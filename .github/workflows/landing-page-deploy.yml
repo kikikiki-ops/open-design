@@ -90,7 +90,9 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/landing-page
+          packageManager: npm
           command: >
-            pages deploy apps/landing-page/out
+            pages deploy out
             --project-name=open-design-landing
             --branch=${{ github.ref_name }}
