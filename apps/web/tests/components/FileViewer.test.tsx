@@ -727,6 +727,73 @@ describe('FileViewer SVG artifacts', () => {
   });
 });
 
+describe('FileViewer comment picker and tweaks mode', () => {
+  function htmlPreviewFile(): ProjectFile {
+    return baseFile({
+      name: 'preview.html',
+      path: 'preview.html',
+      mime: 'text/html',
+      kind: 'html',
+      artifactManifest: {
+        version: 1,
+        kind: 'html',
+        title: 'Preview',
+        entry: 'preview.html',
+        renderer: 'html',
+        exports: ['html'],
+      },
+    });
+  }
+
+  it('turns off tweaks when manual edit is enabled so picker actions disappear', () => {
+    render(
+      <FileViewer
+        projectId="project-1"
+        file={htmlPreviewFile()}
+        liveHtml='<html><body><main data-od-id="hero">Hero</main></body></html>'
+      />,
+    );
+
+    const tweaksToggle = screen.getByTestId('board-mode-toggle');
+    const manualEditToggle = screen.getByTestId('manual-edit-mode-toggle');
+
+    fireEvent.click(tweaksToggle);
+    expect(tweaksToggle.getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByTestId('comment-mode-toggle')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Pods' })).toBeTruthy();
+
+    fireEvent.click(manualEditToggle);
+
+    expect(manualEditToggle.getAttribute('aria-pressed')).toBe('true');
+    expect(tweaksToggle.getAttribute('aria-pressed')).toBe('false');
+    expect(screen.queryByTestId('comment-mode-toggle')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Pods' })).toBeNull();
+  });
+
+  it('turns off manual edit when tweaks are enabled from edit mode', () => {
+    render(
+      <FileViewer
+        projectId="project-1"
+        file={htmlPreviewFile()}
+        liveHtml='<html><body><main data-od-id="hero">Hero</main></body></html>'
+      />,
+    );
+
+    const tweaksToggle = screen.getByTestId('board-mode-toggle');
+    const manualEditToggle = screen.getByTestId('manual-edit-mode-toggle');
+
+    fireEvent.click(manualEditToggle);
+    expect(manualEditToggle.getAttribute('aria-pressed')).toBe('true');
+
+    fireEvent.click(tweaksToggle);
+
+    expect(tweaksToggle.getAttribute('aria-pressed')).toBe('true');
+    expect(manualEditToggle.getAttribute('aria-pressed')).toBe('false');
+    expect(screen.getByTestId('comment-mode-toggle')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Pods' })).toBeTruthy();
+  });
+});
+
 describe('applyInspectOverridesToSource', () => {
   const base = `<!doctype html><html><head><title>X</title></head><body><main data-od-id="hero">Hi</main></body></html>`;
   const css = `[data-od-id="hero"] { color: #ff0000 !important }`;

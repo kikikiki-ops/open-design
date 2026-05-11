@@ -325,6 +325,305 @@ desktopMacDescribe('mac desktop settings smoke', () => {
       expect(snapshot.savedTheme).toBe('dark');
     });
   }, 45_000);
+
+  test('opens Local CLI settings and exposes Codex path fields from the desktop shell', async () => {
+    await seedDesktopConfig(desktop, {
+      mode: 'daemon',
+      apiKey: '',
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-4o',
+      apiProtocol: 'openai',
+      apiProviderBaseUrl: 'https://api.openai.com/v1',
+      agentId: 'codex',
+      skillId: null,
+      designSystemId: null,
+      onboardingCompleted: true,
+      mediaProviders: {},
+      agentModels: {},
+      agentCliEnv: {
+        codex: {
+          CODEX_HOME: '~/.codex-team',
+          CODEX_BIN: '~/bin/codex-next',
+        },
+      },
+      theme: 'system',
+    }, 'agentId');
+
+    await desktop.openSettings();
+    await openDesktopSettingsSection(desktop, 'Configure execution mode');
+    await clickDesktopExecutionModeTab(desktop, 'Local CLI');
+
+    await waitFor(async () => {
+      const snapshot = await readDesktopLocalCliSnapshot(desktop);
+      expect(snapshot.dialogOpen).toBe(true);
+      expect(snapshot.heading).toBe('Execution & model');
+      expect(snapshot.localCliTabSelected).toBe(true);
+      expect(snapshot.selectedAgent).toBe('Codex CLI');
+      expect(snapshot.codexHome).toBe('~/.codex-team');
+      expect(snapshot.codexExecutablePath).toBe('~/bin/codex-next');
+    });
+  }, 45_000);
+
+  test('switches between BYOK and Local CLI without losing the saved field previews', async () => {
+    await seedDesktopConfig(desktop, {
+      mode: 'daemon',
+      apiKey: 'sk-test',
+      baseUrl: 'https://api.deepseek.com',
+      model: 'deepseek-chat',
+      apiProtocol: 'openai',
+      apiProviderBaseUrl: 'https://api.deepseek.com',
+      agentId: 'codex',
+      skillId: null,
+      designSystemId: null,
+      onboardingCompleted: true,
+      mediaProviders: {},
+      agentModels: {},
+      agentCliEnv: {
+        codex: {
+          CODEX_HOME: '~/.codex-switch',
+          CODEX_BIN: '~/bin/codex-switch',
+        },
+      },
+      theme: 'system',
+    }, 'baseUrl');
+
+    await desktop.openSettings();
+    await openDesktopSettingsSection(desktop, 'Configure execution mode');
+
+    await waitFor(async () => {
+      const snapshot = await readDesktopSettingsSnapshot(desktop);
+      expect(snapshot.selectedProtocol).toBe('OpenAI API');
+      expect(snapshot.quickFillProvider).toBe('DeepSeek — OpenAI');
+      expect(snapshot.baseUrl).toBe('https://api.deepseek.com');
+      expect(snapshot.model).toBe('deepseek-chat');
+    });
+
+    await clickDesktopExecutionModeTab(desktop, 'Local CLI');
+
+    await waitFor(async () => {
+      const snapshot = await readDesktopLocalCliSnapshot(desktop);
+      expect(snapshot.localCliTabSelected).toBe(true);
+      expect(snapshot.selectedAgent).toBe('Codex CLI');
+      expect(snapshot.codexHome).toBe('~/.codex-switch');
+      expect(snapshot.codexExecutablePath).toBe('~/bin/codex-switch');
+    });
+
+    await clickDesktopExecutionModeTab(desktop, 'BYOK');
+
+    await waitFor(async () => {
+      const snapshot = await readDesktopSettingsSnapshot(desktop);
+      expect(snapshot.selectedProtocol).toBe('OpenAI API');
+      expect(snapshot.quickFillProvider).toBe('DeepSeek — OpenAI');
+      expect(snapshot.baseUrl).toBe('https://api.deepseek.com');
+      expect(snapshot.model).toBe('deepseek-chat');
+    });
+  }, 45_000);
+
+  test('opens the Connectors section from the desktop shell and shows the catalog surface', async () => {
+    await seedDesktopConfig(desktop, {
+      mode: 'api',
+      apiKey: 'sk-test',
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-4o',
+      apiProtocol: 'openai',
+      apiProviderBaseUrl: 'https://api.openai.com/v1',
+      agentId: null,
+      skillId: null,
+      designSystemId: null,
+      onboardingCompleted: true,
+      mediaProviders: {},
+      agentModels: {},
+      theme: 'system',
+    }, 'model');
+
+    await desktop.openSettings();
+    await openDesktopSettingsSection(desktop, 'Connectors');
+
+    await waitFor(async () => {
+      const snapshot = await readDesktopConnectorsSnapshot(desktop);
+      expect(snapshot.dialogOpen).toBe(true);
+      expect(snapshot.heading).toBe('Connectors');
+      expect(snapshot.sectionTitle).toBe('Connectors');
+      expect(snapshot.apiKeyLabelVisible).toBe(true);
+      expect(snapshot.gateVisible || snapshot.gridVisible).toBe(true);
+    });
+  }, 45_000);
+
+  test('opens the Orbit section from the desktop shell and renders its primary surface', async () => {
+    await seedDesktopConfig(desktop, {
+      mode: 'api',
+      apiKey: 'sk-test',
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-4o',
+      apiProtocol: 'openai',
+      apiProviderBaseUrl: 'https://api.openai.com/v1',
+      agentId: null,
+      skillId: null,
+      designSystemId: null,
+      composio: { apiKeyConfigured: true },
+      orbit: {
+        enabled: false,
+        time: '09:00',
+        templateSkillId: 'orbit-general',
+      },
+      onboardingCompleted: true,
+      mediaProviders: {},
+      agentModels: {},
+      theme: 'system',
+    }, 'model');
+
+    await desktop.openSettings();
+    await openDesktopSettingsSection(desktop, 'Orbit');
+
+    await waitFor(async () => {
+      const snapshot = await readDesktopOrbitSnapshot(desktop);
+      expect(snapshot.dialogOpen).toBe(true);
+      expect(snapshot.heading).toBe('Orbit');
+      expect(snapshot.sectionTitle).toBe('Orbit');
+      expect(snapshot.runButtonVisible).toBe(true);
+      expect(snapshot.gateVisible || snapshot.automationCardVisible).toBe(true);
+    });
+  }, 45_000);
+
+  test('routes the Orbit gate CTA to the Connectors section inside the desktop shell', async () => {
+    await seedDesktopConfig(desktop, {
+      mode: 'api',
+      apiKey: 'sk-test',
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-4o',
+      apiProtocol: 'openai',
+      apiProviderBaseUrl: 'https://api.openai.com/v1',
+      agentId: null,
+      skillId: null,
+      designSystemId: null,
+      composio: { apiKeyConfigured: false },
+      orbit: {
+        enabled: false,
+        time: '09:00',
+        templateSkillId: 'orbit-general',
+      },
+      onboardingCompleted: true,
+      mediaProviders: {},
+      agentModels: {},
+      theme: 'system',
+    }, 'model');
+
+    await desktop.openSettings();
+    await openDesktopSettingsSection(desktop, 'Orbit');
+
+    await waitFor(async () => {
+      const snapshot = await readDesktopOrbitSnapshot(desktop);
+      expect(snapshot.gateVisible).toBe(true);
+    });
+
+    const clicked = await desktop.eval<boolean>(`
+      (() => {
+        const action = document.querySelector('[data-testid="orbit-config-gate-action"]');
+        if (!(action instanceof HTMLElement)) return false;
+        action.click();
+        return true;
+      })()
+    `);
+    expect(clicked).toBe(true);
+
+    await waitFor(async () => {
+      const snapshot = await readDesktopConnectorsSnapshot(desktop);
+      expect(snapshot.dialogOpen).toBe(true);
+      expect(snapshot.heading).toBe('Connectors');
+      expect(snapshot.sectionTitle).toBe('Connectors');
+      expect(snapshot.apiKeyLabelVisible).toBe(true);
+    });
+  }, 45_000);
+
+  test('opens the Media providers section from the desktop shell and shows provider controls', async () => {
+    await seedDesktopConfig(desktop, {
+      mode: 'api',
+      apiKey: 'sk-test',
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-4o',
+      apiProtocol: 'openai',
+      apiProviderBaseUrl: 'https://api.openai.com/v1',
+      agentId: null,
+      skillId: null,
+      designSystemId: null,
+      onboardingCompleted: true,
+      mediaProviders: {},
+      agentModels: {},
+      theme: 'system',
+    }, 'model');
+
+    await desktop.openSettings();
+    await openDesktopSettingsSection(desktop, 'Media providers');
+
+    await waitFor(async () => {
+      const snapshot = await readDesktopMediaSnapshot(desktop);
+      expect(snapshot.dialogOpen).toBe(true);
+      expect(snapshot.heading).toBe('Media providers');
+      expect(snapshot.sectionTitle).toBe('Media providers');
+      expect(snapshot.providerCardCount).toBeGreaterThan(0);
+      expect(snapshot.reloadVisible).toBe(true);
+    });
+  }, 45_000);
+
+  test('opens the About section from the desktop shell and renders version details or the offline placeholder', async () => {
+    await seedDesktopConfig(desktop, {
+      mode: 'api',
+      apiKey: 'sk-test',
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-4o',
+      apiProtocol: 'openai',
+      apiProviderBaseUrl: 'https://api.openai.com/v1',
+      agentId: null,
+      skillId: null,
+      designSystemId: null,
+      onboardingCompleted: true,
+      mediaProviders: {},
+      agentModels: {},
+      theme: 'system',
+    }, 'model');
+
+    await desktop.openSettings();
+    await openDesktopSettingsSection(desktop, 'About');
+
+    await waitFor(async () => {
+      const snapshot = await readDesktopAboutSnapshot(desktop);
+      expect(snapshot.dialogOpen).toBe(true);
+      expect(snapshot.heading).toBe('About');
+      expect(snapshot.sectionTitle).toBe('About');
+      expect(snapshot.aboutListVisible || snapshot.versionUnavailableVisible).toBe(true);
+    });
+  }, 45_000);
+
+  test('opens the Appearance section from the desktop shell and shows theme controls', async () => {
+    await seedDesktopConfig(desktop, {
+      mode: 'api',
+      apiKey: 'sk-test',
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-4o',
+      apiProtocol: 'openai',
+      apiProviderBaseUrl: 'https://api.openai.com/v1',
+      agentId: null,
+      skillId: null,
+      designSystemId: null,
+      onboardingCompleted: true,
+      mediaProviders: {},
+      agentModels: {},
+      theme: 'system',
+    }, 'theme');
+
+    await desktop.openSettings();
+    await openDesktopSettingsSection(desktop, 'Appearance');
+
+    await waitFor(async () => {
+      const snapshot = await readDesktopAppearanceSectionSnapshot(desktop);
+      expect(snapshot.dialogOpen).toBe(true);
+      expect(snapshot.heading).toBe('Appearance');
+      expect(snapshot.sectionTitle).toBe('Appearance');
+      expect(snapshot.systemVisible).toBe(true);
+      expect(snapshot.lightVisible).toBe(true);
+      expect(snapshot.darkVisible).toBe(true);
+    });
+  }, 45_000);
 });
 
 async function runToolsPackJson<T>(action: string, extraArgs: string[] = []): Promise<T> {
@@ -375,11 +674,63 @@ type DesktopSettingsSnapshot = {
   selectedProtocol: string | null;
 };
 
+type DesktopLocalCliSnapshot = {
+  codexExecutablePath: string | null;
+  codexHome: string | null;
+  dialogOpen: boolean;
+  heading: string | null;
+  localCliTabSelected: boolean;
+  selectedAgent: string | null;
+};
+
 type DesktopAppearanceSnapshot = {
   activeTheme: string | null;
   dialogOpen: boolean;
   documentTheme: string | null;
   savedTheme: string | null;
+};
+
+type DesktopConnectorsSnapshot = {
+  apiKeyLabelVisible: boolean;
+  dialogOpen: boolean;
+  gateVisible: boolean;
+  gridVisible: boolean;
+  heading: string | null;
+  sectionTitle: string | null;
+};
+
+type DesktopOrbitSnapshot = {
+  automationCardVisible: boolean;
+  dialogOpen: boolean;
+  gateVisible: boolean;
+  heading: string | null;
+  runButtonVisible: boolean;
+  sectionTitle: string | null;
+};
+
+type DesktopMediaSnapshot = {
+  dialogOpen: boolean;
+  heading: string | null;
+  providerCardCount: number;
+  reloadVisible: boolean;
+  sectionTitle: string | null;
+};
+
+type DesktopAboutSnapshot = {
+  aboutListVisible: boolean;
+  dialogOpen: boolean;
+  heading: string | null;
+  sectionTitle: string | null;
+  versionUnavailableVisible: boolean;
+};
+
+type DesktopAppearanceSectionSnapshot = {
+  darkVisible: boolean;
+  dialogOpen: boolean;
+  heading: string | null;
+  lightVisible: boolean;
+  sectionTitle: string | null;
+  systemVisible: boolean;
 };
 
 async function seedDesktopConfig(
@@ -416,6 +767,29 @@ async function clickDesktopProtocolTab(
         .find((node) => node.getAttribute('aria-label') === 'API protocol');
       const tab = Array.from(protocolTabs?.querySelectorAll('[role="tab"]') ?? [])
         .find((node) => node.textContent?.trim() === ${JSON.stringify(label)});
+      if (!(tab instanceof HTMLElement)) return false;
+      tab.click();
+      return true;
+    })()
+  `);
+  expect(clicked).toBe(true);
+}
+
+async function clickDesktopExecutionModeTab(
+  desktop: DesktopHarness,
+  label: 'BYOK' | 'Local CLI',
+): Promise<void> {
+  const clicked = await desktop.eval<boolean>(`
+    (() => {
+      const modeTabs = Array.from(document.querySelectorAll('[role="tablist"]'))
+        .find((node) => {
+          const labels = Array.from(node.querySelectorAll('[role="tab"]'))
+            .map((tab) => tab.textContent?.trim() ?? '');
+          return labels.some((text) => text.startsWith('BYOK')) &&
+            labels.some((text) => text.startsWith('Local CLI'));
+        });
+      const tab = Array.from(modeTabs?.querySelectorAll('[role="tab"]') ?? [])
+        .find((node) => node.textContent?.trim().startsWith(${JSON.stringify(label)}));
       if (!(tab instanceof HTMLElement)) return false;
       tab.click();
       return true;
@@ -508,6 +882,139 @@ async function readDesktopAppearanceSnapshot(
         dialogOpen: Boolean(document.querySelector('[role="dialog"]')),
         documentTheme: document.documentElement.getAttribute('data-theme'),
         savedTheme: typeof config.theme === 'string' ? config.theme : null,
+      };
+    })()
+  `);
+}
+
+async function readDesktopConnectorsSnapshot(
+  desktop: DesktopHarness,
+): Promise<DesktopConnectorsSnapshot> {
+  return await desktop.eval<DesktopConnectorsSnapshot>(`
+    (() => {
+      const fieldLabels = Array.from(document.querySelectorAll('[role="dialog"] .field-label'))
+        .map((node) => node.textContent?.trim() ?? '');
+      const sectionTitle = document.querySelector('.settings-section-connectors .section-head h3')
+        ?.textContent?.trim() ?? null;
+      return {
+        apiKeyLabelVisible: fieldLabels.includes('Composio API Key'),
+        dialogOpen: Boolean(document.querySelector('[role="dialog"]')),
+        gateVisible: Boolean(document.querySelector('[data-testid="connector-gate"]')),
+        gridVisible: Boolean(document.querySelector('[data-testid="connector-grid-wrap"]')),
+        heading: document.querySelector('[role="dialog"] h2')?.textContent?.trim() ?? null,
+        sectionTitle,
+      };
+    })()
+  `);
+}
+
+async function readDesktopOrbitSnapshot(
+  desktop: DesktopHarness,
+): Promise<DesktopOrbitSnapshot> {
+  return await desktop.eval<DesktopOrbitSnapshot>(`
+    (() => {
+      const sectionTitle = document.querySelector('.orbit-section .orbit-hero-title')
+        ?.textContent?.trim() ?? null;
+      return {
+        automationCardVisible: Boolean(document.querySelector('[data-testid="orbit-automation-card"]')),
+        dialogOpen: Boolean(document.querySelector('[role="dialog"]')),
+        gateVisible: Boolean(document.querySelector('[data-testid="orbit-config-gate"]')),
+        heading: document.querySelector('[role="dialog"] h2')?.textContent?.trim() ?? null,
+        runButtonVisible: Boolean(Array.from(document.querySelectorAll('button'))
+          .find((node) => node.textContent?.trim() === 'Run it now')),
+        sectionTitle,
+      };
+    })()
+  `);
+}
+
+async function readDesktopMediaSnapshot(
+  desktop: DesktopHarness,
+): Promise<DesktopMediaSnapshot> {
+  return await desktop.eval<DesktopMediaSnapshot>(`
+    (() => {
+      const sectionTitle = document.querySelector('.settings-section .section-head h3')
+        ?.textContent?.trim() ?? null;
+      return {
+        dialogOpen: Boolean(document.querySelector('[role="dialog"]')),
+        heading: document.querySelector('[role="dialog"] h2')?.textContent?.trim() ?? null,
+        providerCardCount: document.querySelectorAll('.settings-provider-card').length,
+        reloadVisible: Boolean(Array.from(document.querySelectorAll('button'))
+          .find((node) => node.textContent?.trim() === 'Reload from daemon')),
+        sectionTitle,
+      };
+    })()
+  `);
+}
+
+async function readDesktopAboutSnapshot(
+  desktop: DesktopHarness,
+): Promise<DesktopAboutSnapshot> {
+  return await desktop.eval<DesktopAboutSnapshot>(`
+    (() => {
+      const sectionTitle = document.querySelector('.settings-section .section-head h3')
+        ?.textContent?.trim() ?? null;
+      const emptyCards = Array.from(document.querySelectorAll('.settings-section .empty-card'))
+        .map((node) => node.textContent?.trim() ?? '');
+      return {
+        aboutListVisible: Boolean(document.querySelector('.settings-about-list')),
+        dialogOpen: Boolean(document.querySelector('[role="dialog"]')),
+        heading: document.querySelector('[role="dialog"] h2')?.textContent?.trim() ?? null,
+        sectionTitle,
+        versionUnavailableVisible: emptyCards.includes('Version details are unavailable while the daemon is offline.'),
+      };
+    })()
+  `);
+}
+
+async function readDesktopAppearanceSectionSnapshot(
+  desktop: DesktopHarness,
+): Promise<DesktopAppearanceSectionSnapshot> {
+  return await desktop.eval<DesktopAppearanceSectionSnapshot>(`
+    (() => {
+      const sectionTitle = document.querySelector('.settings-section .section-head h3')
+        ?.textContent?.trim() ?? null;
+      const labels = Array.from(document.querySelectorAll('.seg-control .seg-title'))
+        .map((node) => node.textContent?.trim() ?? '');
+      return {
+        darkVisible: labels.includes('Dark'),
+        dialogOpen: Boolean(document.querySelector('[role="dialog"]')),
+        heading: document.querySelector('[role="dialog"] h2')?.textContent?.trim() ?? null,
+        lightVisible: labels.includes('Light'),
+        sectionTitle,
+        systemVisible: labels.includes('System'),
+      };
+    })()
+  `);
+}
+
+async function readDesktopLocalCliSnapshot(
+  desktop: DesktopHarness,
+): Promise<DesktopLocalCliSnapshot> {
+  return await desktop.eval<DesktopLocalCliSnapshot>(`
+    (() => {
+      const labelFields = Array.from(document.querySelectorAll('[role="dialog"] label.field'));
+      const getField = (label) => {
+        const field = labelFields.find((node) =>
+          node.querySelector('.field-label')?.textContent?.trim() === label,
+        );
+        if (!field) return null;
+        const control = field.querySelector('input');
+        return control instanceof HTMLInputElement ? control.value : null;
+      };
+      const localCliTab = Array.from(document.querySelectorAll('[role="tab"]'))
+        .find((node) => node.textContent?.trim().startsWith('Local CLI'));
+      const selectedAgent = Array.from(document.querySelectorAll('.agent-card.active .agent-card-name'))
+        .map((node) => node.textContent?.trim())
+        .find((value) => typeof value === 'string') ?? null;
+
+      return {
+        codexExecutablePath: getField('Codex executable path'),
+        codexHome: getField('Codex home'),
+        dialogOpen: Boolean(document.querySelector('[role="dialog"]')),
+        heading: document.querySelector('[role="dialog"] h2')?.textContent?.trim() ?? null,
+        localCliTabSelected: localCliTab?.getAttribute('aria-selected') === 'true',
+        selectedAgent,
       };
     })()
   `);
