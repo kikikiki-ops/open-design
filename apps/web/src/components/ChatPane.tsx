@@ -514,17 +514,6 @@ export function ChatPane({
   return (
     <div className="pane">
       <div className="chat-header">
-        <div className="chat-header-tabs" role="tablist">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'chat'}
-            className={`chat-header-tab${tab === 'chat' ? ' active' : ''}`}
-            onClick={() => setTab('chat')}
-          >
-            {t('chat.tabChat')}
-          </button>
-        </div>
         <div className="chat-header-actions">
           <div
             className={`chat-history-wrap${showConvList ? ' open' : ''}`}
@@ -545,9 +534,6 @@ export function ChatPane({
               onClick={() => setShowConvList((v) => !v)}
             >
               <Icon name="history" size={15} />
-              {conversations.length > 1 ? (
-                <span className="chat-history-badge">{conversations.length}</span>
-              ) : null}
             </button>
             {showConvList ? (
               <div className="chat-history-menu" role="menu" data-testid="conversation-history-menu">
