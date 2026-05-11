@@ -103,6 +103,7 @@ vi.mock('../../src/components/ChatPane', () => ({
     activeConversationId,
     conversations,
     streaming,
+    sendDisabled,
     onSelectConversation,
     onSend,
     onNewConversation,
@@ -111,6 +112,7 @@ vi.mock('../../src/components/ChatPane', () => ({
     activeConversationId: string | null;
     conversations: Conversation[];
     streaming: boolean;
+    sendDisabled?: boolean;
     error: string | null;
     onSelectConversation: (id: string) => void;
     onSend: (prompt: string, attachments: unknown[], commentAttachments: unknown[]) => void;
@@ -134,6 +136,7 @@ vi.mock('../../src/components/ChatPane', () => ({
         type="button"
         data-testid="send-message"
         onClick={() => onSend('hello from b', [], [])}
+        disabled={sendDisabled}
       >
         send
       </button>
@@ -251,7 +254,8 @@ describe('ProjectView conversation run isolation', () => {
     fireEvent.click(screen.getByTestId('conversation-select-conv-b'));
 
     await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-b'));
-    await waitFor(() => expect(screen.getByTestId('streaming-state').textContent).toBe('streaming'));
+    await waitFor(() => expect(screen.getByTestId('streaming-state').textContent).toBe('idle'));
+    expect(screen.getByTestId('send-message')).toHaveProperty('disabled', true);
 
     fireEvent.click(screen.getByTestId('send-message'));
     expect(streamViaDaemon).not.toHaveBeenCalled();
@@ -260,6 +264,7 @@ describe('ProjectView conversation run isolation', () => {
     resolveConversationBMessages([]);
 
     await waitFor(() => expect(screen.getByTestId('streaming-state').textContent).toBe('idle'));
+    expect(screen.getByTestId('send-message')).toHaveProperty('disabled', false);
 
     fireEvent.click(screen.getByTestId('send-message'));
 
@@ -304,7 +309,7 @@ describe('ProjectView conversation run isolation', () => {
     expect(showCompletionNotification).not.toHaveBeenCalled();
   });
 
-  it('surfaces conversation message load errors and unblocks send retry', async () => {
+  it('surfaces conversation message load errors and keeps sends disabled until messages load', async () => {
     listMessages.mockImplementation(async (_projectId: string, conversationId: string) => {
       if (conversationId === 'conv-a') return [];
       if (conversationId === 'conv-b') throw new Error('messages unavailable');
@@ -318,16 +323,14 @@ describe('ProjectView conversation run isolation', () => {
 
     await waitFor(() => expect(screen.getByTestId('chat-error').textContent).toBe('messages unavailable'));
     await waitFor(() => expect(screen.getByTestId('streaming-state').textContent).toBe('idle'));
+    expect(screen.getByTestId('send-message')).toHaveProperty('disabled', true);
 
     fireEvent.click(screen.getByTestId('send-message'));
 
-    await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(1));
-    expect(streamViaDaemon).toHaveBeenCalledWith(
-      expect.objectContaining({
-        projectId: 'project-1',
-        conversationId: 'conv-b',
-      }),
-    );
+    expect(streamViaDaemon).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('new-conversation'));
+    await waitFor(() => expect(createConversation).toHaveBeenCalledTimes(1));
   });
 });
 

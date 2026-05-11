@@ -269,6 +269,7 @@ export function ProjectView({
     null,
   );
   const [messagesConversationId, setMessagesConversationId] = useState<string | null>(null);
+  const [failedMessagesConversationId, setFailedMessagesConversationId] = useState<string | null>(null);
   const [conversationLoadError, setConversationLoadError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [previewComments, setPreviewComments] = useState<PreviewComment[]>([]);
@@ -359,9 +360,14 @@ export function ProjectView({
     [messages],
   );
   const currentConversationLoading = Boolean(
-    activeConversationId && messagesConversationId !== activeConversationId,
+    activeConversationId
+      && messagesConversationId !== activeConversationId
+      && failedMessagesConversationId !== activeConversationId,
   );
-  const currentConversationBusy = currentConversationLoading || streaming || currentConversationHasActiveRun;
+  const currentConversationStreaming = streaming || currentConversationHasActiveRun;
+  const currentConversationBusy = currentConversationLoading || currentConversationStreaming;
+  const currentConversationSendDisabled = currentConversationLoading
+    || failedMessagesConversationId === activeConversationId;
   const activeCompletionNotificationRunsRef = useRef<Set<string>>(new Set());
   const completedNotificationRunsRef = useRef<Set<string>>(new Set());
 
@@ -373,6 +379,7 @@ export function ProjectView({
     setConversations([]);
     setActiveConversationId(null);
     setMessagesConversationId(null);
+    setFailedMessagesConversationId(null);
     setConversationLoadError(null);
     setMessages([]);
     setPreviewComments([]);
@@ -426,6 +433,7 @@ export function ProjectView({
       setPreviewComments([]);
       setAttachedComments([]);
       setMessagesConversationId(null);
+      setFailedMessagesConversationId(null);
       messagesConversationIdRef.current = null;
       setStreaming(false);
       return;
@@ -436,6 +444,8 @@ export function ProjectView({
     setAttachedComments([]);
     setArtifact(null);
     setMessagesConversationId(null);
+    setFailedMessagesConversationId(null);
+    setStreaming(false);
     savedArtifactRef.current = null;
     pendingWritesRef.current.clear();
     if (messagesConversationIdRef.current !== activeConversationId) {
@@ -453,11 +463,11 @@ export function ProjectView({
         setAttachedComments([]);
         setArtifact(null);
         setError(null);
-        setStreaming(false);
         savedArtifactRef.current = null;
         pendingWritesRef.current.clear();
         messagesConversationIdRef.current = activeConversationId;
         setMessagesConversationId(activeConversationId);
+        setFailedMessagesConversationId(null);
       } catch (err) {
         if (cancelled) return;
         const message = err instanceof Error ? err.message : 'Could not load messages for this conversation.';
@@ -466,11 +476,11 @@ export function ProjectView({
         setAttachedComments([]);
         setArtifact(null);
         setError(message);
-        setStreaming(false);
         savedArtifactRef.current = null;
         pendingWritesRef.current.clear();
-        messagesConversationIdRef.current = activeConversationId;
-        setMessagesConversationId(activeConversationId);
+        messagesConversationIdRef.current = null;
+        setMessagesConversationId(null);
+        setFailedMessagesConversationId(activeConversationId);
       }
     })();
     return () => {
@@ -2252,7 +2262,8 @@ export function ProjectView({
               // resets internal scroll/draft state inside ChatPane and ChatComposer.
               key={`${project.id}:${activeConversationId ?? 'conversation-unavailable'}`}
               messages={messages}
-              streaming={currentConversationBusy}
+              streaming={currentConversationStreaming}
+              sendDisabled={currentConversationSendDisabled}
               error={conversationLoadError ?? error}
               projectId={project.id}
               projectFiles={projectFiles}

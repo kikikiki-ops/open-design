@@ -40,6 +40,7 @@ interface Props {
   projectId: string | null;
   projectFiles: ProjectFile[];
   streaming: boolean;
+  sendDisabled?: boolean;
   initialDraft?: string;
   // Lazy ensure — the composer calls this before its first upload, so the
   // project folder exists on disk before files land in it. Returns the
@@ -111,6 +112,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       projectId,
       projectFiles,
       streaming,
+      sendDisabled = false,
       initialDraft,
       onEnsureProject,
       commentAttachments = [],
@@ -1031,7 +1033,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
                 className="composer-send"
                 data-testid="chat-send"
                 onClick={() => void submit()}
-                disabled={!draft.trim() && commentAttachments.length === 0}
+                disabled={sendDisabled || (!draft.trim() && commentAttachments.length === 0)}
               >
                 <Icon name="send" size={13} />
                 <span>{t('chat.send')}</span>

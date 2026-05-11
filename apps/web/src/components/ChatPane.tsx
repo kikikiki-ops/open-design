@@ -199,6 +199,7 @@ interface Props {
   error: string | null;
   projectId: string | null;
   projectFiles: ProjectFile[];
+  sendDisabled?: boolean;
   // Names that exist in the project folder. Tool cards and chips use this
   // set to decide whether a path can be opened as a tab.
   projectFileNames?: Set<string>;
@@ -260,6 +261,7 @@ type Tab = 'chat' | 'comments';
 export function ChatPane({
   messages,
   streaming,
+  sendDisabled = false,
   error,
   projectId,
   projectFiles,
@@ -732,6 +734,7 @@ export function ChatPane({
             projectFiles={projectFiles}
             skills={skills}
             streaming={streaming || hasActiveRunMessage}
+            sendDisabled={sendDisabled}
             initialDraft={initialDraft}
             onEnsureProject={onEnsureProject}
             commentAttachments={commentsToAttachments(attachedComments)}
