@@ -8,7 +8,7 @@ import { ProjectView } from '../../src/components/ProjectView';
 import { streamMessage } from '../../src/providers/anthropic';
 import type { StreamHandlers } from '../../src/providers/anthropic';
 import { patchPreviewCommentStatus, writeProjectTextFile } from '../../src/providers/registry';
-import { saveMessage } from '../../src/state/projects';
+import { listMessages, saveMessage } from '../../src/state/projects';
 import type {
   AgentEvent,
   AgentInfo,
@@ -138,6 +138,7 @@ vi.mock('../../src/components/ChatPane', () => ({
 }));
 
 const mockedStreamMessage = vi.mocked(streamMessage);
+const mockedListMessages = vi.mocked(listMessages);
 const mockedSaveMessage = vi.mocked(saveMessage);
 const mockedWriteProjectTextFile = vi.mocked(writeProjectTextFile);
 const mockedPatchPreviewCommentStatus = vi.mocked(patchPreviewCommentStatus);
@@ -190,6 +191,7 @@ describe('ProjectView API empty response handling', () => {
   beforeEach(() => {
     chatPaneMockState.commentAttachments = [];
     mockedStreamMessage.mockReset();
+    mockedListMessages.mockClear();
     mockedSaveMessage.mockClear();
     mockedWriteProjectTextFile.mockClear();
     mockedPatchPreviewCommentStatus.mockClear();
@@ -212,8 +214,7 @@ describe('ProjectView API empty response handling', () => {
     });
     renderProjectView();
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'send' })).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: 'send' }));
+    await sendTestPrompt();
 
     await waitFor(() => {
       expect(screen.getByText('empty_response:deepseek-chat')).toBeTruthy();
@@ -264,8 +265,7 @@ describe('ProjectView API empty response handling', () => {
     });
     renderProjectView();
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'send' })).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: 'send' }));
+    await sendTestPrompt();
 
     await waitFor(() => {
       expect(mockedPatchPreviewCommentStatus).toHaveBeenCalledWith(
@@ -296,8 +296,7 @@ describe('ProjectView API empty response handling', () => {
     });
     renderProjectView();
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'send' })).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: 'send' }));
+    await sendTestPrompt();
 
     await waitFor(() => expect(screen.getAllByText('hello').length).toBeGreaterThan(0));
     await waitFor(() => {
@@ -323,8 +322,7 @@ describe('ProjectView API empty response handling', () => {
     });
     renderProjectView();
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'send' })).toBeTruthy());
-    fireEvent.click(screen.getByRole('button', { name: 'send' }));
+    await sendTestPrompt();
 
     await waitFor(() => {
       expect(hasSavedAssistantMessage((message) => message.runStatus === 'succeeded')).toBe(true);
@@ -334,6 +332,15 @@ describe('ProjectView API empty response handling', () => {
     expect(screen.queryByText('empty_response:deepseek-chat')).toBeNull();
   });
 });
+
+async function sendTestPrompt() {
+  await waitFor(() => {
+    expect(mockedListMessages).toHaveBeenCalledWith(project.id, 'conv-project-1');
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'send' })).toBeTruthy());
+  fireEvent.click(screen.getByRole('button', { name: 'send' }));
+}
 
 function hasSavedAssistantMessage(predicate: (message: ChatMessage) => boolean): boolean {
   return mockedSaveMessage.mock.calls.some((call) => {

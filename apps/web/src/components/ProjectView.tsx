@@ -1133,6 +1133,7 @@ export function ProjectView({
 
       const parser = createArtifactParser();
       let liveHtml = '';
+      let streamedText = '';
 
       const updateAssistant = (updater: (prev: ChatMessage) => ChatMessage) => {
         setMessages((curr) =>
@@ -1242,7 +1243,10 @@ export function ProjectView({
       abortRef.current = controller;
       cancelRef.current = cancelController;
       const handlers = {
-        onDelta: textBuffer.appendContent,
+        onDelta: (delta: string) => {
+          streamedText += delta;
+          textBuffer.appendContent(delta);
+        },
         onAgentEvent: (ev: AgentEvent) => {
           if (ev.kind === 'text') textBuffer.appendTextEvent(ev.text);
           else pushEvent(ev);
@@ -1259,6 +1263,7 @@ export function ProjectView({
           const emptyApiResponse =
             config.mode === 'api' &&
             !fullText.trim() &&
+            !streamedText.trim() &&
             !liveHtml.trim();
           if (emptyApiResponse) {
             const diagnostic = t('assistant.emptyResponseMessage');
