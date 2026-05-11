@@ -929,6 +929,8 @@ export const hu: Dict = {
   'assistant.role': 'Asszisztens',
   'assistant.workingLabel': 'Dolgozik',
   'assistant.doneLabel': 'Kész',
+  'assistant.emptyResponseLabel': 'No output',
+  'assistant.emptyResponseMessage': 'The provider ended the request without returning text or an artifact. Try another model or provider, check quota, or retry.',
   'assistant.unfinishedLabel': 'Befejezetlen munkával állt le',
   'assistant.unfinishedSummary': '{n} feladat hátravan',
   'assistant.unfinishedMore': '+{n} további',

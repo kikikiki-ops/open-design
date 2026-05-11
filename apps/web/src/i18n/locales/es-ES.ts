@@ -818,6 +818,8 @@ export const esES: Dict = {
   'assistant.role': 'Asistente',
   'assistant.workingLabel': 'Trabajando',
   'assistant.doneLabel': 'Listo',
+  'assistant.emptyResponseLabel': 'No output',
+  'assistant.emptyResponseMessage': 'The provider ended the request without returning text or an artifact. Try another model or provider, check quota, or retry.',
   'assistant.unfinishedLabel': 'Detenido con tareas pendientes',
   'assistant.unfinishedSummary': 'quedan {n} tarea(s)',
   'assistant.unfinishedMore': '+{n} más',

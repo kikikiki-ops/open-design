@@ -903,6 +903,8 @@ export const fa: Dict = {
   'assistant.role': 'دستیار',
   'assistant.workingLabel': 'در حال کار',
   'assistant.doneLabel': 'انجام شد',
+  'assistant.emptyResponseLabel': 'No output',
+  'assistant.emptyResponseMessage': 'The provider ended the request without returning text or an artifact. Try another model or provider, check quota, or retry.',
   'assistant.unfinishedLabel': 'با کار ناتمام متوقف شد',
   'assistant.unfinishedSummary': '{n} وظیفه باقی مانده',
   'assistant.unfinishedMore': '+{n} بیشتر',

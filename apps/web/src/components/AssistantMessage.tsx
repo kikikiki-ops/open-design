@@ -72,6 +72,9 @@ export function AssistantMessage({
     | undefined;
   const produced = message.producedFiles ?? [];
   const roleLabel = assistantRoleLabel(message, t);
+  const hasEmptyResponse = events.some(
+    (e) => e.kind === "status" && e.label === "empty_response"
+  );
   const unfinishedTodos = streaming ? [] : unfinishedTodosFromEvents(events);
   const canContinueTodos =
     !streaming &&
@@ -154,6 +157,7 @@ export function AssistantMessage({
           endedAt={message.endedAt}
           usage={usage}
           hasUnfinishedTodos={unfinishedTodos.length > 0}
+          hasEmptyResponse={hasEmptyResponse}
         />
       </div>
     </div>
@@ -219,16 +223,18 @@ function AssistantFooter({
   endedAt,
   usage,
   hasUnfinishedTodos,
+  hasEmptyResponse,
 }: {
   streaming: boolean;
   startedAt: number | undefined;
   endedAt: number | undefined;
   usage: Extract<AgentEvent, { kind: "usage" }> | undefined;
   hasUnfinishedTodos: boolean;
+  hasEmptyResponse: boolean;
 }) {
   const t = useT();
   const elapsed = useLiveElapsed(streaming, startedAt, endedAt);
-  if (!streaming && !elapsed && !usage && !hasUnfinishedTodos) return null;
+  if (!streaming && !elapsed && !usage && !hasUnfinishedTodos && !hasEmptyResponse) return null;
   return (
     <div
       className="assistant-footer"
@@ -238,6 +244,8 @@ function AssistantFooter({
       <span className="assistant-label">
         {streaming
           ? t("assistant.workingLabel")
+          : hasEmptyResponse
+          ? t("assistant.emptyResponseLabel")
           : hasUnfinishedTodos
           ? t("assistant.unfinishedLabel")
           : t("assistant.doneLabel")}
@@ -804,7 +812,8 @@ function buildBlocks(events: AgentEvent[]): Block[] {
         ev.label === "streaming" ||
         ev.label === "starting" ||
         ev.label === "requesting" ||
-        ev.label === "thinking"
+        ev.label === "thinking" ||
+        ev.label === "empty_response"
       )
         continue;
       const last = out[out.length - 1];

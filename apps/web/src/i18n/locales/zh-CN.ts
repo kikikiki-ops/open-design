@@ -1002,6 +1002,8 @@ export const zhCN: Dict = {
   'assistant.role': '助手',
   'assistant.workingLabel': '执行中',
   'assistant.doneLabel': '已完成',
+  'assistant.emptyResponseLabel': '无输出',
+  'assistant.emptyResponseMessage': '服务商结束了请求，但没有返回文本或设计产物。请尝试更换模型或服务商、检查额度，或重试。',
   'assistant.unfinishedLabel': '已停止，仍有未完成任务',
   'assistant.unfinishedSummary': '剩余 {n} 个任务',
   'assistant.unfinishedMore': '还有 {n} 个',

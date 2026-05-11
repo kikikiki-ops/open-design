@@ -1068,6 +1068,8 @@ export const id: Dict = {
   'assistant.role': 'Asisten',
   'assistant.workingLabel': 'Sedang bekerja',
   'assistant.doneLabel': 'Selesai',
+  'assistant.emptyResponseLabel': 'No output',
+  'assistant.emptyResponseMessage': 'The provider ended the request without returning text or an artifact. Try another model or provider, check quota, or retry.',
   'assistant.unfinishedLabel': 'Belum selesai',
   'assistant.unfinishedSummary': '{n} tugas tersisa',
   'assistant.unfinishedMore': '+{n} lagi',

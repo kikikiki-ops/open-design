@@ -929,6 +929,8 @@ export const fr: Dict = {
   'assistant.role': 'Assistant',
   'assistant.workingLabel': 'En cours',
   'assistant.doneLabel': 'Terminé',
+  'assistant.emptyResponseLabel': 'No output',
+  'assistant.emptyResponseMessage': 'The provider ended the request without returning text or an artifact. Try another model or provider, check quota, or retry.',
   'assistant.unfinishedLabel': 'Arrêté avec du travail non terminé',
   'assistant.unfinishedSummary': '{n} tâche(s) restante(s)',
   'assistant.unfinishedMore': '+{n} de plus',

@@ -816,6 +816,8 @@ export const ja: Dict = {
   'assistant.role': 'アシスタント',
   'assistant.workingLabel': '作業中',
   'assistant.doneLabel': '完了',
+  'assistant.emptyResponseLabel': 'No output',
+  'assistant.emptyResponseMessage': 'The provider ended the request without returning text or an artifact. Try another model or provider, check quota, or retry.',
   'assistant.unfinishedLabel': '未完了の作業があります',
   'assistant.unfinishedSummary': '{n} 件のタスクが残っています',
   'assistant.unfinishedMore': '+{n} 件',

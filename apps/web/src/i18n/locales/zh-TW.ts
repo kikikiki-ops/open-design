@@ -995,6 +995,8 @@ export const zhTW: Dict = {
   'assistant.role': '助手',
   'assistant.workingLabel': '執行中',
   'assistant.doneLabel': '已完成',
+  'assistant.emptyResponseLabel': '無輸出',
+  'assistant.emptyResponseMessage': '服務商結束了請求，但沒有返回文字或設計產物。請嘗試更換模型或服務商、檢查額度，或重試。',
   'assistant.outTokens': '{n} 輸出',
   'assistant.producedFiles': '本輪產出的檔案',
   'assistant.openFile': '開啟',

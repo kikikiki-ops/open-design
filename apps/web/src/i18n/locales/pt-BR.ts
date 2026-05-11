@@ -961,6 +961,8 @@ export const ptBR: Dict = {
   'assistant.role': 'Assistente',
   'assistant.workingLabel': 'Trabalhando',
   'assistant.doneLabel': 'Concluído',
+  'assistant.emptyResponseLabel': 'No output',
+  'assistant.emptyResponseMessage': 'The provider ended the request without returning text or an artifact. Try another model or provider, check quota, or retry.',
   'assistant.unfinishedLabel': 'Interrompido com trabalho pendente',
   'assistant.unfinishedSummary': '{n} tarefa(s) restante(s)',
   'assistant.unfinishedMore': '+{n} mais',

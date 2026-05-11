@@ -929,6 +929,8 @@ export const ko: Dict = {
   'assistant.role': '어시스턴트 (Assistant)',
   'assistant.workingLabel': '작업 중',
   'assistant.doneLabel': '완료됨',
+  'assistant.emptyResponseLabel': 'No output',
+  'assistant.emptyResponseMessage': 'The provider ended the request without returning text or an artifact. Try another model or provider, check quota, or retry.',
   'assistant.unfinishedLabel': '작업을 마치지 못하고 중지됨',
   'assistant.unfinishedSummary': '{n}개 작업 남음',
   'assistant.unfinishedMore': '+{n}개 추가',

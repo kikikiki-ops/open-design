@@ -920,6 +920,8 @@ export const tr: Dict = {
   'assistant.role': 'Asistan',
   'assistant.workingLabel': 'Çalışıyor',
   'assistant.doneLabel': 'Bitti',
+  'assistant.emptyResponseLabel': 'No output',
+  'assistant.emptyResponseMessage': 'The provider ended the request without returning text or an artifact. Try another model or provider, check quota, or retry.',
   'assistant.unfinishedLabel': 'Bitmemiş işlerle durduruldu',
   'assistant.unfinishedSummary': '{n} görev kaldı',
   'assistant.unfinishedMore': '+{n} daha',
