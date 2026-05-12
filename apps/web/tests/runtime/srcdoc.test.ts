@@ -27,6 +27,16 @@ describe('buildSrcdoc', () => {
     expect(doc).toContain('var initialSlideIndex = 0;');
   });
 
+  it('injects the snapshot bridge used by draw annotations', () => {
+    const srcdoc = buildSrcdoc('<main style="color:red">Hero</main>');
+
+    expect(srcdoc).toContain('data-od-snapshot-bridge');
+    expect(srcdoc).toContain("data.type !== 'od:snapshot'");
+    expect(srcdoc).toContain("type: 'od:snapshot:result'");
+    expect(srcdoc).toContain('copyComputedStyle');
+    expect(srcdoc).toContain('foreignObject');
+  });
+
   it('only uses directly mutable slide conventions for setActive support', () => {
     const srcdoc = buildSrcdoc(
       '<section class="slide">One</section><section class="slide">Two</section>',

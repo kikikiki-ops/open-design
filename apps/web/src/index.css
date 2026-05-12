@@ -1084,11 +1084,70 @@ code {
   font-size: 11.5px;
   box-shadow: var(--shadow-xs);
 }
+.staged-preview-trigger {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: zoom-in;
+}
+.staged-preview-trigger:hover .staged-name {
+  color: var(--accent);
+  text-decoration: underline;
+}
 .staged-chip img {
   width: 28px;
   height: 28px;
   border-radius: 6px;
   object-fit: cover;
+}
+.staged-preview-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px;
+  background: rgba(0, 0, 0, 0.56);
+}
+.staged-preview-card {
+  max-width: min(920px, 92vw);
+  max-height: min(760px, 88vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-lg);
+}
+.staged-preview-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.staged-preview-head span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.staged-preview-card > img {
+  max-width: 100%;
+  max-height: calc(88vh - 48px);
+  object-fit: contain;
+  background: var(--bg-subtle);
 }
 .staged-comment {
   border-radius: var(--radius-pill);
@@ -14881,13 +14940,115 @@ body.entry-resizing { cursor: col-resize; user-select: none; }
 /* Manual edit mode */
 .manual-edit-workspace {
   display: grid;
-  grid-template-columns: 240px minmax(420px, 1fr) 344px;
+  grid-template-columns: minmax(420px, 1fr) 280px;
   gap: 10px;
   height: 100%;
   min-height: 0;
   padding: 10px;
   background: var(--bg);
 }
+.manual-edit-workspace > .manual-edit-canvas { grid-column: 1; grid-row: 1; }
+.manual-edit-workspace > .manual-edit-right { grid-column: 2; grid-row: 1; min-height: 0; }
+
+/* Claude Code-style edit inspector panel. */
+.cc-panel { display: flex; flex-direction: column; gap: 8px; padding: 8px 0; overflow: auto; background: var(--bg-panel); }
+.cc-inspector { display: flex; flex-direction: column; gap: 12px; padding: 6px 12px; }
+.cc-section { display: flex; flex-direction: column; gap: 6px; }
+.cc-section-head {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
+  color: var(--text-muted); padding: 4px 0 2px;
+}
+.cc-section-body { display: flex; flex-direction: column; gap: 4px; }
+.cc-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.cc-row {
+  display: flex; align-items: center;
+  background: var(--surface-2, #f6f6f7);
+  border: 1px solid var(--border, #e4e4e7);
+  border-radius: 4px;
+  height: 26px; padding: 0 8px;
+  font-size: 12px; min-width: 0;
+}
+.cc-row:focus-within { border-color: var(--accent, #2563eb); }
+.cc-label {
+  color: var(--text-muted, #6b7280);
+  flex: 0 0 auto; padding-right: 8px;
+  white-space: nowrap;
+}
+.cc-value {
+  flex: 1 1 auto; display: flex; align-items: center; justify-content: flex-end;
+  gap: 2px; min-width: 0;
+}
+.cc-value > input,
+.cc-value > select {
+  flex: 1 1 auto; min-width: 0; border: none; outline: none;
+  background: transparent; font: inherit; color: inherit;
+  padding: 0; text-align: right;
+}
+.cc-value > select { cursor: pointer; appearance: none; padding-right: 12px; }
+.cc-unit { flex: 0 0 auto; color: var(--text-muted); font-style: normal; font-size: 11px; }
+.cc-select { position: relative; }
+.cc-chevron {
+  position: absolute; right: 0; pointer-events: none;
+  color: var(--text-muted); font-style: normal; font-size: 9px;
+}
+.cc-color { padding-right: 4px; position: relative; }
+.cc-color-compact .cc-swatch { margin-left: auto; }
+.cc-swatch {
+  width: 14px; height: 14px; border-radius: 3px;
+  border: 1px solid rgba(0,0,0,0.18);
+  padding: 0; cursor: pointer; background-clip: padding-box;
+  flex: 0 0 auto;
+}
+.cc-color > input { text-align: right; }
+.cc-color-popover {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 100;
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px; box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+  display: flex; flex-direction: column; gap: 8px; min-width: 168px;
+}
+.cc-color-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
+.cc-color-tile {
+  width: 22px; height: 22px; border-radius: 4px; padding: 0;
+  border: 1px solid rgba(0,0,0,0.08); cursor: pointer;
+}
+.cc-color-native {
+  width: 100%; height: 22px; border: 1px solid var(--border);
+  border-radius: 4px; padding: 0; background: var(--bg-panel);
+}
+
+.cc-quad { display: flex; flex-direction: column; gap: 4px; margin-top: 2px; }
+.cc-quad-head {
+  display: flex; align-items: center; justify-content: space-between;
+  background: transparent; border: none; padding: 2px 4px;
+  font-size: 11px; color: var(--text-muted); cursor: pointer;
+}
+.cc-quad-head em { color: var(--text); font-style: normal; }
+.cc-chevron-small { color: var(--text-muted); font-size: 10px; }
+.cc-quad-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.cc-quad-cell {
+  display: flex; align-items: center;
+  background: var(--surface-2, #f6f6f7);
+  border: 1px solid var(--border); border-radius: 4px;
+  padding: 0 6px; height: 26px; font-size: 12px; gap: 2px;
+}
+.cc-quad-axis { color: var(--text-muted); font-style: normal; font-size: 10px; flex: 0 0 auto; }
+.cc-quad-cell input {
+  flex: 1 1 auto; min-width: 0; border: none; outline: none;
+  background: transparent; font: inherit; padding: 0;
+  color: inherit; text-align: right;
+}
+.cc-quad-unit { color: var(--text-muted); font-style: normal; font-size: 10px; }
+
+.cc-advanced {
+  border-top: 1px solid var(--border); margin-top: 6px;
+  padding: 6px 12px; display: flex; flex-direction: column; gap: 6px;
+}
+.cc-advanced-toggle {
+  align-self: flex-start; background: transparent; border: none;
+  padding: 2px 0; font-size: 11px; color: var(--text-muted); cursor: pointer;
+}
+.cc-disclosure { font-size: 11px; color: var(--text-muted); }
+.cc-disclosure > summary { cursor: pointer; padding: 4px 0; }
 
 .manual-edit-canvas {
   position: relative;
