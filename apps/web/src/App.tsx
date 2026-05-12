@@ -56,6 +56,8 @@ import type {
 } from './types';
 
 const OPEN_TABS_STORAGE_KEY = 'od:tabs';
+const HOME_TAB_PREFIX = 'home:';
+const HOME_UPLOAD_FOLDER = '素材';
 
 const ACTIVE_PROJECT_STATUSES = new Set<ProjectDisplayStatus>(['queued', 'running', 'awaiting_input']);
 
@@ -190,6 +192,8 @@ export function App() {
   // get pinned on first visit; explicit close on a tab (× button) or
   // deletion of the underlying project removes the entry.
   const [openTabIds, setOpenTabIds] = useState<string[]>(() => loadOpenTabIds());
+  const [homeTabIds, setHomeTabIds] = useState<string[]>([]);
+  const [activeHomeTabId, setActiveHomeTabId] = useState<string | null>(null);
   const addOpenTab = useCallback((id: string) => {
     setOpenTabIds((curr) => {
       if (curr.includes(id)) return curr;
@@ -205,29 +209,48 @@ export function App() {
   }, [route, addOpenTab]);
 
   const closeOpenTab = useCallback((id: string) => {
-    setOpenTabIds((curr) => {
-      const idx = curr.indexOf(id);
-      if (idx === -1) return curr;
-      const next = curr.filter((t) => t !== id);
-      saveOpenTabIds(next);
-      // If the user closed the tab they were currently viewing, fall
-      // back to the neighbouring tab (next-after-removal, then previous)
-      // so they don't get bounced all the way home unless every project
-      // tab is gone.
-      const isOnClosedTab =
-        typeof window !== 'undefined' &&
-        window.location.pathname.startsWith(`/projects/${encodeURIComponent(id)}`);
-      if (isOnClosedTab) {
-        const fallback = next[idx] ?? next[idx - 1] ?? null;
-        if (fallback) {
-          navigate({ kind: 'project', projectId: fallback, fileName: null });
+    if (id.startsWith(HOME_TAB_PREFIX)) {
+      const idx = homeTabIds.indexOf(id);
+      if (idx === -1) return;
+      const next = homeTabIds.filter((tabId) => tabId !== id);
+      setHomeTabIds(next);
+      if (activeHomeTabId === id) {
+        const fallbackHome = next[idx] ?? next[idx - 1] ?? null;
+        if (fallbackHome) {
+          setActiveHomeTabId(fallbackHome);
+          navigate({ kind: 'prompt-home' });
+        } else if (openTabIds[0]) {
+          setActiveHomeTabId(null);
+          navigate({ kind: 'project', projectId: openTabIds[0], fileName: null });
         } else {
+          setActiveHomeTabId(null);
           navigate({ kind: 'prompt-home' });
         }
       }
-      return next;
-    });
-  }, []);
+      return;
+    }
+
+    const idx = openTabIds.indexOf(id);
+    if (idx === -1) return;
+    const next = openTabIds.filter((t) => t !== id);
+    setOpenTabIds(next);
+    saveOpenTabIds(next);
+    // If the user closed the tab they were currently viewing, fall
+    // back to the neighbouring tab (next-after-removal, then previous)
+    // so they don't get bounced all the way home unless every project
+    // tab is gone.
+    const isOnClosedTab =
+      typeof window !== 'undefined' &&
+      window.location.pathname.startsWith(`/projects/${encodeURIComponent(id)}`);
+    if (isOnClosedTab) {
+      const fallback = next[idx] ?? next[idx - 1] ?? null;
+      if (fallback) {
+        navigate({ kind: 'project', projectId: fallback, fileName: null });
+      } else {
+        navigate({ kind: 'prompt-home' });
+      }
+    }
+  }, [activeHomeTabId, homeTabIds, openTabIds]);
 
   // Sync theme preference to the <html> element so CSS variables pick it up.
   // useLayoutEffect (vs useEffect) fires before the browser paints, so a
@@ -621,7 +644,9 @@ export function App() {
       if (!result) return;
 
       if (input.pendingFiles && input.pendingFiles.length > 0) {
-        const upload = await uploadProjectFiles(result.project.id, input.pendingFiles);
+        const upload = await uploadProjectFiles(result.project.id, input.pendingFiles, {
+          folder: HOME_UPLOAD_FOLDER,
+        });
         if (upload.uploaded.length > 0) {
           savePendingAttachments(upload.uploaded);
         }
@@ -840,17 +865,61 @@ export function App() {
   // (deleted on another tab/window) are dropped here so the user
   // never clicks into a 404.
   const openTabs = useMemo(
-    () => openTabIds
+    () => [
+      ...homeTabIds.map((id, index) => ({
+        id,
+        title: index === 0 ? '首页' : `首页 ${index + 1}`,
+      })),
+      ...openTabIds
       .map((id) => projects.find((p) => p.id === id))
       .filter((p): p is Project => Boolean(p))
-      .map((p) => ({ id: p.id, title: p.name })),
-    [openTabIds, projects],
+      .map((p) => ({
+        id: p.id,
+        title: p.name,
+        editable: true,
+      })),
+    ],
+    [homeTabIds, openTabIds, projects],
   );
-  const activeTabId = route.kind === 'project' ? route.projectId : null;
+  const activeTabId = route.kind === 'project'
+    ? route.projectId
+    : route.kind === 'prompt-home'
+      ? activeHomeTabId
+      : null;
+  const handleRenameTab = useCallback(
+    async (id: string, title: string) => {
+      if (id.startsWith(HOME_TAB_PREFIX)) return;
+      const name = title.trim();
+      if (!name) return;
+      setProjects((curr) =>
+        curr.map((p) => (p.id === id ? { ...p, name, updatedAt: Date.now() } : p)),
+      );
+      const updated = await patchProject(id, { name, updatedAt: Date.now() });
+      if (updated) {
+        setProjects((curr) => curr.map((p) => (p.id === updated.id ? updated : p)));
+      } else {
+        void refreshProjects();
+      }
+    },
+    [refreshProjects],
+  );
   const handleSelectTab = useCallback((id: string) => {
+    if (id.startsWith(HOME_TAB_PREFIX)) {
+      setActiveHomeTabId(id);
+      navigate({ kind: 'prompt-home' });
+      return;
+    }
+    setActiveHomeTabId(null);
     navigate({ kind: 'project', projectId: id, fileName: null });
   }, []);
   const handleSelectHomeTab = useCallback(() => {
+    setActiveHomeTabId(null);
+    navigate({ kind: 'prompt-home' });
+  }, []);
+  const handleNewHomeTab = useCallback(() => {
+    const id = `${HOME_TAB_PREFIX}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+    setHomeTabIds((curr) => [...curr, id]);
+    setActiveHomeTabId(id);
     navigate({ kind: 'prompt-home' });
   }, []);
 
@@ -886,6 +955,9 @@ export function App() {
           activeTabId={activeTabId}
           onSelectTab={handleSelectTab}
           onCloseTab={closeOpenTab}
+          onRenameTab={handleRenameTab}
+          onSelectHome={handleSelectHomeTab}
+          onNewHome={handleNewHomeTab}
         />
       ) : route.kind === 'prompt-home' ? (
         <PromptHomeView
@@ -900,12 +972,16 @@ export function App() {
           onOpenLiveArtifact={handleOpenLiveArtifact}
           onDeleteProject={handleDeleteProject}
           onOpenSettings={openSettings}
+          onOpenMcpSettings={openMcpSettings}
           onImportClaudeDesign={handleImportClaudeDesign}
           onImportFolder={handleImportFolder}
           chromeTabs={openTabs}
           activeTabId={activeTabId}
           onSelectTab={handleSelectTab}
           onCloseTab={closeOpenTab}
+          onRenameTab={handleRenameTab}
+          onSelectHome={handleSelectHomeTab}
+          onNewHome={handleNewHomeTab}
         />
       ) : (
         <EntryView
@@ -936,6 +1012,9 @@ export function App() {
           activeTabId={activeTabId}
           onSelectTab={handleSelectTab}
           onCloseTab={closeOpenTab}
+          onRenameTab={handleRenameTab}
+          onSelectHome={handleSelectHomeTab}
+          onNewHome={handleNewHomeTab}
         />
       )}
       <PetOverlay

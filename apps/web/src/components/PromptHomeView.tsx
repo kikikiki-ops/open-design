@@ -6,6 +6,7 @@ import {
   DEFAULT_IMAGE_MODEL,
   DEFAULT_VIDEO_MODEL,
 } from '../media/models';
+import { fetchMcpServers, type McpServerConfig } from '../state/mcp';
 import { Icon } from './Icon';
 import { navigate } from '../router';
 import { AppChromeHeader, SettingsIconButton, type ChromeTab } from './AppChromeHeader';
@@ -27,9 +28,12 @@ import type {
 } from '../types';
 
 type DictKey = keyof Dict;
+type TranslateFn = (key: keyof Dict, vars?: Record<string, string | number>) => string;
+type HomeToolsTab = 'mcp' | 'import';
 
 const PENDING_SETUP_KEY = 'od:setup-pending';
 const PENDING_ATTACHMENTS_KEY = 'od:pending-attachments';
+const HOME_MARK_IMAGES = ['/home-mark-4.png', '/home-mark.png', '/home-mark-2.png', '/home-mark-3.png'];
 
 const TAB_LABEL_KEYS: Record<CreateTab, DictKey> = {
   prototype: 'newproj.tabPrototype',
@@ -96,6 +100,7 @@ interface Props {
   onOpenLiveArtifact: (projectId: string, artifactId: string) => void;
   onDeleteProject: (id: string) => void;
   onOpenSettings: () => void;
+  onOpenMcpSettings?: () => void;
   onImportClaudeDesign?: (file: File) => Promise<void> | void;
   onImportFolder?: (baseDir: string) => Promise<void> | void;
   // Browser-tab strip wiring forwarded into AppChromeHeader. Owned by
@@ -104,6 +109,9 @@ interface Props {
   activeTabId: string | null;
   onSelectTab: (id: string) => void;
   onCloseTab: (id: string) => void;
+  onRenameTab?: (id: string, title: string) => void | Promise<void>;
+  onSelectHome?: () => void;
+  onNewHome?: () => void;
 }
 
 export function PromptHomeView({
@@ -118,16 +126,22 @@ export function PromptHomeView({
   onOpenLiveArtifact,
   onDeleteProject,
   onOpenSettings,
+  onOpenMcpSettings,
   onImportClaudeDesign,
   onImportFolder,
   chromeTabs,
   activeTabId,
   onSelectTab,
   onCloseTab,
+  onRenameTab,
+  onSelectHome,
+  onNewHome,
 }: Props) {
   const t = useT();
   const [tab, setTab] = useState<CreateTab>('prototype');
-  const [libraryTab, setLibraryTab] = useState('examples');
+  const [libraryTab, setLibraryTab] = useState('designs');
+  const [librarySearch, setLibrarySearch] = useState('');
+  const [librarySearchOpen, setLibrarySearchOpen] = useState(false);
   const [previewSystemId, setPreviewSystemId] = useState<string | null>(null);
   const [previewPromptTemplate, setPreviewPromptTemplate] =
     useState<PromptTemplateSummary | null>(null);
@@ -136,8 +150,67 @@ export function PromptHomeView({
   const [isDragging, setIsDragging] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const [homeMarkIndex, setHomeMarkIndex] = useState(0);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [toolsTab, setToolsTab] = useState<HomeToolsTab>('mcp');
+  const [mcpServers, setMcpServers] = useState<McpServerConfig[]>([]);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const promptInputRef = useRef<HTMLDivElement | null>(null);
+  const toolsMenuRef = useRef<HTMLDivElement | null>(null);
+  const toolsTriggerRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setHomeMarkIndex((index) => (index + 1) % HOME_MARK_IMAGES.length);
+    }, 4200);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const data = await fetchMcpServers();
+      if (cancelled || !data) return;
+      setMcpServers(data.servers.filter((server) => server.enabled));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const availableToolsTabs = useMemo<HomeToolsTab[]>(() => {
+    const tabs: HomeToolsTab[] = [];
+    if (onOpenMcpSettings) tabs.push('mcp');
+    tabs.push('import');
+    return tabs;
+  }, [onOpenMcpSettings]);
+
+  useEffect(() => {
+    if (!toolsOpen) return;
+    if (!availableToolsTabs.includes(toolsTab)) {
+      const first = availableToolsTabs[0];
+      if (first) setToolsTab(first);
+    }
+  }, [toolsOpen, availableToolsTabs, toolsTab]);
+
+  useEffect(() => {
+    if (!toolsOpen) return;
+    function onPointer(e: MouseEvent) {
+      const target = e.target as Node;
+      if (toolsMenuRef.current?.contains(target)) return;
+      if (toolsTriggerRef.current?.contains(target)) return;
+      setToolsOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setToolsOpen(false);
+    }
+    document.addEventListener('mousedown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [toolsOpen]);
 
   // Stable blob URLs for image previews — revoked when files change or unmount.
   const fileUrls = useMemo(
@@ -306,6 +379,49 @@ export function PromptHomeView({
     selection?.addRange(range);
   }
 
+  function insertPlainTextAtSelection(text: string) {
+    const editor = promptInputRef.current;
+    if (!editor || text.length === 0) return;
+    const selection = window.getSelection();
+    let range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+    if (!range || !editor.contains(range.commonAncestorContainer)) {
+      editor.focus({ preventScroll: true });
+      range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+    }
+    range.deleteContents();
+    const parts = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+    parts.forEach((part, index) => {
+      if (index > 0) {
+        range.insertNode(document.createElement('br'));
+        range.collapse(false);
+      }
+      if (part.length > 0) {
+        range.insertNode(document.createTextNode(part));
+        range.collapse(false);
+      }
+    });
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    refreshEditorEmpty();
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLDivElement>) {
+    const files = Array.from(e.clipboardData.files ?? []);
+    const text = e.clipboardData.getData('text/plain');
+    if (files.length === 0 && !text) return;
+    e.preventDefault();
+    if (files.length > 0) {
+      setPendingFiles((curr) => [...curr, ...files]);
+    }
+    if (text) {
+      insertPlainTextAtSelection(text);
+    } else {
+      refreshEditorEmpty();
+    }
+  }
+
   function insertFileReference(file: File) {
     const chip = document.createElement('span');
     chip.className = 'od-prompt-home-capsule in-input';
@@ -431,7 +547,13 @@ export function PromptHomeView({
 
   function renderLibraryTabContent(active: string) {
     if (active === 'examples') {
-      return <ExamplesTab skills={skills} onUsePrompt={usePromptFromSkill} />;
+      return (
+        <ExamplesTab
+          skills={skills}
+          onUsePrompt={usePromptFromSkill}
+          searchQuery={librarySearch}
+        />
+      );
     }
     if (active === 'design-systems') {
       return (
@@ -440,6 +562,7 @@ export function PromptHomeView({
           selectedId={defaultDesignSystemId}
           onSelect={onChangeDefaultDesignSystem}
           onPreview={setPreviewSystemId}
+          searchQuery={librarySearch}
         />
       );
     }
@@ -449,6 +572,7 @@ export function PromptHomeView({
           surface="image"
           templates={promptTemplates}
           onPreview={setPreviewPromptTemplate}
+          searchQuery={librarySearch}
         />
       );
     }
@@ -458,6 +582,7 @@ export function PromptHomeView({
           surface="video"
           templates={promptTemplates}
           onPreview={setPreviewPromptTemplate}
+          searchQuery={librarySearch}
         />
       );
     }
@@ -479,6 +604,19 @@ export function PromptHomeView({
         activeTabId={activeTabId}
         onSelectTab={onSelectTab}
         onCloseTab={onCloseTab}
+        onRenameTab={onRenameTab}
+        onSelectHome={onSelectHome}
+        onNewHome={() => {
+          onNewHome?.();
+          if (!onNewHome) navigate({ kind: 'prompt-home' });
+          setTab('prototype');
+          setLibraryTab('designs');
+          setLibrarySearch('');
+          setLibrarySearchOpen(false);
+          if (promptInputRef.current) promptInputRef.current.textContent = '';
+          setPendingFiles([]);
+          setEditorEmpty(true);
+        }}
         actions={(
           <SettingsIconButton
             onClick={onOpenSettings}
@@ -489,157 +627,245 @@ export function PromptHomeView({
       />
 
       <div className="od-prompt-home-main">
-        <div className="od-prompt-home-tabs" role="tablist">
-          {(Object.keys(TAB_LABEL_KEYS) as CreateTab[]).map((entry) => (
-            <button
-              key={entry}
-              type="button"
-              role="tab"
-              aria-selected={tab === entry}
-              data-testid={`prompt-home-tab-${entry}`}
-              className={`od-prompt-home-tab${tab === entry ? ' active' : ''}`}
-              onClick={() => setTab(entry)}
-            >
-              {t(TAB_LABEL_KEYS[entry])}
-            </button>
-          ))}
-          <button
-            type="button"
-            className="od-prompt-home-workspace"
-            onClick={() => navigate({ kind: 'home' })}
-            data-testid="prompt-home-open-workspace"
-          >
-            <Icon name="grid" size={14} />
-            <span>{t('entry.tabDesigns')}</span>
-          </button>
-        </div>
+        <div className="od-prompt-home-fold">
+          <div className="od-prompt-home-hero-image" aria-hidden>
+            <img className="od-prompt-home-hero-mark" src={HOME_MARK_IMAGES[homeMarkIndex]} alt="" />
+            <img className="od-prompt-home-hero-wordmark" src="/home-wordmark.svg" alt="" />
+          </div>
+          <div className="od-prompt-home-tabs" role="tablist">
+            {(Object.keys(TAB_LABEL_KEYS) as CreateTab[]).map((entry) => (
+              <button
+                key={entry}
+                type="button"
+                role="tab"
+                aria-selected={tab === entry}
+                data-testid={`prompt-home-tab-${entry}`}
+                className={`od-prompt-home-tab${tab === entry ? ' active' : ''}`}
+                onClick={() => setTab(entry)}
+              >
+                {t(TAB_LABEL_KEYS[entry])}
+              </button>
+            ))}
+          </div>
 
-        <div
-          className={`od-prompt-home-composer${isDragging ? ' drag-over' : ''}`}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
           <div
-            ref={promptInputRef}
-            className={`od-prompt-home-input${editorEmpty ? ' empty' : ''}`}
-            data-testid="prompt-home-input"
-            data-placeholder={t('chat.composerPlaceholder')}
-            contentEditable
-            suppressContentEditableWarning
-            role="textbox"
-            aria-multiline="true"
-            onInput={refreshEditorEmpty}
-            onKeyDown={handleKeyDown}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => {
-              setIsFocused(false);
-              refreshEditorEmpty();
-            }}
-            onClick={(e) => {
-              const target = e.target as HTMLElement;
-              if (target.classList.contains('od-prompt-home-capsule-remove')) {
-                e.preventDefault();
-                e.stopPropagation();
-                removeEditorReference(target);
-              }
-            }}
-            onMouseDown={(e) => {
-              const target = e.target as HTMLElement;
-              if (target.classList.contains('od-prompt-home-capsule-remove')) {
-                e.preventDefault();
-                e.stopPropagation();
-              }
-            }}
-          />
-          <div className="od-prompt-home-composer-foot">
-            {pendingFiles.length > 0 ? (
-              <div className="od-prompt-home-capsules">
-                {pendingFiles.map((file, i) => (
-                  <button
-                    key={`${file.name}-${i}`}
-                    type="button"
-                    className={`od-prompt-home-capsule${isFocused ? ' focused' : ''}`}
-                    onMouseDown={(e) => { if (isFocused) e.preventDefault(); }}
-                    onClick={() => {
-                      if (isFocused) {
-                        insertFileReference(file);
-                      } else {
-                        setPreviewIndex(i);
-                      }
-                    }}
-                    title={file.name}
-                  >
-                    {fileUrls[i] && (
-                      <img className="od-prompt-home-capsule-thumb" src={fileUrls[i]!} alt="" />
-                    )}
-                    <span className="od-prompt-home-capsule-name">{file.name}</span>
-                    <span
-                      className="od-prompt-home-capsule-remove"
-                      role="button"
-                      tabIndex={-1}
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
+            className={`od-prompt-home-composer${isDragging ? ' drag-over' : ''}`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <div
+              ref={promptInputRef}
+              className={`od-prompt-home-input${editorEmpty ? ' empty' : ''}`}
+              data-testid="prompt-home-input"
+              data-placeholder={t('chat.composerPlaceholder')}
+              contentEditable
+              suppressContentEditableWarning
+              role="textbox"
+              aria-multiline="true"
+              onInput={refreshEditorEmpty}
+              onPaste={handlePaste}
+              onKeyDown={handleKeyDown}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => {
+                setIsFocused(false);
+                refreshEditorEmpty();
+              }}
+              onClick={(e) => {
+                const target = e.target as HTMLElement;
+                if (target.classList.contains('od-prompt-home-capsule-remove')) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  removeEditorReference(target);
+                }
+              }}
+              onMouseDown={(e) => {
+                const target = e.target as HTMLElement;
+                if (target.classList.contains('od-prompt-home-capsule-remove')) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }
+              }}
+            />
+            <div className="od-prompt-home-composer-foot">
+              {pendingFiles.length > 0 ? (
+                <div className="od-prompt-home-capsules">
+                  {pendingFiles.map((file, i) => (
+                    <button
+                      key={`${file.name}-${i}`}
+                      type="button"
+                      className={`od-prompt-home-capsule${isFocused ? ' focused' : ''}`}
+                      onMouseDown={(e) => { if (isFocused) e.preventDefault(); }}
+                      onClick={() => {
+                        if (isFocused) {
+                          insertFileReference(file);
+                        } else {
+                          setPreviewIndex(i);
+                        }
                       }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeFile(i);
-                      }}
-                      aria-label={`Remove ${file.name}`}
-                    >×</span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <span className="od-prompt-home-hint">{t('chat.composerHint')}</span>
-            )}
-            <div className="od-prompt-home-foot-actions">
-              {onImportClaudeDesign ? (
-                <>
-                  <input
-                    ref={importInputRef}
-                    type="file"
-                    accept=".zip,application/zip"
-                    hidden
-                    onChange={handleImportPicked}
-                  />
+                      title={file.name}
+                    >
+                      {fileUrls[i] && (
+                        <img className="od-prompt-home-capsule-thumb" src={fileUrls[i]!} alt="" />
+                      )}
+                      <span className="od-prompt-home-capsule-name">{file.name}</span>
+                      <span
+                        className="od-prompt-home-capsule-remove"
+                        role="button"
+                        tabIndex={-1}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeFile(i);
+                        }}
+                        aria-label={`Remove ${file.name}`}
+                      >×</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <span className="od-prompt-home-hint">{t('chat.composerHint')}</span>
+              )}
+              <div className="od-prompt-home-foot-actions">
+                {onImportClaudeDesign ? (
+                  <>
+                    <input
+                      ref={importInputRef}
+                      type="file"
+                      accept=".zip,application/zip"
+                      hidden
+                      onChange={handleImportPicked}
+                    />
+                    <button
+                      type="button"
+                      className="od-prompt-home-foot-icon"
+                      data-testid="prompt-home-import-zip"
+                      disabled={importing}
+                      title={importing ? t('newproj.importingClaudeZip') : t('newproj.importClaudeZipTitle')}
+                      aria-label={t('newproj.importClaudeZip')}
+                      onClick={() => importInputRef.current?.click()}
+                    >
+                      <Icon name="import" size={14} />
+                    </button>
+                  </>
+                ) : null}
+                {onImportFolder ? (
                   <button
                     type="button"
                     className="od-prompt-home-foot-icon"
-                    data-testid="prompt-home-import-zip"
-                    disabled={importing}
-                    title={importing ? t('newproj.importingClaudeZip') : t('newproj.importClaudeZipTitle')}
-                    aria-label={t('newproj.importClaudeZip')}
-                    onClick={() => importInputRef.current?.click()}
+                    data-testid="prompt-home-open-folder"
+                    disabled={(!hasElectronPicker && !baseDir.trim()) || importingFolder}
+                    title={importingFolder ? 'Opening…' : 'Open folder'}
+                    aria-label="Open folder"
+                    onClick={() => void handleOpenFolder()}
                   >
-                    <Icon name="import" size={14} />
+                    <Icon name="folder" size={14} />
                   </button>
-                </>
-              ) : null}
-              {onImportFolder ? (
+                ) : null}
+                <div className="composer-tools-wrap">
+                  <button
+                    ref={toolsTriggerRef}
+                    type="button"
+                    className={`od-prompt-home-foot-icon composer-tools-trigger${toolsOpen ? ' active' : ''}`}
+                    data-testid="prompt-home-cli-settings"
+                    title={t('chat.cliSettingsTitle')}
+                    aria-haspopup="menu"
+                    aria-expanded={toolsOpen}
+                    aria-label={t('chat.cliSettingsAria')}
+                    onClick={() => setToolsOpen((open) => !open)}
+                  >
+                    <Icon name="sliders" size={14} />
+                    {mcpServers.length > 0 ? (
+                      <span className="composer-tools-badge">{mcpServers.length}</span>
+                    ) : null}
+                  </button>
+                  {toolsOpen ? (
+                    <div
+                      ref={toolsMenuRef}
+                      className="composer-tools-menu od-prompt-home-tools-menu"
+                      role="menu"
+                    >
+                      <div className="composer-tools-tabs" role="tablist">
+                        {availableToolsTabs.map((entry) => (
+                          <button
+                            key={entry}
+                            type="button"
+                            role="tab"
+                            aria-selected={toolsTab === entry}
+                            className={`composer-tools-tab${toolsTab === entry ? ' active' : ''}`}
+                            onClick={() => setToolsTab(entry)}
+                          >
+                            {entry === 'mcp' ? (
+                              <>
+                                <Icon name="link" size={12} />
+                                <span>MCP</span>
+                                {mcpServers.length > 0 ? (
+                                  <span className="composer-tools-tab-count">{mcpServers.length}</span>
+                                ) : null}
+                              </>
+                            ) : (
+                              <>
+                                <Icon name="import" size={12} />
+                                <span>{t('chat.importLabel')}</span>
+                              </>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="composer-tools-content">
+                        {toolsTab === 'mcp' && onOpenMcpSettings ? (
+                          <HomeToolsMcpPanel
+                            servers={mcpServers}
+                            onInsert={(serverId) => {
+                              insertPlainTextAtSelection(`Use the \`${serverId}\` MCP server tools. `);
+                              setToolsOpen(false);
+                            }}
+                            onManage={() => {
+                              setToolsOpen(false);
+                              onOpenMcpSettings();
+                            }}
+                          />
+                        ) : null}
+                        {toolsTab === 'import' ? (
+                          <HomeToolsImportPanel
+                            t={t}
+                            onLinkFolder={async () => {
+                              setToolsOpen(false);
+                              await handleOpenFolder();
+                            }}
+                            folderEnabled={Boolean(onImportFolder && (hasElectronPicker || baseDir.trim()))}
+                          />
+                        ) : null}
+                      </div>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="composer-tools-settings"
+                        onClick={() => {
+                          setToolsOpen(false);
+                          onOpenSettings();
+                        }}
+                      >
+                        <Icon name="settings" size={13} />
+                        <span>{t('pet.composerOpenSettings')}</span>
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
                 <button
                   type="button"
-                  className="od-prompt-home-foot-icon"
-                  data-testid="prompt-home-open-folder"
-                  disabled={(!hasElectronPicker && !baseDir.trim()) || importingFolder}
-                  title={importingFolder ? 'Opening…' : 'Open folder'}
-                  aria-label="Open folder"
-                  onClick={() => void handleOpenFolder()}
+                  className="primary od-prompt-home-send"
+                  data-testid="prompt-home-send"
+                  onClick={handleSend}
+                  disabled={editorEmpty && pendingFiles.length === 0}
                 >
-                  <Icon name="folder" size={14} />
+                  <Icon name="send" size={13} />
+                  <span>{t('chat.send')}</span>
                 </button>
-              ) : null}
-              <button
-                type="button"
-                className="primary od-prompt-home-send"
-                data-testid="prompt-home-send"
-                onClick={handleSend}
-                disabled={editorEmpty && pendingFiles.length === 0}
-              >
-                <Icon name="send" size={13} />
-                <span>{t('chat.send')}</span>
-              </button>
+              </div>
             </div>
           </div>
         </div>
@@ -656,6 +882,13 @@ export function PromptHomeView({
               hideSubTabs
               activeTopTab={libraryTab}
               onTopTabChange={setLibraryTab}
+              filterValue={librarySearch}
+              onFilterChange={setLibrarySearch}
+              filterCollapsed={!librarySearchOpen && librarySearch.trim().length === 0}
+              onFilterOpen={() => setLibrarySearchOpen(true)}
+              onFilterBlur={() => {
+                if (librarySearch.trim().length === 0) setLibrarySearchOpen(false);
+              }}
               homeEmbedded
               renderTopTabContent={renderLibraryTabContent}
             />
@@ -708,6 +941,84 @@ export function PromptHomeView({
           onClose={() => setPreviewPromptTemplate(null)}
         />
       ) : null}
+    </div>
+  );
+}
+
+function HomeToolsMcpPanel({
+  servers,
+  onInsert,
+  onManage,
+}: {
+  servers: McpServerConfig[];
+  onInsert: (serverId: string) => void;
+  onManage: () => void;
+}) {
+  return (
+    <>
+      {servers.length === 0 ? (
+        <div className="composer-tools-empty">
+          No MCP servers configured yet. Open Settings to add Higgsfield,
+          GitHub, Filesystem, or a custom server.
+        </div>
+      ) : (
+        <div className="composer-tools-list">
+          {servers.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              role="menuitem"
+              className="composer-tools-row"
+              onClick={() => onInsert(s.id)}
+              title={`Insert a hint that nudges the model to use ${s.label || s.id}`}
+            >
+              <Icon name="link" size={12} />
+              <span className="composer-tools-row-body">
+                <strong>{s.label || s.id}</strong>
+                <span className="composer-tools-row-meta">{s.transport}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      <button
+        type="button"
+        role="menuitem"
+        className="composer-tools-row composer-tools-row-action"
+        onClick={onManage}
+      >
+        <Icon name="settings" size={12} />
+        <span>Manage MCP servers…</span>
+      </button>
+    </>
+  );
+}
+
+function HomeToolsImportPanel({
+  t,
+  onLinkFolder,
+  folderEnabled,
+}: {
+  t: TranslateFn;
+  onLinkFolder: () => Promise<void> | void;
+  folderEnabled: boolean;
+}) {
+  return (
+    <div className="composer-tools-list">
+      <button
+        type="button"
+        className={`composer-import-item${folderEnabled ? ' composer-import-item-enabled' : ''}`}
+        role="menuitem"
+        disabled={!folderEnabled}
+        title={folderEnabled ? t('chat.importFolder') : t('chat.importComingSoon')}
+        onClick={folderEnabled ? () => void onLinkFolder() : (e) => e.preventDefault()}
+      >
+        <span className="ico" aria-hidden>
+          <Icon name="folder" size={14} />
+        </span>
+        <span className="composer-import-item-label">{t('chat.importFolder')}</span>
+        {!folderEnabled && <span className="composer-import-item-soon">{t('chat.importSoon')}</span>}
+      </button>
     </div>
   );
 }
