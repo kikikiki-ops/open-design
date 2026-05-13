@@ -191,26 +191,30 @@ main 的 `initialDraft` state 是 `{ projectId, value } | undefined`（scoped st
 
 ---
 
-## 决策 #5 · DesignFilesPanel UI 谁胜出
+## 决策 #5 · DesignFilesPanel UI 谁胜出 — 已确认
 
 ### 背景
 
-garnet 的 DesignFilesPanel 是 "by-kind sections + plugin folders" 渲染。main 加了 "pagination + 分页表格" 渲染。**结构性冲突**：两套不能同时存在。
+garnet 的 DesignFilesPanel 包含两块独立改动：
+1. **by-kind sections** (`SECTION_ORDER: pages / sketches / scripts / images / other`)：分叉点 `83ddf760` 之前的公共代码，garnet 没动；同期 main 把它**换成**了 `MODIFIED_SECTION_ORDER` + pagination 表格
+2. **Plugin folders 渲染**（`<div key="plugin-folders">` + `pluginFolders.map`）：**garnet 独有新增**，伴随 plugin sharing 工作流
 
-### 我的合并
+### 最终决策（按产品反馈）
 
-**接受 main 的 pagination 渲染**，理由：
-- 合并后的代码中，pagination state（`page` / `pageSize` / `safePage`）被组件其它部分大量引用
-- garnet 的 by-kind sections 渲染丢失，需要 follow-up 补回
+判断逻辑：分叉前公共代码可被 main 的演进覆盖；garnet 独有新增是产品同学特意做的，必须保留。
 
-**没有截图**——需要一个有真实项目 + 真实文件的环境才能演示。当前空状态下两边视觉一样。
-
-### 给产品的问题
-
-| 选项 | 含义 |
+| 元素 | 取舍 |
 |---|---|
-| **接受** main 的 pagination | 顺手；garnet 的 plugin-folders 渲染 + 按 kind 分组 follow-up 补 |
-| **要求**保留 garnet 的 by-kind + plugin folders | 需要把 main 的 pagination 改成 optional 模式，工程量中等 |
+| by-kind sections | 用 main 最新的 pagination 渲染替代 ✅ |
+| Plugin folders 渲染 | **保留 garnet 独有改动** ✅ |
+
+### 合并实现
+
+混合方案：main 的 pagination 主体保留，garnet 的 Plugin folders section 作为 live-artifacts section 与 pagination 之间的一块额外渲染补回。Plugin folders 的 state (`installingFolder` / `sharingFolder` / `installNotice`) 和 handlers (`handleInstallPluginFolder` / `handleSharePluginFolder`) 在 auto-merge 阶段已经保留，所以只需补回 JSX 块本身（~80 行）。
+
+`pnpm --filter @open-design/web run typecheck` 通过。
+
+*注：DesignFilesPanel 只在项目视图里、有真实文件时渲染，空状态截图体现不出差异；待 Track 工作真正集成进项目流程后能从一个 import 来的 plugin folder 项目里看到 Plugin folders section。*
 
 ---
 
@@ -237,21 +241,21 @@ garnet 的 DesignFilesPanel 是 "by-kind sections + plugin folders" 渲染。mai
 
 ---
 
-## 总体判断
+## 总体判断（最新）
 
-| 决策 | 接受 reconcile 的合并方式? | 我的把握 |
+| 决策 | 状态 | 备注 |
 |---|---|---|
-| #1 SettingsDialog 保留 main nav-item | 待产品确认 | **倾向接受**（最低破坏） |
-| #2 EntryView → EntryShell wrapper | 待产品确认 | **倾向接受**（保留 garnet 投入） |
-| #3 `/integrations` `/automations` 顶级路由 | 待产品确认 | **倾向接受**（garnet 设计意图） |
-| #4 pendingPrompt 合并 | 无需 | 高（两边逻辑都保留） |
-| #5 DesignFilesPanel | 待产品确认 | 中（丢失 garnet plugin-folders 渲染） |
-| #6 guard.ts 路径 | 无需 | 高 |
-| #7 server.ts (10 hunks) | 无需 | 中（typecheck + 启动 OK，但 garnet plugin 路由完整性待测） |
+| #1 SettingsDialog 保留 main nav-item | ✅ 已确认 | 保留 main 加的 Memory / Skills / External MCP / Connectors / Routines / MCP server |
+| #2 EntryView → EntryShell wrapper | ✅ 已确认 | 接受 garnet 改动；PetRail / image-templates / video-templates 进 follow-up |
+| #3 `/integrations` `/automations` 顶级路由 | ✅ 已确认 | garnet 特色路由，保留 |
+| #4 pendingPrompt 合并 | ✅ 工程细节 | 两边逻辑都保留 |
+| #5 DesignFilesPanel | ✅ 已确认 | 混合：main pagination 主体 + garnet Plugin folders section 保留 |
+| #6 guard.ts 路径 | ✅ 工程细节 | 用 main 路径 |
+| #7 server.ts (10 hunks) | ✅ 工程细节 | typecheck + 启动 OK |
 
-**两个 follow-up 队列**：
+**Follow-up 队列**：
 1. **必须做**：Track A（Skills tab 接真组件）+ Track B（Automations 卡片接真数据）—— 否则顶级路由的"Coming soon" 一直占着
-2. **建议做**：PetRail / image-templates / video-templates / DesignFilesPanel plugin-folders / project plugin snapshot 解析 —— 这些是 reconcile 过程中为了完成合并而暂时丢弃的 main 或 garnet 功能，产品确认重要性后排单独 PR
+2. **建议做**：PetRail / image-templates / video-templates 接入 EntryShell；garnet 的 project plugin snapshot 解析逻辑重新集成到 `project-routes.ts`
 
 ---
 
