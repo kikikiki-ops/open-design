@@ -1,0 +1,584 @@
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useT } from '../i18n';
+import { navigate, type EntryHomeView, type Route } from '../router';
+import type { Project } from '../types';
+import { Icon, type IconName } from './Icon';
+
+type WorkspaceChromeTab =
+  | {
+      id: string;
+      kind: 'entry';
+      view: EntryHomeView;
+      createdAt: number;
+      lastActiveAt: number;
+    }
+  | {
+      id: string;
+      kind: 'project';
+      projectId: string;
+      conversationId: string | null;
+      fileName: string | null;
+      createdAt: number;
+      lastActiveAt: number;
+    }
+  | {
+      id: string;
+      kind: 'marketplace';
+      pluginId: string | null;
+      createdAt: number;
+      lastActiveAt: number;
+    };
+
+interface WorkspaceTabsState {
+  tabs: WorkspaceChromeTab[];
+  activeTabId: string;
+}
+
+interface DisplayTab {
+  id: string;
+  title: string;
+  meta: string;
+  icon: IconName;
+  tab: WorkspaceChromeTab;
+}
+
+interface Props {
+  route: Route;
+  projects: Project[];
+  actions?: ReactNode;
+}
+
+const STORAGE_KEY = 'open-design:workspace-tabs:v1';
+const MAX_STORED_TABS = 60;
+const MAX_VISIBLE_CHROME_TABS = 16;
+const MAX_SEARCH_RESULTS = 80;
+
+function nowId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function createEntryTab(view: EntryHomeView, timestamp = Date.now()): WorkspaceChromeTab {
+  return {
+    id: `entry:${view}:${nowId()}`,
+    kind: 'entry',
+    view,
+    createdAt: timestamp,
+    lastActiveAt: timestamp,
+  };
+}
+
+function tabFromRoute(route: Route, timestamp = Date.now()): WorkspaceChromeTab {
+  if (route.kind === 'project') {
+    return {
+      id: `project:${route.projectId}`,
+      kind: 'project',
+      projectId: route.projectId,
+      conversationId: route.conversationId ?? null,
+      fileName: route.fileName,
+      createdAt: timestamp,
+      lastActiveAt: timestamp,
+    };
+  }
+  if (route.kind === 'marketplace' || route.kind === 'marketplace-detail') {
+    const pluginId = route.kind === 'marketplace-detail' ? route.pluginId : null;
+    return {
+      id: pluginId ? `marketplace:${pluginId}` : 'marketplace',
+      kind: 'marketplace',
+      pluginId,
+      createdAt: timestamp,
+      lastActiveAt: timestamp,
+    };
+  }
+  return createEntryTab(route.view, timestamp);
+}
+
+function routeForTab(tab: WorkspaceChromeTab): Route {
+  if (tab.kind === 'project') {
+    return {
+      kind: 'project',
+      projectId: tab.projectId,
+      conversationId: tab.conversationId,
+      fileName: tab.fileName,
+    };
+  }
+  if (tab.kind === 'marketplace') {
+    return tab.pluginId
+      ? { kind: 'marketplace-detail', pluginId: tab.pluginId }
+      : { kind: 'marketplace' };
+  }
+  return { kind: 'home', view: tab.view };
+}
+
+function tabMatchesRoute(tab: WorkspaceChromeTab, route: Route): boolean {
+  if (route.kind === 'project') {
+    return tab.kind === 'project' && tab.projectId === route.projectId;
+  }
+  if (route.kind === 'marketplace') {
+    return tab.kind === 'marketplace' && tab.pluginId === null;
+  }
+  if (route.kind === 'marketplace-detail') {
+    return tab.kind === 'marketplace' && tab.pluginId === route.pluginId;
+  }
+  return tab.kind === 'entry' && tab.view === route.view;
+}
+
+function reviveTab(value: unknown): WorkspaceChromeTab | null {
+  if (value === null || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  const id = typeof record.id === 'string' ? record.id : '';
+  const createdAt = typeof record.createdAt === 'number' ? record.createdAt : Date.now();
+  const lastActiveAt = typeof record.lastActiveAt === 'number' ? record.lastActiveAt : createdAt;
+  if (!id) return null;
+  if (record.kind === 'entry') {
+    const view = record.view;
+    if (
+      view === 'home'
+      || view === 'projects'
+      || view === 'tasks'
+      || view === 'plugins'
+      || view === 'design-systems'
+      || view === 'integrations'
+    ) {
+      return { id, kind: 'entry', view, createdAt, lastActiveAt };
+    }
+  }
+  if (record.kind === 'project' && typeof record.projectId === 'string') {
+    return {
+      id,
+      kind: 'project',
+      projectId: record.projectId,
+      conversationId: typeof record.conversationId === 'string' ? record.conversationId : null,
+      fileName: typeof record.fileName === 'string' ? record.fileName : null,
+      createdAt,
+      lastActiveAt,
+    };
+  }
+  if (record.kind === 'marketplace') {
+    return {
+      id,
+      kind: 'marketplace',
+      pluginId: typeof record.pluginId === 'string' ? record.pluginId : null,
+      createdAt,
+      lastActiveAt,
+    };
+  }
+  return null;
+}
+
+function capTabs(tabs: WorkspaceChromeTab[], activeTabId: string): WorkspaceChromeTab[] {
+  if (tabs.length <= MAX_STORED_TABS) return tabs;
+  const active = tabs.find((tab) => tab.id === activeTabId) ?? null;
+  const kept = [...tabs]
+    .filter((tab) => tab.id !== activeTabId)
+    .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
+    .slice(0, MAX_STORED_TABS - (active ? 1 : 0))
+    .sort((a, b) => a.createdAt - b.createdAt);
+  return active ? [...kept, active] : kept;
+}
+
+function initialTabsState(route: Route): WorkspaceTabsState {
+  const fallback = tabFromRoute(route);
+  if (typeof window === 'undefined') {
+    return { tabs: [fallback], activeTabId: fallback.id };
+  }
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { tabs: [fallback], activeTabId: fallback.id };
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed === null || typeof parsed !== 'object') {
+      return { tabs: [fallback], activeTabId: fallback.id };
+    }
+    const record = parsed as Record<string, unknown>;
+    const tabs = Array.isArray(record.tabs)
+      ? record.tabs.map(reviveTab).filter((tab): tab is WorkspaceChromeTab => tab !== null)
+      : [];
+    const activeTabId = typeof record.activeTabId === 'string' ? record.activeTabId : '';
+    if (tabs.length === 0) return { tabs: [fallback], activeTabId: fallback.id };
+    return syncStateToRoute({ tabs, activeTabId: activeTabId || tabs[0]!.id }, route);
+  } catch {
+    return { tabs: [fallback], activeTabId: fallback.id };
+  }
+}
+
+function syncStateToRoute(state: WorkspaceTabsState, route: Route): WorkspaceTabsState {
+  const timestamp = Date.now();
+  const currentActive = state.tabs.find((tab) => tab.id === state.activeTabId) ?? null;
+  let nextTabs = state.tabs;
+  let activeTabId = state.activeTabId;
+
+  if (route.kind === 'home' && currentActive?.kind === 'entry') {
+    activeTabId = currentActive.id;
+    nextTabs = state.tabs.map((tab) =>
+      tab.id === currentActive.id
+        ? { ...tab, view: route.view, lastActiveAt: timestamp }
+        : tab,
+    );
+  } else {
+    const existing = state.tabs.find((tab) => tabMatchesRoute(tab, route)) ?? null;
+    if (existing) {
+      activeTabId = existing.id;
+      nextTabs = state.tabs.map((tab) =>
+        tab.id === existing.id
+          ? { ...tabFromRoute(route, tab.createdAt), lastActiveAt: timestamp, id: tab.id }
+          : tab,
+      );
+    } else {
+      const nextTab = tabFromRoute(route, timestamp);
+      activeTabId = nextTab.id;
+      nextTabs = [...state.tabs, nextTab];
+    }
+  }
+
+  const capped = capTabs(nextTabs, activeTabId);
+  return {
+    tabs: capped,
+    activeTabId: capped.some((tab) => tab.id === activeTabId) ? activeTabId : capped[0]?.id ?? '',
+  };
+}
+
+function visibleChromeTabs(tabs: WorkspaceChromeTab[], activeTabId: string): WorkspaceChromeTab[] {
+  if (tabs.length <= MAX_VISIBLE_CHROME_TABS) return tabs;
+  const activeIndex = Math.max(0, tabs.findIndex((tab) => tab.id === activeTabId));
+  const half = Math.floor(MAX_VISIBLE_CHROME_TABS / 2);
+  const start = Math.max(0, Math.min(activeIndex - half, tabs.length - MAX_VISIBLE_CHROME_TABS));
+  return tabs.slice(start, start + MAX_VISIBLE_CHROME_TABS);
+}
+
+function normalizeSearch(value: string): string {
+  return value.trim().toLocaleLowerCase();
+}
+
+export function WorkspaceTabsBar({ route, projects, actions }: Props) {
+  const t = useT();
+  const [state, setState] = useState<WorkspaceTabsState>(() => initialTabsState(route));
+  const [tabsMenuOpen, setTabsMenuOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  const projectById = useMemo(
+    () => new Map(projects.map((project) => [project.id, project])),
+    [projects],
+  );
+
+  const displayTabs = useMemo(
+    () => state.tabs.map((tab) => displayTabFor(tab, projectById, t)),
+    [state.tabs, projectById, t],
+  );
+  const displayTabById = useMemo(
+    () => new Map(displayTabs.map((tab) => [tab.id, tab])),
+    [displayTabs],
+  );
+  const visibleTabs = useMemo(
+    () => visibleChromeTabs(state.tabs, state.activeTabId),
+    [state.tabs, state.activeTabId],
+  );
+  const hiddenTabCount = Math.max(0, state.tabs.length - visibleTabs.length);
+  const filteredTabs = useMemo(() => {
+    const needle = normalizeSearch(query);
+    const source = needle
+      ? displayTabs.filter((tab) => {
+          const haystack = `${tab.title} ${tab.meta}`.toLocaleLowerCase();
+          return haystack.includes(needle);
+        })
+      : displayTabs;
+    return source
+      .slice()
+      .sort((a, b) => b.tab.lastActiveAt - a.tab.lastActiveAt)
+      .slice(0, MAX_SEARCH_RESULTS);
+  }, [displayTabs, query]);
+
+  useEffect(() => {
+    setState((current) => syncStateToRoute(current, route));
+  }, [route]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      // Best-effort browser chrome state. Navigation itself remains URL-driven.
+    }
+  }, [state]);
+
+  useEffect(() => {
+    if (!tabsMenuOpen) return;
+    const frame = window.requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [tabsMenuOpen]);
+
+  useEffect(() => {
+    if (!tabsMenuOpen) return;
+    function onPointerDown(event: MouseEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setTabsMenuOpen(false);
+      }
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setTabsMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [tabsMenuOpen]);
+
+  function openTab(tab: WorkspaceChromeTab) {
+    setState((current) => ({
+      tabs: current.tabs.map((item) =>
+        item.id === tab.id ? { ...item, lastActiveAt: Date.now() } : item,
+      ),
+      activeTabId: tab.id,
+    }));
+    setTabsMenuOpen(false);
+    navigate(routeForTab(tab));
+  }
+
+  function openHomeTab() {
+    const existingHome = state.tabs.find((tab) => tab.kind === 'entry' && tab.view === 'home');
+    if (existingHome) {
+      openTab(existingHome);
+      return;
+    }
+    const tab = createEntryTab('home');
+    setState((current) => ({
+      tabs: capTabs([...current.tabs, tab], tab.id),
+      activeTabId: tab.id,
+    }));
+    navigate({ kind: 'home', view: 'home' });
+  }
+
+  function createNewTab() {
+    const tab = createEntryTab('home');
+    setState((current) => ({
+      tabs: capTabs([...current.tabs, tab], tab.id),
+      activeTabId: tab.id,
+    }));
+    setTabsMenuOpen(false);
+    navigate({ kind: 'home', view: 'home' });
+  }
+
+  function closeTab(tabId: string) {
+    let nextRoute: Route | null = null;
+    setState((current) => {
+      const closingIndex = current.tabs.findIndex((tab) => tab.id === tabId);
+      if (closingIndex < 0) return current;
+      const nextTabs = current.tabs.filter((tab) => tab.id !== tabId);
+      if (nextTabs.length === 0) {
+        const homeTab = createEntryTab('home');
+        nextRoute = routeForTab(homeTab);
+        return { tabs: [homeTab], activeTabId: homeTab.id };
+      }
+      if (current.activeTabId !== tabId) {
+        return { ...current, tabs: nextTabs };
+      }
+      const replacement = nextTabs[Math.min(closingIndex, nextTabs.length - 1)] ?? nextTabs[0]!;
+      nextRoute = routeForTab(replacement);
+      return { tabs: nextTabs, activeTabId: replacement.id };
+    });
+    if (nextRoute) navigate(nextRoute);
+  }
+
+  return (
+    <header className="app-chrome-header workspace-tabs-chrome" aria-label="Workspace tabs">
+      <div className="app-chrome-traffic-space workspace-tabs-traffic" aria-hidden />
+      <button
+        type="button"
+        className="workspace-tabs-identity"
+        onClick={openHomeTab}
+        title={t('entry.navHome')}
+        aria-label={t('entry.navHome')}
+      >
+        <span className="workspace-tabs-identity__mark" aria-hidden>
+          <img src="/app-icon.svg" alt="" draggable={false} />
+        </span>
+        <span className="workspace-tabs-identity__text">
+          <span className="workspace-tabs-identity__name">{t('app.brand')}</span>
+          <span className="workspace-tabs-identity__meta">Workspace</span>
+        </span>
+      </button>
+      <div className="workspace-tabs-strip" role="tablist" aria-label="Open workspaces">
+        {visibleTabs.map((tab) => {
+          const display = displayTabById.get(tab.id) ?? displayTabFor(tab, projectById, t);
+          const active = tab.id === state.activeTabId;
+          return (
+            <div
+              key={tab.id}
+              className={`workspace-tab${active ? ' is-active' : ''}`}
+              role="tab"
+              aria-selected={active}
+              title={display.title}
+            >
+              <button
+                type="button"
+                className="workspace-tab__main"
+                onClick={() => openTab(tab)}
+                title={display.title}
+              >
+                <span className="workspace-tab__icon" aria-hidden>
+                  <Icon name={display.icon} size={14} />
+                </span>
+                <span className="workspace-tab__label">{display.title}</span>
+              </button>
+              <button
+                type="button"
+                className="workspace-tab__close"
+                aria-label={t('common.close')}
+                title={t('common.close')}
+                onClick={() => closeTab(tab.id)}
+              >
+                <Icon name="close" size={11} />
+              </button>
+            </div>
+          );
+        })}
+        {hiddenTabCount > 0 ? (
+          <button
+            type="button"
+            className="workspace-tab workspace-tab--overflow"
+            onClick={() => setTabsMenuOpen(true)}
+            title="Show hidden tabs"
+          >
+            {hiddenTabCount} more
+          </button>
+        ) : null}
+      </div>
+      <div className="workspace-tabs-spacer" aria-hidden />
+      {actions ? <div className="workspace-tabs-extra-actions">{actions}</div> : null}
+      <div className="workspace-tabs-actions" ref={menuRef}>
+        <button
+          type="button"
+          className="workspace-tabs-icon-btn"
+          onClick={createNewTab}
+          title="New tab"
+          aria-label="New tab"
+        >
+          <Icon name="plus" size={16} />
+        </button>
+        <button
+          type="button"
+          className={`workspace-tabs-icon-btn${tabsMenuOpen ? ' is-active' : ''}`}
+          onClick={() => setTabsMenuOpen((open) => !open)}
+          title="Search tabs"
+          aria-label="Search tabs"
+          aria-haspopup="dialog"
+          aria-expanded={tabsMenuOpen}
+        >
+          <Icon name="search" size={15} />
+        </button>
+        {tabsMenuOpen ? (
+          <div className="workspace-tabs-popover" role="dialog" aria-label="Search tabs">
+            <div className="workspace-tabs-search">
+              <Icon name="search" size={14} />
+              <input
+                ref={searchInputRef}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search tabs"
+                aria-label="Search tabs"
+              />
+            </div>
+            <div className="workspace-tabs-popover__section">
+              <span>Open tabs</span>
+              <span>{state.tabs.length}</span>
+            </div>
+            <div className="workspace-tabs-list" role="listbox" aria-label="Open tabs">
+              {filteredTabs.length > 0 ? (
+                filteredTabs.map((display) => {
+                  const active = display.id === state.activeTabId;
+                  return (
+                    <div
+                      key={display.id}
+                      className={`workspace-tabs-list__item${active ? ' is-active' : ''}`}
+                      role="option"
+                      aria-selected={active}
+                    >
+                      <button
+                        type="button"
+                        className="workspace-tabs-list__main"
+                        onClick={() => openTab(display.tab)}
+                      >
+                        <span className="workspace-tabs-list__icon" aria-hidden>
+                          <Icon name={display.icon} size={15} />
+                        </span>
+                        <span className="workspace-tabs-list__text">
+                          <span className="workspace-tabs-list__title">{display.title}</span>
+                          <span className="workspace-tabs-list__meta">{display.meta}</span>
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="workspace-tabs-list__close"
+                        onClick={() => closeTab(display.id)}
+                        title={t('common.close')}
+                        aria-label={t('common.close')}
+                      >
+                        <Icon name="close" size={11} />
+                      </button>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="workspace-tabs-empty">No tabs found</div>
+              )}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </header>
+  );
+}
+
+function displayTabFor(
+  tab: WorkspaceChromeTab,
+  projectById: Map<string, Project>,
+  t: ReturnType<typeof useT>,
+): DisplayTab {
+  if (tab.kind === 'project') {
+    const project = projectById.get(tab.projectId);
+    return {
+      id: tab.id,
+      title: project?.name?.trim() || t('common.untitled'),
+      meta: 'Project',
+      icon: 'folder',
+      tab,
+    };
+  }
+  if (tab.kind === 'marketplace') {
+    return {
+      id: tab.id,
+      title: tab.pluginId ? 'Plugin details' : 'Marketplace',
+      meta: 'Plugins',
+      icon: 'grid',
+      tab,
+    };
+  }
+  const entryTitle: Record<EntryHomeView, string> = {
+    home: t('entry.navHome'),
+    projects: t('entry.navProjects'),
+    tasks: 'Automations',
+    plugins: 'Plugins',
+    'design-systems': t('entry.navDesignSystems'),
+    integrations: 'Integrations',
+  };
+  const entryIcon: Record<EntryHomeView, IconName> = {
+    home: 'home',
+    projects: 'folder',
+    tasks: 'kanban',
+    plugins: 'grid',
+    'design-systems': 'palette',
+    integrations: 'link',
+  };
+  return {
+    id: tab.id,
+    title: entryTitle[tab.view],
+    meta: tab.view === 'home' ? 'Start a new project' : 'Workspace',
+    icon: entryIcon[tab.view],
+    tab,
+  };
+}

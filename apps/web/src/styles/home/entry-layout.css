@@ -272,6 +272,12 @@
      topbar's vertical footprint (12px top + 32px chip + 12px bottom). */
   --entry-topbar-h: 56px;
 }
+.workspace-shell .entry-main--scroll {
+  --entry-topbar-h: 0px;
+}
+.workspace-shell .entry-main__topbar {
+  display: none;
+}
 .entry-main__inner {
   width: 100%;
   max-width: 1440px;

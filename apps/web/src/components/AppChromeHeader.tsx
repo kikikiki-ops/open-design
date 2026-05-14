@@ -7,17 +7,24 @@ interface Props {
   children?: ReactNode;
   onBack?: () => void;
   backLabel?: string;
+  showTrafficSpace?: boolean;
 }
 
 export const APP_CHROME_FILE_ACTIONS_ID = 'app-chrome-file-actions';
 
-export function AppChromeHeader({ actions, children, onBack, backLabel }: Props) {
+export function AppChromeHeader({
+  actions,
+  children,
+  onBack,
+  backLabel,
+  showTrafficSpace = true,
+}: Props) {
   const t = useT();
   const resolvedBackLabel = backLabel ?? t('project.backToProjects');
 
   return (
     <header className="app-chrome-header">
-      <div className="app-chrome-traffic-space" aria-hidden />
+      {showTrafficSpace ? <div className="app-chrome-traffic-space" aria-hidden /> : null}
       <div className="app-chrome-brand" aria-label={t('app.brand')}>
         <span className="app-chrome-mark" aria-hidden>
           <img src="/app-icon.svg" alt="" className="brand-mark-img" draggable={false} />

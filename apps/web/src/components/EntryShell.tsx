@@ -176,6 +176,7 @@ interface Props {
       appliedPluginSnapshotId?: string;
       pluginInputs?: Record<string, unknown>;
       autoSendFirstMessage?: boolean;
+      pendingFiles?: File[];
     },
   ) => void;
   onCreatePluginShareProject: (
@@ -333,7 +334,8 @@ export function EntryShell({
   // before continuing.
   function handlePluginLoopSubmit(payload: PluginLoopSubmit) {
     const head = payload.prompt.trim().split(/\s+/).slice(0, 8).join(' ');
-    const fallbackName = head.length > 0 ? head : 'Untitled';
+    const firstAttachmentName = payload.attachments?.[0]?.name ?? '';
+    const fallbackName = head.length > 0 ? head : firstAttachmentName || 'Untitled';
     const name =
       payload.pluginTitle && payload.pluginTitle.trim().length > 0
         ? payload.pluginTitle.trim()
@@ -355,6 +357,9 @@ export function EntryShell({
         ? { appliedPluginSnapshotId: payload.appliedPluginSnapshotId }
         : {}),
       ...(payload.pluginInputs ? { pluginInputs: payload.pluginInputs } : {}),
+      ...(payload.attachments && payload.attachments.length > 0
+        ? { pendingFiles: payload.attachments }
+        : {}),
       autoSendFirstMessage: true,
     });
   }
