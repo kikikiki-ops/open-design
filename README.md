@@ -1,5 +1,7 @@
 # Open Design
 
+> 🔥 **`0.8.0-preview` is here.** Help us ship the open, agent-native alternative to Figma. Installer downloads, the full announcement, and three ways to help: → [**Discussion #1727**](https://github.com/nexu-io/open-design/discussions/1727) · runs side-by-side with your current 0.7.
+
 > **The open-source alternative to [Claude Design][cd].** Local-first, web-deployable, BYOK at every layer — **16 coding-agent CLIs** auto-detected on your `PATH` (Claude Code, Codex, Devin for Terminal, Cursor Agent, Gemini CLI, OpenCode, Qwen, Qoder CLI, GitHub Copilot CLI, Hermes, Kimi, Pi, Kiro, Kilo, Mistral Vibe, DeepSeek TUI) become the design engine, driven by **31 composable Skills** and **72 brand-grade Design Systems**. No CLI? An OpenAI-compatible BYOK proxy is the same loop minus the spawn.
 
 <p align="center">
