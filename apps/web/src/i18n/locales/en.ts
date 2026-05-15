@@ -127,7 +127,7 @@ export const en: Dict = {
   'settings.apiHint': 'Calls are sent through the local daemon proxy to the base URL you set. The key is stored only in this browser and sent with provider requests.',
   'settings.skipForNow': 'Skip for now',
   'settings.getStarted': 'Get started',
-  'settings.envConfigure': 'Execution mode',
+  'settings.envConfigure': 'Configure execution mode',
   'settings.localCli': 'Local CLI',
   'settings.anthropicApi': 'Anthropic API',
   'settings.noAgentSelected': 'no agent selected',
