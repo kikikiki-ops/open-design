@@ -8,6 +8,9 @@ This guide tells you exactly where to look for each type of contribution and wha
 
 ---
 
+> [!IMPORTANT]
+> **Branch targeting for active work.** If your PR is part of the current **`0.8.0` push**, branch from and open it against [`preview/v0.8.0`](https://github.com/nexu-io/open-design/tree/preview/v0.8.0), not `main`. `main` remains the stable repo entry; fast-moving `0.8.0` features and fixes should land on the preview branch first.
+
 ## Three things you can ship in one afternoon
 
 | If you want to… | You're really adding | Where it lives | Ship size |

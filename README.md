@@ -32,6 +32,9 @@
 
 ---
 
+> [!IMPORTANT]
+> **Contributor branch guidance.** We are moving fast on **Open Design `0.8.0`** right now. If you previously contributed on `main` / `0.7.x` and want to pick up new fixes or features, please switch your working branch and PR target to [`preview/v0.8.0`](https://github.com/nexu-io/open-design/tree/preview/v0.8.0). Use `main` for stable docs / repo entry, but land active `0.8.0` work on the preview branch first.
+
 ## Why this exists
 
 Anthropic's [Claude Design][cd] (released 2026-04-17, Opus 4.7) showed what happens when an LLM stops writing prose and starts shipping design artifacts. It went viral — and stayed closed-source, paid-only, cloud-only, locked to Anthropic's model and Anthropic's skills. There is no checkout, no self-host, no Vercel deploy, no swap-in-your-own-agent.
@@ -995,6 +998,7 @@ If this saved you thirty minutes — give it a ★. Stars don't pay rent, but th
 
 Issues, PRs, new skills, and new design systems are all welcome. The highest-leverage contributions are usually one folder, one Markdown file, or one PR-sized adapter:
 
+- **Working on the current fast-moving line?** If your change targets the ongoing `0.8.0` push, branch from and open your PR against [`preview/v0.8.0`](https://github.com/nexu-io/open-design/tree/preview/v0.8.0), not `main`.
 - **Add a skill** — drop a folder into [`skills/`](skills/) following the [`SKILL.md`][skill] convention.
 - **Add a design system** — drop a `DESIGN.md` into [`design-systems/<brand>/`](design-systems/) using the 9-section schema.
 - **Wire up a new coding-agent CLI** — one entry in [`apps/daemon/src/agents.ts`](apps/daemon/src/agents.ts).

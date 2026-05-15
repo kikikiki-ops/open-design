@@ -31,6 +31,9 @@
 
 ---
 
+> [!IMPORTANT]
+> **贡献分支说明。** 我们现在正在全速推进 **Open Design `0.8.0`**。如果你之前是在 `main` / `0.7.x` 上参与贡献、现在准备继续跟进新的功能或修复，请把你的工作分支和 PR 目标切换到 [`preview/v0.8.0`](https://github.com/nexu-io/open-design/tree/preview/v0.8.0)。`main` 仍然作为稳定入口，但当前活跃的 `0.8.0` 工作应优先落到 preview 分支。
+
 ## 为什么要做这个
 
 Anthropic 的 [Claude Design][cd]（2026-04-17 发布，基于 Opus 4.7）让大家第一次看到：当一个 LLM 不再写废话、开始直接交付设计成品，会是什么样子。它瞬间出圈 —— 然后保持**闭源**、付费、只跑在云上、绑定 Anthropic 的模型和 Anthropic 的内部 skill。没有 checkout，没有自托管，没有 Vercel 部署，也换不了自己的 agent。
@@ -700,6 +703,7 @@ Daemon 启动时从 `PATH` 自动检测，无需配置。流式分发逻辑在 [
 
 欢迎 issue、PR、新 skill、新 design system。收益最高的贡献往往就是一个文件夹、一份 Markdown，或者一个 PR 大小的 adapter：
 
+- **如果你做的是当前 `0.8.0` 这条活跃线的功能或修复** —— 请从并且提 PR 到 [`preview/v0.8.0`](https://github.com/nexu-io/open-design/tree/preview/v0.8.0)，不要直接提到 `main`。
 - **加一个 skill** —— 往 [`skills/`](skills/) 丢一个文件夹，遵循 [`SKILL.md`][skill] 规范。
 - **加一套 design system** —— 往 [`design-systems/<brand>/`](design-systems/) 丢一份 `DESIGN.md`，用 9 段式 schema。
 - **接入一个新的 coding-agent CLI** —— 在 [`apps/daemon/src/agents.ts`](apps/daemon/src/agents.ts) 里加一项。
