@@ -21,7 +21,7 @@
   flex-direction: column;
   align-items: center;
   gap: 14px;
-  padding: 24px 0 8px;
+  padding: 32px 0 8px;
 }
 .home-hero__brand {
   display: inline-flex;

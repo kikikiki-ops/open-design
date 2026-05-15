@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { WorkspaceTabsBar } from '../../src/components/WorkspaceTabsBar';
@@ -58,22 +58,19 @@ describe('WorkspaceTabsBar navigation semantics', () => {
     cleanup();
   });
 
-  it('keeps Home pinned when in-tab navigation opens a project', async () => {
+  it('keeps each new Home tab independent when one tab navigates', async () => {
     const { rerender } = render(
       <WorkspaceTabsBar route={homeRoute} projects={[project]} />,
     );
 
     expect(screen.getAllByRole('tab')).toHaveLength(1);
-    expect(
-      within(screen.getByRole('tab', { name: /Home/ })).queryByRole('button', {
-        name: 'Close',
-      }),
-    ).toBeNull();
 
+    fireEvent.click(screen.getByRole('button', { name: 'New tab' }));
     fireEvent.click(screen.getByRole('button', { name: 'New tab' }));
 
     await waitFor(() => {
-      expect(screen.getAllByRole('tab')).toHaveLength(1);
+      const labels = screen.getAllByRole('tab').map((tab) => tab.textContent ?? '');
+      expect(labels.filter((label) => label.includes('Home'))).toHaveLength(3);
     });
     expect(navigate).toHaveBeenCalledWith(homeRoute);
 
@@ -82,24 +79,13 @@ describe('WorkspaceTabsBar navigation semantics', () => {
     await waitFor(() => {
       const tabs = screen.getAllByRole('tab');
       const labels = tabs.map((tab) => tab.textContent ?? '');
-      expect(tabs).toHaveLength(2);
-      expect(labels.filter((label) => label.includes('Home'))).toHaveLength(1);
+      expect(tabs).toHaveLength(3);
+      expect(labels.filter((label) => label.includes('Home'))).toHaveLength(2);
       expect(labels.some((label) => label.includes('Project Alpha'))).toBe(true);
     });
-
-    expect(
-      within(screen.getByRole('tab', { name: /Home/ })).queryByRole('button', {
-        name: 'Close',
-      }),
-    ).toBeNull();
-    expect(
-      within(screen.getByRole('tab', { name: /Project Alpha/ })).queryByRole('button', {
-        name: 'Close',
-      }),
-    ).not.toBeNull();
   });
 
-  it('collapses restored Home duplicates into one pinned tab', async () => {
+  it('preserves restored Home tabs instead of collapsing them by route', async () => {
     window.localStorage.setItem(
       'open-design:workspace-tabs:v1',
       JSON.stringify({
@@ -127,7 +113,20 @@ describe('WorkspaceTabsBar navigation semantics', () => {
 
     await waitFor(() => {
       const labels = screen.getAllByRole('tab').map((tab) => tab.textContent ?? '');
-      expect(labels.filter((label) => label.includes('Home'))).toHaveLength(1);
+      expect(labels.filter((label) => label.includes('Home'))).toHaveLength(2);
     });
+  });
+
+  it('creates a replacement Home tab when the last tab is closed', async () => {
+    render(<WorkspaceTabsBar route={homeRoute} projects={[project]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    await waitFor(() => {
+      const labels = screen.getAllByRole('tab').map((tab) => tab.textContent ?? '');
+      expect(labels).toHaveLength(1);
+      expect(labels[0]).toContain('Home');
+    });
+    expect(navigate).toHaveBeenCalledWith(homeRoute);
   });
 });

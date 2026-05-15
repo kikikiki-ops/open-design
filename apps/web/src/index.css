@@ -341,7 +341,7 @@ code {
 .workspace-tabs-chrome.app-chrome-header {
   min-height: 38px;
   height: 38px;
-  padding: 0 8px 0 0;
+  padding: 0 8px 0 12px;
   gap: 0;
   background: color-mix(in srgb, var(--bg-panel) 88%, var(--bg-subtle));
   border-bottom: 1px solid color-mix(in srgb, var(--border) 74%, transparent);
@@ -350,12 +350,11 @@ code {
   -webkit-app-region: drag;
 }
 .workspace-tabs-chrome .workspace-tabs-traffic {
-  margin-right: var(--app-chrome-traffic-margin);
+  margin-right: calc(var(--app-chrome-traffic-margin) + 8px);
 }
 .workspace-tabs-new-btn {
   width: 24px;
   height: 24px;
-  margin-left: 4px;
   padding: 0;
   border: 0;
   border-radius: 5px;
@@ -401,7 +400,7 @@ code {
 .workspace-tabs-strip {
   align-self: stretch;
   min-width: 0;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   gap: 0;
@@ -413,9 +412,9 @@ code {
 .workspace-tab {
   position: relative;
   height: 26px;
-  min-width: 64px;
-  max-width: 148px;
-  flex: 0 1 128px;
+  min-width: 76px;
+  max-width: 136px;
+  flex: 1 1 124px;
   padding: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 18px;
@@ -449,10 +448,6 @@ code {
   border-color: color-mix(in srgb, var(--border-strong) 52%, transparent);
   color: var(--text-strong);
   box-shadow: 0 1px 1px color-mix(in srgb, var(--text) 6%, transparent);
-}
-.workspace-tab--pinned {
-  grid-template-columns: minmax(0, 1fr);
-  flex-basis: 98px;
 }
 .workspace-tab:hover::before,
 .workspace-tab.is-active::before {
@@ -530,6 +525,7 @@ code {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
+  height: 26px;
   min-width: auto;
   max-width: none;
   padding: 0 9px;
@@ -541,8 +537,9 @@ code {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   flex: 0 0 auto;
+  margin-left: 3px;
   z-index: 35;
   -webkit-app-region: no-drag;
 }
@@ -618,9 +615,6 @@ code {
   grid-template-columns: minmax(0, 1fr) 26px;
   align-items: center;
   contain: layout style;
-}
-.workspace-tabs-list__item--pinned {
-  grid-template-columns: minmax(0, 1fr);
 }
 .workspace-tabs-list__item:hover,
 .workspace-tabs-list__item.is-active {

@@ -17,7 +17,7 @@
   width: 64px;
   border-right: 1px solid var(--border);
   background: var(--bg-panel);
-  padding: 8px 0 10px;
+  padding: 14px 0 10px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -269,14 +269,14 @@
   padding: 0;
   /* Used by descendants (e.g. the plugins-home Scenario row) to
      pin themselves directly below the sticky topbar. Mirrors the
-     topbar's vertical footprint (12px top + 32px chip + 12px bottom). */
+     topbar's vertical footprint (8px top + 32px chip + 8px bottom). */
   --entry-topbar-h: 48px;
 }
 .entry-main__inner {
   width: 100%;
   max-width: 1440px;
   margin: 0 auto;
-  padding: 32px 32px 64px;
+  padding: 40px 32px 64px;
   display: flex;
   flex-direction: column;
   gap: 32px;
@@ -307,7 +307,7 @@
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
-  padding: 6px 16px;
+  padding: 8px 16px;
   background: var(--bg);
 }
 /* Chip group — the GitHub star, inline model switcher, and Use
