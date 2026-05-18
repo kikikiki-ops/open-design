@@ -12,6 +12,7 @@ import {
   type ConnectorToolSafety,
   type ConnectorStatus,
 } from './catalog.js';
+import { amrConnectorProvider } from './amr.js';
 import { composioConnectorProvider, getStaticComposioCatalogDefinitions, type ComposioAuthConfigPrepareResult, type ComposioConnectionStart } from './composio.js';
 
 export interface ConnectorExecuteRequest {
@@ -536,15 +537,28 @@ export class ConnectorService {
   }
 
   async listDefinitions(signal?: AbortSignal): Promise<ConnectorCatalogDefinition[]> {
-    return composioConnectorProvider.listDefinitions(signal);
+    const amrOptions: { signal?: AbortSignal } = signal === undefined ? {} : { signal };
+    const [composio, amr] = await Promise.all([
+      composioConnectorProvider.listDefinitions(signal).catch(() => []),
+      amrConnectorProvider.listDefinitions(amrOptions).catch(() => []),
+    ]);
+    return [...composio, ...amr];
   }
 
   async listHydratedDefinitions(signal?: AbortSignal): Promise<ConnectorCatalogDefinition[]> {
-    return composioConnectorProvider.listDefinitions(signal, { hydrateTools: true });
+    const amrOptions: { signal?: AbortSignal } = signal === undefined ? {} : { signal };
+    const [composio, amr] = await Promise.all([
+      composioConnectorProvider.listDefinitions(signal, { hydrateTools: true }).catch(() => []),
+      amrConnectorProvider.listDefinitions(amrOptions).catch(() => []),
+    ]);
+    return [...composio, ...amr];
   }
 
   listFastDefinitions(): ConnectorCatalogDefinition[] {
-    return composioConnectorProvider.getFastDefinitions();
+    return [
+      ...composioConnectorProvider.getFastDefinitions(),
+      ...amrConnectorProvider.getFastDefinitions(),
+    ];
   }
 
   getFastDefinition(connectorId: string): ConnectorCatalogDefinition | undefined {
@@ -552,16 +566,21 @@ export class ConnectorService {
   }
 
   async getDefinition(connectorId: string, signal?: AbortSignal): Promise<ConnectorCatalogDefinition | undefined> {
-    return composioConnectorProvider.getDefinition(connectorId, signal);
+    return this.getFastDefinition(connectorId)
+      ?? await composioConnectorProvider.getDefinition(connectorId, signal)
+      ?? await amrConnectorProvider.getDefinition(connectorId, signal);
   }
 
   async getHydratedDefinition(connectorId: string, signal?: AbortSignal): Promise<ConnectorCatalogDefinition | undefined> {
-    return await composioConnectorProvider.getHydratedDefinition(connectorId, signal)
+    return this.getFastDefinition(connectorId)
+      ?? await composioConnectorProvider.getHydratedDefinition(connectorId, signal)
+      ?? await amrConnectorProvider.getDefinition(connectorId, signal)
       ?? await this.getDefinition(connectorId, signal);
   }
 
   async getPreviewDefinition(connectorId: string, options: { toolsLimit: number; toolsCursor?: string; signal?: AbortSignal }): Promise<ConnectorCatalogDefinition | undefined> {
-    return composioConnectorProvider.getPreviewDefinition(connectorId, options);
+    return await amrConnectorProvider.getDefinition(connectorId, options.signal)
+      ?? await composioConnectorProvider.getPreviewDefinition(connectorId, options);
   }
 
   getStatus(definition: ConnectorCatalogDefinition): ConnectorConnectionStatus {
@@ -573,7 +592,7 @@ export class ConnectorService {
   }
 
   async listConnectors(signal?: AbortSignal): Promise<ConnectorDetail[]> {
-    return this.listFastDefinitions().map((definition) => this.toDetail(definition));
+    return (await this.listDefinitions(signal)).map((definition) => this.toDetail(definition));
   }
 
   listConnectorStatuses(): Record<string, ConnectorConnectionStatus> {
@@ -585,11 +604,23 @@ export class ConnectorService {
 
   async listConnectorDiscovery(options: { refresh?: boolean; hydrateTools?: boolean; signal?: AbortSignal } = {}): Promise<ConnectorDiscoveryResult> {
     if (options.refresh) composioConnectorProvider.clearDiscoveryCache();
-    const definitions = options.refresh && !options.hydrateTools
-      ? await composioConnectorProvider.refreshCatalog(options.signal)
-      : options.hydrateTools
-        ? await this.listHydratedDefinitions(options.signal)
-        : await this.listDefinitions(options.signal);
+    if (options.refresh) amrConnectorProvider.clearDiscoveryCache();
+    let definitions: ConnectorCatalogDefinition[];
+    if (options.hydrateTools) {
+      definitions = await this.listHydratedDefinitions(options.signal);
+    } else if (options.refresh) {
+      const amrOptions: { refresh: true; signal?: AbortSignal } = {
+        refresh: true,
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
+      };
+      const [composioDefinitions, amrDefinitions] = await Promise.all([
+        composioConnectorProvider.refreshCatalog(options.signal).catch(() => []),
+        amrConnectorProvider.listDefinitions(amrOptions).catch(() => []),
+      ]);
+      definitions = [...composioDefinitions, ...amrDefinitions];
+    } else {
+      definitions = await this.listDefinitions(options.signal);
+    }
     return {
       connectors: definitions.map((definition) => this.toDetail(definition)),
       meta: {
@@ -811,6 +842,9 @@ export class ConnectorService {
     if (definition?.authentication === 'composio' && tool) {
       return composioConnectorProvider.execute(definition, tool, request.input, this.getCredential(request.connectorId)?.credentials, context.signal);
     }
+    if (definition?.provider === 'amr' && tool) {
+      return amrConnectorProvider.execute(definition, tool, request.input, context.signal);
+    }
 
     throw new ConnectorServiceError('CONNECTOR_EXECUTION_FAILED', 'connector provider is not implemented', 501, {
       connectorId: request.connectorId,
@@ -866,7 +900,9 @@ export class ConnectorService {
       ...(detail.auth === undefined ? {} : {
         auth: {
           ...detail.auth,
-          configured: detail.auth.configured || (definition.authentication === 'composio' && composioConnectorProvider.isConfigured(definition)),
+          configured: detail.auth.configured
+            || (definition.authentication === 'composio' && composioConnectorProvider.isConfigured(definition))
+            || (definition.provider === 'amr' && amrConnectorProvider.isConfigured()),
         },
       }),
     };

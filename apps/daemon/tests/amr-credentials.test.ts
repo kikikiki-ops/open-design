@@ -8,16 +8,29 @@ import {
   amrCredentialsFromCallback,
   amrCredentialsToEnv,
   clearAmrCredentials,
+  clearDefaultAmrCredentials,
+  getDefaultAmrCredentials,
   getAmrCredentials,
   readAmrSessionFile,
+  setDefaultAmrCredentials,
   upsertAmrCredentials,
 } from '../src/integrations/amr/credentials.js';
 import { ensureOpenDesignAmrAgent } from '../src/integrations/amr/agents.js';
 import { closeDatabase, openDatabase } from '../src/db.js';
 
 const tempDirs: string[] = [];
+const ORIGINAL_AMR_ENV = {
+  AMR_TOKEN: process.env.AMR_TOKEN,
+  AMR_API_KEY: process.env.AMR_API_KEY,
+  AMR_GATEWAY_URL: process.env.AMR_GATEWAY_URL,
+};
 
 afterEach(() => {
+  clearDefaultAmrCredentials();
+  for (const [key, value] of Object.entries(ORIGINAL_AMR_ENV)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
   closeDatabase();
   for (const dir of tempDirs.splice(0)) {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -153,4 +166,41 @@ test('persists AMR credentials in SQLite and clears stale tokens', () => {
   assert.equal(getAmrCredentials(db)?.gateway, 'http://gateway.local');
   clearAmrCredentials(db);
   assert.equal(getAmrCredentials(db), null);
+});
+
+test('sets persisted AMR OAuth credentials as daemon defaults without mutating launch env', () => {
+  const priorToken = process.env.AMR_TOKEN;
+  const priorApiKey = process.env.AMR_API_KEY;
+  const priorGateway = process.env.AMR_GATEWAY_URL;
+  process.env.AMR_TOKEN = 'launch-token';
+  delete process.env.AMR_API_KEY;
+  process.env.AMR_GATEWAY_URL = 'http://launch-gateway';
+
+  try {
+    setDefaultAmrCredentials({
+      token: 'oauth-token',
+      gateway: 'https://gateway.example.com',
+      createdAt: 1,
+      updatedAt: 1,
+    });
+
+    assert.equal(process.env.AMR_TOKEN, 'launch-token');
+    assert.equal(process.env.AMR_API_KEY, undefined);
+    assert.equal(process.env.AMR_GATEWAY_URL, 'http://launch-gateway');
+    assert.equal(getDefaultAmrCredentials()?.token, 'launch-token');
+
+    delete process.env.AMR_TOKEN;
+    delete process.env.AMR_GATEWAY_URL;
+
+    assert.equal(getDefaultAmrCredentials()?.token, 'oauth-token');
+    assert.equal(getDefaultAmrCredentials()?.gateway, 'https://gateway.example.com');
+  } finally {
+    if (priorToken === undefined) delete process.env.AMR_TOKEN;
+    else process.env.AMR_TOKEN = priorToken;
+    if (priorApiKey === undefined) delete process.env.AMR_API_KEY;
+    else process.env.AMR_API_KEY = priorApiKey;
+    if (priorGateway === undefined) delete process.env.AMR_GATEWAY_URL;
+    else process.env.AMR_GATEWAY_URL = priorGateway;
+    clearDefaultAmrCredentials();
+  }
 });

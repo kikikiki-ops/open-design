@@ -105,6 +105,36 @@ test('live artifact MCP connector list forwards daily digest use case to daemon 
   assert.equal(call.url, 'http://127.0.0.1:17456/base/api/tools/connectors/list?useCase=personal_daily_digest');
 });
 
+test('live artifact MCP connector list surfaces AMR OAuth-backed connectors from daemon tools', async () => {
+  process.env.OD_DAEMON_URL = 'http://127.0.0.1:17456';
+  process.env.OD_TOOL_TOKEN = 'test-tool-token';
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    connectors: [
+      {
+        id: 'notion',
+        name: 'Notion',
+        provider: 'amr',
+        status: 'connected',
+        accountLabel: 'Notion',
+        tools: [{ name: 'notion.search', description: 'Search pages' }],
+      },
+    ],
+  }), { status: 200 });
+
+  const response = await handleLiveArtifactsMcpRequest({
+    jsonrpc: '2.0',
+    id: 6,
+    method: 'tools/call',
+    params: { name: 'connectors_list', arguments: {} },
+  }) as { error?: unknown; result?: { content?: Array<{ text?: string }> } };
+
+  assert.equal(response.error, undefined);
+  const payload = JSON.parse(response.result?.content?.[0]?.text ?? '{}') as { connectors?: Array<{ id?: string; provider?: string; status?: string }> };
+  assert.deepEqual(payload.connectors, [
+    { id: 'notion', name: 'Notion', provider: 'amr', status: 'connected', accountLabel: 'Notion', tools: [{ name: 'notion.search', description: 'Search pages' }] },
+  ]);
+});
+
 test('live artifact MCP create forwards input and artifact payload fields to daemon tools', async () => {
   process.env.OD_DAEMON_URL = 'http://127.0.0.1:17456';
   process.env.OD_TOOL_TOKEN = 'test-tool-token';

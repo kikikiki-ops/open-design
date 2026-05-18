@@ -38,10 +38,12 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { MEDIA_PROVIDERS } from './media-models.js';
+import { MEDIA_PROVIDERS, modelsForSurface } from './media-models.js';
 import { expandHomePrefix } from './home-expansion.js';
+import { getDefaultAmrCredentials } from './integrations/amr/credentials.js';
 
 const PROVIDER_IDS = MEDIA_PROVIDERS.map((p) => p.id);
+const AMR_IMAGE_PROVIDER_IDS = new Set(modelsForSurface('image').map((model) => model.provider));
 type ProviderEntry = { apiKey?: string; baseUrl?: string; model?: string };
 type ProviderMap = Record<string, ProviderEntry>;
 type ModelAliasMap = Record<string, string>;
@@ -371,6 +373,7 @@ export interface MaskedConfigResponse {
 export async function readMaskedConfig(projectRoot: string): Promise<MaskedConfigResponse> {
   const stored = await readStored(projectRoot);
   const providers: MaskedConfigResponse['providers'] = {};
+  const hasAmrDefault = getDefaultAmrCredentials() !== null;
   for (const id of PROVIDER_IDS) {
     const entry = stored[id] || {};
     const envKey = readEnvKey(id);
@@ -379,9 +382,10 @@ export async function readMaskedConfig(projectRoot: string): Promise<MaskedConfi
       id === 'openai' && !envKey && !hasStoredKey
         ? await resolveOpenAIOAuthCredential()
         : null;
+    const amrDefault = hasAmrDefault && !envKey && !hasStoredKey && !oauth?.apiKey && AMR_IMAGE_PROVIDER_IDS.has(id);
     providers[id] = {
-      configured: Boolean(envKey || hasStoredKey || oauth?.apiKey),
-      source: envKey ? 'env' : hasStoredKey ? 'stored' : oauth?.source || 'unset',
+      configured: Boolean(envKey || hasStoredKey || oauth?.apiKey || amrDefault),
+      source: envKey ? 'env' : hasStoredKey ? 'stored' : oauth?.source || (amrDefault ? 'amr' : 'unset'),
       // Show last 4 chars only when stored locally; never echo env-var
       // or OAuth secrets so power users don't accidentally see them in
       // the DOM.

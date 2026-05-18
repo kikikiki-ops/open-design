@@ -19,7 +19,8 @@ describe('API proxy routes', () => {
     server = started.server;
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await realFetch(`${baseUrl}/api/integrations/amr/disconnect`, { method: 'POST' }).catch(() => undefined);
     vi.unstubAllGlobals();
   });
 
@@ -108,6 +109,42 @@ describe('API proxy routes', () => {
     });
 
     expect(String(fetchMock.mock.calls[0]![0])).toBe(expected);
+  });
+
+  it('uses AMR OAuth as the default OpenAI-compatible BYOK proxy credential', async () => {
+    const callbackRes = await realFetch(`${baseUrl}/api/integrations/amr/callback`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        token: 'amr-proxy-token',
+        gateway: 'https://api.example.com',
+      }),
+    });
+    expect(callbackRes.status).toBe(200);
+
+    const fetchMock = vi.fn((req: FetchInput, init?: FetchInit) => {
+      const url = String(req);
+      if (url.startsWith(baseUrl)) return realFetch(req, init);
+      return Promise.resolve(sseResponse('data: [DONE]\n\n'));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const res = await realFetch(`${baseUrl}/api/proxy/openai/stream`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'amr-default-model',
+        messages: [{ role: 'user', content: 'hello' }],
+      }),
+    });
+    expect(res.status).toBe(200);
+
+    expect(String(fetchMock.mock.calls[0]![0])).toBe(
+      'https://api.example.com/v1/chat/completions',
+    );
+    expect(fetchMock.mock.calls[0]![1]).toEqual(expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: 'Bearer amr-proxy-token' }),
+    }));
   });
 
   // The Anthropic proxy goes through the same `appendVersionedApiPath`

@@ -8,6 +8,7 @@ type DbRow = Record<string, unknown>;
 type RuntimeEnv = NodeJS.ProcessEnv | Record<string, string | undefined>;
 
 const DEFAULT_AMR_GATEWAY_URL = 'http://127.0.0.1:8787';
+const AMR_ENV_KEYS = ['AMR_TOKEN', 'AMR_API_KEY', 'AMR_GATEWAY_URL'] as const;
 
 export interface AmrCredentials {
   token: string;
@@ -115,6 +116,20 @@ export function amrCredentialsFromCallback(
   };
 }
 
+export function amrCredentialsFromEnv(env: RuntimeEnv = process.env): AmrCredentials | null {
+  const token =
+    cleanString(env.AMR_TOKEN) ??
+    cleanString(env.AMR_API_KEY);
+  if (!token) return null;
+  const now = Date.now();
+  return {
+    token,
+    gateway: normalizeGateway(undefined, env),
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 export function getAmrCredentials(db: SqliteDb): AmrCredentials | null {
   const row = db.prepare(
     `SELECT token, gateway, user_id AS userId, org_id AS orgId,
@@ -183,4 +198,65 @@ export function amrCredentialsToEnv(credentials: AmrCredentials): Record<string,
     AMR_API_KEY: credentials.token,
     AMR_GATEWAY_URL: credentials.gateway,
   };
+}
+
+let daemonDefaultAmrCredentials: AmrCredentials | null = null;
+
+function cloneAmrCredentials(credentials: AmrCredentials): AmrCredentials {
+  return {
+    token: credentials.token,
+    gateway: normalizeGateway(credentials.gateway, {}),
+    ...(credentials.userId === undefined ? {} : { userId: credentials.userId }),
+    ...(credentials.orgId === undefined ? {} : { orgId: credentials.orgId }),
+    ...(credentials.projectId === undefined ? {} : { projectId: credentials.projectId }),
+    ...(credentials.keyId === undefined ? {} : { keyId: credentials.keyId }),
+    createdAt: credentials.createdAt,
+    updatedAt: credentials.updatedAt,
+  };
+}
+
+export function setDefaultAmrCredentials(credentials: AmrCredentials): AmrCredentials {
+  daemonDefaultAmrCredentials = cloneAmrCredentials(credentials);
+  return cloneAmrCredentials(daemonDefaultAmrCredentials);
+}
+
+export function clearDefaultAmrCredentials(): void {
+  daemonDefaultAmrCredentials = null;
+}
+
+export function getDefaultAmrCredentials(env: RuntimeEnv = process.env): AmrCredentials | null {
+  return amrCredentialsFromEnv(env) ?? (daemonDefaultAmrCredentials ? cloneAmrCredentials(daemonDefaultAmrCredentials) : null);
+}
+
+let syncedProcessEnv: Record<(typeof AMR_ENV_KEYS)[number], string> | null = null;
+let previousProcessEnv: Partial<Record<(typeof AMR_ENV_KEYS)[number], string>> | null = null;
+
+export function syncAmrCredentialsToProcessEnv(credentials: AmrCredentials): void {
+  const next = amrCredentialsToEnv(credentials) as Record<(typeof AMR_ENV_KEYS)[number], string>;
+  if (!previousProcessEnv) {
+    previousProcessEnv = {};
+    for (const key of AMR_ENV_KEYS) {
+      const value = process.env[key];
+      if (value !== undefined) previousProcessEnv[key] = value;
+    }
+  }
+  for (const key of AMR_ENV_KEYS) {
+    process.env[key] = next[key];
+  }
+  syncedProcessEnv = next;
+}
+
+export function clearSyncedAmrCredentialsFromProcessEnv(): void {
+  if (!syncedProcessEnv) return;
+  for (const key of AMR_ENV_KEYS) {
+    if (process.env[key] !== syncedProcessEnv[key]) continue;
+    const previous = previousProcessEnv?.[key];
+    if (previous === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = previous;
+    }
+  }
+  syncedProcessEnv = null;
+  previousProcessEnv = null;
 }

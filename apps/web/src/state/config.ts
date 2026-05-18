@@ -382,6 +382,7 @@ interface PublicComposioConfigResponse {
 interface PublicMediaProviderConfigEntry {
   configured?: boolean;
   apiKeyTail?: string;
+  source?: string;
   baseUrl?: string;
   model?: string;
 }
@@ -443,7 +444,8 @@ export function isStoredMediaProviderEntryPresent(
     || entry?.baseUrl?.trim()
     || entry?.model?.trim()
     || entry?.apiKeyConfigured
-    || entry?.apiKeyTail?.trim(),
+    || entry?.apiKeyTail?.trim()
+    || entry?.apiKeySource === 'amr'
   );
 }
 
@@ -466,14 +468,21 @@ export function buildMediaProvidersForDaemonSave(
   for (const [providerId, currentEntry] of Object.entries(currentProviders ?? {})) {
     const daemonEntry = daemonProviders?.[providerId];
     const apiKey = currentEntry?.apiKey?.trim() ?? '';
+    const daemonHasStoredSecret = Boolean(
+      daemonEntry?.apiKeyConfigured
+      && daemonEntry.apiKeySource !== 'amr'
+      && (daemonEntry.apiKeySource !== 'env' || daemonEntry.apiKeyTail?.trim()),
+    );
     const preserveApiKey = !apiKey && Boolean(
       currentEntry?.apiKeyConfigured
-      && (daemonEntry?.apiKeyConfigured || daemonEntry?.apiKeyTail?.trim()),
+      && daemonHasStoredSecret,
     );
+    const shouldPersistProviderDefaults = currentEntry?.apiKeySource !== 'amr'
+      || Boolean(apiKey || preserveApiKey || currentEntry?.model?.trim());
     const baseUrl =
       currentEntry?.baseUrl?.trim()
       || daemonEntry?.baseUrl?.trim()
-      || defaultBaseUrlForProvider(providerId);
+      || (shouldPersistProviderDefaults ? defaultBaseUrlForProvider(providerId) : '');
     const model = currentEntry?.model?.trim() || daemonEntry?.model?.trim() || '';
     if (!apiKey && !preserveApiKey && !baseUrl && !model) continue;
     providers[providerId] = {
@@ -516,6 +525,7 @@ export async function fetchMediaProvidersFromDaemon(): Promise<DaemonMediaProvid
         apiKey: '',
         apiKeyConfigured: Boolean(entry?.configured),
         apiKeyTail: entry?.apiKeyTail ?? '',
+        apiKeySource: entry?.source ?? 'unset',
         baseUrl: entry?.baseUrl ?? '',
         ...(typeof entry?.model === 'string' && entry.model.trim()
           ? { model: entry.model.trim() }

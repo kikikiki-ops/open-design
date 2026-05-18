@@ -68,6 +68,7 @@ import {
   mimeFor,
   sanitizeName,
 } from './projects.js';
+import { getDefaultAmrCredentials } from './integrations/amr/credentials.js';
 
 const execFile = promisify(execFileCb);
 type ProviderConfig = { apiKey?: string; baseUrl?: string; model?: string };
@@ -128,17 +129,10 @@ function errorStringProp(err: unknown, key: string): string {
   return isRecord(err) && typeof err[key] === 'string' ? err[key] : '';
 }
 
-function cleanEnvString(value: unknown): string {
-  return typeof value === 'string' && value.trim() ? value.trim() : '';
-}
-
 function resolveAmrMediaBridgeConfig(): AmrMediaBridgeConfig | null {
-  const token =
-    cleanEnvString(process.env.AMR_TOKEN) ||
-    cleanEnvString(process.env.AMR_API_KEY);
-  const gateway = cleanEnvString(process.env.AMR_GATEWAY_URL);
-  if (!token || !gateway) return null;
-  return { token, gateway: gateway.replace(/\/+$/, '') };
+  const credentials = getDefaultAmrCredentials();
+  if (!credentials) return null;
+  return { token: credentials.token, gateway: credentials.gateway.replace(/\/+$/, '') };
 }
 
 function imageProviderConfigured(

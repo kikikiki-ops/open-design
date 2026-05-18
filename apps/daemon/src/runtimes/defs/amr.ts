@@ -1,7 +1,7 @@
 import { DEFAULT_MODEL_OPTION } from './shared.js';
 import type { RuntimeAgentDef } from '../types.js';
 import { listAmrAgents } from '../../integrations/amr/agents.js';
-import { readAmrSessionFile } from '../../integrations/amr/credentials.js';
+import { getDefaultAmrCredentials, readAmrSessionFile } from '../../integrations/amr/credentials.js';
 
 function cleanSelector(value: string | null | undefined): string | null {
   if (typeof value !== 'string') return null;
@@ -21,7 +21,7 @@ export const amrAgentDef = {
     { id: 'base:opencode', label: 'OpenCode base' },
   ],
   fetchModels: async (_resolvedBin, env) => {
-    const credentials = readAmrSessionFile(env);
+    const credentials = getDefaultAmrCredentials(env) ?? readAmrSessionFile(env);
     if (!credentials) return null;
     const agents = await listAmrAgents(credentials, fetch);
     if (agents.length === 0) return null;

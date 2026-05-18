@@ -31,6 +31,26 @@ describe('SettingsDialog media providers', () => {
     );
   });
 
+  it('shows AMR OAuth default media providers without making them clearable', () => {
+    renderDialog({
+      ...DEFAULT_CONFIG,
+      mediaProviders: {
+        openai: {
+          apiKey: '',
+          apiKeyConfigured: true,
+          apiKeyTail: '',
+          apiKeySource: 'amr',
+          baseUrl: '',
+        },
+      },
+    });
+
+    const openaiRow = screen.getByText('OpenAI').closest('.media-provider-row') as HTMLElement | null;
+    if (!openaiRow) throw new Error('Expected OpenAI media provider row');
+    expect(within(openaiRow).getByText('AMR')).toBeTruthy();
+    expect((within(openaiRow).getByRole('button', { name: 'Clear' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it('shows daemon fallback notice and reloads media providers from daemon', async () => {
     const reloadMock = vi.fn(async () => ({
       openai: {

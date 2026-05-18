@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { clearDefaultAmrCredentials, setDefaultAmrCredentials } from '../src/integrations/amr/credentials.js';
 import { generateMedia } from '../src/media.js';
 
 const PNG_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+X2uoAAAAASUVORK5CYII=';
@@ -34,6 +35,7 @@ describe('AMR media bridge', () => {
   afterEach(async () => {
     globalThis.fetch = originalFetch;
     vi.unstubAllGlobals();
+    clearDefaultAmrCredentials();
     for (const key of AMR_ENV_KEYS) {
       if (originalEnv[key] == null) {
         delete process.env[key];
@@ -45,8 +47,12 @@ describe('AMR media bridge', () => {
   });
 
   it('routes image generation through AMR fal-image when no provider key is configured', async () => {
-    process.env.AMR_TOKEN = 'amr-token';
-    process.env.AMR_GATEWAY_URL = 'https://amr.example.com/';
+    setDefaultAmrCredentials({
+      token: 'amr-token',
+      gateway: 'https://amr.example.com/',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
     const fetchMock = vi.fn(async (input: unknown, init?: RequestInit) => {
       expect(String(input)).toBe('https://amr.example.com/v1/connectors/fal-image/call');
       expect(init?.method).toBe('POST');

@@ -413,6 +413,11 @@ const PROVIDER_TABS: ReadonlyArray<{
   match: (connector: ConnectorDetail) => boolean;
 }> = [
   {
+    id: 'amr',
+    label: 'AMR',
+    match: (connector) => connector.provider.toLowerCase() === 'amr',
+  },
+  {
     id: 'composio',
     label: 'Composio',
     match: (connector) => {
@@ -663,7 +668,13 @@ export function ConnectorsBrowser({
 
   // The local Composio API-key state is authoritative for masking. Cached
   // connector auth can be stale immediately after the user clears the key.
-  const needsComposioKey = !composioConfigured;
+  // AMR-backed connectors are unlocked by AMR OAuth and should remain usable
+  // even when no Composio API key is configured.
+  const needsComposioKey = selectedProvider === 'composio' && !composioConfigured;
+  const connectorNeedsProviderKey = useCallback((connector: ConnectorDetail) => {
+    const provider = connector.auth?.provider ?? connector.provider.toLowerCase();
+    return provider === 'composio' && !composioConfigured;
+  }, [composioConfigured]);
 
   // Filter and rank connectors by user-visible fields. Exact/prefix matches
   // on connector name/provider are strongest; broad description matches stay
@@ -933,7 +944,7 @@ export function ConnectorsBrowser({
                 <ConnectorCard
                   key={connector.id}
                   connector={connector}
-                  disabled={needsComposioKey}
+                  disabled={connectorNeedsProviderKey(connector)}
                   pendingAction={
                     pendingConnectorAction?.connectorId === connector.id
                       ? pendingConnectorAction.action
@@ -974,7 +985,7 @@ export function ConnectorsBrowser({
       {detailConnector ? (
         <ConnectorDetailDrawer
           connector={detailConnector}
-          disabled={needsComposioKey}
+          disabled={connectorNeedsProviderKey(detailConnector)}
           pendingAction={
             pendingConnectorAction?.connectorId === detailConnector.id
               ? pendingConnectorAction.action

@@ -5,6 +5,7 @@ import { createCommandInvocation } from '@open-design/platform';
 import {
   getAmrCredentials,
   readAmrSessionFile,
+  setDefaultAmrCredentials,
   upsertAmrCredentials,
   type AmrCredentials,
 } from './credentials.js';
@@ -60,11 +61,16 @@ export async function ensureAmrCredentials({
   timeoutMs?: number;
 }): Promise<AmrCredentials> {
   const persisted = getAmrCredentials(db);
-  if (persisted) return persisted;
+  if (persisted) {
+    setDefaultAmrCredentials(persisted);
+    return persisted;
+  }
 
   const existingSession = readAmrSessionFile(env);
   if (existingSession) {
-    return upsertAmrCredentials(db, existingSession);
+    const saved = upsertAmrCredentials(db, existingSession);
+    setDefaultAmrCredentials(saved);
+    return saved;
   }
 
   const args = ['login', '--client-id', 'open-design'];
@@ -92,7 +98,10 @@ export async function ensureAmrCredentials({
   }
 
   const callbackCredentials = getAmrCredentials(db);
-  if (callbackCredentials) return callbackCredentials;
+  if (callbackCredentials) {
+    setDefaultAmrCredentials(callbackCredentials);
+    return callbackCredentials;
+  }
 
   const freshSession = readAmrSessionFile(env);
   if (!freshSession) {
@@ -100,5 +109,7 @@ export async function ensureAmrCredentials({
       'AMR login completed, but no session token was written. Run `amr login --client-id open-design` and retry.',
     );
   }
-  return upsertAmrCredentials(db, freshSession);
+  const saved = upsertAmrCredentials(db, freshSession);
+  setDefaultAmrCredentials(saved);
+  return saved;
 }

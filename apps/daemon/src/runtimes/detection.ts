@@ -52,6 +52,10 @@ type VersionProbeOutcome =
   | { kind: 'not-invocable' }
   | { kind: 'spawned'; version: string | null };
 
+interface DetectAgentsOptions {
+  skipModelFetch?: boolean;
+}
+
 /**
  * Run the agent's `--version` probe and classify the result. The probe
  * has two distinct failure modes the catch arm has to discriminate:
@@ -117,6 +121,7 @@ function unavailableAgent(def: RuntimeAgentDef): DetectedAgent {
 async function probe(
   def: RuntimeAgentDef,
   configuredEnv: Record<string, string> = {},
+  options: DetectAgentsOptions = {},
 ): Promise<DetectedAgent> {
   // Detection must probe the exact path the runtime will spawn, not just the
   // PATH-visible shim. This is load-bearing for Codex under nvm/fnm/mise:
@@ -164,7 +169,9 @@ async function probe(
     }
     agentCapabilities.set(def.id, caps);
   }
-  const models = await fetchModels(def, launch.launchPath, probeEnv);
+  const models = options.skipModelFetch
+    ? def.fallbackModels ?? [DEFAULT_MODEL_OPTION]
+    : await fetchModels(def, launch.launchPath, probeEnv);
   const auth = await probeAgentAuthStatus(def.id, launch.launchPath, probeEnv);
   return {
     ...stripFns(def),
@@ -208,9 +215,10 @@ function stripFns(
 
 export async function detectAgents(
   configuredEnvByAgent: Record<string, Record<string, string>> = {},
+  options: DetectAgentsOptions = {},
 ) {
   const results = await Promise.all(
-    AGENT_DEFS.map((def) => probe(def, configuredEnvByAgent?.[def.id] ?? {})),
+    AGENT_DEFS.map((def) => probe(def, configuredEnvByAgent?.[def.id] ?? {}, options)),
   );
   // Refresh the validation cache from whatever we just surfaced to the UI
   // so /api/chat can accept any model the user could have just picked,

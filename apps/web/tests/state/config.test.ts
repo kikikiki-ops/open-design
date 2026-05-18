@@ -499,8 +499,41 @@ describe('fetchMediaProvidersFromDaemon', () => {
           apiKey: '',
           apiKeyConfigured: true,
           apiKeyTail: '1234',
+          apiKeySource: 'unset',
           baseUrl: 'https://daemon.example/v1',
           model: 'gpt-image-1',
+        },
+      },
+    });
+  });
+
+  it('preserves daemon AMR default source attribution for media providers', async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          providers: {
+            openai: {
+              configured: true,
+              source: 'amr',
+              apiKeyTail: '',
+              baseUrl: '',
+            },
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchMediaProvidersFromDaemon()).resolves.toEqual({
+      status: 'ok',
+      providers: {
+        openai: {
+          apiKey: '',
+          apiKeyConfigured: true,
+          apiKeyTail: '',
+          apiKeySource: 'amr',
+          baseUrl: '',
         },
       },
     });
@@ -578,6 +611,35 @@ describe('buildMediaProvidersForDaemonSave', () => {
         },
       },
       force: false,
+    });
+  });
+
+  it('does not write AMR default marker rows back as stored media config', () => {
+    expect(
+      buildMediaProvidersForDaemonSave(
+        {
+          openai: {
+            apiKey: '',
+            apiKeyConfigured: true,
+            apiKeyTail: '',
+            apiKeySource: 'amr',
+            baseUrl: '',
+          },
+        },
+        {
+          openai: {
+            apiKey: '',
+            apiKeyConfigured: true,
+            apiKeyTail: '',
+            apiKeySource: 'amr',
+            baseUrl: '',
+          },
+        },
+        { force: true },
+      ),
+    ).toEqual({
+      providers: {},
+      force: true,
     });
   });
 });

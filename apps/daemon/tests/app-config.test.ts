@@ -269,7 +269,7 @@ describe('app-config', () => {
           amr: {
             AMR_BIN: '  ~/bin/amr  ',
             AMR_SESSION: '  ~/.amr/session.json  ',
-            AMR_API_KEY: 'should-not-persist',
+            AMR_API_KEY: '  amr-byok-token  ',
           },
           gemini: {
             GEMINI_API_KEY: 'should-not-persist',
@@ -285,7 +285,7 @@ describe('app-config', () => {
       expect(cfg.agentCliEnv).toEqual({
         claude: { CLAUDE_CONFIG_DIR: '~/.claude-2', ANTHROPIC_API_KEY: 'sk-proxy-anthropic' },
         codex: { CODEX_HOME: '~/.codex-alt', CODEX_BIN: '~/bin/codex-next', OPENAI_API_KEY: 'sk-proxy-openai' },
-        amr: { AMR_BIN: '~/bin/amr', AMR_SESSION: '~/.amr/session.json' },
+        amr: { AMR_BIN: '~/bin/amr', AMR_SESSION: '~/.amr/session.json', AMR_API_KEY: 'amr-byok-token' },
       });
     });
 

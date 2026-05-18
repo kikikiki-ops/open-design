@@ -4473,7 +4473,8 @@ function MediaProvidersSection({
         {availableProviders.map((provider) => {
           const entry = cfg.mediaProviders?.[provider.id] ?? { apiKey: '', baseUrl: '', model: '' };
           const hasPendingEdit = Boolean(entry.apiKey.trim());
-          const isSavedState = Boolean((hasPendingEdit || entry.apiKeyConfigured) && !hasPendingEdit);
+          const isAmrDefault = entry.apiKeySource === 'amr' && !hasPendingEdit;
+          const isSavedState = Boolean((hasPendingEdit || entry.apiKeyConfigured) && !hasPendingEdit && !isAmrDefault);
           const tail = entry.apiKeyTail?.trim();
           // Every provider rendered in the main list is integrated by
           // construction (see availableProviders filter), so the inputs
@@ -4481,7 +4482,7 @@ function MediaProvidersSection({
           // the "Coming soon" <details> below.
           const disabled = false;
           const supportsCustomModel = provider.supportsCustomModel === true;
-          const clearable = isStoredMediaProviderEntryPresent(entry);
+          const clearable = isStoredMediaProviderEntryPresent(entry) && !isAmrDefault;
           const apiKeyVisible = visibleApiKeys.has(provider.id);
           return (
             <div key={provider.id} className="media-provider-row">
@@ -4500,6 +4501,14 @@ function MediaProvidersSection({
                   */}
                   <div className="media-provider-name-row">
                     <span className="media-provider-name">{provider.label}</span>
+                    {isAmrDefault ? (
+                      <span
+                        className="field-status-badge field-status-badge--inline"
+                        title="AMR OAuth default"
+                      >
+                        AMR
+                      </span>
+                    ) : null}
                     {isSavedState ? (
                       <span
                         className="field-status-badge field-status-badge--inline"

@@ -40,6 +40,18 @@ const configuredComposioConnector: ConnectorDetail = {
   tools: [],
 };
 
+const connectedAmrConnector: ConnectorDetail = {
+  id: 'amr_notion',
+  name: 'AMR Notion',
+  provider: 'amr',
+  category: 'Documents',
+  status: 'connected',
+  accountLabel: 'AMR workspace',
+  auth: { provider: 'none', configured: true },
+  tools: [makeTool('amr_notion.search')],
+  toolCount: 1,
+};
+
 function makeTool(name: string): ConnectorDetail['tools'][number] {
   return {
     name,
@@ -81,6 +93,22 @@ describe('ConnectorsBrowser', () => {
 
     await waitFor(() => expect(screen.getByTestId('connector-gate')).toBeTruthy());
     expect(screen.getByTestId('connector-grid-wrap').className).toContain('is-masked');
+  });
+
+  it('keeps AMR OAuth-backed connectors visible when no Composio key is configured', async () => {
+    vi.mocked(fetchConnectors).mockResolvedValue([configuredComposioConnector, connectedAmrConnector]);
+    vi.mocked(fetchConnectorDiscovery).mockResolvedValue([configuredComposioConnector, connectedAmrConnector]);
+    vi.mocked(fetchConnectorStatuses).mockResolvedValue({});
+
+    render(<ConnectorsBrowser composioConfigured={false} />);
+
+    fireEvent.click(await screen.findByTestId('connectors-provider-tab-amr'));
+
+    await screen.findByText('AMR Notion');
+    expect(screen.getByTestId('connector-grid-wrap').className).not.toContain('is-masked');
+    expect(screen.queryByTestId('connector-gate')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Open AMR Notion details' }));
+    await screen.findByTestId('connector-drawer');
   });
 
   it('keeps discovered tools when discovery resolves before the base catalog', async () => {

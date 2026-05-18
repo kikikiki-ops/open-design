@@ -163,6 +163,7 @@ export interface MediaProviderCredentials {
   model?: string;
   apiKeyConfigured?: boolean;
   apiKeyTail?: string;
+  apiKeySource?: string;
 }
 
 export interface ApiProtocolConfig {

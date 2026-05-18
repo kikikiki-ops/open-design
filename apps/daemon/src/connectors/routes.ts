@@ -7,6 +7,7 @@ import { validateBoundedJsonObject } from '../live-artifacts/schema.js';
 import { executeConnectorTool, listConnectorTools } from '../tools/connectors.js';
 import { readComposioConfig, readPublicComposioConfig, writeComposioConfig } from './composio-config.js';
 import type { ConnectorToolUseCase } from './catalog.js';
+import { amrConnectorProvider } from './amr.js';
 import { connectorService, ConnectorService, ConnectorServiceError, deleteConnectorCredentialsByProvider } from './service.js';
 
 type ConnectorApiErrorCode =
@@ -580,6 +581,7 @@ export function registerConnectorRoutes(app: Express, options: RegisterConnector
       const cfg = writeComposioConfig(req.body);
       const after = readComposioConfig();
       options.composio?.clearDiscoveryCache();
+      amrConnectorProvider.clearDiscoveryCache();
       if (!cfg.configured || (before.apiKey && before.apiKey !== after.apiKey)) {
         deleteConnectorCredentialsByProvider('composio');
       }

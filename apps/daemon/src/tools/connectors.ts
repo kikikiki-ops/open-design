@@ -1,6 +1,7 @@
 import type { ToolTokenGrant } from '../tool-tokens.js';
 
 import { classifyConnectorToolSafety, connectorDefinitionToDetail, type ConnectorCatalogDefinition, type ConnectorToolDetail, type ConnectorToolSafety, type ConnectorToolUseCase } from '../connectors/catalog.js';
+import { amrConnectorProvider } from '../connectors/amr.js';
 import { connectorService, ConnectorService, type ConnectorExecuteRequest } from '../connectors/service.js';
 
 export interface ConnectorToolContext {
@@ -64,13 +65,24 @@ const AGENT_CONNECTOR_TOOL_HYDRATION_LIMIT = 1000;
 export async function listConnectorTools(context: ConnectorToolContext & { useCase?: ConnectorToolUseCase }): Promise<Awaited<ReturnType<ConnectorService['listConnectors']>>> {
   const service = context.service ?? connectorService;
   // Agent-facing tool discovery sits on the hot path for unattended Orbit
-  // runs. Do not call provider discovery here: Composio toolkit discovery can
+  // runs. Keep Composio on the fast static path: toolkit discovery can
   // cold-start slowly and leave the agent with no data before its shell
-  // timeout. Static definitions plus locally persisted connection status are
-  // enough to expose the approved read-only tool surface, and execution still
-  // validates connection state and safety again before calling providers.
+  // timeout. AMR OAuth-backed connectors are the exception because AMR is the
+  // default credential plane; after one OAuth login, agents need the AMR
+  // catalog even before the user opens the Connectors settings page.
   const fastDefinitions = service.listFastDefinitions();
-  const fastDefinitionsById = new Map(fastDefinitions.map((definition) => [definition.id, definition]));
+  const defaultAmrDefinitions =
+    service === connectorService
+      && amrConnectorProvider.isConfigured()
+      && !fastDefinitions.some((definition) => definition.provider === 'amr')
+      ? await amrConnectorProvider.listDefinitions().catch(() => [])
+      : [];
+  const defaultAmrDefinitionIds = new Set(defaultAmrDefinitions.map((definition) => definition.id));
+  const seedDefinitions = [
+    ...fastDefinitions.filter((definition) => !defaultAmrDefinitionIds.has(definition.id)),
+    ...defaultAmrDefinitions,
+  ];
+  const fastDefinitionsById = new Map(seedDefinitions.map((definition) => [definition.id, definition]));
   const connectedStatusIds = Object.entries(service.listConnectorStatuses())
     .filter(([, status]) => status.status === 'connected')
     .map(([connectorId]) => connectorId);
@@ -78,7 +90,7 @@ export async function listConnectorTools(context: ConnectorToolContext & { useCa
     const fastDefinition = fastDefinitionsById.get(connectorId);
     return connectorNeedsHydratedDiscovery(fastDefinition);
   });
-  let definitions = fastDefinitions;
+  let definitions = seedDefinitions;
   if (connectedConnectorIdsNeedingDiscovery.length > 0) {
     const targetedDefinitions = await Promise.all(connectedConnectorIdsNeedingDiscovery.map(async (connectorId) => {
       const fastDefinition = fastDefinitionsById.get(connectorId);
@@ -91,7 +103,7 @@ export async function listConnectorTools(context: ConnectorToolContext & { useCa
         .filter((definition): definition is ConnectorCatalogDefinition => definition !== undefined)
         .map((definition) => [definition.id, definition]),
     );
-    definitions = fastDefinitions.map((definition) => targetedDefinitionsById.get(definition.id) ?? definition);
+    definitions = seedDefinitions.map((definition) => targetedDefinitionsById.get(definition.id) ?? definition);
     for (const definition of targetedDefinitionsById.values()) {
       if (!fastDefinitionsById.has(definition.id)) definitions.push(definition);
     }

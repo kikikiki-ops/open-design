@@ -10,6 +10,7 @@ import {
   resolveProviderConfig,
   writeConfig,
 } from '../src/media-config.js';
+import { clearDefaultAmrCredentials, setDefaultAmrCredentials } from '../src/integrations/amr/credentials.js';
 
 const TEST_NANOBANANA_BASE_URL = 'https://nano-banana-gateway.example.test';
 
@@ -66,6 +67,7 @@ describe('media-config OpenAI OAuth fallback', () => {
     } else {
       process.env.OD_DATA_DIR = originalDataDir;
     }
+    clearDefaultAmrCredentials();
     homedirSpy.mockRestore();
     await rm(homeDir, { recursive: true, force: true });
     await rm(projectRoot, { recursive: true, force: true });
@@ -152,6 +154,32 @@ describe('media-config OpenAI OAuth fallback', () => {
       source: 'stored',
       apiKeyTail: '-key',
       baseUrl: 'https://example.test/v1',
+    });
+  });
+
+  it('marks AMR OAuth as the default image-provider credential source without exposing the token', async () => {
+    setDefaultAmrCredentials({
+      token: 'amr-oauth-token',
+      gateway: 'https://gateway.example.com',
+      createdAt: 1,
+      updatedAt: 1,
+    });
+
+    const resolved = await resolveProviderConfig(projectRoot, 'openai');
+    const masked = await readMaskedConfig(projectRoot);
+    const openai = (masked.providers as Record<string, unknown>).openai;
+    const minimax = (masked.providers as Record<string, unknown>).minimax;
+
+    expect(resolved.apiKey).toBe('');
+    expect(openai).toMatchObject({
+      configured: true,
+      source: 'amr',
+      apiKeyTail: '',
+    });
+    expect(JSON.stringify(masked)).not.toContain('amr-oauth-token');
+    expect(minimax).toMatchObject({
+      configured: false,
+      source: 'unset',
     });
   });
 

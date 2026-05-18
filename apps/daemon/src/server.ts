@@ -135,7 +135,7 @@ import {
   isAmrSessionNotFoundText,
 } from './runtimes/auth.js';
 import { ensureOpenDesignAmrAgent } from './integrations/amr/agents.js';
-import { amrCredentialsToEnv, clearAmrCredentials } from './integrations/amr/credentials.js';
+import { amrCredentialsToEnv, clearAmrCredentials, getAmrCredentials, setDefaultAmrCredentials } from './integrations/amr/credentials.js';
 import { ensureAmrCredentials } from './integrations/amr/login.js';
 import { registerAmrIntegrationRoutes } from './integrations/amr/routes.js';
 import { createQoderStreamHandler } from './qoder-stream.js';
@@ -2706,6 +2706,10 @@ export async function startServer({
     next();
   });
   const db = openDatabase(PROJECT_ROOT, { dataDir: RUNTIME_DATA_DIR });
+  const persistedAmrCredentials = getAmrCredentials(db);
+  if (persistedAmrCredentials) {
+    setDefaultAmrCredentials(persistedAmrCredentials);
+  }
   // Wire the upload-destination bridge to this db so multer can route
   // file uploads into baseDir-rooted projects' actual folders.
   projectMetadataLookup = (id) => {
@@ -2862,9 +2866,9 @@ export async function startServer({
   void readAppConfig(RUNTIME_DATA_DIR)
     .then((config) => {
       orbitService.configure(config.orbit);
-      return detectAgents(config.agentCliEnv ?? {});
+      return detectAgents(config.agentCliEnv ?? {}, { skipModelFetch: true });
     })
-    .catch(() => detectAgents().catch(() => {}));
+    .catch(() => detectAgents({}, { skipModelFetch: true }).catch(() => {}));
 
   await recoverStaleLiveArtifactRefreshes({ projectsRoot: PROJECTS_DIR }).catch((error) => {
     console.warn('[od] Failed to recover stale live artifact refreshes:', error);

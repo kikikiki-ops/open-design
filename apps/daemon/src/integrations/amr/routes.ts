@@ -3,7 +3,9 @@ import type Database from 'better-sqlite3';
 import {
   amrCredentialsFromCallback,
   clearAmrCredentials,
+  clearDefaultAmrCredentials,
   getAmrCredentials,
+  setDefaultAmrCredentials,
   upsertAmrCredentials,
 } from './credentials.js';
 import { ensureAmrCredentials } from './login.js';
@@ -53,6 +55,7 @@ export function registerAmrIntegrationRoutes(
       return;
     }
     const saved = upsertAmrCredentials(db, credentials);
+    setDefaultAmrCredentials(saved);
     connectState = { status: 'idle' };
     res.json({
       ok: true,
@@ -72,7 +75,7 @@ export function registerAmrIntegrationRoutes(
       res.status(400).send('missing AMR token');
       return;
     }
-    upsertAmrCredentials(db, credentials);
+    setDefaultAmrCredentials(upsertAmrCredentials(db, credentials));
     connectState = { status: 'idle' };
     res.type('html').send(successHtml());
   });
@@ -99,7 +102,9 @@ export function registerAmrIntegrationRoutes(
   // so we don't make the HTTP client wait. The UI polls /status to learn
   // when credentials land (via Electron deep-link → /callback above).
   app.post('/api/integrations/amr/connect', async (_req, res) => {
-    if (getAmrCredentials(db)) {
+    const existingCredentials = getAmrCredentials(db);
+    if (existingCredentials) {
+      setDefaultAmrCredentials(existingCredentials);
       res.status(200).json({ ok: true, alreadyConnected: true });
       return;
     }
@@ -162,6 +167,7 @@ export function registerAmrIntegrationRoutes(
   app.post('/api/integrations/amr/disconnect', (_req, res) => {
     try {
       clearAmrCredentials(db);
+      clearDefaultAmrCredentials();
     } catch (err) {
       res.status(500).json({ error: (err as Error).message ?? String(err) });
       return;

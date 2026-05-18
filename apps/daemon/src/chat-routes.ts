@@ -6,6 +6,7 @@ import {
   projectKindToTracking,
 } from '@open-design/contracts/analytics';
 import { validateBaseUrlResolved } from './connectionTest.js';
+import { getAmrCredentials, getDefaultAmrCredentials } from './integrations/amr/credentials.js';
 
 export interface RegisterChatRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'chat' | 'agents' | 'critique' | 'validation' | 'lifecycle'> {}
 
@@ -65,6 +66,14 @@ export function registerChatRoutes(app: Express, ctx: RegisterChatRoutesDeps) {
       return true;
     }
     return false;
+  };
+  const openAiProviderDefaults = (body: Record<string, unknown>) => {
+    const baseUrl = typeof body.baseUrl === 'string' ? body.baseUrl.trim() : '';
+    const apiKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : '';
+    if (baseUrl || apiKey) return { baseUrl, apiKey, source: 'explicit' as const };
+    const amr = getDefaultAmrCredentials() ?? getAmrCredentials(db);
+    if (!amr) return { baseUrl, apiKey, source: 'missing' as const };
+    return { baseUrl: amr.gateway, apiKey: amr.token, source: 'amr' as const };
   };
 
   app.post('/api/runs', (req, res) => {
@@ -319,24 +328,24 @@ export function registerChatRoutes(app: Express, ctx: RegisterChatRoutesDeps) {
         'protocol must be one of anthropic|openai|azure|google|ollama',
       );
     }
-    if (
-      typeof body.baseUrl !== 'string' ||
-      typeof body.apiKey !== 'string' ||
-      !body.baseUrl.trim() ||
-      !body.apiKey.trim()
-    ) {
+    const openAiDefaults = protocol === 'openai' ? openAiProviderDefaults(body) : null;
+    const baseUrl = openAiDefaults?.baseUrl ?? (typeof body.baseUrl === 'string' ? body.baseUrl : '');
+    const apiKey = openAiDefaults?.apiKey ?? (typeof body.apiKey === 'string' ? body.apiKey : '');
+    if (!baseUrl.trim() || !apiKey.trim()) {
       return sendApiError(
         res,
         400,
         'BAD_REQUEST',
-        'baseUrl and apiKey are required',
+        protocol === 'openai'
+          ? 'baseUrl and apiKey are required unless AMR OAuth is connected'
+          : 'baseUrl and apiKey are required',
       );
     }
     try {
       const result = await listProviderModels({
         protocol,
-        baseUrl: body.baseUrl,
-        apiKey: body.apiKey,
+        baseUrl,
+        apiKey,
         apiVersion:
           typeof body.apiVersion === 'string' ? body.apiVersion : undefined,
         signal: controller.signal,
@@ -380,26 +389,29 @@ export function registerChatRoutes(app: Express, ctx: RegisterChatRoutesDeps) {
             'protocol must be one of anthropic|openai|azure|google|ollama',
           );
         }
+        const openAiDefaults = protocol === 'openai' ? openAiProviderDefaults(body) : null;
+        const baseUrl = openAiDefaults?.baseUrl ?? (typeof body.baseUrl === 'string' ? body.baseUrl : '');
+        const apiKey = openAiDefaults?.apiKey ?? (typeof body.apiKey === 'string' ? body.apiKey : '');
         if (
-          typeof body.baseUrl !== 'string' ||
-          typeof body.apiKey !== 'string' ||
           typeof body.model !== 'string' ||
-          !body.baseUrl.trim() ||
-          !body.apiKey.trim() ||
+          !baseUrl.trim() ||
+          !apiKey.trim() ||
           !body.model.trim()
         ) {
           return sendApiError(
             res,
             400,
             'BAD_REQUEST',
-            'baseUrl, apiKey, and model are required',
+            protocol === 'openai'
+              ? 'baseUrl, apiKey, and model are required unless AMR OAuth is connected'
+              : 'baseUrl, apiKey, and model are required',
           );
         }
         try {
           const result = await testProviderConnection({
             protocol,
-            baseUrl: body.baseUrl,
-            apiKey: body.apiKey,
+            baseUrl,
+            apiKey,
             model: body.model,
             apiVersion:
               typeof body.apiVersion === 'string' ? body.apiVersion : undefined,
@@ -792,14 +804,15 @@ export function registerChatRoutes(app: Express, ctx: RegisterChatRoutesDeps) {
     /** @type {Partial<ProxyStreamRequest>} */
     const proxyBody = req.body || {};
     if (rejectProxyPluginContext(proxyBody, res)) return;
-    const { baseUrl, apiKey, model, systemPrompt, messages, maxTokens } =
-      proxyBody;
+    const { model, systemPrompt, messages, maxTokens } = proxyBody;
+    const resolvedProvider = openAiProviderDefaults(proxyBody);
+    const { baseUrl, apiKey } = resolvedProvider;
     if (!baseUrl || !apiKey || !model) {
       return sendApiError(
         res,
         400,
         'BAD_REQUEST',
-        'baseUrl, apiKey, and model are required',
+        'baseUrl, apiKey, and model are required unless AMR OAuth is connected',
       );
     }
 
