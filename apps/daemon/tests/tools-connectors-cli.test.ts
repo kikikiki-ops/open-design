@@ -212,7 +212,7 @@ const ${componentName}Styles = {
   action: { border: '1px solid var(--cherry-primary)', background: 'var(--cherry-primary)', color: '#fff', borderRadius: 8, padding: '8px 10px' },
 };
 
-export function ${componentName}({ title = '${componentName}', items = ${componentName}Items }) {
+function ${componentName}({ title = '${componentName}', items = ${componentName}Items }) {
   return (
     <section style={${componentName}Styles.shell}>
       <header style={${componentName}Styles.header}>
@@ -228,6 +228,8 @@ export function ${componentName}({ title = '${componentName}', items = ${compone
     </section>
   );
 }
+
+window.${componentName} = ${componentName};
 `;
 }
 
@@ -244,7 +246,7 @@ const appStyles = {
   }
 };
 
-export function App() {
+function App() {
   return (
     <div style={appStyles.container}>
       <Sidebar />
@@ -880,6 +882,61 @@ describe('connectors tool CLI', () => {
       expect.objectContaining({
         code: 'ui_kit_index_missing_jsx_runtime',
         path: 'ui_kits/app/index.html',
+      }),
+    ]));
+
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('fails a design-system package audit when script-loaded JSX components do not expose browser globals', async () => {
+    const tmpDir = await mkdtemp(path.join(os.tmpdir(), 'od-package-audit-missing-browser-global-'));
+    process.chdir(tmpDir);
+    await mkdir(path.join(tmpDir, 'preview'), { recursive: true });
+    await mkdir(path.join(tmpDir, 'ui_kits/app/components'), { recursive: true });
+    await mkdir(path.join(tmpDir, 'context/local-code/cherry/files/src/pages/home'), { recursive: true });
+    await writeFile(path.join(tmpDir, 'DESIGN.md'), AUDIT_DESIGN_MD);
+    await writeFile(path.join(tmpDir, 'README.md'), AUDIT_README);
+    await writeFile(path.join(tmpDir, 'SKILL.md'), AUDIT_SKILL);
+    await writeFile(path.join(tmpDir, 'colors_and_type.css'), AUDIT_TOKENS_CSS);
+    for (const fileName of [
+      'colors-primary.html',
+      'colors-theme-light.html',
+      'typography-specimens.html',
+      'spacing-tokens.html',
+      'components-buttons.html',
+      'brand-assets.html',
+    ]) {
+      await writeFile(path.join(tmpDir, 'preview', fileName), auditHtml(fileName));
+    }
+    await writeFile(path.join(tmpDir, 'ui_kits/app/index.html'), auditUiKitIndex());
+    await writeFile(path.join(tmpDir, 'ui_kits/app/README.md'), '# UI kit\n');
+    for (const componentName of AUDIT_COMPONENT_FILES) {
+      await writeFile(
+        path.join(tmpDir, 'ui_kits/app/components', componentName),
+        componentName === 'Sidebar.jsx'
+          ? 'function Sidebar(){ return <aside>Sidebar</aside>; }\n'
+          : auditUiKitComponent(componentName),
+      );
+    }
+    await writeFile(path.join(tmpDir, 'context/source-context.md'), '# Design System Source Context\n\n## Local Code\n\n- /tmp/cherry\n');
+    await writeFile(path.join(tmpDir, 'context/local-code/cherry.md'), [
+      '# Local Design Evidence: cherry',
+      '',
+      'Snapshot files written: 1',
+      '',
+      '### Chat and input surfaces',
+      '- src/pages/home/Chat.tsx -> `context/local-code/cherry/files/src/pages/home/Chat.tsx` (source)',
+    ].join('\n'));
+    await writeFile(path.join(tmpDir, 'context/local-code/cherry/files/src/pages/home/Chat.tsx'), 'export function Chat(){ return <main><InputBar /><Messages /></main>; }');
+
+    const result = await runConnectorsToolCli(['design-system-package-audit', '--path', tmpDir]);
+
+    expect(result.exitCode).toBe(1);
+    expect(JSON.parse(stdoutOutput.join('')).errors).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        code: 'ui_kit_component_missing_browser_global',
+        path: 'ui_kits/app/components/Sidebar.jsx',
+        message: expect.stringContaining('window.Sidebar'),
       }),
     ]));
 

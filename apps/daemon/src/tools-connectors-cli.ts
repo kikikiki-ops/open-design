@@ -1640,6 +1640,19 @@ async function auditDesignSystemPackage(
         'ui_kits/app/index.html',
       );
     }
+    const directlyLoadedJsxComponents = directScriptLoadedJsxComponents(uiKitIndexText, uiKitScriptComponentFiles);
+    for (const filePath of directlyLoadedJsxComponents) {
+      const componentText = await readAuditText(projectPath, filePath);
+      const componentName = componentNameFromUiKitFile(filePath);
+      if (componentText !== undefined && componentName !== undefined && !componentTextExposesBrowserGlobal(componentText, componentName)) {
+        addIssue(
+          'error',
+          'ui_kit_component_missing_browser_global',
+          `${filePath} is loaded by ui_kits/app/index.html as a browser script, so it must assign \`window.${componentName}\` or \`globalThis.${componentName}\` for the entry renderer to compose it.`,
+          filePath,
+        );
+      }
+    }
   }
   if (hasComponentEvidence && uiKitComponentFiles.length < 3) {
     addIssue(
@@ -1883,6 +1896,25 @@ function uiKitIndexHasBrowserJsxRuntime(text: string): boolean {
   const hasReactDom = /\breact-dom\b|react-dom(?:\.development|\.production)?\.js\b|from\s+['"][^'"]*react-dom(?:\/[^'"]*)?['"]|\bReactDOM\./iu.test(text);
   const hasBabel = /@babel\/standalone|babel\.min\.js|\bBabel\.transform\b/iu.test(text);
   return hasReact && hasReactDom && hasBabel;
+}
+
+function directScriptLoadedJsxComponents(text: string, componentFiles: string[]): string[] {
+  return componentFiles
+    .filter((filePath) => /\.(jsx|tsx)$/iu.test(filePath))
+    .filter((filePath) => {
+      const fileName = escapeRegExp(path.basename(filePath));
+      return new RegExp(`<script\\b[^>]*\\bsrc=["'][^"']*components/${fileName}["'][^>]*>`, 'iu').test(text);
+    });
+}
+
+function componentNameFromUiKitFile(filePath: string): string | undefined {
+  const name = path.basename(filePath).replace(/\.(jsx|tsx|js|ts|html)$/iu, '');
+  return name.length > 0 ? name : undefined;
+}
+
+function componentTextExposesBrowserGlobal(text: string, componentName: string): boolean {
+  const escaped = escapeRegExp(componentName);
+  return new RegExp(`(?:window|globalThis)\\s*\\.\\s*${escaped}\\s*=|(?:window|globalThis)\\s*\\[\\s*["']${escaped}["']\\s*\\]\\s*=|Object\\.assign\\s*\\(\\s*(?:window|globalThis)\\s*,\\s*\\{[^}]*\\b${escaped}\\b`, 'u').test(text);
 }
 
 function componentNamesComposedInUiKitIndex(text: string, componentFiles: string[]): string[] {
