@@ -342,6 +342,33 @@
   background: var(--bg-subtle);
   color: var(--text-muted);
 }
+/*
+ * Empty lanes ("contribute" invites): the chip is intentionally kept
+ * in the strip so the workflow shape stays visible, but it's faded
+ * so users can tell at a glance which lanes are populated vs which
+ * are open-invite buckets. We keep it clickable (a click opens the
+ * "Contribute a X plugin" card) — disabling would hide that flow.
+ */
+.plugins-home__pill[data-empty='true']:not(.is-active) {
+  opacity: 0.45;
+  border-style: dashed;
+}
+.plugins-home__pill[data-empty='true']:not(.is-active):hover {
+  opacity: 0.75;
+}
+.plugins-home__pill[data-empty='true']:not(.is-active) .plugins-home__pill-count {
+  color: var(--text-faint);
+}
+/*
+ * "All" pills always reflect the catalog's full size (or full lane
+ * size in the sub-row's case) and should not pick up the empty
+ * treatment even when an unrelated category happens to be zero.
+ */
+.plugins-home__pill--all[data-empty='true'],
+.plugins-home__pill--sub-all[data-empty='true'] {
+  opacity: 1;
+  border-style: solid;
+}
 
 .plugins-home__empty--filtered {
   border-style: solid;

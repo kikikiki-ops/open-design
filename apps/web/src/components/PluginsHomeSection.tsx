@@ -404,6 +404,15 @@ function CategoryPill({ slug, label, count, active, variant, testId, onPick }: C
         .filter(Boolean)
         .join(' ')}
       onClick={() => onPick(slug)}
+      // Empty lanes are intentionally kept in the strip so the
+      // overall workflow shape (Import / Create / Export / Share /
+      // Deploy / Refine / Extend) is visible at a glance, and
+      // clicking one surfaces a "Contribute a X plugin" card. The
+      // `data-empty` flag drives a faded treatment in CSS so users
+      // can tell at a glance which chips are populated vs which
+      // are open-invite buckets — without that hint, "Deploy 0"
+      // and "Create 375" read as the same kind of control.
+      data-empty={count === 0 ? 'true' : 'false'}
       data-testid={testId ?? `plugins-home-pill-category-${slug ?? 'all'}`}
     >
       <span>{label}</span>
