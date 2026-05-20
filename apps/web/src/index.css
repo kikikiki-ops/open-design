@@ -488,13 +488,19 @@ code {
 }
 
 .workspace-shell {
+  width: 100vw;
+  max-width: 100vw;
   height: 100vh;
+  min-width: 0;
   min-height: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: 36px minmax(0, 1fr);
   background: var(--bg-app);
+  overflow: hidden;
 }
 .workspace-shell__body {
+  min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
@@ -505,6 +511,8 @@ code {
 }
 
 .workspace-tabs-chrome.app-chrome-header {
+  min-width: 0;
+  max-width: 100%;
   min-height: 38px;
   height: 38px;
   padding: 0 8px 0 12px;
@@ -514,7 +522,7 @@ code {
   box-shadow: 0 1px 0 color-mix(in srgb, var(--bg-panel) 80%, transparent) inset;
   user-select: none;
   -webkit-app-region: drag;
-  overflow: visible;
+  overflow: hidden;
   position: relative;
   z-index: 120;
 }
