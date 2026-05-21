@@ -160,7 +160,7 @@ describe('FileWorkspace upload input', () => {
       <FileWorkspace
         projectId="project-1"
         projectKind="prototype"
-        files={[baseFile()]}
+        files={[baseFile({ name: 'mock.txt', path: 'mock.txt', kind: 'text', mime: 'text/plain' })]}
         liveArtifacts={[]}
         onRefreshFiles={vi.fn()}
         isDeck={false}
@@ -170,7 +170,7 @@ describe('FileWorkspace upload input', () => {
     );
 
     fireEvent.change(screen.getByTestId('design-files-upload-input'), {
-      target: { files: [new File(['mock'], 'mock.png', { type: 'image/png' })] },
+      target: { files: [new File(['mock'], 'mock.txt', { type: 'text/plain' })] },
     });
 
     await waitFor(() => {
@@ -179,7 +179,7 @@ describe('FileWorkspace upload input', () => {
       );
     });
 
-    const row = screen.getByTestId('design-file-row-mock.png');
+    const row = screen.getByTestId('design-file-row-mock.txt');
     const nameButton = row.querySelector<HTMLButtonElement>('.df-row-name-btn');
     if (!nameButton) throw new Error('Could not find file name button');
     fireEvent.click(nameButton);
