@@ -1715,15 +1715,18 @@ function FooterInputOption({
   }
   if (field.name === 'designSystem' && designSystemOptions.length > 0) {
     const selectedValue = value === undefined || value === null ? '' : String(value);
-    const hasSelectedValue = selectedValue.length > 0 && designSystemOptions.some((option) => option.title === selectedValue);
-    const currentValue = hasSelectedValue ? selectedValue : designSystemOptions[0]?.title ?? '';
+    const selectedOption = selectedValue.length > 0
+      ? designSystemOptions.find((option) => option.title === selectedValue || option.id === selectedValue)
+      : undefined;
+    const currentValue = selectedOption?.id ?? designSystemOptions[0]?.id ?? '';
     return (
       <FooterSelectOption
         fieldName={field.name}
         label={label}
         value={currentValue}
         options={designSystemOptions.map((option) => ({
-          value: option.title,
+          value: option.id,
+          submitValue: option.title,
           label: option.isDefault ? `${option.title} (${t('ds.badgeDefault')})` : option.title,
           group: option.group,
           icon: option.auto ? 'sparkles' : undefined,
@@ -1904,7 +1907,7 @@ function FooterSelectOption({
                     aria-selected={option.value === value}
                     className={`home-hero__footer-select-item${option.value === value ? ' is-selected' : ''}`}
                     onClick={() => {
-                      onChange(option.value);
+                      onChange(option.submitValue ?? option.value);
                       setOpen(false);
                     }}
                   >
@@ -1933,6 +1936,7 @@ function FooterSelectOption({
 
 interface FooterSelectItemOption {
   value: string;
+  submitValue?: string;
   label: string;
   group?: string;
   icon?: IconName;
