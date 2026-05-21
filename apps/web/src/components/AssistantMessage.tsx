@@ -262,13 +262,6 @@ export function AssistantMessage({
             onRequestPluginFolderAgentAction={onRequestPluginFolderAgentAction}
           />
         ) : null}
-        {!streaming && unfinishedTodos.length > 0 ? (
-          <UnfinishedTodosPanel
-            todos={unfinishedTodos}
-            canContinue={canContinueTodos}
-            onContinue={() => onContinueRemainingTasks?.(unfinishedTodos)}
-          />
-        ) : null}
         {showCompletionRow ? (
           <div className="assistant-completion-row">
             {showFeedback ? (
@@ -304,6 +297,13 @@ export function AssistantMessage({
               />
             )}
           </div>
+        ) : null}
+        {!streaming && unfinishedTodos.length > 0 ? (
+          <UnfinishedTodosPanel
+            todos={unfinishedTodos}
+            canContinue={canContinueTodos}
+            onContinue={() => onContinueRemainingTasks?.(unfinishedTodos)}
+          />
         ) : null}
       </div>
     </div>

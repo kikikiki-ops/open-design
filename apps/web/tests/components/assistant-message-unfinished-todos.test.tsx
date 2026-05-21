@@ -197,6 +197,10 @@ describe('AssistantMessage unfinished todo state', () => {
     expect(remainingList).not.toBeNull();
     expect(within(remainingList as HTMLElement).getByText('Building components')).toBeTruthy();
     expect(within(remainingList as HTMLElement).getByText('Run QA')).toBeTruthy();
+    const footer = screen.getByText('Stopped with unfinished work').closest('.assistant-completion-row');
+    expect(footer).not.toBeNull();
+    const footerPosition = (footer as HTMLElement).compareDocumentPosition(remainingList as HTMLElement);
+    expect(footerPosition & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Continue remaining tasks' }));
 
