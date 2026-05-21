@@ -653,7 +653,6 @@ export async function getTemplateRecords(
     if (a.origin !== b.origin) return a.origin === 'design-template' ? -1 : 1;
     return a.name.localeCompare(b.name);
   });
-
 }
 
 // ---------------------------------------------------------------------------

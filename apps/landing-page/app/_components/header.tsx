@@ -86,7 +86,7 @@ export function Header({
           <span className='brand-mark'>
             <img src='/logo.webp' alt='' width={36} height={36} />
           </span>
-          <span>Open Design</span>
+          <span className='brand-name'>Open Design</span>
           <span className='brand-meta'>
             <b>{headerCopy.brandMetaTitle}</b>
             {headerCopy.brandMetaBody}
