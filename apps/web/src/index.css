@@ -1586,6 +1586,17 @@ code {
   text-decoration: none;
 }
 .avatar-item:hover { background: var(--bg-subtle); }
+.avatar-item.active {
+  background: var(--bg-subtle);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+.avatar-item.active .avatar-item-icon,
+.avatar-item.active .agent-icon,
+.avatar-item.active .avatar-item-meta,
+.avatar-item.active .avatar-item-check {
+  color: var(--accent-strong);
+}
 /* `<a>` items inside the popover need explicit color + decoration
    resets — the user-agent stylesheet otherwise paints them blue
    and underlined, which reads as misalignment next to the button
@@ -1610,6 +1621,10 @@ a.avatar-item:visited {
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+.avatar-item .avatar-item-check {
+  flex: 0 0 auto;
+  color: var(--text-muted);
 }
 .avatar-section-label {
   font-size: 10.5px;

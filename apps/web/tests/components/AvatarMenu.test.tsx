@@ -20,6 +20,15 @@ const config: AppConfig = {
   designSystemId: null,
 };
 
+const codexAgent: AgentInfo = {
+  id: 'codex',
+  name: 'Codex CLI',
+  bin: 'codex',
+  available: true,
+  version: '0.80.0',
+  models: [{ id: 'default', label: 'Default' }],
+};
+
 afterEach(() => {
   cleanup();
 });
@@ -70,5 +79,32 @@ describe('AvatarMenu', () => {
 
     expect(screen.getByRole('dialog', { name: 'avatar.title' })).toBeTruthy();
     expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('marks the current mode and selected agent with active state', () => {
+    render(
+      <AvatarMenu
+        config={{ ...config, mode: 'daemon', agentId: 'codex' }}
+        agents={[codexAgent]}
+        daemonLive
+        onModeChange={vi.fn()}
+        onAgentChange={vi.fn()}
+        onAgentModelChange={vi.fn()}
+        onOpenSettings={vi.fn()}
+        onRefreshAgents={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'avatar.title' }));
+
+    const localMode = screen.getByRole('button', { name: /avatar.useLocal/ });
+    const apiMode = screen.getByRole('button', { name: /avatar.useApi/ });
+    const agent = screen.getByRole('button', { name: /Codex CLI/ });
+
+    expect(localMode.getAttribute('aria-current')).toBe('true');
+    expect(localMode.className).toContain('active');
+    expect(apiMode.getAttribute('aria-current')).toBeNull();
+    expect(agent.getAttribute('aria-current')).toBe('true');
+    expect(agent.className).toContain('active');
   });
 });
