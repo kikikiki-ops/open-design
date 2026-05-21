@@ -922,20 +922,29 @@ function OnboardingView({
   function emitOnboardingComplete(
     result: TrackingOnboardingCompletionResult,
     completionType: TrackingOnboardingCompletionType,
-    extra: { errorCode?: string } = {},
+    extra: {
+      errorCode?: string;
+      // Generate-path callers pass the embedded DS creation flow's
+      // snapshot so the wire row reflects the actual source-count
+      // and brand-description the user typed, not the (always-null)
+      // `designSource` card-pick state. E2E (2026-05-21) showed the
+      // user can click Generate without first clicking one of the
+      // three source-type cards — they go straight to typing a
+      // brand prompt — so reading `designSource` alone yielded
+      // `has_design_system_request: false` despite a real request.
+      sourceSnapshot?: DesignSystemGenerateSnapshot;
+    } = {},
   ): void {
     if (lifecycleReportedRef.current) return;
     const onboardingSessionId = onboardingSessionIdRef.current;
     if (!onboardingSessionId) return;
     lifecycleReportedRef.current = true;
     const info = stepInfo(step);
-    // The DS creation form is embedded via `renderDesignSystemCreation`
-    // (DesignSystemCreationFlow) which owns its own source state, so
-    // OnboardingView can't see exact counts at this layer. `designSource`
-    // captures the click on a source-type card; once the embedded flow
-    // exposes a `onSourceCountChange` callback we can plumb a real count
-    // through. Until then, dashboard treats this as "did the user pick
-    // any source kind at all" rather than "how many".
+    const snapshot = extra.sourceSnapshot;
+    const hasRequest = snapshot
+      ? snapshot.sourceCount > 0 || snapshot.hasBrandDescription
+      : Boolean(designSource);
+    const sourceCount = snapshot ? snapshot.sourceCount : 0;
     trackOnboardingCompleteResult(analytics.track, {
       page_name: 'onboarding',
       area: 'onboarding',
@@ -946,8 +955,8 @@ function OnboardingView({
       has_about_you: Boolean(
         profile.role || profile.orgSize || profile.useCase.length > 0 || profile.source,
       ),
-      has_design_system_request: Boolean(designSource),
-      source_count: 0,
+      has_design_system_request: hasRequest,
+      source_count: sourceCount,
       ...(extra.errorCode ? { error_code: extra.errorCode } : {}),
       duration_ms: Math.max(0, Date.now() - onboardingStartedAtRef.current),
       onboarding_session_id: onboardingSessionId,
@@ -1555,6 +1564,7 @@ function OnboardingView({
                   emitOnboardingComplete(
                     'completed',
                     'completed_with_design_system',
+                    { sourceSnapshot: snapshot },
                   );
                   // Generation hand-off navigates away; the DS detail
                   // view's `area=generation_progress` page_view reads

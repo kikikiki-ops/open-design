@@ -48,6 +48,10 @@ import {
 import { projectKindToTracking } from '@open-design/contracts/analytics';
 import { useAnalytics } from '../analytics/provider';
 import { trackPageView } from '../analytics/events';
+import {
+  clearOnboardingSessionId,
+  peekOnboardingSessionId,
+} from '../analytics/onboarding-session';
 import { navigate } from '../router';
 import { agentDisplayName, agentModelDisplayName } from '../utils/agentLabels';
 import { isMacPlatform } from '../utils/platform';
@@ -479,6 +483,27 @@ export function ProjectView({
     if (chatPanelPageViewFiredRef.current === project.id) return;
     chatPanelPageViewFiredRef.current = project.id;
     trackPageView(analytics.track, { page_name: 'chat_panel' });
+    // Onboarding's 4th step ("生成进度页") fires here, not in
+    // `DesignSystemDetailView`: the Generate path navigates
+    // straight to the project's chat_panel, not to the design
+    // system detail surface. If an onboarding session id is still
+    // in sessionStorage we stamp the funnel's last row here and
+    // clear so any later DS visit doesn't inherit the attribution.
+    // E2E (2026-05-21) confirmed this is the only path users
+    // actually take — observed: page_view chat_panel fires, but
+    // page_view design_system_project never did because that
+    // route isn't visited from the embedded onboarding generate.
+    const onboardingSessionId = peekOnboardingSessionId();
+    if (onboardingSessionId) {
+      trackPageView(analytics.track, {
+        page_name: 'onboarding',
+        area: 'generation_progress',
+        step_index: 'progress',
+        step_name: 'generation',
+        onboarding_session_id: onboardingSessionId,
+      });
+      clearOnboardingSessionId();
+    }
   }, [analytics.track, project.id]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(
