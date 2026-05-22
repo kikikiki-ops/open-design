@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
-import { createReadStream, createWriteStream } from "node:fs";
+import { createReadStream } from "node:fs";
 import {
   access,
   chmod,
@@ -15,9 +15,15 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
-import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
+import {
+  MANAGED_DOWNLOAD_ERROR_CODES,
+  ManagedDownloadError,
+  downloadCopyAndClear,
+  type ManagedDownloadChecksum,
+  type ManagedDownloadProgress,
+} from "@open-design/download";
 import {
   DESKTOP_UPDATE_CHANNELS,
   DESKTOP_UPDATE_MODES,
@@ -66,6 +72,7 @@ const OWNERSHIP_SENTINEL = ".open-design-updater-root.json";
 const STORE_METADATA_FILE = "metadata.json";
 const RELEASES_DIR = "releases";
 const STAGING_DIR = "staging";
+const DOWNLOADS_DIR = "downloads";
 const BACK_DIR = ".back";
 const HELPERS_DIR = "helpers";
 const UPDATE_ROOT_VERSION = 1;
@@ -469,6 +476,7 @@ function logStoreError(logger: DesktopUpdaterLogger, error: DesktopUpdateErrorSn
 function isAllowedRootEntry(name: string): boolean {
   return name === OWNERSHIP_SENTINEL ||
     name === STORE_METADATA_FILE ||
+    name === DOWNLOADS_DIR ||
     name === RELEASES_DIR ||
     name === STAGING_DIR ||
     name === BACK_DIR ||
@@ -590,7 +598,7 @@ async function ensureOwnedUpdateRoot(
       return { ok: false, error };
     }
 
-    for (const dirName of [RELEASES_DIR, STAGING_DIR, BACK_DIR, HELPERS_DIR]) {
+    for (const dirName of [RELEASES_DIR, STAGING_DIR, DOWNLOADS_DIR, BACK_DIR, HELPERS_DIR]) {
       const path = join(realRoot, dirName);
       let entry;
       try {
@@ -909,36 +917,6 @@ async function hashFile(path: string, algorithm: "sha256" | "sha512"): Promise<s
   return hash.digest("hex");
 }
 
-async function downloadToFile(
-  fetchImpl: typeof globalThis.fetch,
-  url: string,
-  path: string,
-  onProgress: (progress: DesktopUpdateProgressSnapshot) => void,
-): Promise<void> {
-  const response = await fetchImpl(url);
-  if (!response.ok) throw new Error(`artifact request returned HTTP ${response.status}`);
-  if (response.body == null) throw new Error("artifact response did not include a body");
-  await mkdir(dirname(path), { recursive: true });
-  const totalRaw = response.headers.get("content-length");
-  const parsedTotalBytes = totalRaw == null ? undefined : Number(totalRaw);
-  const totalBytes = parsedTotalBytes != null && Number.isFinite(parsedTotalBytes) && parsedTotalBytes > 0
-    ? parsedTotalBytes
-    : undefined;
-  let receivedBytes = 0;
-  const meter = new Transform({
-    transform(chunk: Buffer, _encoding, callback) {
-      receivedBytes += chunk.byteLength;
-      onProgress({ receivedBytes, ...(totalBytes == null ? {} : { totalBytes }) });
-      callback(null, chunk);
-    },
-  });
-  await pipeline(
-    Readable.fromWeb(response.body as never),
-    meter,
-    createWriteStream(path, { flags: "wx" }),
-  );
-}
-
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -949,6 +927,9 @@ function isRetryableArtifactDownloadError(error: unknown): boolean {
 }
 
 function userFacingDownloadErrorMessage(error: unknown): string {
+  if (error instanceof ManagedDownloadError && error.code === MANAGED_DOWNLOAD_ERROR_CODES.NETWORK_EXHAUSTED) {
+    return `The network connection ended while downloading the update. Please try again.`;
+  }
   const message = errorMessage(error);
   if (isRetryableArtifactDownloadError(error)) {
     return `The network connection ended while downloading the update. Please try again.`;
@@ -956,31 +937,29 @@ function userFacingDownloadErrorMessage(error: unknown): string {
   return message;
 }
 
-async function downloadToFileWithRetries(
-  fetchImpl: typeof globalThis.fetch,
-  url: string,
-  path: string,
-  onProgress: (progress: DesktopUpdateProgressSnapshot) => void,
-  logger: DesktopUpdaterLogger,
-): Promise<void> {
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= ARTIFACT_DOWNLOAD_MAX_ATTEMPTS; attempt += 1) {
-    if (attempt > 1) await rm(path, { force: true }).catch(() => undefined);
-    try {
-      await downloadToFile(fetchImpl, url, path, onProgress);
-      return;
-    } catch (downloadError) {
-      lastError = downloadError;
-      if (attempt >= ARTIFACT_DOWNLOAD_MAX_ATTEMPTS || !isRetryableArtifactDownloadError(downloadError)) break;
-      logger.warn("[open-design updater] retrying interrupted update download", {
-        attempt,
-        error: errorMessage(downloadError),
-        maxAttempts: ARTIFACT_DOWNLOAD_MAX_ATTEMPTS,
-        url,
-      });
-    }
+function managedChecksum(checksum: DesktopUpdateChecksumSnapshot): ManagedDownloadChecksum {
+  if (checksum.value == null) throw new Error("artifact checksum is missing");
+  return {
+    algorithm: checksum.algorithm,
+    value: checksum.value,
+  };
+}
+
+function updateProgressFromManaged(progress: ManagedDownloadProgress): DesktopUpdateProgressSnapshot {
+  return {
+    receivedBytes: progress.receivedBytes,
+    ...(progress.totalBytes == null ? {} : { totalBytes: progress.totalBytes }),
+  };
+}
+
+function desktopDownloadError(error: unknown): DesktopUpdateErrorSnapshot {
+  if (error instanceof ManagedDownloadError && error.code === MANAGED_DOWNLOAD_ERROR_CODES.CHECKSUM_MISMATCH) {
+    return createError("checksum-mismatch", "downloaded update checksum did not match release metadata", error.details);
   }
-  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+  if (error instanceof ManagedDownloadError && error.code === MANAGED_DOWNLOAD_ERROR_CODES.TARGET_LOCKED) {
+    return createError("download-target-locked", "another update download is already using this target");
+  }
+  return createError("download-failed", userFacingDownloadErrorMessage(error));
 }
 
 async function ensureOwnedSubdir(root: string, name: string): Promise<string> {
@@ -1617,6 +1596,7 @@ export function createDesktopUpdater(
     };
     try {
       const stagingRoot = await ensureOwnedSubdir(opened.root.realRoot, STAGING_DIR);
+      const downloadsRoot = await ensureOwnedSubdir(opened.root.realRoot, DOWNLOADS_DIR);
       const releasesRoot = await ensureOwnedSubdir(opened.root.realRoot, RELEASES_DIR);
       stagingDir = join(stagingRoot, cycleId);
       if (!containsPath(opened.root.realRoot, stagingDir)) {
@@ -1628,10 +1608,22 @@ export function createDesktopUpdater(
         return await failDownload(createError("download-path-escaped", "resolved update download path escaped update root"));
       }
       const resolvedChecksum = await resolveChecksum(fetchImpl, nextCandidate.checksum);
-      await downloadToFileWithRetries(fetchImpl, nextCandidate.artifact.url, tmpPath, (nextProgress) => {
-        progress = nextProgress;
-        emit();
-      }, logger);
+      await downloadCopyAndClear({
+        basePath: downloadsRoot,
+        bucket: "package-launcher",
+        fetch: fetchImpl,
+        fileName: outputName,
+        maxAttempts: ARTIFACT_DOWNLOAD_MAX_ATTEMPTS,
+        onProgress: (nextProgress) => {
+          progress = updateProgressFromManaged(nextProgress);
+          emit();
+        },
+        outputPath: tmpPath,
+        payload: {
+          checksum: managedChecksum(resolvedChecksum),
+          url: nextCandidate.artifact.url,
+        },
+      });
       const digest = await hashFile(tmpPath, resolvedChecksum.algorithm);
       if (resolvedChecksum.value == null || digest.toLowerCase() !== resolvedChecksum.value.toLowerCase()) {
         return await failDownload(
@@ -1687,10 +1679,7 @@ export function createDesktopUpdater(
       incomingRelease = null;
       progress = undefined;
       await writeMetadataPatch((current) => ({ ...current, incoming: undefined }));
-      return setState(
-        DESKTOP_UPDATE_STATES.ERROR,
-        createError("download-failed", userFacingDownloadErrorMessage(downloadError)),
-      );
+      return setState(DESKTOP_UPDATE_STATES.ERROR, desktopDownloadError(downloadError));
     }
   }
 

@@ -69,6 +69,50 @@ describe("updater fixture server", () => {
     }
   });
 
+  it("serves artifact byte ranges for resumable download validation", async () => {
+    const server = await startUpdaterFixtureServer({
+      artifactBody: "fixture artifact",
+      channel: "beta",
+      version: "2.0.0-beta-nightly.1",
+    });
+    try {
+      const rangedArtifact = await fetch(server.info.artifactUrl, {
+        headers: { range: "bytes=8-15" },
+      });
+      expect(rangedArtifact.status).toBe(206);
+      expect(rangedArtifact.headers.get("accept-ranges")).toBe("bytes");
+      expect(rangedArtifact.headers.get("content-range")).toBe("bytes 8-15/16");
+      expect(await rangedArtifact.text()).toBe("artifact");
+
+      const suffixArtifact = await fetch(server.info.artifactUrl, {
+        headers: { range: "bytes=-8" },
+      });
+      expect(suffixArtifact.status).toBe(206);
+      expect(suffixArtifact.headers.get("content-range")).toBe("bytes 8-15/16");
+      expect(await suffixArtifact.text()).toBe("artifact");
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("rejects unsatisfiable artifact byte ranges", async () => {
+    const server = await startUpdaterFixtureServer({
+      artifactBody: "fixture artifact",
+      channel: "beta",
+      version: "2.0.0-beta-nightly.1",
+    });
+    try {
+      const artifact = await fetch(server.info.artifactUrl, {
+        headers: { range: "bytes=100-120" },
+      });
+      expect(artifact.status).toBe(416);
+      expect(artifact.headers.get("accept-ranges")).toBe("bytes");
+      expect(artifact.headers.get("content-range")).toBe("bytes */16");
+    } finally {
+      await server.close();
+    }
+  });
+
   it("serves nightly and preview channel-specific release versions", async () => {
     const nightly = await startUpdaterFixtureServer({
       channel: "nightly",
