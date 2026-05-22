@@ -2,7 +2,7 @@
 //
 // Renders a narrow icon-only column. The first slot is the brand logo,
 // followed by the primary destinations users expect to keep in reach:
-// Home, new project, projects, automations, design systems, plugins,
+// New project, home, projects, automations, design systems, plugins,
 // and integrations. Footer controls are reserved for lower-frequency
 // support affordances such as the help launcher.
 // Language switching and other account-scoped controls live behind the
@@ -79,6 +79,14 @@ export function EntryNavRail({ view, onViewChange, onNewProject }: Props) {
         </button>
         <div className="entry-nav-rail__logo-divider" role="separator" aria-hidden="true" />
         <NavButton
+          ariaLabel={t('entry.navNewProject')}
+          tooltip={t('entry.navNewProject')}
+          onClick={onNewProject}
+          testId="entry-nav-new-project"
+        >
+          <Icon name="plus" size={18} />
+        </NavButton>
+        <NavButton
           active={isHome}
           ariaLabel={homeLabel}
           tooltip={homeLabel}
@@ -86,14 +94,6 @@ export function EntryNavRail({ view, onViewChange, onNewProject }: Props) {
           testId="entry-nav-home"
         >
           <Icon name="home" size={18} />
-        </NavButton>
-        <NavButton
-          ariaLabel={t('entry.navNewProject')}
-          tooltip={t('entry.navNewProject')}
-          onClick={onNewProject}
-          testId="entry-nav-new-project"
-        >
-          <Icon name="plus" size={18} />
         </NavButton>
         <NavButton
           active={view === 'projects'}

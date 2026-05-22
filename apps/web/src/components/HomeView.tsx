@@ -1486,7 +1486,7 @@ function shouldShowActivePluginChip(active: ActivePlugin | null): boolean {
 function facetSelectionForChip(chipId: string): FacetSelection | null {
   switch (chipId) {
     case 'prototype': return { category: 'prototype', subcategory: null };
-    case 'live-artifact': return { category: 'prototype', subcategory: 'business-dashboards' };
+    case 'live-artifact': return { category: 'live-artifact', subcategory: null };
     case 'deck': return { category: 'deck', subcategory: null };
     case 'image': return { category: 'image', subcategory: null };
     case 'video': return { category: 'video', subcategory: null };

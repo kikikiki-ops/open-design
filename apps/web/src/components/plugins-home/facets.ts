@@ -3,7 +3,7 @@
 // The Home starter grid is organized around the artifact a user wants
 // to make first:
 //
-//   Prototype · Slides · Image · Video · HyperFrames · Audio
+//   Prototype · Live Artifact · Slides · Image · Video · HyperFrames · Audio
 //
 // Prototype, Slides, Image, and Video have enough bundled templates to
 // deserve a second row. Those child buckets follow the Feishu prompt
@@ -19,6 +19,7 @@
 // catalog is shaped.
 
 import type { InstalledPluginRecord } from '@open-design/contracts';
+import { CURATED_LIVE_ARTIFACT_PLUGIN_IDS } from './curatedPriority';
 
 export type FacetAxis = 'category' | 'subcategory';
 
@@ -130,6 +131,10 @@ function isVideoPlugin(record: InstalledPluginRecord): boolean {
   return byMode('video')(record) && !isHyperFramesPlugin(record);
 }
 
+function isLiveArtifactPlugin(record: InstalledPluginRecord): boolean {
+  return (CURATED_LIVE_ARTIFACT_PLUGIN_IDS as readonly string[]).includes(record.id);
+}
+
 // Curated artifact-kind list. Keep this aligned with the Home creation
 // intents and the app's artifact product types.
 const PRIMARY_CATEGORIES: readonly CategoryDef[] = [
@@ -137,7 +142,13 @@ const PRIMARY_CATEGORIES: readonly CategoryDef[] = [
     slug: 'prototype',
     label: 'Prototype',
     starterPrompt: 'Create an Open Design plugin that generates an interactive prototype from a product brief.',
-    test: byMode('prototype'),
+    test: (record) => byMode('prototype')(record) && !isLiveArtifactPlugin(record),
+  },
+  {
+    slug: 'live-artifact',
+    label: 'Live Artifact',
+    starterPrompt: 'Create an Open Design plugin that generates a live artifact with refreshable, data-aware UI.',
+    test: isLiveArtifactPlugin,
   },
   {
     slug: 'deck',

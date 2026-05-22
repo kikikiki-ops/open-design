@@ -3,9 +3,9 @@
 // Plugins home section — UI contract.
 //
 // The section renders artifact-kind filters for the starter grid:
-// Prototype / Slides / Image / Video / HyperFrames / Audio. Prototype,
-// Slides, Image, and Video expose a second row of scene buckets; the
-// smaller HyperFrames and Audio slices stay flat. Saved is an
+// Prototype / Live Artifact / Slides / Image / Video / HyperFrames / Audio.
+// Prototype, Slides, Image, and Video expose a second row of scene buckets;
+// the smaller Live Artifact, HyperFrames, and Audio slices stay flat. Saved is an
 // orthogonal user collection override, and sparse buckets should fall
 // back to the normal empty-filter state rather than rendering synthetic
 // cards.
@@ -81,6 +81,23 @@ afterEach(() => {
 const sample: InstalledPluginRecord[] = [
   makePlugin({ id: 'prototype-dashboard', mode: 'prototype', tags: ['dashboard'] }),
   makePlugin({ id: 'prototype-app', mode: 'prototype', tags: ['mobile-app'] }),
+  makePlugin({ id: 'example-live-dashboard', mode: 'prototype', tags: ['live-dashboard'] }),
+  makePlugin({
+    id: 'image-template-notion-team-dashboard-live-artifact',
+    mode: 'image',
+    tags: ['live-artifact'],
+  }),
+  makePlugin({
+    id: 'example-social-media-matrix-tracker-template',
+    mode: 'template',
+    tags: ['live-artifacts'],
+  }),
+  makePlugin({
+    id: 'example-trading-analysis-dashboard-template',
+    mode: 'template',
+    tags: ['live-artifacts'],
+  }),
+  makePlugin({ id: 'example-live-artifact', mode: 'prototype', tags: ['live-artifact'] }),
   makePlugin({ id: 'deck-pitch', mode: 'deck', tags: ['pitch-deck'], featured: true }),
   makePlugin({ id: 'image-logo', mode: 'image', tags: ['logo'] }),
   makePlugin({ id: 'video-short', mode: 'video', tags: ['short-form'] }),
@@ -107,6 +124,7 @@ describe('PluginsHomeSection (category bar)', () => {
     expect(screen.getByTestId('plugins-home-chip-saved').textContent).toContain('Saved');
     expect(screen.getByTestId('plugins-home-pill-category-all')).toBeTruthy();
     expect(screen.getByTestId('plugins-home-pill-category-prototype')).toBeTruthy();
+    expect(screen.getByTestId('plugins-home-pill-category-live-artifact')).toBeTruthy();
     expect(screen.getByTestId('plugins-home-pill-category-deck')).toBeTruthy();
     expect(screen.getByTestId('plugins-home-pill-category-image')).toBeTruthy();
     expect(screen.getByTestId('plugins-home-pill-category-video')).toBeTruthy();
@@ -132,6 +150,21 @@ describe('PluginsHomeSection (category bar)', () => {
     fireEvent.click(screen.getByTestId('plugins-home-pill-category-hyperframes'));
     expect(pluginIds()).toEqual(['hyperframes-composition']);
     expect(screen.queryByTestId('plugins-home-row-subcategory-hyperframes')).toBeNull();
+  });
+
+  it('groups Live Artifact as its own flat Community category', () => {
+    renderSection();
+
+    fireEvent.click(screen.getByTestId('plugins-home-pill-category-live-artifact'));
+
+    expect(pluginIds()).toEqual([
+      'example-live-dashboard',
+      'image-template-notion-team-dashboard-live-artifact',
+      'example-social-media-matrix-tracker-template',
+      'example-trading-analysis-dashboard-template',
+      'example-live-artifact',
+    ]);
+    expect(screen.queryByTestId('plugins-home-row-subcategory-live-artifact')).toBeNull();
   });
 
   it('keeps sparse subcategories as real filters without adding contribution cards', () => {
@@ -188,8 +221,13 @@ describe('PluginsHomeSection (category bar)', () => {
     expect(pluginIds().sort()).toEqual([
       'audio-voice',
       'deck-pitch',
+      'example-live-artifact',
+      'example-live-dashboard',
+      'example-social-media-matrix-tracker-template',
+      'example-trading-analysis-dashboard-template',
       'hyperframes-composition',
       'image-logo',
+      'image-template-notion-team-dashboard-live-artifact',
       'prototype-app',
       'prototype-dashboard',
       'video-cinematic',
@@ -222,8 +260,13 @@ describe('PluginsHomeSection (category bar)', () => {
     expect(pluginIds().sort()).toEqual([
       'audio-voice',
       'deck-pitch',
+      'example-live-artifact',
+      'example-live-dashboard',
+      'example-social-media-matrix-tracker-template',
+      'example-trading-analysis-dashboard-template',
       'hyperframes-composition',
       'image-logo',
+      'image-template-notion-team-dashboard-live-artifact',
       'prototype-app',
       'prototype-dashboard',
       'video-cinematic',

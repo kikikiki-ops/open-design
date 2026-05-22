@@ -27,6 +27,7 @@ function makePlugin(
   mode: string,
   title = id,
   extraTags: string[] = [],
+  options: { query?: string | null } = {},
 ): InstalledPluginRecord {
   return {
     id,
@@ -45,7 +46,9 @@ function makePlugin(
       od: {
         mode,
         useCase: {
-          query: `Create with {{topic}} using ${title}`,
+          ...(options.query !== null
+            ? { query: options.query ?? `Create with {{topic}} using ${title}` }
+            : {}),
         },
         inputs: [
           {
@@ -149,6 +152,8 @@ describe('HomeHero intent rail', () => {
     expect(onPromptChange).toHaveBeenCalledWith(
       'Research the market opportunity for a product launch, including competitors, target users, pricing hypotheses, and launch narrative',
     );
+    expect(screen.getByTestId('home-hero-active-example').textContent).toContain('Example prompts: Research the market opportunity');
+    expect(screen.getByTestId('home-hero-active-example').textContent).toContain('...');
   });
 
   it('shows matching plugin presets in the example prompt area for the selected tab', () => {
@@ -169,6 +174,57 @@ describe('HomeHero intent rail', () => {
       deckPlugin,
       'deck',
       'Create with a focused brief using Investor deck',
+    );
+    expect(screen.getByTestId('home-hero-active-example').textContent).toContain('Example prompts: Investor deck');
+  });
+
+  it('orders curated example presets first for the selected artifact type', () => {
+    const ordinaryDeck = makePlugin('example-ordinary-deck', 'deck', 'Ordinary deck');
+    const capsule = makePlugin(
+      'example-html-ppt-zhangzara-capsule',
+      'deck',
+      'Html Ppt Zhangzara Capsule',
+    );
+    const creativeMode = makePlugin(
+      'example-html-ppt-zhangzara-creative-mode',
+      'deck',
+      'Html Ppt Zhangzara Creative Mode',
+    );
+    renderHero({
+      activeChipId: 'deck',
+      pluginOptions: [ordinaryDeck, capsule, creativeMode],
+    });
+
+    const presets = screen.getAllByTestId('home-hero-plugin-preset');
+    expect(presets.map((preset) => preset.getAttribute('data-plugin-id'))).toEqual([
+      'example-html-ppt-zhangzara-creative-mode',
+      'example-html-ppt-zhangzara-capsule',
+      'example-ordinary-deck',
+    ]);
+  });
+
+  it('keeps curated presets even when they rely on fallback prompt text', () => {
+    const otakuDance = makePlugin(
+      'image-template-infographic-otaku-dance-choreography-breakdown-gokurakujodo-16-panels',
+      'image',
+      'Infographic - Otaku Dance Choreography Breakdown (Gokuraku Jodo, 16 Panels)',
+      ['image-template'],
+      { query: null },
+    );
+    const ordinaryImage = makePlugin(
+      'image-template-ordinary',
+      'image',
+      'Ordinary image',
+      ['image-template'],
+    );
+    renderHero({
+      activeChipId: 'image',
+      pluginOptions: [ordinaryImage, otakuDance],
+    });
+
+    const presets = screen.getAllByTestId('home-hero-plugin-preset');
+    expect(presets[0]?.getAttribute('data-plugin-id')).toBe(
+      'image-template-infographic-otaku-dance-choreography-breakdown-gokurakujodo-16-panels',
     );
   });
 
@@ -191,15 +247,39 @@ describe('HomeHero intent rail', () => {
 
   it('moves live artifact presets out of Image and into Live artifact examples', () => {
     const imagePoster = makePlugin('image-template-poster', 'image', 'Image Poster');
+    const liveDashboard = makePlugin(
+      'example-live-dashboard',
+      'prototype',
+      'Live Dashboard',
+      ['live-dashboard'],
+    );
     const notionDashboard = makePlugin(
       'image-template-notion-team-dashboard-live-artifact',
       'image',
       'Notion-style Team Dashboard (Live Artifact)',
       ['live-artifact'],
     );
+    const socialTracker = makePlugin(
+      'example-social-media-matrix-tracker-template',
+      'template',
+      'Social Media Matrix Tracker Template',
+      ['live-artifacts'],
+    );
+    const tradingDashboard = makePlugin(
+      'example-trading-analysis-dashboard-template',
+      'template',
+      'Trading Analysis Dashboard Template',
+      ['live-artifacts'],
+    );
+    const liveArtifact = makePlugin(
+      'example-live-artifact',
+      'prototype',
+      'Live Artifact',
+      ['live-artifact'],
+    );
     renderHero({
       activeChipId: 'image',
-      pluginOptions: [imagePoster, notionDashboard],
+      pluginOptions: [imagePoster, liveDashboard, notionDashboard],
     });
 
     let presets = screen.getAllByTestId('home-hero-plugin-preset');
@@ -209,12 +289,24 @@ describe('HomeHero intent rail', () => {
     cleanup();
     renderHero({
       activeChipId: 'live-artifact',
-      pluginOptions: [imagePoster, notionDashboard],
+      pluginOptions: [
+        imagePoster,
+        liveArtifact,
+        tradingDashboard,
+        notionDashboard,
+        socialTracker,
+        liveDashboard,
+      ],
     });
 
     presets = screen.getAllByTestId('home-hero-plugin-preset');
-    expect(presets).toHaveLength(1);
-    expect(presets[0]?.textContent).toContain('Notion-style Team Dashboard (Live Artifact)');
+    expect(presets.map((preset) => preset.getAttribute('data-plugin-id'))).toEqual([
+      'example-live-dashboard',
+      'image-template-notion-team-dashboard-live-artifact',
+      'example-social-media-matrix-tracker-template',
+      'example-trading-analysis-dashboard-template',
+      'example-live-artifact',
+    ]);
   });
 
   it('disables every visible chip while a plugin apply is in flight', () => {

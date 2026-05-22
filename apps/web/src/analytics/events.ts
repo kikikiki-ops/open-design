@@ -672,12 +672,13 @@ export function trackAssistantFeedbackReasonSubmit(
 // ---- Onboarding ---------------------------------------------------------
 //
 // `trackOnboardingClick` is the catch-all for the welcome flow's
-// runtime-pick / about-you / design-system source / continue / skip /
-// back / generate buttons; the discriminator combo (area + element +
-// action) narrows the row down inside PostHog so the dashboard can
-// split each step's funnel cleanly without a separate event name per
-// button. Lifecycle events that don't fit a click — CLI scan finishing,
-// onboarding wrapping up — get their own `onboarding_*_result` shape.
+// runtime-pick / about-you / continue / skip / back buttons. The same
+// shape still supports historical and future design-system intake
+// clicks; the discriminator combo (area + element + action) narrows
+// the row down inside PostHog so the dashboard can split each step's
+// funnel cleanly without a separate event name per button. Lifecycle
+// events that don't fit a click — CLI scan finishing, onboarding
+// wrapping up — get their own `onboarding_*_result` shape.
 
 export function trackOnboardingClick(
   track: Track,
