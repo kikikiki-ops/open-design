@@ -2823,7 +2823,7 @@ function CommentPreviewOverlays({
               title={`${comment.elementId}: ${comment.note}`}
               aria-label={`Open comment for ${comment.elementId}`}
             >
-              {index + 1}
+              C
             </button>
           </div>
         );

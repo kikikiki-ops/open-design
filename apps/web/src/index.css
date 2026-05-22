@@ -12131,23 +12131,23 @@ button.connector-action.is-loading {
 .comment-saved-pin {
   position: absolute;
   z-index: 2;
-  left: -8px;
-  top: -8px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border: 1px solid #0958d9;
-  border-radius: var(--radius-pill);
-  background: #1677ff;
+  left: -14px;
+  top: -14px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 2px solid var(--bg-panel);
+  border-radius: 50%;
+  background: #d86f4c;
   color: white;
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 16px;
-  box-shadow: var(--shadow-sm);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1;
+  box-shadow: 0 6px 18px rgba(80, 43, 28, 0.22);
   pointer-events: auto;
 }
 .comment-saved-pin:hover {
-  background: #0958d9;
+  background: #c85d3a;
   transform: translateY(-1px);
 }
 .comment-active-pin {

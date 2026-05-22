@@ -1506,7 +1506,7 @@ describe('FileViewer tweaks toolbar', () => {
     expect(screen.getByTestId('inspect-empty-hint-container')).toBeTruthy();
   });
 
-  it('keeps saved comment marker numbers aligned with the side panel order', () => {
+  it('keeps saved comment pins visible while adding another comment', async () => {
     const olderComment: PreviewComment = {
       id: 'comment-older',
       projectId: 'project-1',
@@ -1548,8 +1548,27 @@ describe('FileViewer tweaks toolbar', () => {
     fireEvent.click(screen.getByTestId('comment-panel-toggle'));
 
     expect(screen.queryByTestId('comment-side-panel')).toBeNull();
-    expect(screen.getByTestId('comment-saved-marker-pin-newer').textContent).toContain('1');
-    expect(screen.getByTestId('comment-saved-marker-pin-older').textContent).toContain('2');
+    expect(screen.getByTestId('comment-saved-marker-pin-newer').textContent).toBe('C');
+    expect(screen.getByTestId('comment-saved-marker-pin-older').textContent).toBe('C');
+
+    const frame = screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;
+    window.dispatchEvent(new MessageEvent('message', {
+      source: frame.contentWindow,
+      data: {
+        type: 'od:comment-target',
+        elementId: 'hero',
+        selector: '[data-od-id="hero"]',
+        label: 'Hero',
+        text: 'Hero',
+        position: { x: 8, y: 12, width: 120, height: 48 },
+        hoverPoint: { x: 12, y: 16 },
+        htmlHint: '<main data-od-id="hero">Hero</main>',
+      },
+    }));
+
+    expect((await screen.findByTestId('comment-active-pin')).textContent).toBe('C');
+    expect(screen.getByTestId('comment-saved-marker-pin-newer')).toBeTruthy();
+    expect(screen.getByTestId('comment-saved-marker-pin-older')).toBeTruthy();
   });
 
   it('does not preload non-open element comments into the picker composer', async () => {
