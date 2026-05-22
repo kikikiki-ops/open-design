@@ -5749,7 +5749,7 @@ function HtmlViewer({
                       aria-pressed={boardMode && boardTool === 'pod'}
                       onClick={() => activateBoardPicker('pod')}
                     >
-                      <Icon name="draw" size={13} />
+                      <Icon name="lasso-select" size={14} />
                       <span>Region</span>
                     </button>
                     <button
