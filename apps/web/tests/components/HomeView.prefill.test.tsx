@@ -141,6 +141,72 @@ const WEB_PROTOTYPE_PLUGIN = {
   },
 };
 
+const SIMPLE_DECK_PLUGIN = {
+  ...DEFAULT_PLUGIN,
+  id: 'example-simple-deck',
+  title: 'Simple Deck',
+  source: '/tmp/simple-deck',
+  fsPath: '/tmp/simple-deck',
+  manifest: {
+    ...DEFAULT_PLUGIN.manifest,
+    name: 'example-simple-deck',
+    title: 'Simple Deck',
+    description: 'Single-file horizontal-swipe HTML deck.',
+    od: {
+      kind: 'scenario',
+      taskKind: 'new-generation',
+      useCase: {
+        query: 'Create a {{deckType}} for {{audience}} about {{topic}} with {{slideCount}}. Speaker notes: {{speakerNotes}}. Use {{designSystem}}.',
+      },
+      inputs: [
+        {
+          name: 'deckType',
+          type: 'select',
+          required: true,
+          options: ['pitch deck', 'product overview', 'study deck'],
+          default: 'pitch deck',
+          label: 'Deck type',
+        },
+        {
+          name: 'topic',
+          type: 'string',
+          required: true,
+          default: 'the user brief',
+          label: 'Topic',
+        },
+        {
+          name: 'audience',
+          type: 'string',
+          required: true,
+          default: 'decision makers',
+          label: 'Audience',
+        },
+        {
+          name: 'slideCount',
+          type: 'select',
+          required: true,
+          options: ['5-10 pages', '10-15 pages', '15-20 pages', '20-25 pages', '25-30 pages'],
+          default: '10-15 pages',
+          label: 'Pages',
+        },
+        {
+          name: 'speakerNotes',
+          type: 'select',
+          options: ['include speaker notes', 'no speaker notes'],
+          default: 'include speaker notes',
+          label: 'Speaker notes',
+        },
+        {
+          name: 'designSystem',
+          type: 'string',
+          default: 'the active project design system',
+          label: 'Design system',
+        },
+      ],
+    },
+  },
+};
+
 const LIVE_ARTIFACT_PLUGIN = {
   ...DEFAULT_PLUGIN,
   id: 'example-live-artifact',
@@ -262,6 +328,25 @@ const WEB_PROTOTYPE_APPLY_RESULT = {
       audience: 'product evaluators',
       designSystem: 'the active project design system',
       template: 'the bundled web prototype seed',
+    },
+  },
+};
+
+const SIMPLE_DECK_APPLY_RESULT = {
+  ...AUTHORING_APPLY_RESULT,
+  query: SIMPLE_DECK_PLUGIN.manifest.od.useCase.query,
+  inputs: SIMPLE_DECK_PLUGIN.manifest.od.inputs,
+  appliedPlugin: {
+    ...AUTHORING_APPLY_RESULT.appliedPlugin,
+    snapshotId: 'snap-simple-deck',
+    pluginId: 'example-simple-deck',
+    inputs: {
+      deckType: 'pitch deck',
+      topic: 'the user brief',
+      audience: 'decision makers',
+      slideCount: '10-15 pages',
+      speakerNotes: 'include speaker notes',
+      designSystem: 'the active project design system',
     },
   },
 };
@@ -826,6 +911,82 @@ describe('HomeView prompt handoff', () => {
       prompt: 'Build a refreshable Stripe revenue dashboard.',
     })));
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('exposes deck page ranges beside speaker notes and submits the selected range', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async (url) => {
+      if (typeof url === 'string' && url === '/api/plugins') {
+        return new Response(JSON.stringify({ plugins: [SIMPLE_DECK_PLUGIN] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (typeof url === 'string' && url.includes('/api/plugins/example-simple-deck/apply')) {
+        return new Response(JSON.stringify(SIMPLE_DECK_APPLY_RESULT), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    stubAnimationFrame();
+    const onSubmit = vi.fn();
+
+    render(
+      <HomeView
+        projects={[]}
+        designSystems={[REFLY_DESIGN_SYSTEM]}
+        defaultDesignSystemId="ds-refly"
+        onSubmit={onSubmit}
+        onOpenProject={() => undefined}
+        onViewAllProjects={() => undefined}
+      />,
+    );
+
+    await clearActiveTypeChip();
+    fireEvent.click(await screen.findByTestId('home-hero-rail-deck'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('home-hero-footer-option-speakerNotes')).toBeTruthy();
+    });
+    expect(screen.getByTestId('home-hero-footer-option-slideCount').textContent).toContain('10-15 pages');
+
+    fireEvent.click(screen.getByTestId('home-hero-footer-option-slideCount'));
+    fireEvent.click(await screen.findByRole('option', { name: '15-20 pages' }));
+    expect(screen.getByTestId('home-hero-footer-option-slideCount').textContent).toContain('15-20 pages');
+
+    fireEvent.change(screen.getByTestId('home-hero-input'), {
+      target: { value: 'Create an investor deck for a local-first design tool.' },
+    });
+    fireEvent.click(screen.getByTestId('home-hero-submit'));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      '/api/plugins/example-simple-deck/apply',
+      expect.anything(),
+    ));
+    const applyCall = fetchMock.mock.calls.find(([url]) => (
+      typeof url === 'string' && url.includes('/api/plugins/example-simple-deck/apply')
+    ));
+    expect(JSON.parse(String((applyCall?.[1] as RequestInit).body))).toMatchObject({
+      inputs: {
+        slideCount: '15-20 pages',
+        speakerNotes: 'include speaker notes',
+        designSystem: 'Refly Design System',
+      },
+    });
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+      pluginId: 'example-simple-deck',
+      pluginInputs: expect.objectContaining({
+        slideCount: '15-20 pages',
+      }),
+      projectKind: 'deck',
+      projectMetadata: expect.objectContaining({
+        kind: 'deck',
+        slideCount: '15-20 pages',
+        speakerNotes: true,
+      }),
+    })));
   });
 
   it('switches output-type chips without replacing an existing prompt', async () => {

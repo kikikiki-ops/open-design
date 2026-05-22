@@ -1514,7 +1514,7 @@ function homeHeroChipLabelForId(chipId: string, t: ReturnType<typeof useI18n>['t
 
 function footerInputNamesForChip(chipId: string | null): string[] {
   if (chipId === 'prototype') return ['designSystem', 'fidelity'];
-  if (chipId === 'deck') return ['designSystem', 'speakerNotes'];
+  if (chipId === 'deck') return ['designSystem', 'slideCount', 'speakerNotes'];
   if (chipId === 'image') return ['designSystem', 'model', 'ratio', 'resolution'];
   if (chipId === 'video') return ['designSystem', 'model', 'ratio', 'duration', 'resolution'];
   if (chipId === 'audio') return ['audioType', 'model', 'duration'];
@@ -1538,6 +1538,8 @@ function homeCreateProjectMetadata(
   if (fidelity) next.fidelity = fidelity;
   const speakerNotes = normalizeHomeSpeakerNotes(inputs?.speakerNotes);
   if (speakerNotes !== null) next.speakerNotes = speakerNotes;
+  const slideCount = normalizeHomeSlideCount(inputs?.slideCount);
+  if (slideCount) next.slideCount = slideCount;
   return next;
 }
 
@@ -1568,6 +1570,12 @@ function normalizeHomeSpeakerNotes(value: unknown): boolean | null {
     return false;
   }
   return null;
+}
+
+function normalizeHomeSlideCount(value: unknown): string | null {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const normalized = String(value).trim();
+  return normalized.length > 0 ? normalized : null;
 }
 
 function designSystemOptionsForHome(
