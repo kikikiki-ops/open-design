@@ -17,6 +17,9 @@ on:
       - "design-systems/**"
       - "craft/**"
       - "templates/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
 
 # Concurrency: a new push on the same PR cancels any in-flight or
 # pending-approval run, so the agent always evaluates the latest SHA
@@ -24,6 +27,12 @@ on:
 concurrency:
   group: agent-pr-explore-${{ github.event.pull_request.number }}
   cancel-in-progress: true
+
+# Fork-origin PRs must skip before the environment approval prompt is
+# created. The pre-agent shell guard below is kept as a defensive
+# assertion, but this workflow-level condition is the load-bearing
+# reviewer-noise guard.
+if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
 
 # Read-only at workflow level; writes happen only in the safe_outputs
 # job that gh-aw scopes separately.
@@ -117,6 +126,9 @@ pre-agent-steps:
           design-systems/*) lp_touched=true ;;
           craft/*) lp_touched=true ;;
           templates/*) lp_touched=true ;;
+          package.json) lp_touched=true ;;
+          pnpm-lock.yaml) lp_touched=true ;;
+          pnpm-workspace.yaml) lp_touched=true ;;
         esac
       done <<< "$files"
       # v1: when both surfaces are touched, run only the apps/web pass;

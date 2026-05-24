@@ -49,8 +49,11 @@ otherwise do by hand.
 In:
 
 - `pull_request` events where the diff touches surfaces the
-  browser-only verifier can actually observe: `apps/web/**` and/or
-  `apps/landing-page/**`. PRs touching only other paths skip the
+  browser-only verifier can actually observe: `apps/web/**`,
+  `apps/landing-page/**`, the landing-page content directories listed
+  in Launch model, or the root workspace inputs that can change the
+  landing-page build (`package.json`, `pnpm-lock.yaml`,
+  `pnpm-workspace.yaml`). PRs touching only other paths skip the
   workflow entirely (no approval prompt, no run).
 - **Manual approval gate (GitHub-native)**: every matching PR
   triggers a workflow run that enters `pending_deployment_review`
@@ -93,10 +96,11 @@ _"With the exception of `GITHUB_TOKEN`, secrets are not passed to the
 runner when a workflow is triggered from a forked repository."_).
 Since the agent requires `ANTHROPIC_API_KEY` (v1 default — see Cost),
 fork-origin PRs literally cannot execute this workflow even if a
-maintainer approves them. The workflow's job-level `if:` includes
-a guard (`head.repo.full_name == github.repository`) to fail fast
-with a clear "fork PR — external coverage requires the future
-two-plane spec" message rather than time out on a missing secret.
+maintainer approves them. The workflow's top-level `if:` includes
+a same-repo guard (`head.repo.full_name == github.repository`) so
+fork-origin PRs skip before creating an environment approval prompt.
+A pre-agent shell assertion repeats the check as a defensive guard for
+any future compiler/runtime drift.
 
 A future spec (not this one) covering external-PR support must
 adopt a two-plane architecture (UI execution plane with no LLM
@@ -314,6 +318,9 @@ skills/**
 design-systems/**
 craft/**
 templates/**
+package.json
+pnpm-lock.yaml
+pnpm-workspace.yaml
 ```
 
 A `SKILL.md`-only change can change what the landing-page renders;
@@ -321,17 +328,17 @@ the path filter must trigger on those PRs too. (Confirmed by
 @nettee's review against `apps/landing-page/AGENTS.md`.)
 
 Resolution: the pre-agent step inspects `gh pr diff --name-only`,
-sets `OD_SURFACES` to a space-separated list of `web` / `landing`,
-and the agent step loops over them. If neither is touched the
-workflow exits with a "not applicable" status before the agent runs.
+sets booleans for `web` and `landing-page`, and selects one runtime.
+If both surfaces are touched, v1 runs the apps/web pass and surfaces a
+mixed-surface warning in the report; full two-pass execution is a
+follow-up spec. If neither is touched the workflow exits before the
+agent runs.
 
 Spike note: PR #2588 was landing-page-only and used the Astro path;
 PR #2572 was `apps/web` and used `tools-dev`. Neither exercised the
-mixed-surface path; v1 ships with the two-pass design but the first
-real mixed PR will validate it in P1-private. If the two-pass
-overhead is excessive (estimated +5-8 min wall time when both
-surfaces are touched), a future spec can revisit consolidating into
-a single agent run with two browser contexts.
+mixed-surface path; the first real mixed PR in P1-private will validate
+whether the explicit warning is enough or whether two-pass execution is
+needed immediately.
 
 ### Concurrency
 
@@ -633,7 +640,10 @@ charter / prompt update. None of them require a code redeploy.
 1. **lock.yml commit policy**: commit `agent-pr-explore.lock.yml` (the
    compiled artifact) alongside the markdown source? Recommended yes —
    it's the actual runtime artifact and changes go through normal PR
-   review like any other CI YAML.
+   review like any other CI YAML. Do not configure `merge=ours` for the
+   compiled artifact; source/runtime drift should surface as a visible
+   conflict or a future compile-consistency check, not be silently
+   resolved.
 2. **Initial required-reviewers set**: which logins go into the GitHub
    environment's required-reviewers list on day 1? Recommended P1 =
    `@lefarcen` only (so approval rate stays manageable while we tune
