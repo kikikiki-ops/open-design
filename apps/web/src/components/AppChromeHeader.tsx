@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react';
 import { useT } from '../i18n';
-import { Icon } from './Icon';
+import { RemixIcon } from './RemixIcon';
 
 interface Props {
   actions?: ReactNode;
   children?: ReactNode;
+  fileActionsBefore?: ReactNode;
   onBack?: () => void;
   backLabel?: string;
   showTrafficSpace?: boolean;
@@ -15,6 +16,7 @@ export const APP_CHROME_FILE_ACTIONS_ID = 'app-chrome-file-actions';
 export function AppChromeHeader({
   actions,
   children,
+  fileActionsBefore,
   onBack,
   backLabel,
   showTrafficSpace = true,
@@ -33,11 +35,12 @@ export function AppChromeHeader({
           title={resolvedBackLabel}
           aria-label={resolvedBackLabel}
         >
-          <Icon name="arrow-left" size={15} />
+          <RemixIcon name="arrow-left-line" size={16} />
         </button>
       ) : null}
       {children ? <div className="app-chrome-content">{children}</div> : null}
       <div className="app-chrome-drag" aria-hidden />
+      {fileActionsBefore ? <div className="app-chrome-file-actions-before">{fileActionsBefore}</div> : null}
       <div id={APP_CHROME_FILE_ACTIONS_ID} className="app-chrome-file-actions" />
       {actions ? <div className="app-chrome-actions">{actions}</div> : null}
     </header>
@@ -61,7 +64,7 @@ export function SettingsIconButton({
       title={title}
       aria-label={ariaLabel}
     >
-      <Icon name="settings" size={17} />
+      <RemixIcon name="settings-line" size={18} />
     </button>
   );
 }

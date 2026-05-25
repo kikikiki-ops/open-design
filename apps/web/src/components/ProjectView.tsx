@@ -4094,9 +4094,9 @@ export function ProjectView({
         showTrafficSpace={false}
         onBack={onBack}
         backLabel={t('project.backToProjects')}
+        fileActionsBefore={<HandoffButton projectId={project.id} />}
         actions={(
           <>
-            <HandoffButton projectId={project.id} />
             <AvatarMenu
               config={config}
               agents={agents}

@@ -552,13 +552,23 @@
   gap: 6px;
   flex-shrink: 0;
 }
+.app-chrome-file-actions-before {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
 .app-chrome-file-actions {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
 }
-.app-chrome-file-actions:not(:empty) + .app-chrome-actions {
+.app-chrome-file-actions-before:not(:empty) + .app-chrome-file-actions:not(:empty) {
+  margin-left: 4px;
+}
+.app-chrome-file-actions:not(:empty) + .app-chrome-actions,
+.app-chrome-file-actions-before:not(:empty) + .app-chrome-file-actions:empty + .app-chrome-actions {
   margin-left: 4px;
   padding-left: 8px;
   border-left: 1px solid var(--border);
