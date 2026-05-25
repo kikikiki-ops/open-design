@@ -11,7 +11,7 @@ The goal is to make packaged AMR builds use a lockfile-backed Vela CLI package i
 Open Design depends only on the Vela meta package:
 
 ```json
-"@powerformer/vela-cli": "0.0.1-test.0"
+"@powerformer/vela-cli": "0.0.1-test"
 ```
 
 Open Design does not depend directly on platform packages such as `@powerformer/vela-cli-darwin-arm64`. Vela owns that platform matrix through optional dependencies and its resolver API.
@@ -24,11 +24,20 @@ The Vela CLI binary resolution order is:
 
 This preserves a developer/emergency override while making npm the normal CI contract.
 
+The CI/package timing is:
+
+1. Vela publishes `@powerformer/vela-cli` to npm before Open Design packaging starts.
+2. Open Design pins that package in `tools/pack/package.json` and `pnpm-lock.yaml`.
+3. CI runs `pnpm install --frozen-lockfile`, which installs the pinned meta package and its supported optional native binary package.
+4. `tools-pack` enters the `resource-tree` phase and resolves/copies the Vela binary into the Open Design resource tree.
+5. `electron-builder` embeds that resource tree through `extraResources`.
+6. The packaged daemon receives `OD_RESOURCE_ROOT` at launch and resolves AMR to `OD_RESOURCE_ROOT/bin/vela` unless `VELA_BIN` explicitly overrides it.
+
 ## Implemented Behavior
 
 `tools-pack` now supports `--require-vela-cli`. When this flag is absent, missing Vela packages, unsupported platforms, missing resolvers, or null resolver results are treated as "skip Vela bundling." When this flag is present, packaging fails with an actionable error that mentions both remediation paths: install/use `@powerformer/vela-cli` or set `OPEN_DESIGN_VELA_CLI_BIN`.
 
-Vela resource copying now resolves the binary through the shared resolver path and copies it into:
+Vela resource copying now lives in `tools/pack/src/vela-cli.ts`, so the generic resource-tree helper only owns static Open Design resources. The Vela helper resolves the binary through the shared resolver path and copies it into:
 
 ```text
 resources/open-design/bin/vela
@@ -42,24 +51,24 @@ Windows resource cache keys include the optional Vela binary when present, prese
 
 ## Vela Package Status
 
-The first verification npm packages have been published:
+The current verification npm packages have been published:
 
-- `@powerformer/vela-cli@0.0.1-test.0`
-- `@powerformer/vela-cli-darwin-arm64@0.0.1-test.0`
+- `@powerformer/vela-cli@0.0.1-test`
+- `@powerformer/vela-cli-darwin-arm64@0.0.1-test`
 
 Open Design should install only `@powerformer/vela-cli`. The meta package pulls the macOS arm64 binary package as an optional dependency on supported machines.
 
 Local verification outside the Vela monorepo:
 
 ```bash
-npm install @powerformer/vela-cli@0.0.1-test.0
+npm install @powerformer/vela-cli@0.0.1-test
 npx vela --version
 ```
 
 Expected output:
 
 ```text
-0.0.1-test.0
+0.0.1-test
 ```
 
 ## Validation
@@ -74,18 +83,18 @@ Focused `tools-pack` tests cover:
 - non-strict unsupported-platform skip behavior;
 - release-beta workflow placement of `--require-vela-cli`.
 
-Local validation passed under Node `v24.0.0` and pnpm `10.33.2`:
+Local validation for the Vela module extraction and `0.0.1-test` bump passed under Node `v24.0.0` and pnpm `10.33.2`:
 
 ```bash
-pnpm --dir tools/pack exec vitest run tests/resources.test.ts tests/release-workflows.test.ts tests/win-resources.test.ts tests/config.test.ts tests/linux.test.ts
 pnpm --filter @open-design/tools-pack typecheck
-pnpm typecheck
+pnpm --dir tools/pack exec vitest run tests/resources.test.ts tests/release-workflows.test.ts tests/config.test.ts tests/win-resources.test.ts
 pnpm guard
+pnpm typecheck
 ```
 
-The focused test run passed 69 tests across 5 files.
+The focused tools-pack test run passed 27 tests across 4 files.
 
-A local non-publishing beta mac arm64 dry run also succeeded with `--require-vela-cli`, producing a DMG and bundling a Vela binary at:
+A previous local non-publishing beta mac arm64 dry run also succeeded with `--require-vela-cli`, producing a DMG and bundling a Vela binary at:
 
 ```text
 .tmp/release-beta-dry-run/out/mac/namespaces/release-beta/resources/open-design/bin/vela
@@ -112,6 +121,6 @@ The first local dry run using `/tmp` exposed an existing path-shape issue caused
 
 ## Follow-Ups
 
-After Vela publishes the first stable package version, update `tools/pack/package.json` and `pnpm-lock.yaml` from `0.0.1-test.0` to the stable version.
+After Vela publishes the first stable package version, update `tools/pack/package.json` and `pnpm-lock.yaml` from `0.0.1-test` to the stable version.
 
 When Vela supports additional platforms, selectively enable `--require-vela-cli` for those release jobs and add matching workflow smoke coverage.

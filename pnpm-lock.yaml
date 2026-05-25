@@ -600,8 +600,8 @@ importers:
         version: 4.1.6(@opentelemetry/api@1.9.1)(@types/node@24.12.2)(jsdom@29.1.1)(vite@7.3.3(@types/node@24.12.2)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.22.3)(yaml@2.9.0))
     optionalDependencies:
       '@powerformer/vela-cli':
-        specifier: 0.0.1-test.0
-        version: 0.0.1-test.0
+        specifier: 0.0.1-test
+        version: 0.0.1-test
 
   tools/pr:
     dependencies:
@@ -1660,13 +1660,13 @@ packages:
   '@posthog/types@1.374.2':
     resolution: {integrity: sha512-ZghQSFMi+HFJNPvPjBoyY/jWQ+q6mSQVtWQxOHMSbBidUZjsyYbxYxBFbHy2qWLNe4mEpX+Wqir2Q4I/4AVvJQ==}
 
-  '@powerformer/vela-cli-darwin-arm64@0.0.1-test.0':
-    resolution: {integrity: sha512-w+8nJKQ72ihaN9Uy4WOKVuW5Jp0CdgPc1LxV/XL9A1o/WrGyGi3ppKvWwdiRgR6EyJMt69DZplWJBA/QjJ+Obw==}
+  '@powerformer/vela-cli-darwin-arm64@0.0.1-test':
+    resolution: {integrity: sha512-/IWqtcv8uWIigawse3gKS9pSPZ28PJc5qmX10WZY6X5no7H+jXj/FoGmJ/7z4T03703J+xVYFuFthCv26WOMMA==}
     cpu: [arm64]
     os: [darwin]
 
-  '@powerformer/vela-cli@0.0.1-test.0':
-    resolution: {integrity: sha512-4t6Vzbz1j2DmedLByMPgoCsHfOxze+bxJWa/Ahq3LVrI4zN8urD856WvVy+FStKEpdfs4+llpDtCgnEnhNf8Cg==}
+  '@powerformer/vela-cli@0.0.1-test':
+    resolution: {integrity: sha512-c7iFVe5YjBPsYmWG2ei6OJvTJVH2LVbW3nOl99bSsk1MRwUaTOnjErKcf3/6gOo45XKkwMw/JUDg3ePXZZJUFA==}
     hasBin: true
 
   '@rollup/pluginutils@5.3.0':
@@ -6155,12 +6155,12 @@ snapshots:
 
   '@posthog/types@1.374.2': {}
 
-  '@powerformer/vela-cli-darwin-arm64@0.0.1-test.0':
+  '@powerformer/vela-cli-darwin-arm64@0.0.1-test':
     optional: true
 
-  '@powerformer/vela-cli@0.0.1-test.0':
+  '@powerformer/vela-cli@0.0.1-test':
     optionalDependencies:
-      '@powerformer/vela-cli-darwin-arm64': 0.0.1-test.0
+      '@powerformer/vela-cli-darwin-arm64': 0.0.1-test
     optional: true
 
   '@rollup/pluginutils@5.3.0(rollup@4.60.2)':

@@ -27,7 +27,8 @@ import {
 } from "@open-design/platform";
 
 import type { ToolPackConfig } from "./config.js";
-import { copyBundledResourceTrees, copyOptionalVelaCliBinary, linuxResources } from "./resources.js";
+import { copyBundledResourceTrees, linuxResources } from "./resources.js";
+import { copyOptionalVelaCliBinary } from "./vela-cli.js";
 import { electronBuilderVersionForAppVersion, readRuntimeAppVersion } from "./versions.js";
 import { processWebSourcemaps } from "./web-sourcemaps.js";
 

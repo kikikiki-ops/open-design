@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { chmod, cp, mkdir } from "node:fs/promises";
+import { cp } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -50,20 +50,6 @@ export const linuxResources = {
   desktopTemplate: join(resourcesRoot, "linux", "open-design.desktop.template"),
 } as const;
 
-export const VELA_CLI_BIN_ENV = "OPEN_DESIGN_VELA_CLI_BIN";
-type VelaCliPlatform = "linux" | "mac" | "win";
-type VelaCliResolveResult =
-  | string
-  | null
-  | undefined
-  | {
-      path?: string | null;
-      supported?: boolean;
-    };
-type VelaCliResolverModule = {
-  resolveVelaCliBin?: (options?: { strict?: boolean }) => VelaCliResolveResult | Promise<VelaCliResolveResult>;
-};
-
 const BUNDLED_RESOURCE_TREES = [
   { from: "skills", to: "skills" },
   // After the skills/design-templates split (specs/current/skills-and-design-templates.md)
@@ -92,79 +78,4 @@ export async function copyBundledResourceTrees({
       recursive: true,
     });
   }
-}
-
-export async function copyOptionalVelaCliBinary({
-  env = process.env,
-  importPackage,
-  platform,
-  requireBundled = false,
-  resourceRoot,
-}: {
-  env?: NodeJS.ProcessEnv;
-  importPackage?: (packageName: string) => Promise<VelaCliResolverModule>;
-  platform: VelaCliPlatform;
-  requireBundled?: boolean;
-  resourceRoot: string;
-}): Promise<{ source: string; target: string } | null> {
-  const source = await resolveOptionalVelaCliBinary({ env, importPackage, requireBundled });
-  if (source == null) return null;
-  const target = join(resourceRoot, "bin", platform === "win" ? "vela.exe" : "vela");
-  await mkdir(dirname(target), { recursive: true });
-  await cp(source, target);
-  if (platform !== "win") {
-    await chmod(target, 0o755);
-  }
-  return { source, target };
-}
-
-export async function resolveOptionalVelaCliBinary({
-  env = process.env,
-  importPackage = async (packageName: string) => import(packageName) as Promise<VelaCliResolverModule>,
-  requireBundled = false,
-}: {
-  env?: NodeJS.ProcessEnv;
-  importPackage?: (packageName: string) => Promise<VelaCliResolverModule>;
-  requireBundled?: boolean;
-} = {}): Promise<string | null> {
-  const envSource = env[VELA_CLI_BIN_ENV]?.trim();
-  if (envSource) return envSource;
-
-  let resolver: VelaCliResolverModule;
-  try {
-    resolver = await importPackage("@powerformer/vela-cli");
-  } catch (error) {
-    if (requireBundled) {
-      throw new Error(
-        "unable to resolve bundled Vela CLI: install @powerformer/vela-cli or set OPEN_DESIGN_VELA_CLI_BIN",
-        { cause: error },
-      );
-    }
-    return null;
-  }
-
-  if (typeof resolver.resolveVelaCliBin !== "function") {
-    if (requireBundled) {
-      throw new Error(
-        "unable to resolve bundled Vela CLI: @powerformer/vela-cli must export resolveVelaCliBin or set OPEN_DESIGN_VELA_CLI_BIN",
-      );
-    }
-    return null;
-  }
-
-  const resolved = await resolver.resolveVelaCliBin({ strict: requireBundled });
-  if (typeof resolved === "string") {
-    const normalized = resolved.trim();
-    if (normalized.length > 0) return normalized;
-  }
-  if (resolved && typeof resolved === "object" && typeof resolved.path === "string") {
-    const normalized = resolved.path.trim();
-    if (normalized.length > 0) return normalized;
-  }
-  if (requireBundled) {
-    throw new Error(
-      "unable to resolve bundled Vela CLI: @powerformer/vela-cli returned no binary path; set OPEN_DESIGN_VELA_CLI_BIN to override",
-    );
-  }
-  return null;
 }

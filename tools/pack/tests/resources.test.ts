@@ -3,7 +3,8 @@ import { access, constants, mkdtemp, readFile, rm, writeFile, mkdir, stat } from
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { copyBundledResourceTrees, copyOptionalVelaCliBinary, resolveOptionalVelaCliBinary } from "../src/resources.js";
+import { copyBundledResourceTrees } from "../src/resources.js";
+import { copyOptionalVelaCliBinary, resolveOptionalVelaCliBinary } from "../src/vela-cli.js";
 
 describe("copyBundledResourceTrees", () => {
   it("includes daemon resource trees", async () => {

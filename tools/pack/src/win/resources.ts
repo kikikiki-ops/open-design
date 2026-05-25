@@ -3,7 +3,8 @@ import { dirname, join } from "node:path";
 
 import { hashJson, hashPath, ToolPackCache } from "../cache.js";
 import type { ToolPackConfig } from "../config.js";
-import { copyBundledResourceTrees, copyOptionalVelaCliBinary, resolveOptionalVelaCliBinary, winResources } from "../resources.js";
+import { copyBundledResourceTrees, winResources } from "../resources.js";
+import { copyOptionalVelaCliBinary, resolveOptionalVelaCliBinary } from "../vela-cli.js";
 import type { WinPaths, ResourceTreeCacheMetadata } from "./types.js";
 
 const RESOURCE_TREE_CACHE_SCHEMA_VERSION = 3;

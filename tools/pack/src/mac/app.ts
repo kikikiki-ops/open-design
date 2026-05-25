@@ -17,7 +17,8 @@ import {
   shouldInstallInternalPackageForMacPrebundle,
   shouldUseMacStandalonePrebundle,
 } from "../mac-prebundle.js";
-import { copyBundledResourceTrees, copyOptionalVelaCliBinary } from "../resources.js";
+import { copyBundledResourceTrees } from "../resources.js";
+import { copyOptionalVelaCliBinary } from "../vela-cli.js";
 import { electronBuilderVersionForAppVersion } from "../versions.js";
 import { runEsbuild, runNpmInstall, runPnpm } from "./commands.js";
 import {
