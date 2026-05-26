@@ -91,6 +91,19 @@ describe('FileViewer preview scale', () => {
     expect(css).toContain('.viewer-action');
   });
 
+  it('keeps the manual edit titlebar from overlapping the close button', () => {
+    const css = readExpandedIndexCss();
+
+    expect(css).toContain('.manual-edit-titlebar');
+    expect(css).toContain('justify-content: space-between;');
+    expect(css).toContain('.manual-edit-titlebar > span');
+    expect(css).toContain('text-overflow: ellipsis;');
+    expect(css).toContain('.manual-edit-titlebar-close');
+    expect(css).toContain('flex: 0 0 auto;');
+    expect(css).toContain('width: 38px;');
+    expect(css).toContain('height: 38px;');
+  });
+
   it('uses the requested zoom for desktop preview overlays', () => {
     expect(effectivePreviewScale('desktop', 1.5, { width: 320, height: 480 })).toBe(1.5);
   });

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ChatPane, retryableAssistantMessage } from '../../src/components/ChatPane';
 import { DESIGN_SYSTEM_WORKSPACE_PROMPT_PREFIX } from '../../src/design-system-auto-prompt';
+import { readExpandedIndexCss } from '../helpers/read-expanded-css';
 import type { ChatMessage, Conversation, ProjectMetadata } from '../../src/types';
 
 const composerMocks = vi.hoisted(() => ({
@@ -46,6 +47,20 @@ afterEach(() => {
 });
 
 describe('ChatPane streaming state', () => {
+  it('keeps queued-send strip styles compact above the composer', () => {
+    const css = readExpandedIndexCss();
+
+    expect(css).toContain('.chat-queued-send-strip');
+    expect(css).toContain('display: flex;');
+    expect(css).toContain('.chat-queued-send-row');
+    expect(css).toContain('align-items: center;');
+    expect(css).toContain('.chat-queued-send-title');
+    expect(css).toContain('text-overflow: ellipsis;');
+    expect(css).toContain('.chat-queued-send-action');
+    expect(css).toContain('width: 26px;');
+    expect(css).toContain('height: 26px;');
+  });
+
   it('exposes retry only for the last failed assistant when the pane is idle', () => {
     const failed: ChatMessage = {
       id: 'assistant-1',
