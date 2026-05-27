@@ -36,9 +36,14 @@ import {
 } from "./manifest.js";
 import { ensureNsisPersianLanguageAlias, writeNsisInclude } from "./nsis.js";
 import { sanitizeNamespace } from "./paths.js";
-import { resolveWinTargets } from "./report.js";
 import { createWinLauncherBuiltAppManifest } from "./launcher-layout.js";
+import {
+  resolveElectronBuilderWinTargets,
+  shouldBuildWinNsisInstaller,
+  shouldBuildWinPortableZip,
+} from "./report.js";
 import type { ResourceTreeResult } from "./resources.js";
+import { buildWinPortableZip } from "./zip.js";
 import type {
   ElectronBuilderDirCacheMetadata,
   WinBuiltAppManifest,
@@ -145,7 +150,7 @@ async function runElectronBuilderRaw(config: ToolPackConfig, paths: WinPaths, pr
     win: {
       artifactName: `${PRODUCT_NAME}-${namespaceToken}.\${ext}`,
       icon: paths.winIconPath,
-      target: resolveWinTargets(config.to).map((target) => ({ arch: ["x64"], target })),
+      target: resolveElectronBuilderWinTargets(config.to).map((target) => ({ arch: ["x64"], target })),
     },
   };
 
@@ -344,7 +349,10 @@ export async function runElectronBuilder(
   const launcherBuiltApp = await materializeCachedUnpackedForInstaller(cachedUnpackedRoot, paths, packagedVersion);
   const launcherLayout = await buildWinLauncherInstallRootArtifacts(config, paths, launcherBuiltApp);
   await writeBuiltAppManifest(paths, createWinLauncherBuiltAppManifest(launcherBuiltApp, launcherLayout));
-  if (config.to === "nsis" || config.to === "all") {
+  if (shouldBuildWinNsisInstaller(config.to)) {
     await buildCustomWinNsisInstaller(config, paths, launcherLayout);
+  }
+  if (shouldBuildWinPortableZip(config.to)) {
+    await buildWinPortableZip(config, paths, launcherBuiltApp);
   }
 }

@@ -53,6 +53,7 @@ function createPaths(root: string): WinPaths {
     packagedMainPrebundlePath: join(namespaceRoot, "assembled", "app", "prebundled", "packaged-main.mjs"),
     resourceRoot: join(namespaceRoot, "resources", "open-design"),
     setupPath: join(namespaceRoot, "builder", "Open Design-second-setup.exe"),
+    setupZipPath: join(namespaceRoot, "builder", "Open Design-second-portable.zip"),
     startMenuShortcutPath: join(namespaceRoot, "start-menu.lnk"),
     tarballsRoot: join(namespaceRoot, "tarballs"),
     userDesktopShortcutPath: join(namespaceRoot, "desktop", "user.lnk"),
@@ -114,7 +115,7 @@ describe("materializeCachedUnpackedForInstaller", () => {
     const assemblyIndex = source.indexOf(
       "const launcherLayout = await buildWinLauncherInstallRootArtifacts(config, paths, launcherBuiltApp);",
     );
-    const nsisBranchIndex = source.indexOf('if (config.to === "nsis" || config.to === "all")');
+    const nsisBranchIndex = source.indexOf("if (shouldBuildWinNsisInstaller(config.to))");
 
     expect(source).toContain("buildWinLauncherInstallRootArtifacts");
     expect(source).toContain(
@@ -126,6 +127,8 @@ describe("materializeCachedUnpackedForInstaller", () => {
     expect(assemblyIndex).toBeGreaterThan(-1);
     expect(nsisBranchIndex).toBeGreaterThan(-1);
     expect(assemblyIndex).toBeLessThan(nsisBranchIndex);
+    expect(source).toContain("if (shouldBuildWinPortableZip(config.to))");
+    expect(source).toContain("await buildWinPortableZip(config, paths, launcherBuiltApp);");
   });
 
   it("overwrites cached packaged config and app package version", async () => {
