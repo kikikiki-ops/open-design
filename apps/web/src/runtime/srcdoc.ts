@@ -1499,6 +1499,8 @@ function injectDeckBridge(doc: string, initialSlideIndex = 0): string {
       var w = Math.max(1, window.innerWidth);
       return Math.max(0, Math.min(list.length - 1, Math.round(scroller().scrollLeft / w)));
     }
+    var byTransform = activeIndexFromTransform(list);
+    if (byTransform >= 0) return byTransform;
     var byClass = findActiveByClass(list);
     if (byClass >= 0) return byClass;
     var byVis = findActiveByVisibility(list);
@@ -1533,6 +1535,53 @@ function injectDeckBridge(doc: string, initialSlideIndex = 0): string {
       if (list[i].hasAttribute('hidden')) return true;
     }
     return false;
+  }
+  function transformTrack(list){
+    if (!list || !list.length) return null;
+    var first = list[0];
+    var node = first && first.parentElement;
+    while (node && node !== document.body && node !== document.documentElement) {
+      try {
+        var directSlides = 0;
+        for (var i=0; i<node.children.length; i++) {
+          if (node.children[i].classList && node.children[i].classList.contains('slide')) directSlides += 1;
+        }
+        var style = window.getComputedStyle(node);
+        if (
+          directSlides >= list.length &&
+          (
+            node.style.transform ||
+            style.transform !== 'none' ||
+            /\\b(?:flex|grid)\\b/i.test(style.display)
+          )
+        ) {
+          return node;
+        }
+      } catch (_) {}
+      node = node.parentElement;
+    }
+    return null;
+  }
+  function activeIndexFromTransform(list){
+    var track = transformTrack(list);
+    if (!track) return -1;
+    var raw = track.style.transform || '';
+    var match = raw.match(/translateX\\(\\s*(-?[0-9.]+)\\s*(vw|%)\\s*\\)/i);
+    if (!match) return -1;
+    var value = parseFloat(match[1]);
+    if (!Number.isFinite(value)) return -1;
+    return Math.max(0, Math.min(list.length - 1, Math.round(Math.abs(value) / 100)));
+  }
+  function transformGo(i){
+    var list = slides();
+    var track = transformTrack(list);
+    if (!track) return false;
+    var target = Math.max(0, Math.min(list.length - 1, i));
+    var unit = /translateX\\(\\s*-?[0-9.]+\\s*%\\s*\\)/i.test(track.style.transform || '') ? '%' : 'vw';
+    track.style.transform = 'translateX(' + (-target * 100) + unit + ')';
+    updateDeckChrome(target, list.length);
+    report();
+    return true;
   }
   function updateDeckChrome(i, count){
     var cur = document.getElementById('deck-cur');
@@ -1600,6 +1649,7 @@ function injectDeckBridge(doc: string, initialSlideIndex = 0): string {
       return;
     }
     if (canSetActive(list) && setActive(target)) return;
+    if (transformGo(target)) return;
     if (action === 'next') dispatchKey('ArrowRight');
     else if (action === 'prev') dispatchKey('ArrowLeft');
     else if (action === 'first') dispatchKey('Home');
@@ -1612,6 +1662,7 @@ function injectDeckBridge(doc: string, initialSlideIndex = 0): string {
     var target = Math.max(0, Math.min(list.length - 1, i));
     if (isScrollDeck()) { scrollGo(target); return; }
     if (canSetActive(list) && setActive(target)) return;
+    if (transformGo(target)) return;
     var current = activeIndex(list);
     var diff = target - current;
     if (!diff) { report(); return; }

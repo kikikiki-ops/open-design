@@ -62,6 +62,12 @@ function lastSlideState(parentPostMessage: ReturnType<typeof vi.fn>) {
   return messages.at(-1);
 }
 
+function postSlide(win: ReturnType<typeof setupDeckBridge>['win'], action: 'next' | 'prev') {
+  win.dispatchEvent(new win.window.MessageEvent('message', {
+    data: { type: 'od:slide', action },
+  }));
+}
+
 describe('deck bridge — nested slide markup (#1530)', () => {
   it('counts nested .slide elements through a fallback when no structured container matches', async () => {
     // 8 slides nested two levels deep — none of `.deck > .slide`,
@@ -98,5 +104,28 @@ describe('deck bridge — nested slide markup (#1530)', () => {
     const state = lastSlideState(parentPostMessage);
     expect(state).toBeDefined();
     expect(state.count).toBe(3);
+  });
+
+  it('advances transform-track decks that do not expose active classes or scroll state', async () => {
+    const { win, parentPostMessage } = setupDeckBridge(`
+      <style>
+        html, body { margin: 0; overflow: hidden; }
+        #deck { display: flex; width: 300vw; transform: translateX(0); }
+        .slide { flex: 0 0 100vw; width: 100vw; height: 100vh; }
+      </style>
+      <div id="deck">
+        <section class="slide">One</section>
+        <section class="slide">Two</section>
+        <section class="slide">Three</section>
+      </div>
+    `);
+    const deck = win.document.getElementById('deck') as HTMLElement;
+
+    postSlide(win, 'next');
+    await new Promise<void>((resolve) => win.setTimeout(resolve, 350));
+
+    expect(deck.style.transform).toBe('translateX(-100vw)');
+    const state = lastSlideState(parentPostMessage);
+    expect(state).toMatchObject({ active: 1, count: 3 });
   });
 });
