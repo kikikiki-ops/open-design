@@ -6461,6 +6461,22 @@ const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([
         <div className="viewer-toolbar-actions">
           {showPreviewToolbarControls ? (
             <>
+              <div className="artifact-tool-menu-anchor">
+                <button
+                  type="button"
+                  className={`viewer-action viewer-action-icon viewer-comment-toggle${boardMode && !commentCreateMode && boardTool === 'inspect' ? ' active' : ''}`}
+                  data-testid="board-mode-toggle"
+                  data-tooltip={t('fileViewer.comment')}
+                  title={t('fileViewer.comment')}
+                  aria-label={t('fileViewer.comment')}
+                  aria-pressed={boardMode && !commentCreateMode && boardTool === 'inspect'}
+                  onClick={activateCommentTool}
+                >
+                  <RemixIcon name="chat-new-line" size={15} />
+                  {boardMode && !commentCreateMode && boardTool === 'inspect' ? <span className="viewer-action-active-dot" aria-hidden /> : null}
+                </button>
+              </div>
+              <span className="viewer-toolbar-tool-divider" aria-hidden />
               <button
                 className={`viewer-action viewer-action-icon${manualEditMode ? ' active' : ''}`}
                 type="button"
@@ -6498,21 +6514,6 @@ const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([
                 <RemixIcon name="screenshot-2-line" size={15} />
               </button>
               <span className="viewer-toolbar-tool-divider" aria-hidden />
-              <div className="artifact-tool-menu-anchor">
-                <button
-                  type="button"
-                  className={`viewer-action viewer-action-icon viewer-comment-toggle${boardMode && !commentCreateMode && boardTool === 'inspect' ? ' active' : ''}`}
-                  data-testid="board-mode-toggle"
-                  data-tooltip={t('fileViewer.comment')}
-                  title={t('fileViewer.comment')}
-                  aria-label={t('fileViewer.comment')}
-                  aria-pressed={boardMode && !commentCreateMode && boardTool === 'inspect'}
-                  onClick={activateCommentTool}
-                >
-                  <RemixIcon name="chat-new-line" size={15} />
-                  {boardMode && !commentCreateMode && boardTool === 'inspect' ? <span className="viewer-action-active-dot" aria-hidden /> : null}
-                </button>
-              </div>
               <button
                 type="button"
                 className={`viewer-action viewer-comment-count-trigger viewer-comment-toggle${boardMode && commentCreateMode ? ' active' : ''}`}

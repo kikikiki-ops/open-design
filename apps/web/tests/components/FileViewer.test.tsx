@@ -1615,6 +1615,14 @@ describe('FileViewer tweaks toolbar', () => {
     const commentsButton = screen.getByTestId('comment-panel-toggle');
     expect(commentsButton.textContent).toContain('1');
     expect(commentsButton.getAttribute('aria-label')).toBe('Comments (1)');
+    expect(
+      screen.getByTestId('board-mode-toggle').compareDocumentPosition(screen.getByTestId('manual-edit-mode-toggle')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      screen.getByTestId('screenshot-capture-toggle').compareDocumentPosition(commentsButton) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it('keeps comments and annotation picker mutually exclusive', () => {
