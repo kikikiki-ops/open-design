@@ -1550,12 +1550,18 @@ describe('POST /api/test/connection provider mode', () => {
   });
 
   it('ignores SOCKS-only ALL_PROXY values for the HTTP proxy dispatcher', async () => {
-    const { close, requestInit } = proxyDispatcherRequestInit({
-      ALL_PROXY: 'socks5://system-socks:1080',
-    });
+    const proxySpy = vi.spyOn(platform, 'resolveSystemProxyEnvCached').mockReturnValue({});
 
-    expect(requestInit).toEqual({});
-    await expect(close()).resolves.toBeUndefined();
+    try {
+      const { close, requestInit } = proxyDispatcherRequestInit({
+        ALL_PROXY: 'socks5://system-socks:1080',
+      });
+
+      expect(requestInit).toEqual({});
+      await expect(close()).resolves.toBeUndefined();
+    } finally {
+      proxySpy.mockRestore();
+    }
   });
 
   it('keeps loopback provider probes off the proxy when user NO_PROXY omits localhost', async () => {
