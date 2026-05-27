@@ -17,6 +17,7 @@ import { useI18n } from '../i18n';
 import { streamMessage } from '../providers/anthropic';
 import {
   fetchChatRunStatus,
+  fetchVelaLoginStatus,
   listActiveChatRuns,
   listProjectRuns,
   reattachDaemonRun,
@@ -166,7 +167,6 @@ import { buildClipboardPrompt } from '../lib/build-clipboard-prompt';
 import { copyToClipboard } from '../lib/copy-to-clipboard';
 import { effectiveMaxTokens } from '../state/maxTokens';
 
-const DEFAULT_AMR_RECHARGE_URL = 'https://open-design.ai/amr/wallet';
 
 type ProjectChatSendMeta = ChatSendMeta & {
   retryOfAssistantId?: string;
@@ -210,6 +210,7 @@ interface Props {
   ) => void;
   onRefreshAgents: () => void;
   onOpenSettings: (section?: SettingsSection) => void;
+  onOpenAmrSettings?: () => void;
   onOpenMcpSettings?: () => void;
   // Pet wiring forwarded to the chat composer so users can adopt /
   // wake / tuck a pet without leaving the project view.
@@ -492,6 +493,7 @@ export function ProjectView({
   onAgentModelChange,
   onRefreshAgents,
   onOpenSettings,
+  onOpenAmrSettings,
   onOpenMcpSettings,
   onAdoptPetInline,
   onTogglePet,
@@ -2074,22 +2076,18 @@ export function ProjectView({
               onProjectsRefresh();
             },
             onError: (err) => {
-              const amrFailureText = amrAccountFailureText(err);
               const errorCode = (err as Error & { code?: string }).code;
               textBuffer.flush();
               textBuffer.cancel();
               unregisterTextBuffer();
-              setError(amrFailureText ?? err.message);
-              appendAssistantErrorEvent(message.id, amrFailureText ?? err.message, errorCode);
+              setError(err.message);
+              appendAssistantErrorEvent(message.id, err.message, errorCode);
               updateMessageById(
                 message.id,
                 (prev) => ({
                   ...prev,
                   runStatus: 'failed',
                   endedAt: prev.endedAt ?? Date.now(),
-                  events: amrFailureText
-                    ? appendAmrFailureTextEvent(prev.events ?? [], amrFailureText)
-                    : prev.events,
                 }),
                 true,
               );
@@ -2635,22 +2633,18 @@ export function ProjectView({
         },
         onError: (err: Error) => {
           const endedAt = Date.now();
-          const amrFailureText = amrAccountFailureText(err);
           const errorCode = (err as Error & { code?: string }).code;
           textBuffer.flush();
           textBuffer.cancel();
           cancelSendTextBuffer();
-          setError(amrFailureText ?? err.message);
-          appendAssistantErrorEvent(assistantId, amrFailureText ?? err.message, errorCode);
+          setError(err.message);
+          appendAssistantErrorEvent(assistantId, err.message, errorCode);
           updateAssistant((prev) => ({
             ...prev,
             endedAt,
             runStatus: config.mode === 'api' || prev.runId || isActiveRunStatus(prev.runStatus)
               ? 'failed'
               : prev.runStatus,
-            events: amrFailureText
-              ? appendAmrFailureTextEvent(prev.events ?? [], amrFailureText)
-              : prev.events,
           }));
           if (runCommentAttachments.length > 0) {
             void patchAttachedStatuses(runCommentAttachments, 'failed');
@@ -2930,6 +2924,50 @@ export function ProjectView({
     },
     [currentConversationActionDisabled, handleSend],
   );
+
+  // "Switch to AMR & retry" from the failed-run card: switch the run to AMR,
+  // open Settings on the AMR controls so the user can sign in / authorize /
+  // top up, and arm an auto-retry that fires once AMR is selected AND signed
+  // in (see the effect below).
+  const [pendingAmrRetry, setPendingAmrRetry] = useState<ChatMessage | null>(null);
+  const handleSwitchToAmrAndRetry = useCallback(
+    (failedAssistant: ChatMessage) => {
+      if (currentConversationActionDisabled) return;
+      onModeChange('daemon');
+      onAgentChange('amr');
+      onOpenAmrSettings?.();
+      setPendingAmrRetry(failedAssistant);
+    },
+    [currentConversationActionDisabled, onModeChange, onAgentChange, onOpenAmrSettings],
+  );
+  // Poll the AMR login status while a retry is armed, rather than only reacting
+  // to the AmrLoginPill's status event — the user may close Settings (which
+  // unmounts the pill and stops its polling) before finishing sign-in in the
+  // browser. Polling here keeps working regardless of the pill's lifecycle.
+  // Fires once AMR is the selected agent AND the account is signed in.
+  useEffect(() => {
+    if (!pendingAmrRetry) return;
+    let cancelled = false;
+    const tryRetry = async () => {
+      if (cancelled) return;
+      if (!(config.mode === 'daemon' && config.agentId === 'amr')) return;
+      const status = await fetchVelaLoginStatus().catch(() => null);
+      if (cancelled || status?.loggedIn !== true) return;
+      setPendingAmrRetry(null);
+      handleRetry(pendingAmrRetry);
+    };
+    void tryRetry();
+    const interval = setInterval(() => void tryRetry(), 2000);
+    // Give up after a few minutes so we never poll forever.
+    const stop = setTimeout(() => {
+      if (!cancelled) setPendingAmrRetry(null);
+    }, 5 * 60 * 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      clearTimeout(stop);
+    };
+  }, [pendingAmrRetry, config.mode, config.agentId, handleRetry]);
 
   useEffect(() => {
     if (!autoAuditRepairSeed) return;
@@ -4379,6 +4417,8 @@ export function ProjectView({
               onDeleteConversation={handleDeleteConversation}
               onRenameConversation={handleRenameConversation}
               onOpenSettings={onOpenSettings}
+              onOpenAmrSettings={onOpenAmrSettings}
+              onSwitchToAmrAndRetry={handleSwitchToAmrAndRetry}
               onOpenMcpSettings={onOpenMcpSettings}
               connectRepoNeeded={connectRepoNeeded}
               githubConnected={githubConnected}
@@ -4606,30 +4646,6 @@ function assistantAgentDisplayName(
 
 function isTerminalRunStatus(status: ChatMessage['runStatus']): boolean {
   return status === 'succeeded' || status === 'failed' || status === 'canceled';
-}
-
-function amrAccountFailureText(error: Error): string | null {
-  const coded = error as Error & { code?: string; details?: unknown };
-  if (coded.code === 'AMR_INSUFFICIENT_BALANCE') {
-    const details = coded.details && typeof coded.details === 'object'
-      ? coded.details as { actionUrl?: unknown }
-      : null;
-    const walletUrl =
-      typeof details?.actionUrl === 'string' && details.actionUrl.trim()
-        ? details.actionUrl.trim()
-        : DEFAULT_AMR_RECHARGE_URL;
-    return `${error.message}\n\n[Recharge AMR wallet](${walletUrl})`;
-  }
-  if (coded.code === 'AMR_AUTH_REQUIRED') {
-    return `${error.message}\n\nUse the AMR sign-in control in the model switcher or Settings, then retry this run.`;
-  }
-  return null;
-}
-
-function appendAmrFailureTextEvent(events: AgentEvent[], text: string): AgentEvent[] {
-  const last = events[events.length - 1];
-  if (last?.kind === 'text' && last.text === text) return events;
-  return [...events, { kind: 'text', text }];
 }
 
 function isActiveRunStatus(status: ChatMessage['runStatus']): boolean {
