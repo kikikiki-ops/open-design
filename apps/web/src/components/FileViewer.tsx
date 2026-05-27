@@ -1968,7 +1968,6 @@ export function CommentSidePanel({
   onSelectAll,
   onClearSelection,
   onReply,
-  onDeleteComment,
   onSendSelected,
   onCreateComment,
   sending,
@@ -1985,7 +1984,6 @@ export function CommentSidePanel({
   onSelectAll: () => void;
   onClearSelection: () => void;
   onReply: (comment: PreviewComment) => void;
-  onDeleteComment?: (commentId: string) => void | Promise<void>;
   onSendSelected: () => void | Promise<void>;
   onCreateComment?: (note: string) => boolean | Promise<boolean>;
   sending: boolean;
@@ -2065,6 +2063,14 @@ export function CommentSidePanel({
               data-testid="comment-side-item"
               data-comment-id={comment.id}
               aria-current={active ? 'true' : undefined}
+              role="button"
+              tabIndex={0}
+              onClick={() => onReply(comment)}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault();
+                onReply(comment);
+              }}
             >
               <div className="comment-side-item-head">
                 <span className="comment-side-author">
@@ -2076,28 +2082,23 @@ export function CommentSidePanel({
                   className={`comment-side-check${selected ? ' checked' : ''}`}
                   aria-label={selected ? t('chat.comments.deselect') : t('chat.comments.select')}
                   aria-pressed={selected}
-                  onClick={() => onToggleSelect(comment.id)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onToggleSelect(comment.id);
+                  }}
                 >
                   {selected ? <Icon name="check" size={11} /> : null}
                 </button>
-                {onDeleteComment ? (
-                  <button
-                    type="button"
-                    className="comment-side-delete"
-                    aria-label={t('common.delete')}
-                    title={t('common.delete')}
-                    onClick={() => void onDeleteComment(comment.id)}
-                  >
-                    <Icon name="trash" size={12} />
-                  </button>
-                ) : null}
               </div>
               <div className="comment-side-body">{comment.note}</div>
               <button
                 type="button"
                 className="comment-side-reply"
                 data-testid="comment-side-edit"
-                onClick={() => onReply(comment)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onReply(comment);
+                }}
               >
                 {t('chat.comments.edit')}
               </button>
@@ -6247,6 +6248,17 @@ const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([
         setHoveredPodMemberId((current) => (current === elementId ? null : current));
       }}
       onHoverMember={setHoveredPodMemberId}
+      onDeleteComment={onRemovePreviewComment ? async (commentId) => {
+        await onRemovePreviewComment(commentId);
+        clearBoardComposer();
+        setSelectedSideCommentIds((current) => {
+          if (!current.has(commentId)) return current;
+          const next = new Set(current);
+          next.delete(commentId);
+          return next;
+        });
+        setActivePreviewCommentId((current) => (current === commentId ? null : current));
+      } : undefined}
       sending={sendingBoardBatch || streaming}
       t={t}
       scale={overlayPreviewScale}
@@ -6305,16 +6317,6 @@ const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([
         setCommentPanelOpen(true);
         setCommentSidePanelCollapsed(false);
       }}
-      onDeleteComment={onRemovePreviewComment ? async (commentId) => {
-        await onRemovePreviewComment(commentId);
-        setSelectedSideCommentIds((current) => {
-          if (!current.has(commentId)) return current;
-          const next = new Set(current);
-          next.delete(commentId);
-          return next;
-        });
-        setActivePreviewCommentId((current) => (current === commentId ? null : current));
-      } : undefined}
       onSendSelected={async () => {
         if (!onSendBoardCommentAttachments) return;
         const selected = visibleSideComments.filter(

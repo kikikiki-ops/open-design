@@ -157,6 +157,7 @@ export function BoardComposerPopover({
   onSendBatch,
   onRemoveMember,
   onHoverMember,
+  onDeleteComment,
   sending,
   t,
   scale = 1,
@@ -175,6 +176,7 @@ export function BoardComposerPopover({
   onSendBatch: () => void | Promise<void>;
   onRemoveMember: (elementId: string) => void;
   onHoverMember?: (elementId: string | null) => void;
+  onDeleteComment?: (commentId: string) => void | Promise<void>;
   sending: boolean;
   t: TranslateFn;
   scale?: number;
@@ -254,15 +256,27 @@ export function BoardComposerPopover({
       />
       <div className="comment-popover-actions">
         <div className="comment-popover-actions-start">
-          <button
-            type="button"
-            className="comment-popover-close"
-            onClick={onClose}
-            title={t('common.close')}
-            aria-label={t('common.close')}
-          >
-            <Icon name="close" size={12} />
-          </button>
+          {existing && onDeleteComment ? (
+            <button
+              type="button"
+              className="comment-popover-close comment-popover-delete"
+              onClick={() => void onDeleteComment(existing.id)}
+              title={t('common.delete')}
+              aria-label={t('common.delete')}
+            >
+              <Icon name="trash" size={13} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="comment-popover-close"
+              onClick={onClose}
+              title={t('common.close')}
+              aria-label={t('common.close')}
+            >
+              <Icon name="close" size={12} />
+            </button>
+          )}
         </div>
         <div className="comment-popover-actions-end">
           {target.selectionKind === 'pod' ? (

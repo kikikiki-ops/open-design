@@ -2027,7 +2027,7 @@ describe('FileViewer tweaks toolbar', () => {
     const onCollapseChange = vi.fn();
     const onClose = vi.fn();
     const onSelectAll = vi.fn();
-    const onDeleteComment = vi.fn();
+    const onReply = vi.fn();
 
     function Harness() {
       const [collapsed, setCollapsed] = useState(false);
@@ -2066,8 +2066,7 @@ describe('FileViewer tweaks toolbar', () => {
           onToggleSelect={() => {}}
           onSelectAll={onSelectAll}
           onClearSelection={() => {}}
-          onReply={() => {}}
-          onDeleteComment={onDeleteComment}
+          onReply={onReply}
           onSendSelected={() => {}}
           sending={false}
           t={t}
@@ -2080,8 +2079,9 @@ describe('FileViewer tweaks toolbar', () => {
     expect(screen.getByTestId('comment-side-panel')).toBeTruthy();
     expect(screen.getByText('不要github，换成微信')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Select all' }).hasAttribute('disabled')).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
-    expect(onDeleteComment).toHaveBeenCalledWith('comment-1');
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+    fireEvent.click(screen.getByText('不要github，换成微信').closest('[data-testid="comment-side-item"]')!);
+    expect(onReply).toHaveBeenCalledWith(expect.objectContaining({ id: 'comment-1' }));
 
     fireEvent.click(screen.getByRole('button', { name: /close/i }));
 
