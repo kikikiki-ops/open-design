@@ -6515,15 +6515,16 @@ const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([
               </div>
               <button
                 type="button"
-                className={`viewer-action viewer-action-icon viewer-comment-toggle${boardMode && commentCreateMode ? ' active' : ''}`}
+                className={`viewer-action viewer-comment-count-trigger viewer-comment-toggle${boardMode && commentCreateMode ? ' active' : ''}`}
                 data-testid="comment-panel-toggle"
                 data-tooltip={t('chat.tabComments')}
                 title={t('chat.tabComments')}
-                aria-label={t('chat.tabComments')}
+                aria-label={`${t('chat.tabComments')} (${visibleSideComments.length})`}
                 aria-pressed={boardMode && commentCreateMode}
                 onClick={activateCommentCreateTool}
               >
                 <RemixIcon name="message-3-line" size={15} />
+                <span className="viewer-comment-count" aria-hidden>{visibleSideComments.length}</span>
                 {boardMode && commentCreateMode ? <span className="viewer-action-active-dot" aria-hidden /> : null}
               </button>
               {source !== null && mode === 'preview' ? (
