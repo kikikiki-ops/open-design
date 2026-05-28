@@ -35,13 +35,21 @@ vi.mock('../../src/components/EntryView', () => ({
   EntryView: ({
     config,
     onOpenSettings,
+    onProjectsRefresh,
     onPersistComposioKey,
+    projectsLoading,
   }: {
     config: AppConfig;
     onOpenSettings: (section?: 'composio') => void;
+    onProjectsRefresh: () => Promise<void>;
     onPersistComposioKey: (composio: AppConfig['composio']) => void;
+    projectsLoading?: boolean;
   }) => (
     <div>
+      <div>Projects loading: {projectsLoading ? 'loading' : 'idle'}</div>
+      <button type="button" onClick={() => { void onProjectsRefresh().catch(() => {}); }}>
+        Refresh projects
+      </button>
       <button type="button" onClick={() => onOpenSettings('composio')}>
         Open connectors settings
       </button>
@@ -296,6 +304,22 @@ describe('App connectors settings flows', () => {
     await waitFor(() => {
       expect(mockedListProjects).toHaveBeenCalledWith('local-personal');
       expect(mockedListTemplates).toHaveBeenCalledWith('local-personal');
+    });
+  });
+
+  it('clears project loading after a later scoped project refresh fails', async () => {
+    render(<App />);
+
+    expect(await screen.findByText('Projects loading: idle')).toBeTruthy();
+
+    mockedListProjects.mockRejectedValueOnce(new Error('project refresh unavailable'));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh projects' }));
+
+    await waitFor(() => {
+      expect(mockedListProjects).toHaveBeenLastCalledWith('local-personal');
+    });
+    await waitFor(() => {
+      expect(screen.getByText('Projects loading: idle')).toBeTruthy();
     });
   });
 

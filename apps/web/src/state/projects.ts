@@ -2,8 +2,10 @@
 // daemon's SQLite store. All writes round-trip through HTTP so projects
 // stay coherent across multiple browser tabs and across restarts.
 //
-// These helpers fail soft (returning null / [] on transport errors) so
+// Most helpers fail soft (returning null / [] on transport errors) so
 // the UI can stay rendered when the daemon is briefly unreachable.
+// Workspace-scoped project/template list loads throw instead; the app
+// uses those failures to surface explicit workspace load errors.
 
 import type {
   AppliedPluginSnapshot,

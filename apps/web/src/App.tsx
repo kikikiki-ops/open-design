@@ -389,15 +389,24 @@ export function App() {
     const requestId = workspaceDataRequestRef.current + 1;
     workspaceDataRequestRef.current = requestId;
     setProjectsLoading(true);
-    const [nextProjects, nextTemplates] = await Promise.all([
-      listProjects(workspaceId),
-      listTemplates(workspaceId),
-    ]);
-    if (isCancelled() || requestId !== workspaceDataRequestRef.current) return false;
-    setProjects(nextProjects);
-    setTemplates(nextTemplates);
-    setProjectsLoading(false);
-    return true;
+    try {
+      const [nextProjects, nextTemplates] = await Promise.all([
+        listProjects(workspaceId),
+        listTemplates(workspaceId),
+      ]);
+      if (isCancelled() || requestId !== workspaceDataRequestRef.current) return false;
+      setProjects(nextProjects);
+      setTemplates(nextTemplates);
+      setProjectsLoading(false);
+      return true;
+    } catch (err) {
+      if (!isCancelled() && requestId === workspaceDataRequestRef.current) {
+        setProjects([]);
+        setTemplates([]);
+        setProjectsLoading(false);
+      }
+      throw err;
+    }
   }, []);
 
   const messageFromError = useCallback((error: unknown, fallback: string) => {
