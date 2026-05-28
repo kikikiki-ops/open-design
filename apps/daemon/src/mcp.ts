@@ -385,7 +385,7 @@ const TOOL_DEFS = [
   {
     name: 'get_run',
     description:
-      'Poll a run started by start_run. Returns status (queued|running|succeeded|failed|canceled) plus error info. On success, adds previewUrl (open it in a browser to view the rendered design) and a hint to pull files with get_artifact.',
+      'Poll a run started by start_run. Returns status (queued|running|succeeded|failed|canceled) plus error info. On success, adds previewUrl (open it in a browser to view the rendered design) and agentMessage (the inner agent\'s textual output reassembled from the event stream — show this when there is no previewUrl, e.g. when the agent asked the user a clarifying question instead of producing files).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -709,7 +709,7 @@ async function handleMcpToolCall(baseUrl: string, name: unknown, args: McpArgs) 
       case 'list_skills':
         return ok(await getJson<SkillsPayload>(`${baseUrl}/api/skills`));
       case 'list_plugins':
-        return ok(await getJson<PluginsPayload>(`${baseUrl}/api/plugins`));
+        return ok(await listPlugins(baseUrl));
       case 'start_run':
         return await startRun(baseUrl, args);
       case 'get_run':
@@ -829,13 +829,20 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
 // Create an empty project to generate into. start_run needs an existing
 // project; without this an external agent could only work on projects
 // the user had already created in Open Design.
+//
+// skipDiscoveryBrief defaults to true: the outer agent (Codex, Cursor,
+// …) IS the user-facing surface, so OD's own interactive discovery
+// stage would create a confusing nested-clarification loop where OD's
+// <question-form> output ends up dropped from the MCP response because
+// no project file is produced. Better to let the outer agent gather
+// requirements directly and pass a precise prompt to start_run.
 async function createProject(baseUrl: string, args: McpArgs) {
   requireString(args.name, 'name');
   const id =
     typeof args.id === 'string' && args.id.length > 0
       ? args.id
       : slugifyProjectId(args.name);
-  const body: JsonObject = { id, name: args.name };
+  const body: JsonObject = { id, name: args.name, skipDiscoveryBrief: true };
   if (typeof args.designSystem === 'string' && args.designSystem.length > 0) {
     body.designSystemId = args.designSystem;
   }
@@ -843,6 +850,30 @@ async function createProject(baseUrl: string, args: McpArgs) {
     body.skillId = args.skill;
   }
   return ok(await postJson<JsonObject>(`${baseUrl}/api/projects`, body));
+}
+
+// Flatten daemon's plugin record into the few fields an external agent
+// needs to pick a plugin: id, title, description, kind, tags. The raw
+// record carries 16+ fields (fsPath, sourceMarketplaceId, installedAt,
+// resolvedSource, …) that an agent never reasons about, and the
+// human-readable description / kind live one level deeper in
+// `manifest.description` / `manifest.od.kind`.
+async function listPlugins(baseUrl: string): Promise<JsonObject> {
+  const raw = await getJson<{ plugins?: JsonObject[] }>(`${baseUrl}/api/plugins`);
+  const plugins = (raw?.plugins ?? []).map((p) => {
+    const manifest = (p?.manifest as JsonObject | undefined) ?? {};
+    const od = (manifest.od as JsonObject | undefined) ?? {};
+    const result: JsonObject = {
+      id: p?.id,
+      title: manifest.title ?? p?.title ?? p?.id,
+    };
+    if (typeof manifest.description === 'string') result.description = manifest.description;
+    const kind = od.taskKind ?? od.kind;
+    if (typeof kind === 'string') result.kind = kind;
+    if (Array.isArray(manifest.tags)) result.tags = manifest.tags;
+    return result;
+  });
+  return { plugins };
 }
 
 // Derive a valid project id ([A-Za-z0-9._-], <=128) from a display name,
@@ -886,8 +917,15 @@ async function startRun(baseUrl: string, args: McpArgs) {
   );
 }
 
-// Poll a run. On success we enrich the daemon's status body with a
-// browser-openable previewUrl plus a pull hint.
+// Poll a run. On terminal status we enrich the daemon's status body
+// with three things the outer agent needs to actually close the loop:
+// (1) previewUrl when there's an entry file — open this in a browser,
+// (2) agentMessage = the inner agent's textual output reassembled from
+//     the SSE event stream, so when the inner agent asked a discovery
+//     question back instead of producing files, the outer agent can
+//     relay it to the user (without this, the run looks like a
+//     "succeeded with empty output" mystery), and
+// (3) a hint that tells the outer agent how to surface both.
 async function getRun(baseUrl: string, args: McpArgs) {
   requireString(args.runId, 'runId');
   const status = await getJson<JsonObject>(
@@ -896,13 +934,53 @@ async function getRun(baseUrl: string, args: McpArgs) {
   if (status.status !== 'succeeded' || typeof status.projectId !== 'string' || !status.projectId) {
     return ok(status);
   }
-  const enriched: JsonObject = {
-    ...status,
-    hint: 'Run finished. Open previewUrl in the user-facing browser now to show the rendered design — clients with a built-in browser pane (e.g. Codex CLI) should navigate to it directly; otherwise surface it as a clickable link the user can click. Call get_artifact (project defaults to this run\'s project) when you need the source files.',
-  };
-  const previewUrl = await buildRunPreviewUrl(baseUrl, status.projectId);
+  const [previewUrl, agentMessage] = await Promise.all([
+    buildRunPreviewUrl(baseUrl, status.projectId),
+    fetchRunAgentMessage(baseUrl, String(status.id ?? args.runId)),
+  ]);
+  const enriched: JsonObject = { ...status };
   if (previewUrl) enriched.previewUrl = previewUrl;
+  if (agentMessage) enriched.agentMessage = agentMessage;
+  enriched.hint = previewUrl
+    ? 'Run finished. Open previewUrl in the user-facing browser now to show the rendered design — clients with a built-in browser pane (e.g. Codex CLI) should navigate to it directly; otherwise surface it as a clickable link the user can click. agentMessage carries the inner agent\'s explanation; show it alongside the preview. Call get_artifact (project defaults to this run\'s project) when you need the source files.'
+    : 'Run finished but produced no files. The inner agent\'s output is in agentMessage — relay it to the user verbatim. Most often this is a clarifying question (e.g. a <question-form>) you should answer by calling start_run again with a more specific prompt or a chosen plugin.';
   return ok(enriched);
+}
+
+// Reassemble the inner agent's textual output from the SSE event log.
+// We pull the events one-shot (the endpoint returns the full history
+// for terminal runs and closes), parse out text_delta deltas, and
+// concatenate. Best-effort: any HTTP / parse error returns null so the
+// caller just omits the field.
+async function fetchRunAgentMessage(baseUrl: string, runId: string): Promise<string | null> {
+  try {
+    const resp = await fetch(`${baseUrl}/api/runs/${encodeURIComponent(runId)}/events`);
+    if (!resp.ok) return null;
+    const body = await resp.text();
+    const parts: string[] = [];
+    for (const block of body.split(/\n\n/)) {
+      if (!block.trim()) continue;
+      let eventName = '';
+      let dataLine = '';
+      for (const rawLine of block.split('\n')) {
+        if (rawLine.startsWith('event:')) eventName = rawLine.slice(6).trim();
+        else if (rawLine.startsWith('data:')) dataLine = rawLine.slice(5).trim();
+      }
+      if (eventName !== 'agent' || !dataLine) continue;
+      try {
+        const data = JSON.parse(dataLine) as { type?: string; delta?: unknown };
+        if (data?.type === 'text_delta' && typeof data.delta === 'string') {
+          parts.push(data.delta);
+        }
+      } catch {
+        // Non-JSON data lines (rare) are skipped silently.
+      }
+    }
+    const message = parts.join('');
+    return message.length > 0 ? message : null;
+  } catch {
+    return null;
+  }
 }
 
 // Build the raw URL that renders a project's entry file. The raw route

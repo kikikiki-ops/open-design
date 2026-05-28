@@ -31,17 +31,6 @@ describe('public MCP discovery + generation tools', () => {
     expect(JSON.parse(firstText(result))).toEqual({ skills: [{ id: 'deck', name: 'Deck' }] });
   });
 
-  it('list_plugins proxies GET /api/plugins', async () => {
-    const fetchMock = vi.fn(async (url: string) => {
-      expect(url).toBe('http://127.0.0.1:17456/api/plugins');
-      return new Response(JSON.stringify({ plugins: [{ id: 'pitch-deck', name: 'Pitch Deck' }] }), { status: 200 });
-    });
-    vi.stubGlobal('fetch', fetchMock);
-
-    const result = await handleMcpToolCall('http://127.0.0.1:17456', 'list_plugins', {});
-    expect(JSON.parse(firstText(result))).toEqual({ plugins: [{ id: 'pitch-deck', name: 'Pitch Deck' }] });
-  });
-
   it('start_run resolves a project name and POSTs /api/runs with the prompt + plugin + inputs', async () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (url.endsWith('/api/projects')) {
@@ -232,5 +221,158 @@ describe('public MCP discovery + generation tools', () => {
     const result = await handleMcpToolCall('http://127.0.0.1:17456', 'get_project', { project: PROJECT_UUID });
     const parsed = JSON.parse(firstText(result));
     expect(parsed.previewUrl).toBeUndefined();
+  });
+
+  // Discovery-stage / clarifying-question fallback: when Open Design's
+  // inner agent does NOT write files (e.g. it asks back with a discovery
+  // form), the run still terminates "succeeded" but the only output
+  // lives in the SSE event stream as text_delta chunks. get_run must
+  // pull those into an agentMessage field — otherwise the outer agent
+  // sees a successful run with no artifacts and assumes failure.
+
+  function sseEvents(entries: Array<{ event: string; data: unknown }>): string {
+    return entries
+      .map((e, i) => `id: ${i + 1}\nevent: ${e.event}\ndata: ${JSON.stringify(e.data)}\n`)
+      .join('\n');
+  }
+
+  it('get_run surfaces the inner agent text on success when there are no files', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith('/api/runs/run-42')) {
+        return new Response(JSON.stringify({ id: 'run-42', status: 'succeeded', projectId: 'project-1' }), { status: 200 });
+      }
+      if (url.endsWith('/api/projects/project-1')) {
+        // No entry file → no previewUrl. Discovery scenario.
+        return new Response(JSON.stringify({ project: { id: 'project-1', metadata: {} } }), { status: 200 });
+      }
+      if (url.endsWith('/api/runs/run-42/events')) {
+        return new Response(
+          sseEvents([
+            { event: 'start', data: { runId: 'run-42' } },
+            { event: 'agent', data: { type: 'text_delta', delta: '明白，先锁定几个细节。' } },
+            { event: 'agent', data: { type: 'text_delta', delta: '<question-form>…</question-form>' } },
+            { event: 'end', data: { code: 0, status: 'succeeded' } },
+          ]),
+          { status: 200, headers: { 'content-type': 'text/event-stream' } },
+        );
+      }
+      throw new Error(`unexpected url ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await handleMcpToolCall('http://127.0.0.1:17456', 'get_run', { runId: 'run-42' });
+    const parsed = JSON.parse(firstText(result));
+    expect(parsed.status).toBe('succeeded');
+    expect(parsed.agentMessage).toContain('明白');
+    expect(parsed.agentMessage).toContain('<question-form>');
+    expect(parsed.previewUrl).toBeUndefined();
+  });
+
+  it('get_run still includes agentMessage even when previewUrl is present', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith('/api/runs/run-42')) {
+        return new Response(JSON.stringify({ id: 'run-42', status: 'succeeded', projectId: 'project-1' }), { status: 200 });
+      }
+      if (url.endsWith('/api/projects/project-1')) {
+        return new Response(JSON.stringify({ project: { id: 'project-1', metadata: { entryFile: 'index.html' } } }), { status: 200 });
+      }
+      if (url.endsWith('/api/runs/run-42/events')) {
+        return new Response(
+          sseEvents([{ event: 'agent', data: { type: 'text_delta', delta: 'Done — see index.html.' } }]),
+          { status: 200 },
+        );
+      }
+      throw new Error(`unexpected url ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await handleMcpToolCall('http://127.0.0.1:17456', 'get_run', { runId: 'run-42' });
+    const parsed = JSON.parse(firstText(result));
+    expect(parsed.previewUrl).toBe('http://127.0.0.1:17456/api/projects/project-1/raw/index.html');
+    expect(parsed.agentMessage).toBe('Done — see index.html.');
+  });
+
+  it('get_run tolerates a missing events endpoint (older daemons / unreachable)', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith('/api/runs/run-42')) {
+        return new Response(JSON.stringify({ id: 'run-42', status: 'succeeded', projectId: 'project-1' }), { status: 200 });
+      }
+      if (url.endsWith('/api/projects/project-1')) {
+        return new Response(JSON.stringify({ project: { id: 'project-1', metadata: { entryFile: 'index.html' } } }), { status: 200 });
+      }
+      if (url.endsWith('/api/runs/run-42/events')) {
+        return new Response('not found', { status: 404 });
+      }
+      throw new Error(`unexpected url ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await handleMcpToolCall('http://127.0.0.1:17456', 'get_run', { runId: 'run-42' });
+    const parsed = JSON.parse(firstText(result));
+    expect(parsed.status).toBe('succeeded');
+    expect(parsed.previewUrl).toBe('http://127.0.0.1:17456/api/projects/project-1/raw/index.html');
+    expect(parsed.agentMessage).toBeUndefined();
+  });
+
+  // #2: MCP-driven projects skip Open Design's interactive discovery
+  // stage. The outer agent (Codex, Cursor, …) IS the user-facing surface;
+  // having OD ask a discovery form back through MCP creates a confusing
+  // nested-clarification loop where the form ends up dropped because no
+  // file is produced. So create_project pre-sets skipDiscoveryBrief.
+
+  it('create_project sets skipDiscoveryBrief:true by default', async () => {
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      return new Response(JSON.stringify({ project: { id: body.id, name: body.name }, conversationId: 'c1' }), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await handleMcpToolCall('http://127.0.0.1:17456', 'create_project', { name: 'X' });
+    const postBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(postBody.skipDiscoveryBrief).toBe(true);
+  });
+
+  // #4: list_plugins flattens the bulky daemon record (sourceKind,
+  // fsPath, marketplaceTrust, installedAt, …) into the few fields an
+  // external agent actually needs to pick a plugin — id, title,
+  // description, kind, tags.
+
+  it('list_plugins maps to a slim agent-friendly shape pulled from manifest', async () => {
+    const fetchMock = vi.fn(async () => new Response(
+      JSON.stringify({
+        plugins: [
+          {
+            id: 'example-html-ppt-pitch-deck',
+            title: 'Html Ppt Pitch Deck',
+            sourceKind: 'bundled',
+            fsPath: '/some/path',
+            installedAt: 1234,
+            manifest: {
+              name: 'example-html-ppt-pitch-deck',
+              title: 'HTML PPT Pitch Deck',
+              description: 'Investor-ready 10-slide HTML pitch deck — gradient hero, big numbers, traction bar chart.',
+              tags: ['deck', 'pitch'],
+              od: { kind: 'scenario', taskKind: 'deck' },
+            },
+          },
+        ],
+      }),
+      { status: 200 },
+    ));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await handleMcpToolCall('http://127.0.0.1:17456', 'list_plugins', {});
+    const parsed = JSON.parse(firstText(result));
+    expect(parsed.plugins).toEqual([
+      {
+        id: 'example-html-ppt-pitch-deck',
+        title: 'HTML PPT Pitch Deck',
+        description: 'Investor-ready 10-slide HTML pitch deck — gradient hero, big numbers, traction bar chart.',
+        kind: 'deck',
+        tags: ['deck', 'pitch'],
+      },
+    ]);
+    expect(parsed.plugins[0]).not.toHaveProperty('fsPath');
+    expect(parsed.plugins[0]).not.toHaveProperty('sourceKind');
   });
 });
