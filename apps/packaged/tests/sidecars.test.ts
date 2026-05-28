@@ -156,6 +156,23 @@ describe('packaged child Vite+ environment forwarding', () => {
     }
   });
 
+  it('enables Node env proxy support for forwarded lowercase proxy env', () => {
+    const env = resolvePackagedChildBaseEnv(
+      {
+        HOME: '/Users/tester',
+        https_proxy: 'http://user-lowercase:9443',
+      },
+      false,
+      {},
+    );
+
+    expect(env.HTTPS_PROXY).toBe('http://user-lowercase:9443');
+    expect(env.NODE_USE_ENV_PROXY).toBe('1');
+    if (process.platform !== 'win32') {
+      expect(env.https_proxy).toBe('http://user-lowercase:9443');
+    }
+  });
+
   it('can skip injecting system proxy env into the packaged daemon base env', () => {
     const env = resolvePackagedChildBaseEnv(
       {

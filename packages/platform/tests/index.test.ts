@@ -154,6 +154,28 @@ describe("generic filesystem primitives", () => {
 });
 
 describe("system proxy env resolution", () => {
+  it("enables Node env proxy support when merging user proxy variables", () => {
+    const env = mergeProxyAwareEnv("darwin", {
+      http_proxy: "http://user-proxy:7890",
+    });
+
+    expect(env).toMatchObject({
+      HTTP_PROXY: "http://user-proxy:7890",
+      NODE_USE_ENV_PROXY: "1",
+      http_proxy: "http://user-proxy:7890",
+    });
+  });
+
+  it("preserves an explicit NODE_USE_ENV_PROXY value when merging user proxy variables", () => {
+    const env = mergeProxyAwareEnv("darwin", {
+      HTTPS_PROXY: "http://user-proxy:7891",
+      NODE_USE_ENV_PROXY: "0",
+    });
+
+    expect(env.HTTPS_PROXY).toBe("http://user-proxy:7891");
+    expect(env.NODE_USE_ENV_PROXY).toBe("0");
+  });
+
   it("parses macOS scutil output into standard proxy env vars", () => {
     const env = parseMacosScutilProxyOutput(`
 <dictionary> {

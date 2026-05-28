@@ -162,7 +162,26 @@ export function mergeProxyAwareEnv(
       setCanonicalProxyEnvValue(merged, canonicalKey, entry.value, platform);
     }
   }
+  if (hasProxyEndpointEnv(merged) && !hasCanonicalProxyEnv(merged, "NODE_USE_ENV_PROXY")) {
+    merged.NODE_USE_ENV_PROXY = "1";
+  }
   return merged;
+}
+
+function hasCanonicalProxyEnv(
+  env: NodeJS.ProcessEnv,
+  canonicalKey: "ALL_PROXY" | "HTTP_PROXY" | "HTTPS_PROXY" | "NODE_USE_ENV_PROXY" | "NO_PROXY",
+): boolean {
+  return Object.keys(env).some((key) => key.toLowerCase() === canonicalKey.toLowerCase());
+}
+
+function hasProxyEndpointEnv(env: NodeJS.ProcessEnv): boolean {
+  return ["ALL_PROXY", "HTTP_PROXY", "HTTPS_PROXY"].some((key) => {
+    for (const [envKey, value] of Object.entries(env)) {
+      if (envKey.toLowerCase() === key.toLowerCase() && value?.trim()) return true;
+    }
+    return false;
+  });
 }
 
 function addProxyEnvValue(

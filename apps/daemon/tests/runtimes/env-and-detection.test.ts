@@ -117,6 +117,24 @@ test('spawnEnvForAgent lets explicit lowercase proxy env override system upperca
   }
 });
 
+test('spawnEnvForAgent enables Node env proxy support for inherited lowercase proxy env', () => {
+  const env = spawnEnvForAgent(
+    'gemini',
+    {
+      http_proxy: 'http://user-lowercase:9000',
+      PATH: '/usr/bin',
+    },
+    {},
+    {},
+  );
+
+  assert.equal(env.HTTP_PROXY, 'http://user-lowercase:9000');
+  assert.equal(env.NODE_USE_ENV_PROXY, '1');
+  if (process.platform !== 'win32') {
+    assert.equal(env.http_proxy, 'http://user-lowercase:9000');
+  }
+});
+
 test('spawnEnvForAgent expands configured env home paths', () => {
   const env = spawnEnvForAgent('codex', { PATH: '/usr/bin' }, {
     CODEX_HOME: '~/.codex-alt',
