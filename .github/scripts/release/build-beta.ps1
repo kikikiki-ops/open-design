@@ -48,6 +48,48 @@ function Read-GitHubOutput([string]$Path) {
   return $outputs
 }
 
+function Repair-ElectronDist {
+  $electronVersion = "41.3.0"
+  $electronRoot = Join-Path $workspaceRoot "node_modules\.pnpm\electron@$electronVersion\node_modules\electron"
+  $dist = Join-Path $electronRoot "dist"
+  $electronExe = Join-Path $dist "electron.exe"
+  if (Test-Path -LiteralPath $electronExe) {
+    return
+  }
+
+  $cacheRoot = Join-Path $env:LOCALAPPDATA "electron\Cache"
+  $zip = Get-ChildItem -LiteralPath $cacheRoot -Recurse -Filter "electron-v$electronVersion-win32-x64.zip" -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 1
+
+  if ($zip -eq $null) {
+    $previousForceNoCache = $env:force_no_cache
+    try {
+      $env:force_no_cache = "true"
+      Invoke-Node24 -Arguments @("node", (Join-Path $electronRoot "install.js"))
+    } finally {
+      $env:force_no_cache = $previousForceNoCache
+    }
+    $zip = Get-ChildItem -LiteralPath $cacheRoot -Recurse -Filter "electron-v$electronVersion-win32-x64.zip" -ErrorAction SilentlyContinue |
+      Sort-Object LastWriteTime -Descending |
+      Select-Object -First 1
+  }
+
+  if ($zip -eq $null) {
+    throw "Electron cache zip not found for $electronVersion under $cacheRoot"
+  }
+
+  $resolvedDist = (Resolve-Path -LiteralPath $dist -ErrorAction SilentlyContinue)
+  if ($resolvedDist -ne $null -and -not $resolvedDist.Path.StartsWith($workspaceRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Refusing to repair Electron dist outside workspace: $($resolvedDist.Path)"
+  }
+
+  Remove-Item -LiteralPath $dist -Recurse -Force -ErrorAction SilentlyContinue
+  New-Item -ItemType Directory -Force -Path $dist | Out-Null
+  tar.exe -xf $zip.FullName -C $dist
+  Require-File $electronExe "electron.exe"
+}
+
 if ([string]::IsNullOrWhiteSpace($Root)) {
   if ($Lane -eq "self-hosted") {
     $Root = "C:\.tmp\runner\od-beta"
@@ -80,6 +122,7 @@ git lfs version
 & $makensis /VERSION
 
 Invoke-Node24 -Arguments @("pnpm.cmd", "install", "--frozen-lockfile")
+Repair-ElectronDist
 
 if ([string]::IsNullOrWhiteSpace($ReleaseVersion)) {
   git fetch --force --depth=1 origin "+refs/tags/open-design-v*:refs/tags/open-design-v*"
