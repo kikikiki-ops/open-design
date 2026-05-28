@@ -62,8 +62,16 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
     try {
       const rawLimit = Number(req.query.limit);
       const limit = Number.isFinite(rawLimit) ? rawLimit : undefined;
-      const voices = await listElevenLabsVoiceOptions(PROJECT_ROOT, { limit });
-      res.json({ voices });
+      const proxyDispatcher = proxyDispatcherRequestInit(process.env);
+      try {
+        const voices = await listElevenLabsVoiceOptions(PROJECT_ROOT, {
+          limit,
+          requestInit: proxyDispatcher.requestInit,
+        });
+        res.json({ voices });
+      } finally {
+        await proxyDispatcher.close();
+      }
     } catch (err: any) {
       const message = String(err && err.message ? err.message : err);
       const status = message.includes('no ElevenLabs API key') ? 400 : 502;
