@@ -4249,6 +4249,12 @@ export function ProjectView({
         onBack={onBack}
         backLabel={t('project.backToProjects')}
         fileActionsBefore={(
+          <div
+            className="app-chrome-file-actions-before workspace-tabs-file-actions"
+            data-app-chrome-file-actions="true"
+          />
+        )}
+        actions={(
           <>
             <button
               type="button"
@@ -4276,14 +4282,7 @@ export function ProjectView({
               onRefreshAgents={onRefreshAgents}
               onBack={onBack}
             />
-            <div
-              className="app-chrome-file-actions-before workspace-tabs-file-actions"
-              data-app-chrome-file-actions="true"
-            />
           </>
-        )}
-        actions={(
-          null
         )}
       >
         <div className="app-project-title">
