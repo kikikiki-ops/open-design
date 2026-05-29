@@ -95,7 +95,7 @@ jobs:
           lfs: false
 
       - name: Validate self-hosted beta inputs
-        shell: pwsh
+        shell: powershell
         run: |
           if ("${{ inputs.enable_win }}" -ne "true") {
             throw "release-beta-s requires enable_win=true"
