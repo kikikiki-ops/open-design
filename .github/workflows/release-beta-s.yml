@@ -95,14 +95,10 @@ jobs:
           lfs: false
 
       - name: Validate self-hosted beta inputs
-        shell: powershell
+        shell: cmd
         run: |
-          if ("${{ inputs.enable_win }}" -ne "true") {
-            throw "release-beta-s requires enable_win=true"
-          }
-          if ([string]::IsNullOrWhiteSpace("${{ inputs.s3_public_origin }}")) {
-            throw "release-beta-s requires a non-empty s3_public_origin"
-          }
+          @echo on
+          powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "if ('${{ inputs.enable_win }}' -ne 'true') { throw 'release-beta-s requires enable_win=true' }; if ([string]::IsNullOrWhiteSpace('${{ inputs.s3_public_origin }}')) { throw 'release-beta-s requires a non-empty s3_public_origin' }"
 
       - name: Prepare beta release metadata
         id: beta
