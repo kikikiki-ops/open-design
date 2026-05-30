@@ -5,6 +5,7 @@ import {
   commentVisibleOnDeckSlide,
   commentsToAttachments,
   historyWithCommentAttachmentContext,
+  liveCommentTargetMapsEqual,
   liveSnapshotForComment,
   mergeAttachedComments,
   messageContentWithCommentAttachments,
@@ -263,6 +264,23 @@ describe('preview comment attachment helpers', () => {
     expect(commentVisibleOnDeckSlide({ slideIndex: 2 }, 2)).toBe(true);
     expect(commentVisibleOnDeckSlide({ slideIndex: 2 }, 1)).toBe(false);
     expect(commentVisibleOnDeckSlide({}, 1)).toBe(true);
+  });
+
+  it('treats live comment target maps with identical overlay bounds as equal', () => {
+    const base: PreviewCommentSnapshot = {
+      filePath: 'index.html',
+      elementId: 'hero-title',
+      selector: '[data-od-id="hero-title"]',
+      label: 'h1.hero-title',
+      text: 'Hello',
+      htmlHint: '',
+      position: { x: 12, y: 24, width: 120, height: 32 },
+    };
+    const current = new Map([['hero-title', base]]);
+    const next = new Map([['hero-title', { ...base, text: 'Hello world' }]]);
+    expect(liveCommentTargetMapsEqual(current, next)).toBe(true);
+    next.set('hero-title', { ...base, position: { x: 13, y: 24, width: 120, height: 32 } });
+    expect(liveCommentTargetMapsEqual(current, next)).toBe(false);
   });
 
   it('serializes selected comments into API-mode prompt context without visible input', () => {

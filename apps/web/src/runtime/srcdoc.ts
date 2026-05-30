@@ -1510,7 +1510,7 @@ function meaningfulDomFallbackTarget(el) {
     schedulePostPreviewScroll();
   }, true);
   var mo = new MutationObserver(schedulePostTargets);
-  mo.observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true });
+  mo.observe(document.documentElement, { subtree: true, childList: true, attributes: true });
   // Reflect the host-requested initial modes on the documentElement so
   // the cursor/hover styles match what the bridge picks up on click.
   if (commentEnabled) document.documentElement.toggleAttribute('data-od-comment-mode', true);
@@ -1897,6 +1897,7 @@ function injectDeckBridge(doc: string, initialSlideIndex = 0): string {
     for (var k = 0; k < n; k++) dispatchKey(key);
     setTimeout(report, 320);
   }
+  var lastCommentTargetSlideIndex = -1;
   function report(){
     try {
       var list = slides();
@@ -1918,9 +1919,12 @@ function injectDeckBridge(doc: string, initialSlideIndex = 0): string {
         if (el.querySelector('span,.bar')) return;
         el.style.width=progressWidth;
       });
-      try {
-        if (typeof window.__odScheduleCommentTargets === 'function') window.__odScheduleCommentTargets();
-      } catch (_) {}
+      if (i !== lastCommentTargetSlideIndex) {
+        lastCommentTargetSlideIndex = i;
+        try {
+          if (typeof window.__odScheduleCommentTargets === 'function') window.__odScheduleCommentTargets();
+        } catch (_) {}
+      }
     } catch (e) {}
   }
   window.__odDeckSlideState = function(){

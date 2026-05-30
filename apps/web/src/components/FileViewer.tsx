@@ -93,10 +93,12 @@ import { Toast } from './Toast';
 import { PreviewDrawOverlay } from './PreviewDrawOverlay';
 import {
   buildBoardCommentAttachments,
+  commentSnapshotOverlayEqual,
   commentTargetDisplayName,
   commentVisibleOnDeckSlide,
   commentsToAttachments,
   isValidCommentOverlayPosition,
+  liveCommentTargetMapsEqual,
   liveSnapshotForComment,
   overlayBoundsFromSnapshot,
   selectionKindLabel,
@@ -4972,7 +4974,9 @@ const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([
           ...(typeof item?.slideIndex === 'number' ? { slideIndex: item.slideIndex } : {}),
         });
       });
-      setLiveCommentTargets(next);
+      setLiveCommentTargets((current) => (
+        liveCommentTargetMapsEqual(current, next) ? current : next
+      ));
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
@@ -5096,32 +5100,42 @@ const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([
           if (!snapshot.elementId || !isValidCommentOverlayPosition(snapshot.position)) return;
           next.set(snapshot.elementId, snapshot);
         });
-        setLiveCommentTargets(next);
+        setLiveCommentTargets((current) => (
+          liveCommentTargetMapsEqual(current, next) ? current : next
+        ));
         setActiveCommentTarget((current) => {
           if (!current) return null;
           if (current.selectionKind === 'pod') return current;
           const updated = next.get(current.elementId);
-          if (updated && isValidCommentOverlayPosition(updated.position)) return updated;
-          return null;
+          if (!updated || !isValidCommentOverlayPosition(updated.position)) return null;
+          return commentSnapshotOverlayEqual(current, updated) ? current : updated;
         });
         setHoveredCommentTarget((current) => {
           if (!current) return null;
           if (current.selectionKind === 'pod') return current;
           const updated = next.get(current.elementId);
-          if (updated && isValidCommentOverlayPosition(updated.position)) return updated;
-          return null;
+          if (!updated || !isValidCommentOverlayPosition(updated.position)) return null;
+          return commentSnapshotOverlayEqual(current, updated) ? current : updated;
         });
         return;
       }
       if (data.type === 'od:comment-active-target-update') {
         const snapshot = snapshotFromData(data);
         if (!snapshot.elementId || !isValidCommentOverlayPosition(snapshot.position)) return;
-        setLiveCommentTargets((current) => new Map(current).set(snapshot.elementId, snapshot));
+        setLiveCommentTargets((current) => {
+          const existing = current.get(snapshot.elementId);
+          if (existing && commentSnapshotOverlayEqual(existing, snapshot)) return current;
+          return new Map(current).set(snapshot.elementId, snapshot);
+        });
         setActiveCommentTarget((current) => (
-          current && current.elementId === snapshot.elementId ? snapshot : current
+          current && current.elementId === snapshot.elementId && !commentSnapshotOverlayEqual(current, snapshot)
+            ? snapshot
+            : current
         ));
         setHoveredCommentTarget((current) => (
-          current && current.elementId === snapshot.elementId ? snapshot : current
+          current && current.elementId === snapshot.elementId && !commentSnapshotOverlayEqual(current, snapshot)
+            ? snapshot
+            : current
         ));
         return;
       }
@@ -5132,8 +5146,14 @@ const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([
       if (data.type === 'od:comment-hover') {
         const snapshot = snapshotFromData(data);
         if (!snapshot.elementId || !isValidCommentOverlayPosition(snapshot.position)) return;
-        setHoveredCommentTarget(snapshot);
-        setLiveCommentTargets((current) => new Map(current).set(snapshot.elementId, snapshot));
+        setHoveredCommentTarget((current) => (
+          current && commentSnapshotOverlayEqual(current, snapshot) ? current : snapshot
+        ));
+        setLiveCommentTargets((current) => {
+          const existing = current.get(snapshot.elementId);
+          if (existing && commentSnapshotOverlayEqual(existing, snapshot)) return current;
+          return new Map(current).set(snapshot.elementId, snapshot);
+        });
         return;
       }
       if (data.type === 'od:comment-target') {

@@ -124,6 +124,35 @@ export function commentVisibleOnDeckSlide(
   return comment.slideIndex === activeSlideIndex;
 }
 
+export function commentSnapshotOverlayEqual(
+  a: PreviewCommentSnapshot,
+  b: PreviewCommentSnapshot,
+): boolean {
+  const positionA = normalizePosition(a.position);
+  const positionB = normalizePosition(b.position);
+  return (
+    a.elementId === b.elementId
+    && a.filePath === b.filePath
+    && positionA.x === positionB.x
+    && positionA.y === positionB.y
+    && positionA.width === positionB.width
+    && positionA.height === positionB.height
+    && (a.slideIndex ?? -1) === (b.slideIndex ?? -1)
+  );
+}
+
+export function liveCommentTargetMapsEqual(
+  current: Map<string, PreviewCommentSnapshot>,
+  next: Map<string, PreviewCommentSnapshot>,
+): boolean {
+  if (current.size !== next.size) return false;
+  for (const [elementId, snapshot] of current) {
+    const candidate = next.get(elementId);
+    if (!candidate || !commentSnapshotOverlayEqual(snapshot, candidate)) return false;
+  }
+  return true;
+}
+
 export function overlayBoundsFromSnapshot(
   snapshot: PreviewCommentSnapshot,
   scale: number,
