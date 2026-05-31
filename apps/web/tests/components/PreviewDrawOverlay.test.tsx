@@ -20,7 +20,7 @@ afterEach(() => {
 });
 
 describe('PreviewDrawOverlay', () => {
-  it('uses the visible primary send action when Enter submits a note', async () => {
+  it('queues a note when Enter submits from the draw input', async () => {
     const annotation = vi.fn();
     window.addEventListener('opendesign:annotation', annotation);
 
@@ -39,7 +39,7 @@ describe('PreviewDrawOverlay', () => {
 
       await waitFor(() => expect(annotation).toHaveBeenCalledTimes(1));
       expect(annotation.mock.calls[0]?.[0].detail).toMatchObject({
-        action: 'send',
+        action: 'queue',
         note: 'Please inspect this panel.',
       });
     } finally {
@@ -96,14 +96,17 @@ describe('PreviewDrawOverlay', () => {
       expect(queueButton.disabled).toBe(false);
 
       fireEvent.keyDown(input!, { key: 'Enter' });
-      fireEvent.click(sendButton);
-      expect(annotation).not.toHaveBeenCalled();
-
-      fireEvent.click(queueButton);
       await waitFor(() => expect(annotation).toHaveBeenCalledTimes(1));
       expect(annotation.mock.calls[0]?.[0]).toMatchObject({
         detail: expect.objectContaining({ action: 'queue' }),
       });
+
+      fireEvent.click(sendButton);
+      expect(annotation).toHaveBeenCalledTimes(1);
+
+      fireEvent.change(input!, { target: { value: 'Queue another note.' } });
+      fireEvent.click(queueButton);
+      await waitFor(() => expect(annotation).toHaveBeenCalledTimes(2));
     } finally {
       window.removeEventListener('opendesign:annotation', annotation);
     }

@@ -42,13 +42,38 @@ vi.mock('../../src/components/AssistantMessage', () => ({
 }));
 
 vi.mock('../../src/components/ChatComposer', () => ({
-  ChatComposer: forwardRef(({ streaming }: { streaming: boolean }, ref) => {
+  ChatComposer: forwardRef(({
+    onSend,
+    streaming,
+  }: {
+    onSend?: (
+      prompt: string,
+      attachments: Array<{ path: string; name: string; kind: 'file' }>,
+      commentAttachments: Array<{ id: string; order: number; filePath: string; comment: string }>,
+    ) => void;
+    streaming: boolean;
+  }, ref) => {
     useImperativeHandle(ref, () => ({
       focus: composerMocks.focus,
       restoreDraft: composerMocks.restoreDraft,
       setDraft: composerMocks.setDraft,
     }));
-    return <output data-testid="composer-streaming">{streaming ? 'streaming' : 'idle'}</output>;
+    return (
+      <>
+        <output data-testid="composer-streaming">{streaming ? 'streaming' : 'idle'}</output>
+        <button
+          type="button"
+          data-testid="composer-submit"
+          onClick={() => onSend?.(
+            'Use a bolder export button',
+            [{ path: 'edited.md', name: 'edited.md', kind: 'file' }],
+            [{ id: 'edited-comment', order: 1, filePath: 'preview.html', comment: 'Bolder' }],
+          )}
+        >
+          submit composer
+        </button>
+      </>
+    );
   }),
 }));
 
@@ -406,13 +431,33 @@ Expected output:
 
     const editButtons = screen.getAllByRole('button', { name: 'Edit' });
     fireEvent.click(editButtons[0]!);
-    const editInput = screen.getByRole('textbox', { name: 'Edit queued task' });
-    expect((editInput as HTMLInputElement).value).toBe(
-      'Make the export button larger and use a warmer accent',
-    );
-    fireEvent.change(editInput, { target: { value: 'Use a bolder export button' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    expect(onUpdateQueuedSend).toHaveBeenCalledWith('queued-1', 'Use a bolder export button');
+    expect(composerMocks.restoreDraft).toHaveBeenCalledWith({
+      text: 'Make the export button larger and use a warmer accent',
+      attachments: [{ path: 'brief.md', name: 'brief.md', kind: 'file' }],
+      commentAttachments: [
+        {
+          id: 'comment-1',
+          order: 1,
+          filePath: 'preview.html',
+          elementId: 'hero',
+          selector: '#hero',
+          label: 'Hero',
+          comment: 'Use a warmer accent',
+          currentText: 'Export',
+          pagePosition: { x: 10, y: 20, width: 30, height: 40 },
+          htmlHint: '<section id="hero">',
+        },
+      ],
+    });
+    expect(onUpdateQueuedSend).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('composer-submit'));
+    expect(onUpdateQueuedSend).toHaveBeenCalledWith('queued-1', {
+      prompt: 'Use a bolder export button',
+      attachments: [{ path: 'edited.md', name: 'edited.md', kind: 'file' }],
+      commentAttachments: [
+        { id: 'edited-comment', order: 1, filePath: 'preview.html', comment: 'Bolder' },
+      ],
+    });
 
     const removeButtons = screen.getAllByRole('button', { name: 'chat.comments.remove' });
     fireEvent.click(removeButtons[1]!);

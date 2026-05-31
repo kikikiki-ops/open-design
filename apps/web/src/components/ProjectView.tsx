@@ -251,7 +251,7 @@ interface QueuedChatSendUpdate {
   prompt: string;
   attachments: ChatAttachment[];
   commentAttachments: ChatCommentAttachment[];
-  meta?: ProjectChatSendMeta;
+  meta?: ChatSendMeta;
 }
 
 let liveArtifactEventSequence = 0;
@@ -770,12 +770,16 @@ export function ProjectView({
   const currentConversationQueuedItems = activeConversationId
     ? queuedChatSends
         .filter((item) => item.conversationId === activeConversationId)
-        .map((item) => ({
-          id: item.id,
-          prompt: item.prompt,
-          attachments: item.attachments,
-          commentAttachments: item.commentAttachments,
-        }))
+        .map((item) => {
+          const queuedItem = {
+            id: item.id,
+            prompt: item.prompt,
+            attachments: item.attachments,
+            commentAttachments: item.commentAttachments,
+          };
+          if (item.meta === undefined) return queuedItem;
+          return { ...queuedItem, meta: item.meta };
+        })
     : [];
   const newConversationDisabled = creatingConversation;
   const activeCompletionNotificationRunsRef = useRef<Set<string>>(new Set());
@@ -2267,13 +2271,15 @@ export function ProjectView({
     const next = queuedChatSendsRef.current.map((item) => {
       if (item.id !== id) return item;
       const meta = stripQueueOnlyFromMeta(update.meta);
-      return {
+      const updated: QueuedChatSend = {
         ...item,
         prompt: update.prompt,
         attachments: update.attachments,
         commentAttachments: update.commentAttachments,
-        ...(meta === undefined ? { meta: undefined } : { meta }),
       };
+      if (meta === undefined) delete updated.meta;
+      else updated.meta = meta;
+      return updated;
     });
     commitQueuedChatSends(next);
   }, [commitQueuedChatSends]);
@@ -4843,6 +4849,57 @@ function isTerminalRunStatus(status: ChatMessage['runStatus']): boolean {
 
 function isActiveRunStatus(status: ChatMessage['runStatus']): boolean {
   return status === 'queued' || status === 'running';
+}
+
+const QUEUED_CHAT_SENDS_STORAGE_VERSION = 1;
+
+function queuedChatSendsStorageKey(projectId: string): string {
+  return `od:chat-queued-sends:${projectId}:v${QUEUED_CHAT_SENDS_STORAGE_VERSION}`;
+}
+
+function loadQueuedChatSends(projectId: string): QueuedChatSend[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(queuedChatSendsStorageKey(projectId));
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(isQueuedChatSend).slice(0, 100);
+  } catch {
+    return [];
+  }
+}
+
+function saveQueuedChatSends(projectId: string, items: QueuedChatSend[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const key = queuedChatSendsStorageKey(projectId);
+    if (items.length === 0) {
+      window.localStorage.removeItem(key);
+      return;
+    }
+    window.localStorage.setItem(key, JSON.stringify(items.slice(0, 100)));
+  } catch {
+    // Ignore private-mode/quota failures. The in-memory queue still works.
+  }
+}
+
+function isQueuedChatSend(value: unknown): value is QueuedChatSend {
+  if (typeof value !== 'object' || value == null || Array.isArray(value)) return false;
+  const record = value as Partial<QueuedChatSend>;
+  return (
+    typeof record.id === 'string' &&
+    typeof record.conversationId === 'string' &&
+    typeof record.prompt === 'string' &&
+    Array.isArray(record.attachments) &&
+    Array.isArray(record.commentAttachments) &&
+    typeof record.createdAt === 'number'
+  );
+}
+
+function stripQueueOnlyFromMeta(meta: ChatSendMeta | undefined): ProjectChatSendMeta | undefined {
+  if (!meta) return undefined;
+  const { queueOnly: _queueOnly, ...rest } = meta;
+  return Object.keys(rest).length > 0 ? rest : undefined;
 }
 
 function compactInlinePreview(value: string): string {

@@ -226,7 +226,7 @@ interface Props {
   sendDisabled?: boolean;
   queuedItems?: QueuedSendItem[];
   onRemoveQueuedSend?: (id: string) => void;
-  onUpdateQueuedSend?: (id: string, prompt: string) => void;
+  onUpdateQueuedSend?: (id: string, update: QueuedSendUpdate) => void;
   onSendQueuedNow?: (id: string) => void;
   // Names that exist in the project folder. Tool cards and chips use this
   // set to decide whether a path can be opened as a tab.
@@ -338,6 +338,14 @@ interface QueuedSendItem {
   prompt: string;
   attachments?: ChatAttachment[];
   commentAttachments?: ChatCommentAttachment[];
+  meta?: ChatSendMeta;
+}
+
+interface QueuedSendUpdate {
+  prompt: string;
+  attachments: ChatAttachment[];
+  commentAttachments: ChatCommentAttachment[];
+  meta?: ChatSendMeta;
 }
 
 export function ChatPane({
@@ -430,6 +438,7 @@ export function ChatPane({
   // the next time the agent emits a different snapshot the card returns,
   // but the same snapshot stays hidden across renders / streaming ticks.
   const [dismissedPinnedTodoKey, setDismissedPinnedTodoKey] = useState<string | null>(null);
+  const [editingQueuedSendId, setEditingQueuedSendId] = useState<string | null>(null);
   const lastAssistantId = [...messages].reverse().find((m) => m.role === 'assistant')?.id;
   const hasActiveRunMessage = messages.some(
     (m) => m.role === 'assistant' && isActiveRunStatus(m.runStatus),
@@ -531,6 +540,21 @@ export function ChatPane({
     lastDraftSignalNonceRef.current = composerDraftSignal.nonce;
     composerRef.current?.setDraft(composerDraftSignal.text);
   }, [composerDraftSignal]);
+
+  useEffect(() => {
+    if (!editingQueuedSendId) return;
+    if (queuedItems.some((item) => item.id === editingQueuedSendId)) return;
+    setEditingQueuedSendId(null);
+  }, [editingQueuedSendId, queuedItems]);
+
+  const restoreQueuedSendToComposer = (item: QueuedSendItem) => {
+    setEditingQueuedSendId(item.id);
+    composerRef.current?.restoreDraft({
+      text: item.prompt,
+      attachments: item.attachments ?? [],
+      commentAttachments: item.commentAttachments ?? [],
+    });
+  };
 
   useEffect(() => {
     const el = logRef.current;
@@ -1282,8 +1306,9 @@ export function ChatPane({
           <QueuedSendStrip
             containerRef={queuedSendStripRef}
             items={queuedItems}
+            editingId={editingQueuedSendId}
+            onEdit={restoreQueuedSendToComposer}
             onRemove={onRemoveQueuedSend}
-            onUpdate={onUpdateQueuedSend}
             onSendNow={onSendQueuedNow}
           />
           <ChatComposer
@@ -1301,6 +1326,19 @@ export function ChatPane({
             onSend={(prompt, attachments, commentAttachments, meta) => {
               pinnedToBottomRef.current = true;
               scrolledToFormRef.current = new Set();
+              if (editingQueuedSendId && onUpdateQueuedSend) {
+                const original = queuedItems.find((item) => item.id === editingQueuedSendId);
+                const update: QueuedSendUpdate = {
+                  prompt,
+                  attachments,
+                  commentAttachments,
+                };
+                const nextMeta = meta ?? original?.meta;
+                if (nextMeta !== undefined) update.meta = nextMeta;
+                onUpdateQueuedSend(editingQueuedSendId, update);
+                setEditingQueuedSendId(null);
+                return;
+              }
               onSend(prompt, attachments, commentAttachments, meta);
             }}
             onStop={onStop}
@@ -1380,38 +1418,23 @@ function PinnedTodoSlot({
 
 function QueuedSendStrip({
   containerRef,
+  editingId,
   items,
+  onEdit,
   onRemove,
   onSendNow,
-  onUpdate,
 }: {
   containerRef?: MutableRefObject<HTMLDivElement | null>;
-  items: Array<{ id: string; prompt: string }>;
+  editingId?: string | null;
+  items: QueuedSendItem[];
+  onEdit?: (item: QueuedSendItem) => void;
   onRemove?: (id: string) => void;
   onSendNow?: (id: string) => void;
-  onUpdate?: (id: string, prompt: string) => void;
 }) {
   const t = useT();
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingDraft, setEditingDraft] = useState('');
   if (items.length === 0) return null;
   const visible = items.slice(0, QUEUED_SEND_VISIBLE_LIMIT);
   const extra = items.length - visible.length;
-  const startEdit = (item: { id: string; prompt: string }) => {
-    setEditingId(item.id);
-    setEditingDraft(item.prompt);
-  };
-  const commitEdit = () => {
-    if (!editingId) return;
-    const next = editingDraft.trim();
-    if (next) onUpdate?.(editingId, next);
-    setEditingId(null);
-    setEditingDraft('');
-  };
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditingDraft('');
-  };
   return (
     <div
       ref={containerRef}
@@ -1434,86 +1457,41 @@ function QueuedSendStrip({
           }`}
           key={item.id}
         >
-          {editingId === item.id ? (
-            <form
-              className="chat-queued-send-edit-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                commitEdit();
-              }}
-            >
-              <input
-                className="chat-queued-send-edit-input"
-                value={editingDraft}
-                // eslint-disable-next-line jsx-a11y/no-autofocus
-                autoFocus
-                onChange={(event) => setEditingDraft(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') {
-                    event.preventDefault();
-                    cancelEdit();
-                  }
-                }}
-                aria-label={t('chat.queuedEditQueuedTaskAria')}
-              />
-              <button
-                type="submit"
-                className="chat-queued-send-action"
-                title={t('chat.queuedSave')}
-                aria-label={t('chat.queuedSave')}
-                disabled={!editingDraft.trim()}
-              >
-                <Icon name="check" size={13} />
-              </button>
+          <span className="chat-queued-send-title">{summarizeQueuedPrompt(item, t)}</span>
+          <div className="chat-queued-send-actions">
+            {onEdit ? (
               <button
                 type="button"
                 className="chat-queued-send-action"
-                title={t('chat.queuedCancel')}
-                aria-label={t('chat.queuedCancel')}
-                onClick={cancelEdit}
+                title={t('chat.queuedEdit')}
+                aria-label={t('chat.queuedEdit')}
+                onClick={() => onEdit(item)}
               >
-                <Icon name="close" size={13} />
+                <Icon name="pencil" size={13} />
               </button>
-            </form>
-          ) : (
-            <>
-              <span className="chat-queued-send-title">{summarizeQueuedPrompt(item.prompt, t)}</span>
-              <div className="chat-queued-send-actions">
-                {onUpdate ? (
-                  <button
-                    type="button"
-                    className="chat-queued-send-action"
-                    title={t('chat.queuedEdit')}
-                    aria-label={t('chat.queuedEdit')}
-                    onClick={() => startEdit(item)}
-                  >
-                    <Icon name="pencil" size={13} />
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  className="chat-queued-send-action"
-                  title={t('chat.send')}
-                  aria-label={t('chat.send')}
-                  onClick={() => onSendNow?.(item.id)}
-                  disabled={!onSendNow}
-                >
-                  <Icon name="arrow-up" size={13} />
-                </button>
-                {onRemove ? (
-                  <button
-                    type="button"
-                    className="chat-queued-send-action"
-                    onClick={() => onRemove(item.id)}
-                    title={t('chat.comments.remove')}
-                    aria-label={t('chat.comments.remove')}
-                  >
-                    <Icon name="trash" size={13} />
-                  </button>
-                ) : null}
-              </div>
-            </>
-          )}
+            ) : null}
+            <button
+              type="button"
+              className="chat-queued-send-action"
+              title={t('chat.send')}
+              aria-label={t('chat.send')}
+              onClick={() => onSendNow?.(item.id)}
+              disabled={!onSendNow}
+            >
+              <Icon name="arrow-up" size={13} />
+            </button>
+            {onRemove ? (
+              <button
+                type="button"
+                className="chat-queued-send-action"
+                onClick={() => onRemove(item.id)}
+                title={t('chat.comments.remove')}
+                aria-label={t('chat.comments.remove')}
+              >
+                <Icon name="trash" size={13} />
+              </button>
+            ) : null}
+          </div>
         </div>
       ))}
       {extra > 0 ? (
@@ -1529,10 +1507,15 @@ function QueuedSendStrip({
 
 const QUEUED_SEND_VISIBLE_LIMIT = 4;
 
-function summarizeQueuedPrompt(prompt: string, t: TranslateFn): string {
-  const normalized = prompt.replace(/\s+/g, ' ').trim();
-  if (!normalized) return t('chat.queuedFollowUpFallback');
-  return normalized.length > 58 ? `${normalized.slice(0, 57)}...` : normalized;
+function summarizeQueuedPrompt(item: QueuedSendItem, t: TranslateFn): string {
+  const normalized = item.prompt.replace(/\s+/g, ' ').trim();
+  const parts = [normalized || t('chat.queuedFollowUpFallback')];
+  const attachmentCount = item.attachments?.length ?? 0;
+  const commentCount = item.commentAttachments?.length ?? 0;
+  if (attachmentCount > 0) parts.push(`${attachmentCount} file${attachmentCount === 1 ? '' : 's'}`);
+  if (commentCount > 0) parts.push(`${commentCount} mark${commentCount === 1 ? '' : 's'}`);
+  const text = parts.join(' · ');
+  return text.length > 58 ? `${text.slice(0, 57)}...` : text;
 }
 
 function CommentsPanel({

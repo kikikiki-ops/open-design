@@ -18,6 +18,7 @@ import {
   writeProjectTextFile,
 } from '../providers/registry';
 import { Icon } from './Icon';
+import { PreviewDrawOverlay } from './PreviewDrawOverlay';
 
 type BrowserHistoryEntry = {
   iconUrl?: string;
@@ -92,6 +93,7 @@ interface DesignBrowserPanelProps {
   onOpenFile: (name: string) => void;
   onRefreshFiles: () => Promise<void> | void;
   onPageInfoChange?: (info: BrowserPageInfo) => void;
+  sendDisabled?: boolean;
 }
 
 export interface BrowserPageInfo {
@@ -384,6 +386,7 @@ export function DesignBrowserPanel({
   onOpenFile,
   onPageInfoChange,
   onRefreshFiles,
+  sendDisabled = false,
 }: DesignBrowserPanelProps) {
   const desktopHostAvailable = isOpenDesignHostAvailable();
   const initialState = initialBrowserState(initialUrl, initialTitle);
@@ -405,6 +408,7 @@ export function DesignBrowserPanel({
   const [menuOpen, setMenuOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [webviewNode, setWebviewNode] = useState<WebviewElement | null>(null);
+  const [drawOverlayOpen, setDrawOverlayOpen] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [savingAction, setSavingAction] = useState<'brief' | 'screenshot' | 'task' | null>(null);
   const addressInputRef = useRef<HTMLInputElement | null>(null);
@@ -822,6 +826,25 @@ export function DesignBrowserPanel({
     }
   }
 
+  async function captureBrowserSnapshot(): Promise<{ dataUrl: string; w: number; h: number } | null> {
+    if (!webviewNode || isBlank) return null;
+    try {
+      const image = await webviewNode.capturePage();
+      const dataUrl = image.toDataURL();
+      const size = await imageSizeFromDataUrl(dataUrl);
+      if (size) return { dataUrl, ...size };
+      const rect = webviewNode.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      return {
+        dataUrl,
+        w: Math.max(1, Math.round(rect.width * dpr)),
+        h: Math.max(1, Math.round(rect.height * dpr)),
+      };
+    } catch {
+      return null;
+    }
+  }
+
   async function savePageBrief() {
     if (!webviewNode || isBlank) {
       setStatusMessage('Open a page before saving a brief');
@@ -1042,6 +1065,16 @@ export function DesignBrowserPanel({
               <Icon name="image" size={15} />
             </IconTooltipButton>
           ) : null}
+          {desktopHostAvailable ? (
+            <IconTooltipButton
+              label="Annotate page"
+              disabled={isBlank}
+              className={drawOverlayOpen ? 'is-active' : ''}
+              onClick={() => setDrawOverlayOpen((open) => !open)}
+            >
+              <Icon name="pencil" size={15} />
+            </IconTooltipButton>
+          ) : null}
           <IconTooltipButton
             label="Save page brief"
             disabled={isBlank || savingAction != null}
@@ -1101,25 +1134,35 @@ export function DesignBrowserPanel({
       </div>
       {statusMessage ? <div className="db-status">{statusMessage}</div> : null}
       <div className="db-content">
-        {isBlank ? (
-          <DesignBrowserStart
-            onNavigate={navigateTo}
-            onSaveHarnessTask={saveHarnessTask}
-            savingTask={savingAction === 'task'}
-          />
-        ) : desktopHostAvailable ? (
-          <webview
-            ref={assignWebviewNode}
-            className="db-webview"
-            src={loadUrl}
-            partition={DESIGN_BROWSER_PARTITION}
-            title={pageTitle}
-          />
-        ) : (
-          <div className="db-fallback">
-            <iframe title={pageTitle} src={loadUrl} />
-          </div>
-        )}
+        <PreviewDrawOverlay
+          active={drawOverlayOpen}
+          captureViewport={!isBlank}
+          captureSnapshot={desktopHostAvailable ? captureBrowserSnapshot : undefined}
+          filePath={isBlank ? undefined : currentUrl}
+          onActiveChange={setDrawOverlayOpen}
+          sendDisabled={sendDisabled}
+          sendDisabledReason="A task is currently running"
+        >
+          {isBlank ? (
+            <DesignBrowserStart
+              onNavigate={navigateTo}
+              onSaveHarnessTask={saveHarnessTask}
+              savingTask={savingAction === 'task'}
+            />
+          ) : desktopHostAvailable ? (
+            <webview
+              ref={assignWebviewNode}
+              className="db-webview"
+              src={loadUrl}
+              partition={DESIGN_BROWSER_PARTITION}
+              title={pageTitle}
+            />
+          ) : (
+            <div className="db-fallback">
+              <iframe title={pageTitle} src={loadUrl} />
+            </div>
+          )}
+        </PreviewDrawOverlay>
       </div>
     </section>
   );
@@ -1536,6 +1579,18 @@ function canUseNativeHistoryNavigation(node: WebviewElement, delta: -1 | 1): boo
   } catch {
     return false;
   }
+}
+
+function imageSizeFromDataUrl(dataUrl: string): Promise<{ w: number; h: number } | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve({
+      w: Math.max(1, img.naturalWidth || img.width),
+      h: Math.max(1, img.naturalHeight || img.height),
+    });
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
 }
 
 export function browserFileName(prefix: string, url: string, extension: 'md' | 'png'): string {

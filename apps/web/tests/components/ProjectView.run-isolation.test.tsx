@@ -391,6 +391,7 @@ describe('ProjectView conversation run isolation', () => {
   let conversationAMessages: ChatMessage[] = [runningAssistant];
 
   beforeEach(() => {
+    window.localStorage.clear();
     resolveConversationBMessages = null;
     conversationAMessages = [runningAssistant];
     listConversations.mockResolvedValue(conversations);
@@ -427,6 +428,7 @@ describe('ProjectView conversation run isolation', () => {
 
   afterEach(() => {
     cleanup();
+    window.localStorage.clear();
     vi.unstubAllGlobals();
     vi.clearAllMocks();
   });
@@ -707,6 +709,25 @@ describe('ProjectView conversation run isolation', () => {
     };
     expect(payload.history?.at(-1)).toMatchObject({ role: 'user', content: 'hello from c' });
   });
+
+  it('restores queued sends after the project view remounts', async () => {
+    reattachDaemonRun.mockImplementation(async () => new Promise<void>(() => {}));
+
+    const firstRender = renderProjectView();
+
+    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
+    await waitFor(() => expect(screen.getByTestId('streaming-state').textContent).toBe('streaming'));
+
+    fireEvent.click(screen.getByTestId('send-message'));
+    await waitFor(() => expect(screen.getByTestId('send-queued-0').textContent).toBe('hello from b'));
+
+    firstRender.unmount();
+    renderProjectView();
+
+    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
+    await waitFor(() => expect(screen.getByTestId('send-queued-0').textContent).toBe('hello from b'));
+  });
+
   it('surfaces conversation message load errors and keeps sends disabled until messages load', async () => {
     let conversationBLoadAttempts = 0;
     listMessages.mockImplementation(async (_projectId: string, conversationId: string) => {

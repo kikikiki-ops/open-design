@@ -56,6 +56,13 @@ function dispatchWebviewTitle(webview: HTMLElement, title: string) {
   });
 }
 
+function getAddressDisplay(container: HTMLElement) {
+  return {
+    title: container.querySelector('.db-address-title')?.textContent ?? '',
+    url: container.querySelector('.db-address-url')?.textContent ?? '',
+  };
+}
+
 describe('DesignBrowserPanel <webview> navigation', () => {
   it('pins the webview src to the load target when the guest commits a redirected URL', () => {
     // Regression guard for the blank-page bug: the embedded <webview> rendered
@@ -75,13 +82,13 @@ describe('DesignBrowserPanel <webview> navigation', () => {
     expect(webview).not.toBeNull();
     // The bare domain is normalized to https and becomes the load target.
     expect(webview!.getAttribute('src')).toBe('https://example.com');
-    expect(input.value).toBe('https://example.com');
+    expect(getAddressDisplay(container).url).toBe('https://example.com');
 
     // The guest commits a redirect that appends a trailing slash.
     dispatchWebviewNavigate(webview!, 'https://example.com/');
 
     // The address bar follows the committed URL...
-    expect(input.value).toBe('https://example.com/');
+    expect(getAddressDisplay(container).url).toBe('https://example.com/');
     // ...but the src remains the original target, so no abort/reload loop.
     expect(webview!.getAttribute('src')).toBe('https://example.com');
   });
@@ -101,7 +108,7 @@ describe('DesignBrowserPanel <webview> navigation', () => {
     // An in-page navigation event must not move the load target.
     dispatchWebviewNavigate(webview, 'https://gsap.com/docs/');
     expect(webview.getAttribute('src')).toBe('https://gsap.com');
-    expect(input.value).toBe('https://gsap.com/docs/');
+    expect(getAddressDisplay(container).url).toBe('https://gsap.com/docs/');
 
     // A fresh user navigation does move it.
     fireEvent.change(input, { target: { value: 'unsplash.com' } });
@@ -133,7 +140,7 @@ describe('DesignBrowserPanel <webview> navigation', () => {
     expect(backButton.disabled).toBe(true);
 
     dispatchWebviewNavigate(webview, 'https://example.com/docs/');
-    expect(input.value).toBe('https://example.com/docs/');
+    expect(getAddressDisplay(container).url).toBe('https://example.com/docs/');
     expect(backButton.disabled).toBe(false);
     expect(forwardButton.disabled).toBe(true);
 
@@ -190,7 +197,10 @@ describe('DesignBrowserPanel <webview> navigation', () => {
     dispatchWebviewTitle(webview, '百度一下，你就知道');
     fireEvent.blur(input);
 
-    expect(input.value).toBe('https://www.baidu.com/ / 百度一下，你就知道');
+    expect(getAddressDisplay(container)).toMatchObject({
+      title: '百度一下，你就知道',
+      url: 'https://www.baidu.com/',
+    });
 
     fireEvent.focus(input);
     expect(input.value).toBe('https://www.baidu.com/');

@@ -1240,6 +1240,7 @@ export function FileWorkspace({
               initialIconUrl={browserTab.iconUrl}
               initialTitle={browserTab.title}
               initialUrl={browserTab.url}
+              sendDisabled={Boolean(streaming)}
               onRefreshFiles={onRefreshFiles}
               onOpenFile={openFile}
               onPageInfoChange={(info) => updateBrowserTabInfo(browserTab.id, info)}

@@ -372,7 +372,7 @@ function normalizeTabsState(value: unknown): OpenTabsState | null {
       ) as OpenTabsState['browserTabs']
     : undefined;
   const state: OpenTabsState = {
-    tabs: record.tabs.slice(),
+    tabs: record.tabs.slice() as string[],
     active: typeof record.active === 'string' ? record.active : null,
   };
   if (browserTabs && browserTabs.length > 0) state.browserTabs = browserTabs;
@@ -417,6 +417,15 @@ function newestTabsState(
   return (second.updatedAt ?? 0) > (first.updatedAt ?? 0) ? second : first;
 }
 
+async function persistTabsToDaemon(projectId: string, state: OpenTabsState): Promise<void> {
+  await fetch(`/api/projects/${encodeURIComponent(projectId)}/tabs`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(state),
+    keepalive: true,
+  });
+}
+
 export async function loadTabs(projectId: string): Promise<OpenTabsState> {
   const cached = readCachedTabs(projectId);
   try {
@@ -424,7 +433,12 @@ export async function loadTabs(projectId: string): Promise<OpenTabsState> {
       `/api/projects/${encodeURIComponent(projectId)}/tabs`,
     );
     if (!resp.ok) return cached ?? { tabs: [], active: null };
-    return newestTabsState(cached, normalizeTabsState(await resp.json()));
+    const saved = normalizeTabsState(await resp.json());
+    const latest = newestTabsState(cached, saved);
+    if (cached && latest === cached && (cached.updatedAt ?? 0) > (saved?.updatedAt ?? 0)) {
+      void persistTabsToDaemon(projectId, cached).catch(() => {});
+    }
+    return latest;
   } catch {
     return cached ?? { tabs: [], active: null };
   }
@@ -436,12 +450,7 @@ export async function saveTabs(
 ): Promise<void> {
   const next = writeCachedTabs(projectId, state);
   try {
-    await fetch(`/api/projects/${encodeURIComponent(projectId)}/tabs`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(next),
-      keepalive: true,
-    });
+    await persistTabsToDaemon(projectId, next);
   } catch {
     // best-effort
   }

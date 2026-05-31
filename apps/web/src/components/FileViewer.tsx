@@ -6682,7 +6682,7 @@ const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([
         });
         setActivePreviewCommentId((current) => (current === commentId ? null : current));
       } : undefined}
-      sending={sendingBoardBatch || streaming}
+      sending={sendingBoardBatch}
       t={t}
       scale={overlayPreviewScale}
       offset={{ x: overlayPreviewTransform.offsetX, y: overlayPreviewTransform.offsetY }}
@@ -6760,7 +6760,7 @@ const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([
         }
       }}
       onCreateComment={savePanelComment}
-      sending={sendingBoardBatch || streaming}
+      sending={sendingBoardBatch}
       t={t}
       composer={null}
     />

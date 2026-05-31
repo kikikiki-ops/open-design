@@ -171,6 +171,7 @@ export interface ChatComposerHandle {
 }
 
 export interface ChatSendMeta {
+  queueOnly?: boolean;
   research?: ResearchOptions;
   context?: RunContextSelection;
   // Per-turn skill ids picked via the @-mention popover. The chat layer
@@ -818,6 +819,10 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       return true;
     }
 
+    function queueMeta(meta?: ChatSendMeta): ChatSendMeta {
+      return { ...(meta ?? {}), queueOnly: true };
+    }
+
     async function insertSkillMention(skill: SkillSummary) {
       const applied = await applyProjectSkill(skill);
       if (!applied) return;
@@ -940,9 +945,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
               const result = await uploadProjectFiles(id, [detail.file]);
               if (result.uploaded.length > 0) {
                 uploaded = result.uploaded;
-                if (detail.action !== 'send') {
-                  setStaged((s) => [...s, ...uploaded]);
-                }
                 const screenshot = uploaded[0];
                 if (screenshot && detail.markKind && detail.bounds) {
                   visualAttachmentInput = {
@@ -967,15 +969,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
                           position: detail.bounds,
                         },
                   };
-                  if (detail.action !== 'send') {
-                    setStagedVisualComments((current) => [
-                      ...current,
-                      buildVisualAnnotationAttachment({
-                        ...visualAttachmentInput!,
-                        order: commentAttachments.length + current.length + 1,
-                      }),
-                    ]);
-                  }
                 }
               }
               if (result.failed.length > 0) {
@@ -988,6 +981,21 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
               }
             }
             setUploading(false);
+
+            if (detail.action === 'queue') {
+              if (visualAttachmentInput) {
+                visualAttachment = buildVisualAnnotationAttachment({
+                  ...visualAttachmentInput,
+                  order: commentAttachments.length + stagedVisualComments.length + 1,
+                });
+              }
+              const prompt = [draft.trim(), detail.note].filter(Boolean).join('\n');
+              const attachments = [...staged, ...uploaded];
+              const nextCommentAttachments = currentCommentAttachments(visualAttachment ? [visualAttachment] : []);
+              sendComposedTurn(prompt, attachments, nextCommentAttachments, queueMeta(currentRunContextMeta()));
+              ack({ ok: true });
+              return;
+            }
 
             if (detail.action === 'send') {
               if (streaming) {
