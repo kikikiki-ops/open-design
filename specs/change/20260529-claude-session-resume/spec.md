@@ -157,13 +157,24 @@ it stays Claude-first and opt-out-able:
 Three additions, all behind a Claude-only capability gate:
 
 1. **Capture + persist** the Claude `session_id` (already parsed) keyed on
-   `(conversationId, agentId)`, plus a `historyEpoch` snapshot and the run's
-   `workDir`. Update on run success. `workDir` is a **resume guard**, not just
-   the spawn cwd: Claude Code sessions live under a per-cwd path, so
-   `claude --resume <id>` is only meaningful from the same working directory that
-   produced the session — `resolveResumeDecision()` rejects a pinned row whose
-   `workDir` differs from the current run's. This is the OD analog of multica's
-   "same runtime" guard.
+   `(conversationId, agentId)`, plus a `historyEpoch` snapshot, the run's
+   `workDir`, and a `runtimeId` runtime-identity fingerprint. Update on run
+   success. Two distinct guards ride these fields:
+   - `workDir` is a **cwd-scope guard**, not just the spawn cwd: Claude Code
+     sessions live under a per-cwd path, so `claude --resume <id>` is only
+     meaningful from the same working directory that produced the session —
+     `resolveResumeDecision()` rejects a pinned row whose `workDir` differs from
+     the current run's.
+   - `runtimeId` is the OD analog of multica's **"same runtime" guard** (multica's
+     guard is about the *producing runtime*, not just the cwd). The Claude adapter
+     can resolve through different binaries/forks (`fallbackBins` includes
+     `openclaude`, Research lines 140-141), and a session created by one
+     executable is not guaranteed resumable by another. `runtimeId` is a small,
+     stable fingerprint of the resolved runtime (e.g. the resolved bin path plus
+     its `--resume` capability probe result); `resolveResumeDecision()` rejects a
+     pinned row whose `runtimeId` differs from the current run's resolved runtime,
+     so a mid-conversation binary/fork swap falls back to a transcript spawn
+     rather than attempting `--resume` against a foreign session.
 2. **Decide** at run start whether to resume: a pure `resolveResumeDecision()`
    helper that returns a `sessionId` only when every guard passes.
 3. **Apply**: when resuming, `buildArgs` appends `--resume <id>` and the prompt
@@ -172,7 +183,7 @@ Three additions, all behind a Claude-only capability gate:
 
 ```
 turn N:   claude system/init → session_id  ──pin──▶ conversation_agent_session
-                                                     (conv, agent, sid, epoch, wd)
+                                                     (conv, agent, sid, epoch, wd, rt)
 turn N+1: resolveResumeDecision(conv, agent, epoch, forceFresh, caps)
             │ pass → buildArgs(+--resume sid) + skipTranscript + anti-echo guard
             │ fail → today's full-transcript cold spawn
@@ -183,12 +194,15 @@ turn N+1: resolveResumeDecision(conv, agent, epoch, forceFresh, caps)
 
 - `packages/contracts`: add `forceFreshSession?: boolean` to the chat/run
   request DTO; add `sessionResumed?: boolean` to run status/telemetry shape.
-- `apps/daemon/src/db.ts`: add `history_epoch INTEGER NOT NULL DEFAULT 0` to
-  `conversations` (the live conversation epoch, bumped on history edit / truncate
-  / retry); new `conversation_agent_session` table + queries (the table's
-  `historyEpoch` column records the epoch a session was *pinned under*, distinct
-  from the live `conversations.history_epoch`); stop stripping `session_id` so it
-  reaches the pin path.
+- `apps/daemon/src/db.ts`: add a `conversation_agent_epoch` table keyed on
+  `(conversation_id, agent_id)` with `history_epoch INTEGER NOT NULL DEFAULT 0`
+  (the live **agent-scoped** epoch, bumped only when a mutation affects *that
+  agent's* scoped history — edit / truncate / retry of a turn inside
+  `scopeHistoryToAgent`'s slice for that agent); new `conversation_agent_session`
+  table + queries (its `historyEpoch` column records the epoch a session was
+  *pinned under*, distinct from the live `conversation_agent_epoch.history_epoch`;
+  its `runtimeId` column records the runtime fingerprint a session was *produced
+  by*); stop stripping `session_id` so it reaches the pin path.
 - `apps/daemon/src/runtimes/types.ts`: extend `RuntimeContext` with
   `resumeSessionId?: string`; add `supportsSessionResume` capability key.
 - `apps/daemon/src/runtimes/defs/claude.ts`: probe `--resume`; emit it when
@@ -196,8 +210,10 @@ turn N+1: resolveResumeDecision(conv, agent, epoch, forceFresh, caps)
 - `apps/daemon/src/server.ts`: `resolveResumeDecision()`, pin-on-success,
   resume-aware `skipTranscript`, anti-echo guard line, runtime-rejection
   fallback.
-- `apps/web/src/`: force-fresh control in the composer; bump epoch on history
-  edit/retry.
+- `apps/web/src/`: force-fresh control in the composer; bump the live
+  agent-scoped epoch on history edit/retry, scoped to the agent(s) whose
+  `scopeHistoryToAgent` slice the edited/truncated turn belongs to (so editing a
+  Codex-only turn does not invalidate Claude's pinned session).
 - `apps/daemon/src/cli.ts`: `--fresh-session` flag on the run path (dual-track).
 
 ### Design Decisions
@@ -221,15 +237,25 @@ turn N+1: resolveResumeDecision(conv, agent, epoch, forceFresh, caps)
 2. **Store a pointer keyed on `(conversationId, agentId)`** — the OD analog of
    multica's per-(agent, issue) session. A dedicated small table avoids bloating
    `conversations` and makes the agent-switch guard a natural key miss.
-3. **`historyEpoch` guard.** The conversation carries a monotonic epoch bumped
-   whenever history is edited, truncated, or a turn is retried. The live epoch is
-   the new `conversations.history_epoch` column (the web edit/retry path issues
-   the bump); the pinned `conversation_agent_session.historyEpoch` records the
-   epoch a session was produced under. At run start the daemon reads
-   `conversations.history_epoch` for the active conversation to form
-   `currentHistoryEpoch`, then `resolveResumeDecision()` compares it against the
-   pinned row; a mismatch invalidates resume (Claude's immutable session would
-   diverge from OD's edited history). This is OD's addition over multica.
+3. **`historyEpoch` guard (agent-scoped).** Each `(conversation, agent)` carries
+   a monotonic epoch bumped whenever *that agent's scoped history* is edited,
+   truncated, or retried. The epoch is **agent-scoped, not conversation-wide**,
+   because the resumable state itself is agent-scoped: OD scopes the prompt
+   transcript to the active agent (`scopeHistoryToAgent`, Research lines 79-83)
+   and pins the session pointer by `(conversationId, agentId)` (Design Decision
+   #2). A conversation-wide epoch would let an edit to a *Codex-only* turn bump
+   the key and invalidate Claude's pinned session even though Claude's scoped
+   history — the actual prompt source — never changed, making the invalidation
+   model stricter than the prompt source. The live epoch therefore lives in the
+   new `conversation_agent_epoch` table keyed on `(conversationId, agentId)` (the
+   web edit/retry path issues the bump only for the agent(s) whose scoped slice
+   the mutation touches); the pinned `conversation_agent_session.historyEpoch`
+   records the epoch a session was produced under. At run start the daemon reads
+   `conversation_agent_epoch.history_epoch` for the active `(conversation, agent)`
+   to form `currentHistoryEpoch`, then `resolveResumeDecision()` compares it
+   against the pinned row; a mismatch invalidates resume (Claude's immutable
+   session would diverge from that agent's edited history). This is OD's addition
+   over multica.
 4. **Best-effort with guaranteed fallback.** If `claude --resume` exits early
    reporting an unknown/invalid session, retry the same turn once without
    `--resume` and with the full transcript. Worst case equals today.
@@ -266,11 +292,18 @@ per `AGENTS.md`:
   `--resume` AND turn 2's prompt contains the full transcript.
 - **Force-fresh.** Retry-from-message and `--fresh-session` → no `--resume` AND
   full transcript present.
-- **History-edit epoch guard.** Editing a prior turn bumps epoch → no `--resume`
-  AND full transcript present.
+- **History-edit epoch guard.** Editing a prior turn in the active agent's scoped
+  history bumps that agent's epoch → no `--resume` AND full transcript present.
+  Conversely, editing a turn that belongs only to a *different* agent's scoped
+  history (e.g. a Codex-only turn) must NOT bump Claude's epoch → Claude still
+  resumes with `--resume`.
 - **Work-dir guard.** A pinned session whose `workDir` differs from the current
   run's (e.g. the conversation's project cwd moved) → no `--resume` AND full
   transcript present.
+- **Same-runtime guard.** A pinned session whose `runtimeId` differs from the
+  current run's resolved runtime (e.g. the Claude bin resolved to `openclaude` on
+  turn 2 while cwd and agent stayed the same) → no `--resume` AND full transcript
+  present.
 - **Runtime-rejection fallback.** Stub a `claude` that rejects `--resume` → the
   daemon retries WITHOUT `--resume` AND WITH the full transcript, and the run
   still succeeds.
@@ -294,9 +327,12 @@ function resolveResumeDecision(ctx): string | null {
   if (!hasPriorAssistantTurn) return null;
   const row = getConversationAgentSession(db, conversationId, agentId);
   if (!row || row.agentId !== agentId) return null;          // agent-switch guard
-  // currentHistoryEpoch is read from conversations.history_epoch at run start.
+  // currentHistoryEpoch is read from conversation_agent_epoch for THIS
+  // (conversationId, agentId) at run start — agent-scoped, so a Codex-only edit
+  // never invalidates Claude's pinned session.
   if (row.historyEpoch !== currentHistoryEpoch) return null; // edit guard
   if (row.workDir !== currentWorkDir) return null;           // cwd-scope guard
+  if (row.runtimeId !== currentRuntimeId) return null;       // same-runtime guard
   return row.sessionId;
 }
 
@@ -313,7 +349,7 @@ const skipTranscript = resumeSessionId != null;
 // on run success (mirrors multica PinTaskSession)
 if (finalSessionId) upsertConversationAgentSession(db, {
   conversationId, agentId, sessionId: finalSessionId,
-  historyEpoch: currentHistoryEpoch, workDir,
+  historyEpoch: currentHistoryEpoch, workDir, runtimeId: currentRuntimeId,
 });
 
 // runtime rejection
@@ -332,7 +368,8 @@ if (exitedWith('unknown session') && usedResume) {
 
 1. Land this spec (this PR).
 2. Contracts: `forceFreshSession`, `sessionResumed`.
-3. DB: `conversation_agent_session` table + queries; stop dropping `session_id`.
+3. DB: `conversation_agent_session` (with `runtimeId`) + `conversation_agent_epoch`
+   tables + queries; stop dropping `session_id`.
 4. Runtime: `RuntimeContext.resumeSessionId`, `supportsSessionResume` probe,
    `--resume` in `claude.ts`.
 5. Server: `resolveResumeDecision`, pin-on-success, resume-aware skipTranscript,
