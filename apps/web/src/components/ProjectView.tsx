@@ -708,7 +708,8 @@ export function ProjectView({
   const reattachControllersRef = useRef<Map<string, AbortController>>(new Map());
   const reattachCancelControllersRef = useRef<Map<string, AbortController>>(new Map());
   const completedReattachRunsRef = useRef<Set<string>>(new Set());
-  const [queuedAutoStartBlocked, setQueuedAutoStartBlocked] = useState(false);
+  const startingQueuedChatSendIdRef = useRef<string | null>(null);
+  const [queuedAutoStartTick, setQueuedAutoStartTick] = useState(0);
   const skillCache = useRef<Map<string, string>>(new Map());
   const designCache = useRef<Map<string, string>>(new Map());
   const templateCache = useRef<Map<string, ProjectTemplate>>(new Map());
@@ -3080,17 +3081,17 @@ export function ProjectView({
 
   useEffect(() => {
     if (currentConversationBusy) {
-      if (queuedAutoStartBlocked) setQueuedAutoStartBlocked(false);
+      startingQueuedChatSendIdRef.current = null;
       return;
     }
-    if (queuedAutoStartBlocked) return;
+    if (startingQueuedChatSendIdRef.current) return;
     if (!activeConversationId) return;
     if (messagesConversationIdRef.current !== activeConversationId) return;
     const next = queuedChatSendsRef.current.find(
       (item) => item.conversationId === activeConversationId,
     );
     if (!next) return;
-    setQueuedAutoStartBlocked(true);
+    startingQueuedChatSendIdRef.current = next.id;
     void (async () => {
       const started = await handleSend(
         next.prompt,
@@ -3098,13 +3099,23 @@ export function ProjectView({
         next.commentAttachments,
         next.meta,
       );
-      if (started) removeQueuedChatSend(next.id);
-      window.setTimeout(() => setQueuedAutoStartBlocked(false), 0);
+      if (!started) {
+        if (startingQueuedChatSendIdRef.current === next.id) {
+          startingQueuedChatSendIdRef.current = null;
+        }
+        return;
+      }
+      removeQueuedChatSend(next.id);
+      window.setTimeout(() => {
+        if (startingQueuedChatSendIdRef.current !== next.id) return;
+        startingQueuedChatSendIdRef.current = null;
+        setQueuedAutoStartTick((tick) => tick + 1);
+      }, 0);
     })();
   }, [
     activeConversationId,
     currentConversationBusy,
-    queuedAutoStartBlocked,
+    queuedAutoStartTick,
     queuedChatSends,
     handleSend,
     removeQueuedChatSend,
