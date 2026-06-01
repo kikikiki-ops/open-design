@@ -861,6 +861,7 @@ function AppInner() {
     async (options?: { throwOnError?: boolean; agentCliEnv?: AppConfig['agentCliEnv'] }) => {
       if (options && Object.prototype.hasOwnProperty.call(options, 'agentCliEnv')) {
         const nextConfig = { ...config, agentCliEnv: options.agentCliEnv ?? {} };
+        amrModelsRef.current = null;
         saveConfig(nextConfig);
         await syncConfigToDaemon(nextConfig);
         setConfig(nextConfig);

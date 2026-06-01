@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../../src/App';
@@ -23,10 +23,19 @@ vi.mock('../../src/router', () => ({
 }));
 
 vi.mock('../../src/components/EntryView', () => ({
-  EntryView: ({ agents }: { agents: Array<{ id: string; models?: Array<{ id: string }> }> }) => (
-    <div data-testid="amr-model">
-      {agents.find((agent) => agent.id === 'amr')?.models?.[0]?.id ?? 'none'}
-    </div>
+  EntryView: ({
+    agents,
+    onOpenSettings,
+  }: {
+    agents: Array<{ id: string; models?: Array<{ id: string }> }>;
+    onOpenSettings: () => void;
+  }) => (
+    <>
+      <div data-testid="amr-model">
+        {agents.find((agent) => agent.id === 'amr')?.models?.[0]?.id ?? 'none'}
+      </div>
+      <button onClick={() => onOpenSettings()}>open settings</button>
+    </>
   ),
 }));
 
@@ -43,7 +52,22 @@ vi.mock('../../src/components/pet/pets', () => ({
 }));
 
 vi.mock('../../src/components/SettingsDialog', () => ({
-  SettingsDialog: () => null,
+  SettingsDialog: ({
+    onRefreshAgents,
+  }: {
+    onRefreshAgents: (options?: { agentCliEnv?: AppConfig['agentCliEnv'] }) => void | Promise<void>;
+  }) => (
+    <button
+      onClick={() =>
+        void onRefreshAgents({
+          agentCliEnv: {
+            amr: { VELA_PROFILE: 'next-profile' },
+          },
+        })}
+    >
+      rescan agents
+    </button>
+  ),
 }));
 
 vi.mock('../../src/providers/registry', async () => {
@@ -284,5 +308,53 @@ describe('App AMR polling', () => {
 
     expect(mockedFetchAmrModels).toHaveBeenCalledTimes(11);
     expect(screen.getByTestId('amr-model').textContent).toBe('preset-a');
+  });
+
+  it('does not merge stale AMR remote models over a rescan with new agent env', async () => {
+    mockedFetchAmrModels.mockReset();
+    mockedFetchAmrModels.mockResolvedValue({
+      source: 'remote',
+      refreshing: false,
+      models: [{ id: 'old-remote', label: 'old-remote' }],
+    });
+    mockedFetchAgents
+      .mockResolvedValueOnce([
+        {
+          id: 'amr',
+          name: 'AMR',
+          bin: 'vela',
+          available: true,
+          version: '1.0.0',
+          models: [],
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'amr',
+          name: 'AMR',
+          bin: 'vela',
+          available: true,
+          version: '1.0.0',
+          models: [{ id: 'new-probe', label: 'new-probe' }],
+        },
+      ]);
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('amr-model').textContent).toBe('old-remote');
+    });
+
+    fireEvent.click(screen.getByText('open settings'));
+
+    await waitFor(() => {
+      expect(screen.getByText('rescan agents')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByText('rescan agents'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('amr-model').textContent).toBe('new-probe');
+    });
+    expect(mockedFetchAmrModels).toHaveBeenCalledTimes(1);
   });
 });
