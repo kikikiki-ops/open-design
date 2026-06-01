@@ -158,11 +158,13 @@ export async function assertFreshToolBuild(toolName, toolRoot) {
 
 async function main(argv) {
   const [command, toolName, toolRootArg] = argv;
-  if (command !== "write") {
-    throw new Error(`usage: ${basename(fileURLToPath(import.meta.url))} write <tool-name> [tool-root]`);
+  if (command !== "write" && command !== "check") {
+    throw new Error(`usage: ${basename(fileURLToPath(import.meta.url))} <write|check> <tool-name> [tool-root]`);
   }
   const toolRoot = toolRootArg == null ? process.cwd() : resolve(toolRootArg);
-  const result = await writeToolBuildMetadata(toolName, toolRoot);
+  const result = command === "write"
+    ? await writeToolBuildMetadata(toolName, toolRoot)
+    : await assertFreshToolBuild(toolName, toolRoot);
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 

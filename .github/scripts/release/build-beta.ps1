@@ -19,6 +19,12 @@ $ErrorActionPreference = "Stop"
 $scriptStartedAt = Get-Date
 $script:timings = @()
 $script:failureMessage = $null
+$script:node24Version = $null
+$script:pnpmVersion = $null
+$script:pnpmInstallFingerprint = $null
+$script:pnpmInstallInputs = 0
+$script:pnpmInstallReuse = $false
+$script:pnpmInstallReuseReason = $null
 $script:requestedWindowsSigningEnabled = $false
 $script:signingFallbackReason = $null
 
@@ -38,6 +44,17 @@ $winSigningThumbprint = "8617C437D6CCE5A61758C27E684BF5CADC5AC0A7"
 function Require-File([string]$Path, [string]$Name) {
   if (-not (Test-Path -LiteralPath $Path)) {
     throw "$Name is required at $Path"
+  }
+}
+
+function Get-Sha256Text([string]$Value) {
+  $sha256 = [System.Security.Cryptography.SHA256]::Create()
+  try {
+    return -join ($sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($Value)) | ForEach-Object {
+      $_.ToString("x2")
+    })
+  } finally {
+    $sha256.Dispose()
   }
 }
 
@@ -146,6 +163,148 @@ function Read-GitHubOutput([string]$Path) {
     $outputs[$line.Substring(0, $index)] = $line.Substring($index + 1)
   }
   return $outputs
+}
+
+function Get-WorkspaceInstallTrackedFiles {
+  $patterns = @(
+    "package.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "apps/*/package.json",
+    "packages/*/package.json",
+    "tools/*/package.json"
+  )
+  $files = @(
+    git -C $workspaceRoot ls-files -- @patterns |
+      ForEach-Object { $_.Trim() } |
+      Where-Object { $_.Length -gt 0 } |
+      Sort-Object -Unique
+  )
+  if ($LASTEXITCODE -ne 0) {
+    throw "git ls-files failed while collecting workspace install inputs"
+  }
+  return $files
+}
+
+function Get-WorkspaceInstallState {
+  $files = Get-WorkspaceInstallTrackedFiles
+  $entries = @(
+    foreach ($relativePath in $files) {
+      $absolutePath = Join-Path $workspaceRoot $relativePath
+      if (-not (Test-Path -LiteralPath $absolutePath)) {
+        throw "workspace install input missing: $absolutePath"
+      }
+      $item = Get-Item -LiteralPath $absolutePath
+      [ordered]@{
+        path = $relativePath.Replace("\", "/")
+        sha256 = (Get-FileHash -LiteralPath $absolutePath -Algorithm SHA256).Hash.ToLowerInvariant()
+        size = $item.Length
+      }
+    }
+  )
+  $fingerprintInput = [ordered]@{
+    files = $entries
+    node24Version = $script:node24Version
+    pnpmVersion = $script:pnpmVersion
+  }
+  return [ordered]@{
+    files = $entries
+    fingerprint = Get-Sha256Text (($fingerprintInput | ConvertTo-Json -Depth 6 -Compress))
+    inputs = $entries.Count
+    node24Version = $script:node24Version
+    pnpmVersion = $script:pnpmVersion
+  }
+}
+
+function Test-WorkspaceInstallReusable {
+  $stampPath = Join-Path $platformRoot "workspace-install-state.json"
+  if (-not (Test-Path -LiteralPath $stampPath)) {
+    return [ordered]@{
+      reusable = $false
+      reason = "install stamp missing"
+      stampPath = $stampPath
+      state = $null
+    }
+  }
+  if (-not (Test-Path -LiteralPath (Join-Path $workspaceRoot "node_modules\.pnpm"))) {
+    return [ordered]@{
+      reusable = $false
+      reason = "node_modules/.pnpm missing"
+      stampPath = $stampPath
+      state = $null
+    }
+  }
+  if (-not (Test-Path -LiteralPath (Join-Path $workspaceRoot "tools\pack\dist\index.mjs"))) {
+    return [ordered]@{
+      reusable = $false
+      reason = "tools-pack dist missing"
+      stampPath = $stampPath
+      state = $null
+    }
+  }
+  if (-not (Test-Path -LiteralPath (Join-Path $workspaceRoot "tools\pack\dist\metadata.json"))) {
+    return [ordered]@{
+      reusable = $false
+      reason = "tools-pack metadata missing"
+      stampPath = $stampPath
+      state = $null
+    }
+  }
+
+  $state = Get-WorkspaceInstallState
+  $stamp = Read-JsonFile $stampPath
+  if ($stamp -eq $null) {
+    return [ordered]@{
+      reusable = $false
+      reason = "install stamp unreadable"
+      stampPath = $stampPath
+      state = $state
+    }
+  }
+  if ([string]$stamp.fingerprint -ne $state.fingerprint) {
+    return [ordered]@{
+      reusable = $false
+      reason = "install fingerprint changed"
+      stampPath = $stampPath
+      state = $state
+    }
+  }
+
+  try {
+    Invoke-Node24 -Arguments @(
+      "node",
+      ".\scripts\tool-build-metadata.mjs",
+      "check",
+      "tools-pack",
+      ".\tools\pack"
+    )
+    Invoke-Node24 -Arguments @("pnpm.cmd", "exec", "tsx", "--version")
+  } catch {
+    return [ordered]@{
+      reusable = $false
+      reason = "workspace install probe failed"
+      stampPath = $stampPath
+      state = $state
+    }
+  }
+
+  return [ordered]@{
+    reusable = $true
+    reason = "workspace install state unchanged"
+    stampPath = $stampPath
+    state = $state
+  }
+}
+
+function Write-WorkspaceInstallState([hashtable]$State, [string]$StampPath) {
+  $payload = [ordered]@{
+    fingerprint = $State.fingerprint
+    generatedAt = (Get-Date).ToUniversalTime().ToString("o")
+    inputs = $State.inputs
+    node24Version = $State.node24Version
+    pnpmVersion = $State.pnpmVersion
+  }
+  $payload | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $StampPath -Encoding utf8
 }
 
 function Repair-ElectronDist {
@@ -275,6 +434,10 @@ function Write-IndexAndSummary([string]$Status) {
     channel = "beta"
     lane = $Lane
     namespace = $Namespace
+    pnpmInstallFingerprint = $script:pnpmInstallFingerprint
+    pnpmInstallInputs = $script:pnpmInstallInputs
+    pnpmInstallReuse = $script:pnpmInstallReuse
+    pnpmInstallReuseReason = $script:pnpmInstallReuseReason
     platform = $Platform
     target = $Target
     signed = $script:windowsSigningEnabled
@@ -313,6 +476,7 @@ function Write-IndexAndSummary([string]$Status) {
     "- signingRequested: ``$script:requestedWindowsSigningEnabled``",
     "- lane: ``$Lane``",
     "- namespace: ``$Namespace``",
+    "- pnpmInstallReuse: ``$script:pnpmInstallReuse``",
     "- releaseVersion: ``$ReleaseVersion``",
     "- smokeMode: ``$SmokeMode``",
     "- duration: ``$(Format-Duration $durationMs)``",
@@ -325,6 +489,9 @@ function Write-IndexAndSummary([string]$Status) {
   }
   if ($script:signingFallbackReason -ne $null) {
     $summary += "- signingFallback: ``$script:signingFallbackReason``"
+  }
+  if ($script:pnpmInstallReuseReason -ne $null) {
+    $summary += "- pnpmInstallReuseReason: ``$script:pnpmInstallReuseReason``"
   }
 
   if ($artifactSummary -ne $null) {
@@ -419,8 +586,10 @@ try {
     Require-File $makensis "makensis"
     git --version
     git lfs version
-    & $fnm exec --using=24 -- node --version
-    & $fnm exec --using=24 -- pnpm.cmd --version
+    $script:node24Version = (& $fnm exec --using=24 -- node --version | Select-Object -Last 1).Trim()
+    Write-Host $script:node24Version
+    $script:pnpmVersion = (& $fnm exec --using=24 -- pnpm.cmd --version | Select-Object -Last 1).Trim()
+    Write-Host $script:pnpmVersion
     & $cargo --version
     & $makensis /VERSION
   }
@@ -444,7 +613,26 @@ try {
   }
 
   Measure-Step "pnpm install" {
+    $reuse = Test-WorkspaceInstallReusable
+    if ($reuse.state -ne $null) {
+      $script:pnpmInstallFingerprint = $reuse.state.fingerprint
+      $script:pnpmInstallInputs = $reuse.state.inputs
+    }
+    if ($reuse.reusable) {
+      $script:pnpmInstallReuse = $true
+      $script:pnpmInstallReuseReason = [string]$reuse.reason
+      Write-Host "Skipping pnpm install: $($reuse.reason)"
+      return
+    }
+
+    $script:pnpmInstallReuse = $false
+    $script:pnpmInstallReuseReason = [string]$reuse.reason
+    Write-Host "Running pnpm install: $($reuse.reason)"
     Invoke-Node24 -Arguments @("pnpm.cmd", "install", "--frozen-lockfile", "--prefer-offline")
+    $state = if ($reuse.state -ne $null) { $reuse.state } else { Get-WorkspaceInstallState }
+    $script:pnpmInstallFingerprint = $state.fingerprint
+    $script:pnpmInstallInputs = $state.inputs
+    Write-WorkspaceInstallState -State $state -StampPath $reuse.stampPath
   }
 
   Measure-Step "tools-pack dist bundle" {

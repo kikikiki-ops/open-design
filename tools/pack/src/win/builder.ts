@@ -48,6 +48,11 @@ import {
   resolveWinSigningCacheKey,
   signAndVerifyWinFile,
 } from "./sign.js";
+import {
+  readWinExecutableVersionSnapshot,
+  resolveWinExecutableVersionTargets,
+  rewriteWinExecutableVersion,
+} from "./version-resource.js";
 import { buildWinPortableZip } from "./zip.js";
 import type {
   ElectronBuilderDirCacheMetadata,
@@ -58,6 +63,7 @@ import type {
 
 const execFileAsync = promisify(execFile);
 const WIN_ARCHIVE_CACHE_VERSION = 3;
+const WIN_ELECTRON_BUILDER_DIR_CACHE_VERSION = 6;
 
 async function assertWebStandaloneOutput(config: ToolPackConfig): Promise<void> {
   const webRoot = join(config.workspaceRoot, "apps", "web");
@@ -103,12 +109,34 @@ async function writeWebStandaloneHookConfig(config: ToolPackConfig, paths: WinPa
   return paths.webStandaloneHookConfigPath;
 }
 
-async function runElectronBuilderRaw(config: ToolPackConfig, paths: WinPaths, projectDir: string): Promise<void> {
+async function runElectronBuilderRaw(
+  config: ToolPackConfig,
+  paths: WinPaths,
+  projectDir: string,
+): Promise<WinPackTiming[]> {
+  const segments: WinPackTiming[] = [];
+  const runSegment = async <T>(
+    phase: string,
+    task: () => Promise<T>,
+    details?: Record<string, unknown>,
+  ): Promise<T> => {
+    const startedAt = Date.now();
+    try {
+      return await task();
+    } finally {
+      segments.push({ details, durationMs: Date.now() - startedAt, phase });
+    }
+  };
+
   const namespaceToken = sanitizeNamespace(config.namespace);
-  const packagedVersion = await readPackagedVersion(config);
+  const packagedVersion = await runSegment("electron-builder-raw:read-packaged-version", async () =>
+    readPackagedVersion(config)
+  );
   const packageVersion = electronBuilderVersionForAppVersion(packagedVersion);
   const webStandaloneHookConfigPath = config.webOutputMode === "standalone"
-    ? await writeWebStandaloneHookConfig(config, paths)
+    ? await runSegment("electron-builder-raw:write-web-standalone-hook-config", async () =>
+      writeWebStandaloneHookConfig(config, paths)
+    )
     : null;
   const builderConfig = {
     appId: "io.open-design.desktop",
@@ -161,40 +189,57 @@ async function runElectronBuilderRaw(config: ToolPackConfig, paths: WinPaths, pr
     },
   };
 
-  await removeTree(paths.appBuilderOutputRoot);
-  await mkdir(dirname(paths.appBuilderConfigPath), { recursive: true });
-  await writeNsisInclude(config, paths);
-  await writeFile(paths.appBuilderConfigPath, `${JSON.stringify(builderConfig, null, 2)}\n`, "utf8");
-  const build = async () => {
-    await execFileAsync(process.execPath, [
-      config.electronBuilderCliPath,
-      "--win",
-      "--projectDir",
+  await runSegment("electron-builder-raw:prepare-config", async () => {
+    await removeTree(paths.appBuilderOutputRoot);
+    await mkdir(dirname(paths.appBuilderConfigPath), { recursive: true });
+    await writeNsisInclude(config, paths);
+    await writeFile(paths.appBuilderConfigPath, `${JSON.stringify(builderConfig, null, 2)}\n`, "utf8");
+  });
+
+  const build = async (phase: string) => {
+    await runSegment(phase, async () => {
+      await execFileAsync(process.execPath, [
+        config.electronBuilderCliPath,
+        "--win",
+        "--projectDir",
+        projectDir,
+        "--config",
+        paths.appBuilderConfigPath,
+        "--publish",
+        "never",
+      ], {
+        cwd: config.workspaceRoot,
+        env: {
+          ...process.env,
+          CSC_IDENTITY_AUTO_DISCOVERY: "false",
+          ...(webStandaloneHookConfigPath == null ? {} : { [WEB_STANDALONE_HOOK_CONFIG_ENV]: webStandaloneHookConfigPath }),
+        },
+      });
+    }, {
+      electronBuilderCliPath: config.electronBuilderCliPath,
       projectDir,
-      "--config",
-      paths.appBuilderConfigPath,
-      "--publish",
-      "never",
-    ], {
-      cwd: config.workspaceRoot,
-      env: {
-        ...process.env,
-        CSC_IDENTITY_AUTO_DISCOVERY: "false",
-        ...(webStandaloneHookConfigPath == null ? {} : { [WEB_STANDALONE_HOOK_CONFIG_ENV]: webStandaloneHookConfigPath }),
-      },
+      webOutputMode: config.webOutputMode,
     });
   };
-  await ensureNsisPersianLanguageAlias(config);
+
+  await runSegment("electron-builder-raw:ensure-nsis-persian-alias", async () => {
+    await ensureNsisPersianLanguageAlias(config);
+  });
   try {
-    await build();
+    await build("electron-builder-raw:process");
   } catch (error) {
     const output = `${(error as { stdout?: unknown }).stdout ?? ""}\n${(error as { stderr?: unknown }).stderr ?? ""}`;
-    if (output.includes("Persian.nlf") && await ensureNsisPersianLanguageAlias(config)) {
-      await build();
-      return;
+    const retried = output.includes("Persian.nlf") && await runSegment(
+      "electron-builder-raw:retry-ensure-nsis-persian-alias",
+      async () => ensureNsisPersianLanguageAlias(config),
+    );
+    if (retried) {
+      await build("electron-builder-raw:process-retry");
+      return segments;
     }
     throw error;
   }
+  return segments;
 }
 
 function createCacheLocalWinPaths(paths: WinPaths, entryRoot: string): WinPaths {
@@ -240,6 +285,54 @@ async function rewriteUnpackedAppPackageVersion(unpackedRoot: string, packagedVe
   await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`, "utf8");
 }
 
+async function assertMaterializedUnpackedVersionConsistency(
+  unpackedRoot: string,
+  packagedVersion: string,
+): Promise<void> {
+  const packageJsonPath = join(unpackedRoot, "resources", "app", "package.json");
+  const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8")) as { version?: unknown };
+  const expectedPackageVersion = electronBuilderVersionForAppVersion(packagedVersion);
+  if (packageJson.version !== expectedPackageVersion) {
+    throw new Error(
+      `expected packaged app version ${JSON.stringify(expectedPackageVersion)} in ${packageJsonPath}, received ${JSON.stringify(packageJson.version)}`,
+    );
+  }
+
+  const packagedConfigPath = join(unpackedRoot, "resources", "open-design-config.json");
+  const packagedConfig = JSON.parse(await readFile(packagedConfigPath, "utf8")) as { appVersion?: unknown };
+  if (packagedConfig.appVersion !== packagedVersion) {
+    throw new Error(
+      `expected packaged config version ${JSON.stringify(packagedVersion)} in ${packagedConfigPath}, received ${JSON.stringify(packagedConfig.appVersion)}`,
+    );
+  }
+
+  const executablePath = join(unpackedRoot, `${PRODUCT_NAME}.exe`);
+  const executableVersionTargets = resolveWinExecutableVersionTargets(packagedVersion);
+  const executableVersion = await readWinExecutableVersionSnapshot(executablePath);
+  if (executableVersion.fixedFileVersion !== executableVersionTargets.numericVersion) {
+    throw new Error(
+      `expected unpacked executable fixed FileVersion ${executableVersionTargets.numericVersion} in ${executablePath}, received ${executableVersion.fixedFileVersion}`,
+    );
+  }
+  if (executableVersion.fixedProductVersion !== executableVersionTargets.productVersion) {
+    throw new Error(
+      `expected unpacked executable fixed ProductVersion ${executableVersionTargets.productVersion} in ${executablePath}, received ${executableVersion.fixedProductVersion}`,
+    );
+  }
+  for (const stringTable of executableVersion.stringTables) {
+    if (stringTable.values.FileVersion !== executableVersionTargets.fileVersion) {
+      throw new Error(
+        `expected unpacked executable FileVersion string ${JSON.stringify(executableVersionTargets.fileVersion)} in ${executablePath}, received ${JSON.stringify(stringTable.values.FileVersion)}`,
+      );
+    }
+    if (stringTable.values.ProductVersion !== executableVersionTargets.productVersion) {
+      throw new Error(
+        `expected unpacked executable ProductVersion string ${JSON.stringify(executableVersionTargets.productVersion)} in ${executablePath}, received ${JSON.stringify(stringTable.values.ProductVersion)}`,
+      );
+    }
+  }
+}
+
 export async function materializeCachedUnpackedForInstaller(
   sourceUnpackedRoot: string,
   paths: WinPaths,
@@ -273,7 +366,11 @@ export async function materializeCachedUnpackedForInstaller(
     join(paths.unpackedRoot, "resources", "open-design-config.json"),
     await readFile(paths.packagedConfigPath),
   );
-  if (packagedVersion != null) await rewriteUnpackedAppPackageVersion(paths.unpackedRoot, packagedVersion);
+  if (packagedVersion != null) {
+    await rewriteUnpackedAppPackageVersion(paths.unpackedRoot, packagedVersion);
+    await rewriteWinExecutableVersion(paths.unpackedExePath, packagedVersion);
+    await assertMaterializedUnpackedVersionConsistency(paths.unpackedRoot, packagedVersion);
+  }
   return {
     appBuilderOutputRoot: paths.appBuilderOutputRoot,
     cacheEntryPath: null,
@@ -321,6 +418,7 @@ export async function runElectronBuilder(
   const winIcon = await hashPath(winResources.icon);
   const electronBuilderKeyInput = {
     afterPackHook,
+    cacheVersion: WIN_ELECTRON_BUILDER_DIR_CACHE_VERSION,
     asar: ELECTRON_BUILDER_ASAR,
     buildDependenciesFromSource: ELECTRON_BUILDER_BUILD_DEPENDENCIES_FROM_SOURCE,
     electronBuilderCliPath: config.electronBuilderCliPath,
@@ -331,8 +429,8 @@ export async function runElectronBuilder(
     packagedConfigSchemaVersion: usePrebundle ? 2 : 1,
     portable: config.portable,
     platform: "win32",
+    packagedVersionScope: versionCore,
     resourceTreeKey: resourceTree.key,
-    schemaVersion: 5,
     target: "dir",
     webOutputMode: config.webOutputMode,
     winIcon,
@@ -341,7 +439,6 @@ export async function runElectronBuilder(
   const key = hashJson({
     ...electronBuilderKeyInput,
     node: "win.electron-builder-dir",
-    packagedVersion,
   });
   const builderVersionScopeKey = hashJson({
     ...electronBuilderKeyInput,
@@ -379,11 +476,12 @@ export async function runElectronBuilder(
           ...node,
           build: async ({ entryRoot }: { entryRoot: string }): Promise<ElectronBuilderDirCacheMetadata> => {
             await runSegment("electron-builder-dir:build-raw", async () => {
-              await runElectronBuilderRaw(
+              const rawSegments = await runElectronBuilderRaw(
                 { ...config, to: "dir" },
                 { ...createCacheLocalWinPaths(paths, entryRoot), resourceRoot: resourceTree.resourceRoot },
                 packagedAppRoot,
               );
+              segments.push(...rawSegments);
             });
             return { packagedAppKey, packagedVersion };
           },
