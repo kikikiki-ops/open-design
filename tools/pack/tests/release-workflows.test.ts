@@ -27,6 +27,7 @@ describe("release workflows", () => {
     expect(selfHostedMac).toContain("bash .github/scripts/release/build-mac.sh");
     expect(buildMac).toContain("build_args+=(--require-vela-cli)");
     expect(buildMac).toContain('--cache-dir "$cache_dir"');
+    expect(buildMac).not.toContain("::warning::Expected Electron framework symlink");
     expect(macIntel).not.toContain("--require-vela-cli");
     expect(win).not.toContain("--require-vela-cli");
     expect(linux).not.toContain("--require-vela-cli");

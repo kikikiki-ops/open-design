@@ -83,7 +83,7 @@ inspect_electron_framework_symlinks() {
     "$framework/Resources" \
     "$framework/Versions/Current"; do
     if [ ! -L "$link" ]; then
-      echo "::warning::Expected Electron framework symlink, got non-symlink: $link"
+      echo "diagnostic: expected Electron framework symlink, got non-symlink: $link"
       missing_links=1
     fi
   done
