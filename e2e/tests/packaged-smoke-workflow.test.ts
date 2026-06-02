@@ -133,6 +133,7 @@ describe("packaged smoke workflow", () => {
     expect(workflow).toContain("open-design-beta-win-publish-manifest");
     expect(workflow).toContain("runs-on: [self-hosted, macOS, ARM64, nexu-mac, release-beta]");
     expect(workflow).toContain('git -C "$GITHUB_WORKSPACE" sparse-checkout disable || true');
+    expect(workflow).toContain('git -C "$GITHUB_WORKSPACE" ls-files -z | xargs -0 git -C "$GITHUB_WORKSPACE" update-index --no-skip-worktree || true');
     expect(workflow).toContain("bash .github/scripts/release/build-mac.sh");
     expect(workflow).toContain("MAC_SIGN_MODE: ${{ inputs.mac_sign_mode }}");
     expect(workflow).toContain("OPEN_DESIGN_RELEASE_PROFILE: /Users/runner/.profile");

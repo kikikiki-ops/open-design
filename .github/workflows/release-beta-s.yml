@@ -231,6 +231,7 @@ jobs:
           set -euo pipefail
           if [ -d "$GITHUB_WORKSPACE/.git" ]; then
             git -C "$GITHUB_WORKSPACE" sparse-checkout disable || true
+            git -C "$GITHUB_WORKSPACE" ls-files -z | xargs -0 git -C "$GITHUB_WORKSPACE" update-index --no-skip-worktree || true
           fi
 
       - name: Checkout
