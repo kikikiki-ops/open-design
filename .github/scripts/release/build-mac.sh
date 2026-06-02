@@ -116,12 +116,18 @@ install_mac_signing_keychain() {
   fi
 
   local password_path="$RUNNER_TEMP/open-design-signing.p12.password"
-  trap 'rm -f "$password_path"' RETURN
   printf '%s' "$APPLE_SIGNING_CERTIFICATE_PASSWORD" > "$password_path"
   chmod 600 "$password_path"
 
   echo "mac signing: installing identity through sudo helper"
+  set +e
   sudo -n "$helper" "$cert_path" "$password_path"
+  local status=$?
+  set -e
+  if [ "$status" -ne 0 ]; then
+    rm -f "$password_path"
+    return "$status"
+  fi
   rm -f "$password_path"
 
   export CSC_KEYCHAIN="${OPEN_DESIGN_MAC_SIGNING_KEYCHAIN:-/Library/Keychains/open-design-release-signing.keychain}"
@@ -255,6 +261,9 @@ echo "tools_pack_dir=$tools_pack_dir"
 echo "tools_pack_cache_dir=$cache_dir"
 
 timings_json=""
+mkdir -p "$cache_dir" "$(dirname "$build_json_path")" "$(dirname "$build_log_path")"
+: > "$build_log_path"
+
 measure_step "pnpm install" pnpm install --frozen-lockfile
 measure_step "electron framework symlink inspection" inspect_electron_framework_symlinks
 
@@ -267,8 +276,6 @@ if [ "$sign_mode" = "on" ]; then
 fi
 
 rm -rf "$tools_pack_dir"
-mkdir -p "$cache_dir" "$(dirname "$build_json_path")" "$(dirname "$build_log_path")"
-: > "$build_log_path"
 
 build_args=(
   exec tools-pack mac build
