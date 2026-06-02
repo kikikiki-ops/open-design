@@ -299,18 +299,47 @@ jobs:
           ASSET_VERSION_SUFFIX: ${{ inputs.mac_sign_mode == 'on' && needs.metadata.outputs.asset_version_suffix || '.unsigned' }}
           CLOUDFLARE_R2_RELEASES_PUBLIC_ORIGIN: ${{ inputs.s3_public_origin }}
           MAC_ARTIFACT_MODE: dmg-only
+          OPEN_DESIGN_RELEASE_PROFILE: /Users/runner/.profile
           RELEASE_CHANNEL: beta
           RELEASE_NOTES: Open Design beta ${{ inputs.release_version || needs.metadata.outputs.beta_version }}${{ inputs.mac_sign_mode == 'on' && needs.metadata.outputs.asset_version_suffix || '.unsigned' }}
           RELEASE_VERSION: ${{ inputs.release_version || needs.metadata.outputs.beta_version }}
           TOOLS_PACK_NAMESPACE: release-beta
         run: bash .github/scripts/release/assets/mac.sh
 
-      - name: Upload mac release assets
+      - name: Publish beta mac candidate platform to Nexu S3
+        if: ${{ inputs.publish }}
+        working-directory: _release-build
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.NEXU_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.NEXU_S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.NEXU_S3_REGION }}
+          AWS_EC2_METADATA_DISABLED: "true"
+          ASSET_VERSION_SUFFIX: ${{ inputs.mac_sign_mode == 'on' && needs.metadata.outputs.asset_version_suffix || '.unsigned' }}
+          CLOUDFLARE_R2_RELEASES_BUCKET: ${{ secrets.NEXU_S3_BUCKET }}
+          CLOUDFLARE_R2_RELEASES_PUBLIC_ORIGIN: ${{ inputs.s3_public_origin }}
+          CLOUDFLARE_R2_RELEASES_URL: ${{ secrets.NEXU_S3_ENDPOINT }}
+          MAC_ARTIFACT_MODE: dmg-only
+          RELEASE_CHANNEL: beta
+          RELEASE_PLATFORM: mac
+          RELEASE_ROOT: ${{ runner.temp }}/release-assets
+          RELEASE_SIGNED: ${{ inputs.mac_sign_mode == 'on' && 'true' || 'false' }}
+          RELEASE_VERSION: ${{ inputs.release_version || needs.metadata.outputs.beta_version }}
+          REPORT_ROOT: ${{ runner.temp }}/release-report/mac
+        run: |
+          set -euo pipefail
+          if ! command -v rehash >/dev/null 2>&1; then
+            rehash() { hash -r; }
+          fi
+          # shellcheck disable=SC1090
+          source "$OPEN_DESIGN_RELEASE_PROFILE"
+          node --experimental-strip-types .github/scripts/release/r2/publish-platform.ts
+
+      - name: Upload mac publish manifest
         if: ${{ inputs.publish }}
         uses: actions/upload-artifact@v7
         with:
-          name: open-design-beta-mac-release-assets
-          path: ${{ runner.temp }}/release-assets
+          name: open-design-beta-mac-publish-manifest
+          path: ${{ runner.temp }}/release-platform-manifests/mac.json
           if-no-files-found: error
 
   publish:
@@ -350,47 +379,12 @@ jobs:
           name: open-design-beta-win-publish-manifest
           path: ${{ runner.temp }}/release-platform-manifests
 
-      - name: Download mac release assets
+      - name: Download mac publish manifest
         if: ${{ inputs.enable_mac && needs.build_mac.result == 'success' }}
         uses: actions/download-artifact@v8
         with:
-          name: open-design-beta-mac-release-assets
-          path: ${{ runner.temp }}/release-assets
-
-      - name: Download mac e2e spec report
-        if: ${{ inputs.enable_mac && needs.build_mac.result == 'success' }}
-        uses: actions/download-artifact@v8
-        with:
-          name: open-design-beta-mac-e2e-report
-          path: ${{ runner.temp }}/release-report/mac
-
-      - name: Publish beta mac assets to Nexu S3
-        if: ${{ inputs.enable_mac && needs.build_mac.result == 'success' }}
-        working-directory: _release-publish
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.NEXU_S3_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.NEXU_S3_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: ${{ secrets.NEXU_S3_REGION }}
-          AWS_EC2_METADATA_DISABLED: "true"
-          ASSET_VERSION_SUFFIX: ${{ inputs.mac_sign_mode == 'on' && needs.metadata.outputs.asset_version_suffix || '.unsigned' }}
-          CLOUDFLARE_R2_RELEASES_BUCKET: ${{ secrets.NEXU_S3_BUCKET }}
-          CLOUDFLARE_R2_RELEASES_PUBLIC_ORIGIN: ${{ inputs.s3_public_origin }}
-          CLOUDFLARE_R2_RELEASES_URL: ${{ secrets.NEXU_S3_ENDPOINT }}
-          MAC_ARTIFACT_MODE: dmg-only
-          RELEASE_CHANNEL: beta
-          RELEASE_PLATFORM: mac
-          RELEASE_ROOT: ${{ runner.temp }}/release-assets
-          RELEASE_SIGNED: ${{ inputs.mac_sign_mode == 'on' && 'true' || 'false' }}
-          RELEASE_VERSION: ${{ inputs.release_version || needs.metadata.outputs.beta_version }}
-          REPORT_ROOT: ${{ runner.temp }}/release-report/mac
-        run: |
-          set -euo pipefail
-          if ! command -v rehash >/dev/null 2>&1; then
-            rehash() { hash -r; }
-          fi
-          # shellcheck disable=SC1090
-          source "$OPEN_DESIGN_RELEASE_PROFILE"
-          node --experimental-strip-types .github/scripts/release/r2/publish-platform.ts
+          name: open-design-beta-mac-publish-manifest
+          path: ${{ runner.temp }}/release-platform-manifests
 
       - name: Publish beta metadata to Nexu S3
         id: publish_metadata
