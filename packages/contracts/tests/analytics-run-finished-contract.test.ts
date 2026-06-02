@@ -22,6 +22,7 @@ function makeBaseRunFinishedProps(): RunFinishedProps {
     token_count_source: 'unknown',
     result: 'failed',
     artifact_count: 0,
+    asked_user_question: false,
     total_duration_ms: 1234,
   };
 }
