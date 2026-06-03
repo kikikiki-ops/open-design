@@ -210,6 +210,9 @@ interface PromptSectionTelemetry {
     | 'linkedDirsHint'
     | 'echoGuard'
     | 'userRequest'
+    | 'skillPrompt'
+    | 'designSystemPrompt'
+    | 'pluginStagePrompt'
     | 'attachments'
     | 'commentAttachments'
     | 'promptImagePaths';
@@ -457,9 +460,11 @@ Phase 1 section-content allowlist:
 
 - May include bounded `redactedContent`: `formOverride`,
   `daemonSystemPrompt`, `runtimeToolPrompt`, `researchCommandContract`,
-  `runContextPrompt`, `clientSystemPrompt`, `echoGuard`, `userRequest`, and
-  implementation-specific skill, design-system, plugin, or stage prompt
-  sections when they can be separated from raw attachments.
+  `runContextPrompt`, `clientSystemPrompt`, `echoGuard`, `userRequest`, and the
+  implementation-specific `skillPrompt`, `designSystemPrompt`, and
+  `pluginStagePrompt` sections (aligned with the `skillId`, `designSystemId`,
+  and `appliedPluginSnapshotId` routing dimensions) when they can be separated
+  from raw attachments.
 - Metadata-only in Phase 1: `cwdHint`, `linkedDirsHint`, `attachments`,
   `commentAttachments`, and `promptImagePaths`. Report presence, counts, file
   extensions, size buckets, hashes, and truncation state where available, but do
@@ -551,8 +556,8 @@ Phase 1 tests:
 - Unit-test redaction with fake credentials, bearer tokens, OD tool tokens,
   emails, local paths, linked dirs, and attachment names.
 - Unit-test bounded redacted section capture for daemon system prompt,
-  form-answer override, runtime tool prompt, client system prompt, skill,
-  design-system, plugin/stage prompt sections, and user request.
+  form-answer override, runtime tool prompt, client system prompt, `skillPrompt`,
+  `designSystemPrompt`, `pluginStagePrompt` sections, and user request.
 - Unit-test metadata-only capture for cwd hints, linked dirs, attachments,
   comment attachments, and prompt image paths.
 - Unit-test 16 KiB per-section and 64 KiB total redacted section content limits,
