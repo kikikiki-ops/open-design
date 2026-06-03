@@ -33,6 +33,7 @@ import {
   generateApiToken,
   hasDisplay,
   isLoopbackHost,
+  isNotRunningIpcError,
   loadConfigFile,
   parseWebuiArgs,
   persistTokenToConfig,
@@ -463,7 +464,11 @@ async function commandStopOrStatus(
     if (json) process.stdout.write(`${JSON.stringify(reply)}\n`);
     else if (command === "status") process.stdout.write(` ${JSON.stringify(reply)}\n`);
     else process.stdout.write(` ${t.stopped}\n`);
-  } catch {
+  } catch (error) {
+    // Only a missing/refused socket means "not running". A timeout, permission,
+    // or protocol failure means a live worker is wedged or there's a real bug —
+    // surfacing it (rethrow) beats lying with "stopped" and orphaning the service.
+    if (!isNotRunningIpcError(error)) throw error;
     if (json) process.stdout.write(`${JSON.stringify({ state: "stopped" })}\n`);
     else process.stdout.write(` ${t.notRunning(namespace)}\n`);
     if (command === "status") process.exitCode = 1;

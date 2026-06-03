@@ -328,6 +328,18 @@ export function resolveRuntimeNamespace(
   return normalizeNamespace(config.namespace ?? env.OD_PACKAGED_NAMESPACE ?? SIDECAR_DEFAULTS.namespace);
 }
 
+// Classifies an IPC request failure as "no live worker is listening" (vs a real
+// failure that must surface). Only a missing socket (ENOENT) or refused
+// connection (ECONNREFUSED) means not-running — those are how `createConnection`
+// fails when nothing is accepting on the namespace. A timeout, permission error
+// (EACCES/EPERM), or protocol/`ok:false` rejection means the request reached a
+// wedged worker or hit a real bug, so stop/status must NOT report "stopped" and
+// orphan a live service — the caller rethrows those.
+export function isNotRunningIpcError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | null)?.code;
+  return code === "ENOENT" || code === "ECONNREFUSED";
+}
+
 export function generateApiToken(): string {
   return `odtoken_${randomBytes(32).toString("base64url")}`;
 }

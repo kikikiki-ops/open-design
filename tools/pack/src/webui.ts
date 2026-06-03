@@ -165,6 +165,33 @@ export async function createWebuiArchive(
   await stat(archivePath);
 }
 
+// Stages the launcher scripts, wrappers, config example, and README into the
+// archive root, setting the executable bit on every user-invoked entry. The
+// Linux `.desktop` entry is tracked 100644 but MUST be executable: many file
+// managers refuse to launch a non-executable desktop entry, which would break
+// the double-click contract documented in the WebUI README. `resourcesRoot` is
+// injectable for tests.
+export async function stageWebuiLauncherResources(
+  stageRoot: string,
+  platform: ToolPackPlatform,
+  resourcesRoot: string = webuiResourcesRoot,
+): Promise<void> {
+  for (const name of ["open-design.sh", "open-design.cmd", "webui.config.example.json", "README.md"]) {
+    await cp(join(resourcesRoot, name), join(stageRoot, name));
+  }
+  await chmod(join(stageRoot, "open-design.sh"), 0o755);
+  if (platform === "mac") {
+    await cp(join(resourcesRoot, "launch-mac.command"), join(stageRoot, "Open Design WebUI.command"));
+    await chmod(join(stageRoot, "Open Design WebUI.command"), 0o755);
+  } else if (platform === "win") {
+    await cp(join(resourcesRoot, "launch-win.bat"), join(stageRoot, "Open Design WebUI.bat"));
+  } else {
+    const desktopEntry = join(stageRoot, "open-design-webui.desktop");
+    await cp(join(resourcesRoot, "open-design-webui.desktop"), desktopEntry);
+    await chmod(desktopEntry, 0o755);
+  }
+}
+
 export async function buildPackedWebui(config: ToolPackConfig): Promise<WebuiBuildResult> {
   const platform = config.platform;
   const arch = config.arch;
@@ -201,18 +228,7 @@ export async function buildPackedWebui(config: ToolPackConfig): Promise<WebuiBui
   const prunedNativeModules = await pruneBuildOnlyNativeModules(appRoot);
 
   // 5) copy webui launcher scripts / wrappers / config example / README
-  for (const name of ["open-design.sh", "open-design.cmd", "webui.config.example.json", "README.md"]) {
-    await cp(join(webuiResourcesRoot, name), join(stageRoot, name));
-  }
-  await chmod(join(stageRoot, "open-design.sh"), 0o755);
-  if (platform === "mac") {
-    await cp(join(webuiResourcesRoot, "launch-mac.command"), join(stageRoot, "Open Design WebUI.command"));
-    await chmod(join(stageRoot, "Open Design WebUI.command"), 0o755);
-  } else if (platform === "win") {
-    await cp(join(webuiResourcesRoot, "launch-win.bat"), join(stageRoot, "Open Design WebUI.bat"));
-  } else {
-    await cp(join(webuiResourcesRoot, "open-design-webui.desktop"), join(stageRoot, "open-design-webui.desktop"));
-  }
+  await stageWebuiLauncherResources(stageRoot, platform);
 
   // 6) archive
   const kind = webuiArchiveKind(platform);

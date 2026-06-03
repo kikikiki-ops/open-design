@@ -12,6 +12,7 @@ import {
   generateApiToken,
   hasDisplay,
   isLoopbackHost,
+  isNotRunningIpcError,
   loadConfigFile,
   parseWebuiArgs,
   persistTokenToConfig,
@@ -384,6 +385,25 @@ describe("loadConfigFile", () => {
     const path = join(dir, "bad.json");
     writeFileSync(path, "{ not valid json", "utf8");
     expect(() => loadConfigFile(path)).toThrow(/failed to read config file/i);
+  });
+});
+
+describe("isNotRunningIpcError", () => {
+  const withCode = (code: string): NodeJS.ErrnoException => Object.assign(new Error(code), { code });
+
+  it("treats a missing or refused socket as not-running", () => {
+    expect(isNotRunningIpcError(withCode("ENOENT"))).toBe(true);
+    expect(isNotRunningIpcError(withCode("ECONNREFUSED"))).toBe(true);
+  });
+
+  it("treats timeout / permission / protocol failures as real errors (rethrow)", () => {
+    // requestJsonIpc's timeout rejection: a plain Error with no `code`.
+    expect(isNotRunningIpcError(new Error("IPC request timed out: /tmp/x.sock"))).toBe(false);
+    expect(isNotRunningIpcError(withCode("EACCES"))).toBe(false);
+    expect(isNotRunningIpcError(withCode("EPERM"))).toBe(false);
+    expect(isNotRunningIpcError(new Error("IPC request failed"))).toBe(false);
+    expect(isNotRunningIpcError(null)).toBe(false);
+    expect(isNotRunningIpcError(undefined)).toBe(false);
   });
 });
 

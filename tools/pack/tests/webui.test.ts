@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   prebuiltSqliteTarget,
   pruneBuildOnlyNativeModules,
+  stageWebuiLauncherResources,
   webuiArchiveName,
   webuiArchiveKind,
 } from "../src/webui.js";
@@ -27,6 +28,32 @@ describe("webuiArchiveKind", () => {
     expect(webuiArchiveKind("linux")).toBe("tar.gz");
     expect(webuiArchiveKind("mac")).toBe("zip");
     expect(webuiArchiveKind("win")).toBe("zip");
+  });
+});
+
+describe("stageWebuiLauncherResources", () => {
+  const mode = (p: string) => (statSync(p).mode & 0o777).toString(8);
+
+  it("makes the Linux double-click .desktop entry executable", async () => {
+    const stageRoot = mkdtempSync(join(tmpdir(), "od-webui-stage-linux-"));
+    await stageWebuiLauncherResources(stageRoot, "linux");
+
+    // The tracked source is 100644; the staged copy MUST be executable or many
+    // Linux file managers refuse to launch it (README's double-click contract).
+    expect(mode(join(stageRoot, "open-design-webui.desktop"))).toBe("755");
+    expect(mode(join(stageRoot, "open-design.sh"))).toBe("755");
+
+    rmSync(stageRoot, { force: true, recursive: true });
+  });
+
+  it("makes the macOS double-click .command entry executable", async () => {
+    const stageRoot = mkdtempSync(join(tmpdir(), "od-webui-stage-mac-"));
+    await stageWebuiLauncherResources(stageRoot, "mac");
+
+    expect(mode(join(stageRoot, "Open Design WebUI.command"))).toBe("755");
+    expect(mode(join(stageRoot, "open-design.sh"))).toBe("755");
+
+    rmSync(stageRoot, { force: true, recursive: true });
   });
 });
 
