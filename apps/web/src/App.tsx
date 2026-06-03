@@ -18,6 +18,7 @@ import { MarketplaceView } from './components/MarketplaceView';
 import { PluginDetailView } from './components/PluginDetailView';
 import type { CreateInput, ImportClaudeDesignOutcome } from './components/NewProjectPanel';
 import { MemoryToast } from './components/MemoryToast';
+import { Toast } from './components/Toast';
 import { PetOverlay, type PetTaskCenter } from './components/pet/PetOverlay';
 import { buildPetTaskCenter } from './components/pet/taskCenter';
 import { migrateCustomPetAtlas } from './components/pet/pets';
@@ -212,6 +213,11 @@ function AppInner() {
   const latestPersistedConfigRef = useRef(config);
   latestPersistedConfigRef.current = config;
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Surfaced when a Home-picked working dir could not be applied to a freshly
+  // created project (expired/invalid desktop token, daemon rejection). Without
+  // this the failure was swallowed and the user believed their folder was in
+  // effect while the project actually stayed in the managed root.
+  const [workingDirError, setWorkingDirError] = useState<string | null>(null);
   const [settingsWelcome, setSettingsWelcome] = useState(false);
   const [settingsInitialSection, setSettingsInitialSection] = useState<SettingsSection>('execution');
   const [settingsHighlight, setSettingsHighlight] = useState<SettingsHighlight>(null);
@@ -1006,7 +1012,17 @@ function AppInner() {
             input.userWorkingDirToken,
           );
         } catch (err) {
+          // The desktop working-dir token is short-lived (~60s TTL); if the
+          // user lingered on Home or the POST was otherwise rejected, the
+          // handoff fails AFTER the project already exists. Do NOT swallow
+          // this: the staged upload below would then land in the managed
+          // `.od/projects/<id>` root while the user believes their chosen
+          // folder is in effect. Surface it so they can re-pick the folder
+          // from inside the project instead of silently diverging.
           console.warn('Failed to set working directory for new project', userWorkingDir, err);
+          setWorkingDirError(
+            `Couldn't apply the chosen folder "${userWorkingDir}". The project was created in the default location — re-pick the working directory from the project to use your folder.`,
+          );
         }
       }
       let firstMessageAttachments: ChatAttachment[] = [];
@@ -1793,6 +1809,13 @@ function AppInner() {
         />
       ) : null}
       <MemoryToast onOpenMemory={() => openSettings('memory')} />
+      {workingDirError ? (
+        <Toast
+          message={workingDirError}
+          role="alert"
+          onDismiss={() => setWorkingDirError(null)}
+        />
+      ) : null}
       {/* First-run privacy consent banner. It waits for daemon config
           hydration because privacyDecisionAt is daemon-owned and stripped
           from localStorage. It waits for `onboardingCompleted` so first-run

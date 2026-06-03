@@ -637,4 +637,31 @@ describe('App project creation routing', () => {
     const uploadOrder = mockedUploadProjectFiles.mock.invocationCallOrder[0]!;
     expect(replaceOrder).toBeLessThan(uploadOrder);
   });
+
+  it('surfaces an error instead of silently diverging when the working-dir token is expired/invalid', async () => {
+    // Regression for the swallowed-failure case: the desktop working-dir token
+    // has a ~60s TTL, so a slow user (or any rejected POST) makes
+    // replaceProjectWorkingDir throw AFTER the project already exists. The old
+    // code only logged a warning, so the staged upload landed in the managed
+    // root while the user believed their chosen folder was applied. The fix
+    // surfaces a create-time error toast.
+    mockedListProjects.mockResolvedValue([]);
+    mockedReplaceProjectWorkingDir.mockRejectedValue(
+      new Error('working-dir token expired'),
+    );
+
+    render(<App />);
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Create project with working dir' }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Couldn't apply the chosen folder/i)).toBeTruthy();
+    });
+    // The handoff failed, but the project was still created — the upload still
+    // runs (the user keeps their project); the toast is what tells them the
+    // folder did not take effect.
+    expect(mockedReplaceProjectWorkingDir).toHaveBeenCalledTimes(1);
+  });
 });
