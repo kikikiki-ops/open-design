@@ -385,10 +385,9 @@ export function InlineModelSwitcher({
       ),
     [apiProtocol, config.apiKey, config.apiVersion, config.baseUrl],
   );
-  // MERGE-TODO(@YUHAO-corn #3286, @AmyShang-alt #3262): persisted/shared
-  // providerModelsCache keyed by the fingerprinted key (BYOK security, PR#3286);
-  // ephemeral discoveredProviderModels still keyed by providerModelsInputKey —
-  // confirm acceptable, or re-key the discovery state to the fingerprint too.
+  // Persisted/shared providerModelsCache is keyed by the fingerprinted key so BYOK
+  // API keys never become cache map keys (PR#3286); runtime-discovered models use
+  // the raw input key.
   const fetchedProviderModels =
     providerModelsCache?.[providerModelsKey] ??
     discoveredProviderModels[providerModelsInputKey] ??

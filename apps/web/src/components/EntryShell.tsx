@@ -860,10 +860,8 @@ function OnboardingView({
     hasSharedProviderModelsCache
       ? onProviderModelsCacheChange!
       : setLocalProviderModelsCache;
-  // MERGE-TODO(@YUHAO-corn #3286, @AmyShang-alt #3262): release's model-picker
-  // names aliased onto main's fingerprint-keyed cache so BYOK raw API keys never
-  // become React cache map keys (security, PR#3286). Verify discovery + search UI
-  // still read the right cache at runtime.
+  // Alias the model-picker names onto the fingerprint-keyed cache so raw BYOK API
+  // keys never become React cache map keys (PR#3286).
   const providerModelsCache = activeProviderModelsCache;
   const setProviderModelsCache = activeSetProviderModelsCache;
   const [profile, setProfile] = useState({
