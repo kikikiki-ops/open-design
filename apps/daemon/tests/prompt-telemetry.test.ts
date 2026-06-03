@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   PROMPT_STACK_PATH_MARKER,
+  buildPromptStackFlatMetadata,
   buildPromptStackTelemetry,
   promptStackWithoutContent,
   redactLocalPaths,
@@ -149,6 +150,43 @@ describe('prompt telemetry builder', () => {
     });
     expect(JSON.stringify(section)).not.toContain('/Users/alice');
     expect(JSON.stringify(section)).not.toContain('make the hero blue');
+  });
+
+  it('omits absent sections from the emitted prompt stack', () => {
+    const telemetry = buildPromptStackTelemetry({
+      composedPrompt: 'Build a card',
+      sections: [
+        { kind: 'formOverride', content: '' },
+        { kind: 'daemonSystemPrompt', content: 'system prompt' },
+        { kind: 'attachments', metadata: [] },
+      ],
+    });
+
+    expect(telemetry.sections.map((section) => section.kind)).toEqual([
+      'daemonSystemPrompt',
+    ]);
+    expect(telemetry.sectionCount).toBe(1);
+  });
+
+  it('keeps only high-value flat metadata fields', () => {
+    const telemetry = buildPromptStackTelemetry({
+      composedPrompt: 'Build a card',
+      sections: [
+        { kind: 'daemonSystemPrompt', content: 'system prompt' },
+        { kind: 'runtimeToolPrompt', content: 'runtime tools' },
+        { kind: 'pluginStagePrompt', content: 'plugin stage' },
+        { kind: 'userRequest', content: 'Build a card' },
+      ],
+    });
+
+    const flat = buildPromptStackFlatMetadata(telemetry);
+    expect(flat.promptStack_promptFingerprint).toMatch(/^sha256:/);
+    expect(flat.promptStack_section_daemonSystemPrompt_present).toBe(true);
+    expect(flat.promptStack_section_runtimeToolPrompt_present).toBe(true);
+    expect(flat.promptStack_section_pluginStagePrompt_present).toBe(true);
+    expect(flat.promptStack_section_userRequest_present).toBeUndefined();
+    expect(flat.promptStack_section_daemonSystemPrompt_rawBytes).toBeUndefined();
+    expect(flat.promptStack_rawBytes).toBeUndefined();
   });
 
   it('applies per-section limits and total budget in diagnostic priority order', () => {

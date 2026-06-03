@@ -301,9 +301,9 @@ export function buildPromptStackTelemetry({
     }
   }
 
-  const outputSections: PromptTelemetrySection[] = built.map(
-    ({ redactedSource: _redactedSource, ...section }) => section,
-  );
+  const outputSections: PromptTelemetrySection[] = built
+    .filter((section) => section.present)
+    .map(({ redactedSource: _redactedSource, ...section }) => section);
   const stackFingerprintSource = outputSections.map((section) => ({
     kind: section.kind,
     ordinal: section.ordinal,
@@ -343,22 +343,30 @@ export function buildPromptStackFlatMetadata(
     promptStack_redactionVersion: telemetry.redactionVersion,
     promptStack_promptFingerprint: telemetry.promptFingerprint,
     promptStack_stackFingerprint: telemetry.stackFingerprint,
-    promptStack_rawBytes: telemetry.rawBytes,
-    promptStack_redactedBytes: telemetry.redactedBytes,
     promptStack_sectionCount: telemetry.sectionCount,
     promptStack_redactedContentBytes: telemetry.redactedContentBytes,
     promptStack_redactedContentBudgetBytes: telemetry.redactedContentBudgetBytes,
   };
-  for (const section of telemetry.sections) {
-    const prefix = `promptStack_section_${section.kind}`;
-    out[`${prefix}_present`] = section.present;
-    out[`${prefix}_rawBytes`] = section.rawBytes;
-    out[`${prefix}_redactedBytes`] = section.redactedBytes;
-    out[`${prefix}_fingerprint`] = section.fingerprint;
-    out[`${prefix}_truncated`] = section.truncated;
-    if (section.truncationReason) {
-      out[`${prefix}_truncationReason`] = section.truncationReason;
-    }
+
+  const daemonSystemPrompt = telemetry.sections.find(
+    (section) => section.kind === 'daemonSystemPrompt',
+  );
+  const runtimeToolPrompt = telemetry.sections.find(
+    (section) => section.kind === 'runtimeToolPrompt',
+  );
+  const pluginStagePrompt = telemetry.sections.find(
+    (section) => section.kind === 'pluginStagePrompt',
+  );
+
+  out.promptStack_section_daemonSystemPrompt_present = Boolean(daemonSystemPrompt);
+  out.promptStack_section_daemonSystemPrompt_truncated =
+    daemonSystemPrompt?.truncated ?? false;
+  out.promptStack_section_runtimeToolPrompt_present = Boolean(runtimeToolPrompt);
+  out.promptStack_section_pluginStagePrompt_present = Boolean(pluginStagePrompt);
+
+  if (daemonSystemPrompt?.truncationReason) {
+    out.promptStack_section_daemonSystemPrompt_truncationReason =
+      daemonSystemPrompt.truncationReason;
   }
   return out;
 }

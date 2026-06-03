@@ -314,7 +314,12 @@ describe('langfuse-bridge.reportRunCompletedFromDaemon', () => {
       '[REDACTED:path]',
     );
     expect(generation.metadata.promptStack).toEqual(trace.metadata.promptStack);
-    expect(trace.metadata.promptStack_section_userRequest_present).toBe(true);
+    expect(
+      trace.metadata.promptStack.sections.some(
+        (section: { kind: string }) => section.kind === 'userRequest',
+      ),
+    ).toBe(true);
+    expect(trace.metadata.promptStack_section_userRequest_present).toBeUndefined();
   });
 
   it('attaches turn-level config (model / reasoning / skill / DS) to trace + generation', async () => {

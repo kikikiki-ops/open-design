@@ -338,7 +338,8 @@ describe('buildTracePayload', () => {
     );
     expect(trace.metadata.promptStack.sections[2].redactedContent).toBeUndefined();
     expect(trace.metadata.promptStack_section_daemonSystemPrompt_present).toBe(true);
-    expect(trace.metadata.promptStack_section_attachments_present).toBe(true);
+    expect(trace.metadata.promptStack_section_attachments_present).toBeUndefined();
+    expect(trace.metadata.promptStack_section_daemonSystemPrompt_rawBytes).toBeUndefined();
     expect(trace.metadata.promptStack_promptFingerprint).toMatch(/^sha256:/);
   });
 
