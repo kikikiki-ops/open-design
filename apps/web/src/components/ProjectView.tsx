@@ -5188,16 +5188,17 @@ export function ProjectView({
           conversationId={activeConversationId}
           headerActions={(
             <>
-              <button
-                type="button"
-                className="settings-icon-btn"
-                onClick={() => onOpenSettings('execution')}
-                title={t('chat.cliSettingsTitle')}
-                aria-label={t('chat.cliSettingsAria')}
-              >
-                <Icon name="settings" size={16} />
-              </button>
-              <HandoffButton projectId={project.id} />
+              <EntrySettingsMenu
+                config={config}
+                onThemeChange={handleThemeChange}
+                onOpenSettings={onOpenSettings}
+              />
+              <HandoffButton
+                projectId={project.id}
+                projectName={project.name}
+                projectDir={projectDetail.resolvedDir}
+                agents={agents}
+              />
             </>
           )}
           questionForm={questionForm}

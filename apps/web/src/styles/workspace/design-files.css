@@ -951,6 +951,41 @@
   font-size: 11.5px;
   line-height: 1.35;
 }
+.db-browser-use-search {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+  color: var(--text-soft);
+}
+.db-browser-use-search input {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.2;
+}
+.db-browser-use-search input::placeholder {
+  color: var(--text-faint);
+}
+.db-browser-use-search span {
+  min-width: 20px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-subtle) 82%, transparent);
+  color: var(--text-muted);
+  font-size: 10.5px;
+  line-height: 1.2;
+  text-align: center;
+}
 .db-browser-use-list {
   min-height: 0;
   overflow-y: auto;
@@ -1008,6 +1043,12 @@
   color: var(--text-soft);
   font-size: 10.5px;
   line-height: 1.2;
+}
+.db-browser-use-empty {
+  padding: 18px 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
 }
 
 /* ---- Status toast -------------------------------------------------------- */

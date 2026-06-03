@@ -237,6 +237,13 @@ const PREVIEW_VIEWPORT_PRESETS: PreviewViewportPreset[] = [
     titleKey: 'fileViewer.viewportMobileTitle',
   },
 ];
+
+function previewViewportIcon(viewport: PreviewViewportId): string {
+  if (viewport === 'tablet') return 'tablet-line';
+  if (viewport === 'mobile') return 'smartphone-line';
+  return 'computer-line';
+}
+
 const EXPORT_READY_NUDGE_STORAGE_PREFIX = 'open-design:export-ready-nudge:';
 const COMMENT_SIDE_DOCK_WIDTH = 320;
 const COMMENT_SIDE_DOCK_RAIL_WIDTH = 42;
@@ -522,6 +529,11 @@ function PreviewViewportControls({
         tabIndex={tabIndex}
         onClick={() => setOpen((value) => !value)}
       >
+        <RemixIcon
+          name={previewViewportIcon(activePreset.id)}
+          size={14}
+          className="viewer-viewport-icon"
+        />
         <span>{t(activePreset.labelKey)}</span>
         <RemixIcon name="arrow-down-s-line" size={14} />
       </button>
@@ -542,7 +554,10 @@ function PreviewViewportControls({
                   setOpen(false);
                 }}
               >
-                <span>{t(preset.labelKey)}</span>
+                <span className="viewer-viewport-menu-label">
+                  <RemixIcon name={previewViewportIcon(preset.id)} size={14} />
+                  <span>{t(preset.labelKey)}</span>
+                </span>
                 {selected ? <Icon name="check" size={13} /> : null}
               </button>
             );

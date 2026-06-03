@@ -1902,11 +1902,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
         onDrop={handleDrop}
       >
         <div className="composer-shell">
-          {designSystemPicker ? (
-            <div className="composer-design-system-row">
-              {designSystemPicker}
-            </div>
-          ) : null}
           {/*
             Spec §8.4 — context bar above the composer input. The
             section now behaves as a pure context bar: it renders the
@@ -1938,8 +1933,9 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
               }}
             />
           ) : null}
-          {selectedWorkspaceContexts.length > 0 || stagedSkills.length > 0 || stagedMcpServers.length > 0 || stagedConnectors.length > 0 ? (
+          {designSystemPicker || selectedWorkspaceContexts.length > 0 || stagedSkills.length > 0 || stagedMcpServers.length > 0 || stagedConnectors.length > 0 ? (
             <StagedRunContexts
+              designSystemPicker={designSystemPicker}
               workspaceItems={selectedWorkspaceContexts}
               currentWorkspaceContextId={visibleWorkspaceContext?.id ?? null}
               skills={stagedSkills}
@@ -2747,6 +2743,7 @@ function workspaceContextKindLabel(kind: WorkspaceContextItem['kind']): string {
 }
 
 function StagedRunContexts({
+  designSystemPicker,
   workspaceItems,
   currentWorkspaceContextId,
   skills,
@@ -2758,6 +2755,7 @@ function StagedRunContexts({
   onRemoveConnector,
   t,
 }: {
+  designSystemPicker?: ReactNode;
   workspaceItems: WorkspaceContextItem[];
   currentWorkspaceContextId: string | null;
   skills: SkillSummary[];
@@ -2774,6 +2772,11 @@ function StagedRunContexts({
       className="staged-row staged-context-row"
       data-testid="staged-contexts"
     >
+      {designSystemPicker ? (
+        <div className="staged-context-picker staged-context-picker--design-system">
+          {designSystemPicker}
+        </div>
+      ) : null}
       {workspaceItems.map((workspaceItem) => {
         const kindLabel =
           workspaceItem.id === currentWorkspaceContextId

@@ -61,6 +61,12 @@ type BrowserNavigationEntry = {
   url: string;
 };
 
+function browserViewportIcon(viewport: BrowserViewportId): string {
+  if (viewport === 'tablet') return 'tablet-line';
+  if (viewport === 'mobile') return 'smartphone-line';
+  return 'computer-line';
+}
+
 type ReferenceSite = {
   label: string;
   url: string;
@@ -75,14 +81,13 @@ type ReferenceGroup = {
 };
 
 export type BrowserUseCategoryId =
-  | 'interact'
   | 'assets'
   | 'tokens'
   | 'motion'
-  | 'screenshots'
+  | 'visual'
   | 'structure'
-  | 'audit'
-  | 'terminal';
+  | 'project'
+  | 'general';
 
 export interface BrowserUseAction {
   id: string;
@@ -421,94 +426,88 @@ export function filterReferenceGroups(
 
 export const BROWSER_USE_CATEGORIES: BrowserUseCategory[] = [
   {
-    id: 'interact',
-    title: 'Browse and interact',
-    actions: [
-      { id: 'navigate', label: 'navigate', input: 'url / domain / search terms', output: 'Open page and return page_info.', prompt: 'Navigate the bound Browser tab to the requested URL, domain, or search query, then report the resulting page_info.' },
-      { id: 'page_info', label: 'page_info', input: 'none', output: 'URL, title, description, OG image, theme color, favicon, viewport.', prompt: 'Read compact metadata for the bound Browser tab: URL, title, description, OG/Twitter cards, theme color, favicon, and viewport.' },
-      { id: 'snapshot', label: 'snapshot', input: 'none', output: 'Up to 120 visible interactive/text elements with tag, label, href, and coordinates.', prompt: 'Capture a compact DOM interaction snapshot for agent reasoning, capped to the most useful visible controls and text blocks.' },
-      { id: 'click', label: 'click', input: 'selector', output: 'Click first matching element after scrolling it into view.', prompt: 'Click the first element matching the requested selector in the bound Browser tab, then report the visible result.' },
-      { id: 'type_text', label: 'type_text', input: 'selector, text', output: 'Fill an input and dispatch input/change events.', prompt: 'Type the requested text into the selected input or editable element and dispatch the normal browser events.' },
-      { id: 'scroll', label: 'scroll', input: 'pixels / top / bottom / page', output: 'Current and maximum scroll position.', prompt: 'Scroll the page by the requested amount or target, then report the resulting scroll position.' },
-    ],
-  },
-  {
     id: 'assets',
-    title: 'Assets',
+    title: '素材提取',
     actions: [
+      { id: 'extract_logo', label: 'extract_logo', input: 'none', output: 'Best logo candidates from header/nav/class/position plus og/favicon fallback.', prompt: 'Find likely site logo assets using DOM position, class names, header/nav context, OG image, and favicon evidence.' },
       { id: 'list_images', label: 'list_images', input: 'none', output: 'All img/srcset/source/CSS background images with dimensions and alt text.', prompt: 'Inventory every visible and CSS-referenced image, including dimensions, alt text, and source URLs.' },
       { id: 'download_assets', label: 'download_assets', input: 'kind: images|svgs|media|fonts, limit=200', output: 'Downloaded asset folder plus _manifest.json with referer/cookie support.', prompt: 'Download the requested asset kind from the bound Browser tab into the project and write a compact manifest.' },
       { id: 'extract_svgs', label: 'extract_svgs', input: 'none', output: 'Inline svg and linked .svg files saved as .svg.', prompt: 'Extract all inline and linked SVG assets from the page and save them as project files.' },
-      { id: 'extract_logo', label: 'extract_logo', input: 'none', output: 'Best logo candidates from header/nav/class/position plus og/favicon fallback.', prompt: 'Find likely site logo assets using DOM position, class names, header/nav context, OG image, and favicon evidence.' },
       { id: 'optimize_svgs', label: 'optimize_svgs', input: 'none', output: 'Optimized SVG files and compression ratio.', prompt: 'Extract page SVGs, lightly optimize comments/metadata/editor namespaces, and report compression ratios.' },
     ],
   },
   {
     id: 'tokens',
-    title: 'Design language and tokens',
+    title: '设计语言',
     actions: [
       { id: 'extract_colors', label: 'extract_colors', input: 'none', output: 'Weighted palette plus :root CSS variables as palette.json and palette.html.', prompt: 'Extract the weighted color palette and CSS color variables, then save a JSON file and visual swatch preview.' },
       { id: 'extract_fonts', label: 'extract_fonts', input: 'none', output: 'Top font families, sizes, weights, and @font-face rules as typography.json.', prompt: 'Extract computed font families, size/weight usage, and @font-face declarations from the current page.' },
       { id: 'extract_design_tokens', label: 'extract_design_tokens', input: 'none', output: 'Radius, shadow, spacing, and CSS variables as tokens.json.', prompt: 'Extract reusable design tokens from computed CSS: radius, shadows, spacing, and custom properties.' },
+      { id: 'extract_type_scale', label: 'extract_type_scale', input: 'none', output: 'h1-h6/p/button type scale with size, weight, line-height, and ratios.', prompt: 'Extract the effective typography scale for headings, body, buttons, labels, weights, line heights, and adjacent ratios.' },
+      { id: 'extract_buttons', label: 'extract_buttons', input: 'none', output: 'Deduped button style library as buttons.html and buttons.json.', prompt: 'Extract a deduped gallery of button variants, states, labels, and computed styles.' },
+      { id: 'extract_grid_system', label: 'extract_grid_system', input: 'none', output: 'Grid/flex containers, direction, gaps, columns, and max widths as layout.json.', prompt: 'Detect layout containers and grid/flex systems, including gaps, columns, directions, and max-width rules.' },
+      { id: 'extract_breakpoints', label: 'extract_breakpoints', input: 'none', output: 'Responsive media-query breakpoints as breakpoints.json.', prompt: 'Extract responsive breakpoints from stylesheets and summarize what changes at each breakpoint.' },
       { id: 'extract_gradients', label: 'extract_gradients', input: 'none', output: 'CSS gradients as gradients.css, gradients.json, and preview HTML.', prompt: 'Find linear, radial, and conic gradients and save reusable CSS, JSON, and an HTML preview.' },
       { id: 'extract_shadows', label: 'extract_shadows', input: 'none', output: 'box-shadow, text-shadow, and drop-shadow as shadows.json plus preview.', prompt: 'Extract shadow styles from the page and generate a compact visual preview.' },
       { id: 'extract_easings', label: 'extract_easings', input: 'none', output: 'Transition/animation easing functions as easings.json.', prompt: 'Extract easing functions from CSS transitions and animations, including cubic-bezier, steps, and named easings.' },
-      { id: 'extract_type_scale', label: 'extract_type_scale', input: 'none', output: 'h1-h6/p/button type scale with size, weight, line-height, and ratios.', prompt: 'Extract the effective typography scale for headings, body, buttons, labels, weights, line heights, and adjacent ratios.' },
       { id: 'export_tokens', label: 'export_tokens', input: 'none', output: 'tokens.css, tokens.scss, tailwind.theme.js, style-dictionary.tokens.json.', prompt: 'Export extracted tokens in CSS variables, SCSS, Tailwind theme, and Style Dictionary formats.' },
     ],
   },
   {
     id: 'motion',
-    title: 'Motion and interaction',
+    title: '动效',
     actions: [
       { id: 'extract_animations', label: 'extract_animations', input: 'optional selector', output: '@keyframes, transition/transform rules, detected motion libraries, motion.css, motion.json.', prompt: 'Extract animation evidence from the page or selector scope, including keyframes, transitions, transforms, and motion libraries.' },
     ],
   },
   {
-    id: 'screenshots',
-    title: 'Screenshots',
+    id: 'visual',
+    title: '视觉校验',
     actions: [
+      { id: 'validate_view', label: 'validate_view', input: 'requirement, selector? optional', output: 'Screenshot paths plus structured visual/layout issues.', prompt: 'Validate the current view against the requirement using screenshots plus layout audit evidence, then return issues and asset paths.' },
+      { id: 'audit_layout', label: 'audit_layout', input: 'selector? optional', output: 'Layout defects: overflow, bounds, overlap, clipped text as audit.json.', prompt: 'Run a deterministic layout audit for overflow, out-of-bounds elements, text overlap, and clipped text.' },
+      { id: 'audit_accessibility', label: 'audit_accessibility', input: 'selector? optional', output: 'A11y issues with selectors, labels, roles, focus, contrast, and screenshots where useful.', prompt: 'Audit accessibility evidence for the page or selector scope: names, roles, labels, focus order, contrast, and obvious keyboard traps.' },
+      { id: 'responsive_screenshots', label: 'responsive_screenshots', input: 'none', output: 'Mobile 390, tablet 834, and desktop 1440 screenshots.', prompt: 'Capture mobile, tablet, and desktop screenshots for the current page and compare the main layout shifts.' },
       { id: 'screenshot_full', label: 'screenshot_full', input: 'scale=1', output: 'Full-page screenshot beyond the viewport.', prompt: 'Capture a full-page screenshot of the bound Browser tab and save it in the project.' },
       { id: 'screenshot_element', label: 'screenshot_element', input: 'selector, scale=2', output: 'Single element screenshot at 2x by default.', prompt: 'Capture a screenshot of the requested element selector, preferring a direct element capture over a cropped page image.' },
-      { id: 'responsive_screenshots', label: 'responsive_screenshots', input: 'none', output: 'Mobile 390, tablet 834, and desktop 1440 screenshots.', prompt: 'Capture mobile, tablet, and desktop screenshots for the current page and compare the main layout shifts.' },
-      { id: 'screenshot_dark_mode', label: 'screenshot_dark_mode', input: 'none', output: 'Screenshot with prefers-color-scheme: dark.', prompt: 'Emulate dark color scheme and capture a screenshot of the page state.' },
       { id: 'screenshot_with_grid', label: 'screenshot_with_grid', input: 'columns=12, maxWidth=1200, gap=24', output: 'Screenshot with layout grid overlay.', prompt: 'Overlay a responsive column grid on the page and capture a screenshot for alignment review.' },
+      { id: 'screenshot_dark_mode', label: 'screenshot_dark_mode', input: 'none', output: 'Screenshot with prefers-color-scheme: dark.', prompt: 'Emulate dark color scheme and capture a screenshot of the page state.' },
+      { id: 'generate_styleguide', label: 'generate_styleguide', input: 'none', output: 'One-page style guide with colors, type scale, radius, and shadows.', prompt: 'Generate a concise one-page style guide from page evidence: colors, typography, radius, shadows, and reusable UI notes.' },
     ],
   },
   {
     id: 'structure',
-    title: 'Components and structure',
+    title: '组件结构',
     actions: [
       { id: 'extract_html', label: 'extract_html', input: "selector='body'", output: 'Clean self-contained HTML without script/noscript/on* attributes.', prompt: 'Extract clean self-contained HTML for the selected area, removing scripts and inline event handlers.' },
-      { id: 'extract_buttons', label: 'extract_buttons', input: 'none', output: 'Deduped button style library as buttons.html and buttons.json.', prompt: 'Extract a deduped gallery of button variants, states, labels, and computed styles.' },
-      { id: 'extract_grid_system', label: 'extract_grid_system', input: 'none', output: 'Grid/flex containers, direction, gaps, columns, and max widths as layout.json.', prompt: 'Detect layout containers and grid/flex systems, including gaps, columns, directions, and max-width rules.' },
-      { id: 'extract_nav', label: 'extract_nav', input: 'none', output: 'Primary navigation and footer links as sitemap.md and nav.json.', prompt: 'Extract primary navigation, footer links, and sitemap-like structure from the current page.' },
-      { id: 'extract_breakpoints', label: 'extract_breakpoints', input: 'none', output: 'Responsive media-query breakpoints as breakpoints.json.', prompt: 'Extract responsive breakpoints from stylesheets and summarize what changes at each breakpoint.' },
-      { id: 'extract_copy', label: 'extract_copy', input: 'none', output: 'Headings, CTAs, body copy, descriptions as copy.md and copy.json.', prompt: 'Extract product copy from the page: headings, CTA labels, paragraphs, descriptions, and repeated text patterns.' },
-      { id: 'extract_forms', label: 'extract_forms', input: 'none', output: 'Form fields, labels, validation hints, and submit actions as forms.json.', prompt: 'Extract form structure, labels, placeholders, validation hints, required states, and submit actions.' },
       { id: 'extract_component_inventory', label: 'extract_component_inventory', input: 'none', output: 'Repeated component patterns, selectors, counts, and screenshots.', prompt: 'Inventory repeated component patterns such as cards, nav items, pricing rows, modals, accordions, and tables.' },
+      { id: 'extract_copy', label: 'extract_copy', input: 'none', output: 'Headings, CTAs, body copy, descriptions as copy.md and copy.json.', prompt: 'Extract product copy from the page: headings, CTA labels, paragraphs, descriptions, and repeated text patterns.' },
+      { id: 'extract_nav', label: 'extract_nav', input: 'none', output: 'Primary navigation and footer links as sitemap.md and nav.json.', prompt: 'Extract primary navigation, footer links, and sitemap-like structure from the current page.' },
+      { id: 'extract_forms', label: 'extract_forms', input: 'none', output: 'Form fields, labels, validation hints, and submit actions as forms.json.', prompt: 'Extract form structure, labels, placeholders, validation hints, required states, and submit actions.' },
     ],
   },
   {
-    id: 'audit',
-    title: 'Audit and synthesis',
+    id: 'project',
+    title: '项目运行',
     actions: [
-      { id: 'generate_styleguide', label: 'generate_styleguide', input: 'none', output: 'One-page style guide with colors, type scale, radius, and shadows.', prompt: 'Generate a concise one-page style guide from page evidence: colors, typography, radius, shadows, and reusable UI notes.' },
-      { id: 'extract_og_metadata', label: 'extract_og_metadata', input: 'none', output: 'Meta title/description/canonical, OG/Twitter cards, social image, theme color.', prompt: 'Extract SEO and social preview metadata, including canonical, OG, Twitter card, image, and theme-color evidence.' },
-      { id: 'audit_accessibility', label: 'audit_accessibility', input: 'selector? optional', output: 'A11y issues with selectors, labels, roles, focus, contrast, and screenshots where useful.', prompt: 'Audit accessibility evidence for the page or selector scope: names, roles, labels, focus order, contrast, and obvious keyboard traps.' },
-    ],
-  },
-  {
-    id: 'terminal',
-    title: 'Terminal, project, and visual validation',
-    actions: [
+      { id: 'run_project', label: 'run_project', input: 'none', output: 'Detected dev server URL opened in Browser tab.', prompt: 'Detect, install if needed, run the project dev server, find the local URL, and open it in the Browser tab.' },
       { id: 'detect_project', label: 'detect_project', input: 'none', output: 'Framework, package manager, install command, dev command, and port.', prompt: 'Detect the project setup from package files, lockfiles, and framework config, then report install/dev commands and likely ports.' },
+    ],
+  },
+  {
+    id: 'general',
+    title: '通用操作',
+    actions: [
+      { id: 'page_info', label: 'page_info', input: 'none', output: 'URL, title, description, OG image, theme color, favicon, viewport.', prompt: 'Read compact metadata for the bound Browser tab: URL, title, description, OG/Twitter cards, theme color, favicon, and viewport.' },
+      { id: 'snapshot', label: 'snapshot', input: 'none', output: 'Up to 120 visible interactive/text elements with tag, label, href, and coordinates.', prompt: 'Capture a compact DOM interaction snapshot for agent reasoning, capped to the most useful visible controls and text blocks.' },
+      { id: 'navigate', label: 'navigate', input: 'url / domain / search terms', output: 'Open page and return page_info.', prompt: 'Navigate the bound Browser tab to the requested URL, domain, or search query, then report the resulting page_info.' },
+      { id: 'click', label: 'click', input: 'selector', output: 'Click first matching element after scrolling it into view.', prompt: 'Click the first element matching the requested selector in the bound Browser tab, then report the visible result.' },
+      { id: 'type_text', label: 'type_text', input: 'selector, text', output: 'Fill an input and dispatch input/change events.', prompt: 'Type the requested text into the selected input or editable element and dispatch the normal browser events.' },
+      { id: 'scroll', label: 'scroll', input: 'pixels / top / bottom / page', output: 'Current and maximum scroll position.', prompt: 'Scroll the page by the requested amount or target, then report the resulting scroll position.' },
+      { id: 'extract_og_metadata', label: 'extract_og_metadata', input: 'none', output: 'Meta title/description/canonical, OG/Twitter cards, social image, theme color.', prompt: 'Extract SEO and social preview metadata, including canonical, OG, Twitter card, image, and theme-color evidence.' },
       { id: 'terminal_run', label: 'terminal_run', input: 'command, timeoutMs=120000', output: 'stdout, stderr, and exit code.', prompt: 'Run the requested terminal command to completion in the shared project terminal and summarize stdout, stderr, and exit code.' },
       { id: 'terminal_run_background', label: 'terminal_run_background', input: 'command', output: 'Background task id and recent output.', prompt: 'Start the requested long-running terminal command in the background and report how to read its output.' },
       { id: 'terminal_read', label: 'terminal_read', input: 'maxChars=8000', output: 'Recent shared terminal output.', prompt: 'Read recent terminal output and extract URLs, errors, or readiness signals relevant to the bound Browser tab.' },
-      { id: 'run_project', label: 'run_project', input: 'none', output: 'Detected dev server URL opened in Browser tab.', prompt: 'Detect, install if needed, run the project dev server, find the local URL, and open it in the Browser tab.' },
-      { id: 'audit_layout', label: 'audit_layout', input: 'selector? optional', output: 'Layout defects: overflow, bounds, overlap, clipped text as audit.json.', prompt: 'Run a deterministic layout audit for overflow, out-of-bounds elements, text overlap, and clipped text.' },
-      { id: 'validate_view', label: 'validate_view', input: 'requirement, selector? optional', output: 'Screenshot paths plus structured visual/layout issues.', prompt: 'Validate the current view against the requirement using screenshots plus layout audit evidence, then return issues and asset paths.' },
     ],
   },
 ];
@@ -524,6 +523,28 @@ export function browserUseActionById(id: string): BrowserUseAction | null {
     if (action) return action;
   }
   return null;
+}
+
+export function filterBrowserUseCategories(groups: BrowserUseCategory[], query: string): BrowserUseCategory[] {
+  const needle = query.trim().toLocaleLowerCase();
+  if (!needle) return groups;
+  return groups
+    .map((group) => {
+      const groupMatches = group.title.toLocaleLowerCase().includes(needle);
+      const actions = groupMatches
+        ? group.actions
+        : group.actions.filter((action) =>
+          [
+            action.id,
+            action.label,
+            action.input,
+            action.output,
+            action.prompt,
+          ].some((value) => value.toLocaleLowerCase().includes(needle)),
+        );
+      return { ...group, actions };
+    })
+    .filter((group) => group.actions.length > 0);
 }
 
 export function browserUsePrompt(action: BrowserUseAction, context: BrowserUsePromptContext = {}): string {
@@ -1340,7 +1361,7 @@ export function DesignBrowserPanel({
 
   function requestBrowserUsePrompt(action: BrowserUseAction) {
     if (!onRequestBrowserUsePrompt) {
-      setStatusMessage('Browser use prompts are unavailable here');
+      setStatusMessage('灵感暂不可用');
       setBrowserUseOpen(false);
       return;
     }
@@ -1348,7 +1369,7 @@ export function DesignBrowserPanel({
     setBrowserUseOpen(false);
     setMenuOpen(false);
     setSuggestionsOpen(false);
-    setStatusMessage('Browser use prompt added to chat input');
+    setStatusMessage('已加入输入框');
   }
 
   function updateActiveTargetStyle(prop: keyof PreviewAnnotationStyle, value: string) {
@@ -1719,7 +1740,7 @@ export function DesignBrowserPanel({
             <Icon name="comment" size={15} />
           </IconTooltipButton>
           <IconTooltipButton
-            label="Inspiration / Browser use"
+            label="灵感"
             wrapperClassName="db-action-item db-action-browser-use"
             className={browserUseOpen ? 'is-active' : ''}
             onClick={() => {
@@ -1956,14 +1977,32 @@ function BrowserUseMenu({
 }: {
   onPick: (action: BrowserUseAction) => void;
 }) {
+  const [query, setQuery] = useState('');
+  const categories = useMemo(() => filterBrowserUseCategories(BROWSER_USE_CATEGORIES, query), [query]);
+  const visibleTotal = useMemo(
+    () => categories.reduce((sum, category) => sum + category.actions.length, 0),
+    [categories],
+  );
+
   return (
-    <div className="db-menu db-browser-use-menu" role="menu" aria-label="Browser use actions">
+    <div className="db-menu db-browser-use-menu" role="menu" aria-label="灵感">
       <div className="db-browser-use-head">
-        <strong>Inspiration / Browser use</strong>
-        <small>{BROWSER_USE_ACTION_TOTAL} actions for DOM, screenshots, a11y, OG, fonts, colors, motion, and layout evidence.</small>
+        <strong>灵感</strong>
+        <small>{BROWSER_USE_ACTION_TOTAL} 个网页操作，优先展示素材提取、设计语言、动效、视觉校验和组件结构。</small>
       </div>
+      <label className="db-browser-use-search">
+        <Icon name="search" size={13} />
+        <input
+          type="search"
+          value={query}
+          aria-label="搜索灵感"
+          placeholder="搜索截图、字体、配色、a11y..."
+          onChange={(event) => setQuery(event.currentTarget.value)}
+        />
+        {query ? <span>{visibleTotal}</span> : null}
+      </label>
       <div className="db-browser-use-list">
-        {BROWSER_USE_CATEGORIES.map((category) => (
+        {categories.map((category) => (
           <section key={category.id} className="db-browser-use-section">
             <div className="db-browser-use-section-title">
               <span>{category.title}</span>
@@ -1987,6 +2026,9 @@ function BrowserUseMenu({
             ))}
           </section>
         ))}
+        {categories.length === 0 ? (
+          <div className="db-browser-use-empty" role="status">没有匹配的灵感</div>
+        ) : null}
       </div>
     </div>
   );
@@ -2030,6 +2072,11 @@ function BrowserViewportControls({
         className={open ? 'is-active' : ''}
         onClick={() => setOpen((value) => !value)}
       >
+        <RemixIcon
+          name={browserViewportIcon(activePreset.id)}
+          size={14}
+          className="db-viewport-icon"
+        />
         <span className="db-viewport-label">{activePreset.label}</span>
         <RemixIcon name="arrow-down-s-line" size={13} />
       </IconTooltipButton>
@@ -2047,7 +2094,10 @@ function BrowserViewportControls({
                 setOpen(false);
               }}
             >
-              <span>{preset.label}</span>
+              <span className="db-viewport-menu-label">
+                <RemixIcon name={browserViewportIcon(preset.id)} size={14} />
+                <span>{preset.label}</span>
+              </span>
               {preset.id === viewport ? <Icon name="check" size={13} /> : null}
             </button>
           ))}

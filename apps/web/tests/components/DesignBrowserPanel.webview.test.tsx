@@ -85,7 +85,7 @@ describe('DesignBrowserPanel <webview> navigation', () => {
     expect(screen.getByRole('menuitem', { name: /Edit Live DOM/ })).toBeTruthy();
   });
 
-  it('adds a Browser use operation prompt for the current browser tab', () => {
+  it('searches inspiration actions and adds an operation prompt for the current browser tab', () => {
     const onRequestBrowserUsePrompt = vi.fn();
 
     render(
@@ -99,7 +99,11 @@ describe('DesignBrowserPanel <webview> navigation', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Inspiration / Browser use' }));
+    fireEvent.click(screen.getByRole('button', { name: '灵感' }));
+    fireEvent.change(screen.getByRole('searchbox', { name: '搜索灵感' }), {
+      target: { value: 'font' },
+    });
+    expect(screen.queryByRole('menuitem', { name: /validate_view/ })).toBeNull();
     fireEvent.click(screen.getByRole('menuitem', { name: /extract_fonts/ }));
 
     expect(onRequestBrowserUsePrompt).toHaveBeenCalledTimes(1);

@@ -19,6 +19,7 @@ import { AgentIcon } from './AgentIcon';
 const PREFERRED_EDITOR_KEY = 'open-design:preferred-editor';
 const PREFERRED_FRAMEWORK_KEY = 'open-design:handoff-framework';
 const AMR_WEBSITE_URL = 'https://open-design.ai/amr';
+const PROJECT_PATH_COPY_ID = 'project-path';
 
 type HandoffTab = 'editor' | 'cli';
 type FrameworkId = 'react' | 'vue' | 'svelte' | 'solid' | 'next' | 'vanilla';
@@ -429,6 +430,32 @@ export function HandoffButton({
     }
   }
 
+  async function copyProjectPath() {
+    if (!projectDir) {
+      setError(t('handoff.projectPathUnavailable'));
+      return;
+    }
+    setError(null);
+    setCopyBusy(PROJECT_PATH_COPY_ID);
+    try {
+      const copied = await copyToClipboard(projectDir);
+      if (!copied) {
+        setError(t('handoff.copyFailed'));
+        return;
+      }
+      setCopiedCliId(PROJECT_PATH_COPY_ID);
+      if (copiedTimerRef.current !== null) {
+        window.clearTimeout(copiedTimerRef.current);
+      }
+      copiedTimerRef.current = window.setTimeout(() => {
+        setCopiedCliId(null);
+        copiedTimerRef.current = null;
+      }, 1800);
+    } finally {
+      setCopyBusy(null);
+    }
+  }
+
   if (!loaded) {
     return null;
   }
@@ -557,6 +584,26 @@ export function HandoffButton({
               onClick={() => setActiveTab('cli')}
             >
               {t('handoff.cliSection')}
+            </button>
+          </div>
+          <div className="handoff-path-row" data-testid="handoff-project-path">
+            <div className="handoff-path-copy">
+              <span className="handoff-path-label">Path</span>
+              <code title={projectDir ?? t('handoff.projectPathUnavailable')}>
+                {projectDir ?? t('handoff.projectPathUnavailable')}
+              </code>
+            </div>
+            <button
+              type="button"
+              className="handoff-path-button"
+              onClick={() => void copyProjectPath()}
+              disabled={copyBusy === PROJECT_PATH_COPY_ID || !projectDir}
+              title={t('designFiles.copyPath')}
+            >
+              <Icon name={copiedCliId === PROJECT_PATH_COPY_ID ? 'check' : 'copy'} size={13} />
+              <span>
+                {copiedCliId === PROJECT_PATH_COPY_ID ? t('handoff.copied') : t('designFiles.copyPath')}
+              </span>
             </button>
           </div>
           {activeTab === 'editor' ? (

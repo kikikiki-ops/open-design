@@ -11,6 +11,7 @@ import {
   browserUsePrompt,
   browserFileName,
   faviconUrl,
+  filterBrowserUseCategories,
   filterReferenceGroups,
   formatAddressDisplay,
   formatAddressDisplayParts,
@@ -95,22 +96,40 @@ describe('normalizeBrowserAddress', () => {
   });
 });
 
-describe('browser use action prompts', () => {
-  it('keeps the Browser use catalogue at the intended 43 actions', () => {
+describe('inspiration action prompts', () => {
+  it('keeps the inspiration catalogue at the intended 43 actions', () => {
     expect(BROWSER_USE_ACTION_TOTAL).toBe(43);
     expect(BROWSER_USE_CATEGORIES.map((category) => category.id)).toEqual([
-      'interact',
       'assets',
       'tokens',
       'motion',
-      'screenshots',
+      'visual',
       'structure',
-      'audit',
-      'terminal',
+      'project',
+      'general',
     ]);
+    expect(BROWSER_USE_CATEGORIES[0]?.actions.slice(0, 3).map((action) => action.id)).toEqual([
+      'extract_logo',
+      'list_images',
+      'download_assets',
+    ]);
+    expect(BROWSER_USE_CATEGORIES[BROWSER_USE_CATEGORIES.length - 1]?.actions.map((action) => action.id)).toContain('navigate');
     expect(browserUseActionById('extract_fonts')?.output).toContain('typography.json');
     expect(browserUseActionById('extract_og_metadata')?.output).toContain('OG/Twitter');
     expect(browserUseActionById('audit_accessibility')?.output).toContain('A11y');
+  });
+
+  it('filters inspiration actions by action evidence and category title', () => {
+    const visualCategory = BROWSER_USE_CATEGORIES.find((category) => category.id === 'visual');
+    expect(visualCategory).toBeTruthy();
+    expect(filterBrowserUseCategories(BROWSER_USE_CATEGORIES, 'a11y')).toEqual([
+      {
+        ...visualCategory!,
+        actions: [browserUseActionById('audit_accessibility')!],
+      },
+    ]);
+    expect(filterBrowserUseCategories(BROWSER_USE_CATEGORIES, '通用操作')[0]?.id).toBe('general');
+    expect(filterBrowserUseCategories(BROWSER_USE_CATEGORIES, 'no-such-action')).toEqual([]);
   });
 
   it('builds an agent-browser prompt bound to the current browser tab context', () => {
