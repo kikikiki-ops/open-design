@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { isIP } from "node:net";
 import { networkInterfaces } from "node:os";
 
@@ -209,12 +209,44 @@ export function persistTokenToConfig(
   }
 }
 
+// A "documentation key" in the shipped example: any object key whose name
+// starts with `//`. The example uses `"// <field>": "<description>"` siblings to
+// annotate fields while staying valid JSON. These are stripped before a
+// webui.config.json is generated so the live config is pure data.
+function isDocCommentKey(key: string): boolean {
+  return key.startsWith("//");
+}
+
+// Builds the comment-free webui.config.json body. When the shipped example is
+// present, its real VALUES seed the config (so a packager can tune defaults via
+// the example) but its `//` documentation keys are stripped — the generated
+// file must never carry description text, which would otherwise show up as
+// unknown/garbage config keys. A missing or unparseable example falls back to
+// the built-in defaults so first-run always yields a valid config.
+function scaffoldContentsFromExample(examplePath: string): string {
+  if (!existsSync(examplePath)) return defaultWebuiConfigFileContents();
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(readFileSync(examplePath, "utf8")) as Record<string, unknown>;
+  } catch {
+    return defaultWebuiConfigFileContents();
+  }
+  const clean: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (!isDocCommentKey(key)) clean[key] = value;
+  }
+  return `${JSON.stringify(clean, null, 2)}\n`;
+}
+
 /**
  * First-run convenience: materialize `webui.config.json` when it does not yet
- * exist, copying the shipped `webui.config.example.json` verbatim when present
- * and otherwise writing {@link defaultWebuiConfigFileContents}. Returns whether
- * a file was created. Never throws on a read-only install dir — the caller
- * keeps running on resolved defaults and only surfaces a notice.
+ * exist, seeding it from the shipped `webui.config.example.json` (with its `//`
+ * documentation keys stripped) when present and otherwise writing
+ * {@link defaultWebuiConfigFileContents}. The generated file is always pure
+ * data — descriptions live only in the example, never in the live config — so
+ * it can never fail JSON.parse or carry placeholder/invalid values. Returns
+ * whether a file was created. Never throws on a read-only install dir — the
+ * caller keeps running on resolved defaults and only surfaces a notice.
  */
 export function ensureWebuiConfigScaffold(input: {
   configPath: string;
@@ -222,11 +254,7 @@ export function ensureWebuiConfigScaffold(input: {
 }): { created: boolean; error?: string } {
   if (existsSync(input.configPath)) return { created: false };
   try {
-    if (existsSync(input.examplePath)) {
-      copyFileSync(input.examplePath, input.configPath);
-    } else {
-      writeFileSync(input.configPath, defaultWebuiConfigFileContents(), "utf8");
-    }
+    writeFileSync(input.configPath, scaffoldContentsFromExample(input.examplePath), "utf8");
     return { created: true };
   } catch (error) {
     return { created: false, error: (error as Error).message };

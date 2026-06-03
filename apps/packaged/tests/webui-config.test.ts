@@ -186,7 +186,7 @@ describe("config file scaffolding", () => {
     expect(parsed.host).toBe("127.0.0.1");
   });
 
-  it("ensureWebuiConfigScaffold copies the example when present, else writes defaults", () => {
+  it("ensureWebuiConfigScaffold seeds from the example when present, else writes defaults", () => {
     const dir = mkdtempSync(join(tmpdir(), "od-cfg-scaffold-"));
     const configPath = join(dir, "webui.config.json");
     const examplePath = join(dir, "webui.config.example.json");
@@ -203,17 +203,53 @@ describe("config file scaffolding", () => {
     rmSync(dir, { force: true, recursive: true });
   });
 
-  it("ensureWebuiConfigScaffold copies the example file verbatim when it exists", () => {
+  it("ensureWebuiConfigScaffold keeps the example's real values but strips // doc keys", () => {
     const dir = mkdtempSync(join(tmpdir(), "od-cfg-copy-"));
     const configPath = join(dir, "webui.config.json");
     const examplePath = join(dir, "webui.config.example.json");
-    writeFileSync(examplePath, JSON.stringify({ port: 9999, daemonPort: 8888 }), "utf8");
+    // A documented example: `//` keys describe fields; `// namespace` documents
+    // an optional field that has NO real value line (so it must not leak as a
+    // bogus `namespace` string into the generated config).
+    writeFileSync(
+      examplePath,
+      JSON.stringify({
+        "//": "header doc",
+        "// port": "browser port",
+        port: 9999,
+        "// daemonPort": "daemon port",
+        daemonPort: 8888,
+        "// namespace": "optional runtime namespace",
+      }),
+      "utf8",
+    );
 
     const result = ensureWebuiConfigScaffold({ configPath, examplePath });
     expect(result.created).toBe(true);
-    const written = JSON.parse(loadConfigFileRaw(configPath));
+    const rawWritten = loadConfigFileRaw(configPath);
+    // The generated file must be pure data: no `//` comment keys survive.
+    expect(rawWritten).not.toContain("//");
+    const written = JSON.parse(rawWritten) as Record<string, unknown>;
+    // Real values flow through.
     expect(written.port).toBe(9999);
     expect(written.daemonPort).toBe(8888);
+    // Doc-only fields do NOT become real config (no `namespace` description leak).
+    expect(written).not.toHaveProperty("namespace");
+    expect(Object.keys(written).some((k) => k.startsWith("//"))).toBe(false);
+
+    rmSync(dir, { force: true, recursive: true });
+  });
+
+  it("ensureWebuiConfigScaffold falls back to defaults when the example is unparseable", () => {
+    const dir = mkdtempSync(join(tmpdir(), "od-cfg-bad-"));
+    const configPath = join(dir, "webui.config.json");
+    const examplePath = join(dir, "webui.config.example.json");
+    writeFileSync(examplePath, "{ not valid json", "utf8");
+
+    const result = ensureWebuiConfigScaffold({ configPath, examplePath });
+    expect(result.created).toBe(true);
+    const written = JSON.parse(loadConfigFileRaw(configPath)) as Record<string, unknown>;
+    expect(written.port).toBe(7456);
+    expect(written.daemonPort).toBe(7457);
 
     rmSync(dir, { force: true, recursive: true });
   });

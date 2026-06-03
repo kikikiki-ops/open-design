@@ -1,7 +1,24 @@
 {
+  "//": "Open Design WebUI 配置示例。首次运行 `start` 会据此自动生成精简的 webui.config.json（自动去掉所有以 // 开头的说明键）。也可手动复制本文件改名为 webui.config.json —— 这些说明键会被忽略，不影响解析。优先级：命令行参数 > webui.config.json > 环境变量 > 默认值。",
+
+  "// port": "浏览器访问端口（web 监听端口）。默认 7456。",
   "port": 7456,
+
+  "// daemonPort": "内部 daemon 端口。默认 7457；设为 0 改用随机环回端口（仅本机内部使用）。",
   "daemonPort": 7457,
+
+  "// host": "绑定地址。127.0.0.1 = 仅本机；0.0.0.0 = 监听所有网卡，供局域网/远程访问（此时建议设置 token）。",
   "host": "127.0.0.1",
+
+  "// token": "直连 daemon /api 的访问令牌。host 非环回且此项为空时会自动生成并写回本文件，重启复用。浏览器经 web 访问时 /api 已反代，无需 token。",
   "token": null,
-  "openBrowser": true
+
+  "// openBrowser": "启动后是否自动打开浏览器。默认 true。",
+  "openBrowser": true,
+
+  "// namespace": "可选。运行时命名空间，决定 start/stop/status 之间通信的 IPC socket。同机隔离多实例时给每个实例设不同值；省略 = default。设置后请保持 start/stop/status 用同一份配置。",
+
+  "// dataDir": "可选。数据目录绝对路径（等价环境变量 OD_DATA_DIR），存放数据库 / 项目 / 工件 / 日志。省略 = 使用系统默认位置（OD_DATA_DIR 或 ~/.local/share/open-design）。",
+
+  "// lang": "可选。启动输出与界面语言，如 \"en\"、\"zh-CN\"。省略 = 按系统环境（LC_ALL/LANG 等）推断。"
 }
