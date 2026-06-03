@@ -94,7 +94,7 @@ import { installFromTarget, uninstallById, sanitizeRepoName } from './library-in
 import { buildWindowsFolderDialogCommand, parseFolderDialogStdout } from './native-folder-dialog.js';
 import { listCodexPets, readCodexPetSpritesheet } from './codex-pets.js';
 import { syncCommunityPets } from './community-pets-sync.js';
-import { parseMediaExecutionPolicyInput } from './media-policy.js';
+import { defaultMediaExecutionPolicy, parseMediaExecutionPolicyInput } from './media-policy.js';
 import {
   applySandboxRuntimeEnv,
   ensureSandboxRuntimeDirs,
@@ -3519,8 +3519,8 @@ function authorizeToolRequest(req, res, operation) {
   return validation.grant;
 }
 
-function optionalToolGrantFromRequest(req) {
-  const validation = toolTokenRegistry.validate(bearerTokenFromRequest(req));
+function optionalToolGrantFromRequest(req, options = {}) {
+  const validation = toolTokenRegistry.validate(bearerTokenFromRequest(req), options);
   return validation.ok ? validation.grant : null;
 }
 
@@ -13323,6 +13323,7 @@ export async function startServer({
       assistantMessageId,
       clientRequestId: `orbit-${trigger}-${randomUUID()}`,
       agentId,
+      mediaExecution: defaultMediaExecutionPolicy(),
     });
     upsertMessage(db, conversationId, {
       id: `orbit-user-${run.id}`,
@@ -14323,6 +14324,7 @@ export async function startServer({
       assistantMessageId,
       clientRequestId: `routine-${trigger}-${randomUUID()}`,
       agentId,
+      mediaExecution: defaultMediaExecutionPolicy(),
       ...(resolvedRoutineSnapshot?.ok
         ? {
             appliedPluginSnapshotId: resolvedRoutineSnapshot.snapshotId,

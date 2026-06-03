@@ -1268,7 +1268,6 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
                 onClick={() => usePromptExample(example)}
               >
                 <span>{example}</span>
-                <Icon name="external-link" size={14} aria-hidden />
               </button>
             ))}
           </div>
