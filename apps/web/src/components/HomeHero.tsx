@@ -171,6 +171,18 @@ interface SelectedPromptExample {
   promptText: string;
 }
 
+const EMPTY_PLUGIN_CONTEXTS: InstalledPluginRecord[] = [];
+const EMPTY_MCP_CONTEXTS: McpServerConfig[] = [];
+const EMPTY_CONNECTOR_CONTEXTS: ConnectorDetail[] = [];
+const EMPTY_INPUT_FIELDS: InputFieldSpec[] = [];
+const EMPTY_PLUGIN_INPUT_VALUES: Record<string, unknown> = {};
+const EMPTY_INPUT_NAMES: string[] = [];
+const EMPTY_DESIGN_SYSTEM_OPTIONS: HomeHeroDesignSystemOption[] = [];
+const EMPTY_STAGED_FILES: File[] = [];
+const EMPTY_SKILLS: SkillSummary[] = [];
+const EMPTY_MCP_OPTIONS: McpServerConfig[] = [];
+const EMPTY_CONNECTOR_OPTIONS: ConnectorDetail[] = [];
+
 export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
   {
     prompt,
@@ -186,32 +198,32 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
     onClearActivePlugin,
     onClearActiveChip = onClearActivePlugin,
     onClearActiveSkill = () => undefined,
-    selectedPluginContexts = [],
-    selectedMcpContexts = [],
-    selectedConnectorContexts = [],
+    selectedPluginContexts = EMPTY_PLUGIN_CONTEXTS,
+    selectedMcpContexts = EMPTY_MCP_CONTEXTS,
+    selectedConnectorContexts = EMPTY_CONNECTOR_CONTEXTS,
     onRemovePluginContext = () => undefined,
     onRemoveMcpContext = () => undefined,
     onRemoveConnectorContext = () => undefined,
     onOpenPluginDetails = () => undefined,
-    pluginInputFields = [],
-    pluginInputValues = {},
+    pluginInputFields = EMPTY_INPUT_FIELDS,
+    pluginInputValues = EMPTY_PLUGIN_INPUT_VALUES,
     pluginInputTemplate = null,
     onPluginInputValuesChange = () => undefined,
     onPluginInputValidityChange = () => undefined,
-    inlineEditableInputNames = [],
+    inlineEditableInputNames = EMPTY_INPUT_NAMES,
     showPluginInputsForm = true,
-    footerInputNames = [],
-    designSystemOptions = [],
-    stagedFiles = [],
+    footerInputNames = EMPTY_INPUT_NAMES,
+    designSystemOptions = EMPTY_DESIGN_SYSTEM_OPTIONS,
+    stagedFiles = EMPTY_STAGED_FILES,
     onAddFiles = () => undefined,
     onRemoveFile = () => undefined,
     pluginOptions,
     pluginsLoading,
-    skillOptions = [],
+    skillOptions = EMPTY_SKILLS,
     skillsLoading = false,
-    mcpOptions = [],
+    mcpOptions = EMPTY_MCP_OPTIONS,
     mcpLoading = false,
-    connectorOptions = [],
+    connectorOptions = EMPTY_CONNECTOR_OPTIONS,
     pendingPluginId,
     pendingChipId,
     submitDisabled = false,
