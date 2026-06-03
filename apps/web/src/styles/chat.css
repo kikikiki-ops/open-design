@@ -878,6 +878,11 @@
   position: relative;
   z-index: 1500;
 }
+.composer:has(.composer-tools-menu),
+.composer:has(.composer-design-toolbox-menu),
+.composer:has(.composer-import-menu) {
+  z-index: 80;
+}
 /* Elevation kicks in only when a pinned todo card is sitting directly
  * above the composer. Without the card the chat scroll already provides
  * its own visual edge; the shadow would just darken empty whitespace. */

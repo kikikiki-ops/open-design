@@ -1502,7 +1502,7 @@ a.avatar-item:visited {
 .split-resize-handle:focus-visible::after,
 .split.is-resizing-chat .split-resize-handle::after {
   background: color-mix(in srgb, var(--accent) 70%, var(--border));
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 10%, transparent);
+  box-shadow: none;
   opacity: 1;
 }
 .split-resize-handle:focus-visible {

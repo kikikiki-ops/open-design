@@ -712,6 +712,109 @@ describe('FileWorkspace launcher tab creation', () => {
     });
   });
 
+  it('opens the Design Files tab launcher with the browser new-tab shortcut', async () => {
+    render(
+      <FileWorkspace
+        projectId="project-1"
+        projectKind="prototype"
+        files={[workspaceFile('cover.html')]}
+        liveArtifacts={[]}
+        onRefreshFiles={vi.fn()}
+        isDeck={false}
+        tabsState={{ tabs: [], active: null }}
+        onTabsStateChange={vi.fn()}
+      />,
+    );
+
+    const allowedDefault = fireEvent.keyDown(window, {
+      key: 't',
+      metaKey: true,
+    });
+
+    expect(allowedDefault).toBe(false);
+    expect(screen.getByTestId('workspace-add-tab').getAttribute('aria-expanded')).toBe(
+      'true',
+    );
+    expect(await screen.findByRole('dialog', { name: /New tab/i })).toBeTruthy();
+    expect(screen.getByTestId('tab-launcher-search')).toBe(document.activeElement);
+  });
+
+  it('closes the active Design Files workspace tab with the browser close-tab shortcut', () => {
+    const onTabsStateChange = vi.fn();
+    render(
+      <FileWorkspace
+        projectId="project-1"
+        projectKind="prototype"
+        files={[workspaceFile('analysis.html'), workspaceFile('notes.html')]}
+        liveArtifacts={[]}
+        onRefreshFiles={vi.fn()}
+        isDeck={false}
+        tabsState={{ tabs: ['analysis.html', 'notes.html'], active: 'notes.html' }}
+        onTabsStateChange={onTabsStateChange}
+      />,
+    );
+
+    const allowedDefault = fireEvent.keyDown(window, {
+      key: 'w',
+      ctrlKey: true,
+    });
+
+    expect(allowedDefault).toBe(false);
+    expect(onTabsStateChange).toHaveBeenLastCalledWith({
+      tabs: ['analysis.html'],
+      active: 'analysis.html',
+    });
+  });
+
+  it('switches Design Files workspace tabs with browser-style next and previous shortcuts', async () => {
+    const onTabsStateChange = vi.fn();
+    render(
+      <FileWorkspace
+        projectId="project-1"
+        projectKind="prototype"
+        files={[workspaceFile('analysis.html'), workspaceFile('notes.html')]}
+        liveArtifacts={[]}
+        onRefreshFiles={vi.fn()}
+        isDeck={false}
+        tabsState={{ tabs: ['analysis.html', 'notes.html'], active: 'analysis.html' }}
+        onTabsStateChange={onTabsStateChange}
+      />,
+    );
+
+    const nextAllowedDefault = fireEvent.keyDown(window, {
+      key: 'Tab',
+      ctrlKey: true,
+    });
+
+    expect(nextAllowedDefault).toBe(false);
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /notes\.html/ }).getAttribute('aria-selected')).toBe(
+        'true',
+      );
+    });
+    expect(onTabsStateChange).toHaveBeenLastCalledWith({
+      tabs: ['analysis.html', 'notes.html'],
+      active: 'notes.html',
+    });
+
+    const previousAllowedDefault = fireEvent.keyDown(window, {
+      key: 'Tab',
+      ctrlKey: true,
+      shiftKey: true,
+    });
+
+    expect(previousAllowedDefault).toBe(false);
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /analysis\.html/ }).getAttribute('aria-selected')).toBe(
+        'true',
+      );
+    });
+    expect(onTabsStateChange).toHaveBeenLastCalledWith({
+      tabs: ['analysis.html', 'notes.html'],
+      active: 'analysis.html',
+    });
+  });
+
   it('focuses a browser open request without adding it to file tabs', async () => {
     const onTabsStateChange = vi.fn();
     const browserTabs = [

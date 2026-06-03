@@ -587,22 +587,21 @@ export function HandoffButton({
             </button>
           </div>
           <div className="handoff-path-row" data-testid="handoff-project-path">
-            <div className="handoff-path-copy">
-              <span className="handoff-path-label">Path</span>
-              <code title={projectDir ?? t('handoff.projectPathUnavailable')}>
-                {projectDir ?? t('handoff.projectPathUnavailable')}
-              </code>
-            </div>
             <button
               type="button"
-              className="handoff-path-button"
+              className={`handoff-path-button${copiedCliId === PROJECT_PATH_COPY_ID ? ' copied' : ''}`}
               onClick={() => void copyProjectPath()}
               disabled={copyBusy === PROJECT_PATH_COPY_ID || !projectDir}
-              title={t('designFiles.copyPath')}
+              title={projectDir ?? t('handoff.projectPathUnavailable')}
+              aria-label={copiedCliId === PROJECT_PATH_COPY_ID ? t('handoff.copied') : t('designFiles.copyPath')}
             >
-              <Icon name={copiedCliId === PROJECT_PATH_COPY_ID ? 'check' : 'copy'} size={13} />
-              <span>
-                {copiedCliId === PROJECT_PATH_COPY_ID ? t('handoff.copied') : t('designFiles.copyPath')}
+              <span className="handoff-path-button-main">
+                <span className="handoff-path-button-icon" aria-hidden>
+                  <Icon name={copiedCliId === PROJECT_PATH_COPY_ID ? 'check' : 'copy'} size={13} />
+                </span>
+                <span className="handoff-path-button-label">
+                  {copiedCliId === PROJECT_PATH_COPY_ID ? t('handoff.copied') : t('designFiles.copyPath')}
+                </span>
               </span>
             </button>
           </div>

@@ -5,7 +5,7 @@
 // daemon's open-in catalogue: finder / explorer / file-manager) rather than a
 // no-op that advertises an action it never runs.
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { HandoffButton } from '../../src/components/HandoffButton';
@@ -133,5 +133,42 @@ describe('HandoffButton zero-editors fallback', () => {
     expect(prompt).toContain('Vue.js');
     expect(prompt).toContain('Claude Code');
     expect(prompt).toContain('真实可运行');
+  });
+
+  it('keeps the project path hidden behind a compact copy row', async () => {
+    fetchHostEditors.mockResolvedValue({
+      platform: 'darwin',
+      editors: [
+        {
+          id: 'cursor',
+          label: 'Cursor',
+          available: true,
+        },
+      ],
+    });
+    copyToClipboard.mockResolvedValue(true);
+    const projectDir = '/tmp/open-design/Landing';
+
+    render(
+      <I18nProvider initial="en">
+        <HandoffButton
+          projectId="p1"
+          projectName="Landing"
+          projectDir={projectDir}
+        />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(await screen.findByTestId('handoff-caret'));
+
+    const pathRow = await screen.findByTestId('handoff-project-path');
+    expect(pathRow.textContent).toContain('Copy path');
+    expect(pathRow.textContent).not.toContain(projectDir);
+
+    const copyPathButton = within(pathRow).getByRole('button', { name: 'Copy path' });
+    expect(copyPathButton.getAttribute('title')).toBe(projectDir);
+    fireEvent.click(copyPathButton);
+
+    await waitFor(() => expect(copyToClipboard).toHaveBeenCalledWith(projectDir));
   });
 });

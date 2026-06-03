@@ -165,6 +165,17 @@ describe('ChatPane streaming state', () => {
     expect(css).toContain('.chat-queued-send-overflow');
   });
 
+  it('keeps composer popovers above the chat jump button', () => {
+    const css = readExpandedIndexCss();
+
+    expect(css).toContain('.chat-jump-btn');
+    expect(css).toContain('z-index: 6;');
+    expect(css).toContain('.composer:has(.composer-tools-menu)');
+    expect(css).toContain('.composer:has(.composer-design-toolbox-menu)');
+    expect(css).toContain('.composer:has(.composer-import-menu)');
+    expect(css).toContain('z-index: 80;');
+  });
+
   it('exposes retry only for the last failed assistant when the pane is idle', () => {
     const failed: ChatMessage = {
       id: 'assistant-1',

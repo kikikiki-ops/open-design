@@ -253,6 +253,12 @@ interface DesignSystemProjectSection {
   category: DesignSystemReviewCategory;
   requiredFile?: string;
 }
+
+function consumeFileWorkspaceTabShortcut(event: KeyboardEvent) {
+  event.preventDefault();
+  event.stopPropagation();
+}
+
 type DesignSystemSectionActivityPhase =
   | 'idle'
   | 'planned'
@@ -742,6 +748,54 @@ export function FileWorkspace({
     openFile(tabId);
   }
 
+  function activateWorkspaceTab(tabId: string) {
+    if (tabId === QUESTIONS_TAB) {
+      setUploadError(null);
+      setActiveTab(QUESTIONS_TAB);
+      return;
+    }
+    const sketchEntry = sketches[tabId];
+    if (sketchEntry && !sketchEntry.persisted) {
+      setUploadError(null);
+      activatePending(tabId);
+      return;
+    }
+    focusWorkspaceTab(tabId);
+  }
+
+  function activateWorkspaceTabByOffset(offset: number) {
+    if (workspaceTabIds.length === 0) return;
+    const activeIndex = workspaceTabIds.indexOf(activeTab);
+    const startIndex = activeIndex >= 0 ? activeIndex : 0;
+    const targetIndex =
+      (startIndex + offset + workspaceTabIds.length) % workspaceTabIds.length;
+    activateWorkspaceTab(workspaceTabIds[targetIndex]!);
+  }
+
+  function activateWorkspaceTabByIndex(index: number) {
+    if (index < 0 || index >= workspaceTabIds.length) return;
+    activateWorkspaceTab(workspaceTabIds[index]!);
+  }
+
+  function openWorkspaceTabLauncher() {
+    setLauncherOpen(true);
+    launcherBtnRef.current?.focus();
+  }
+
+  function closeActiveWorkspaceTab() {
+    if (!workspaceTabIds.includes(activeTab)) return;
+    if (activeTab === DESIGN_FILES_TAB || activeTab === DESIGN_SYSTEM_TAB) return;
+    if (activeTab === QUESTIONS_TAB) {
+      setActiveTab(defaultRootTab);
+      return;
+    }
+    if (isBrowserTabId(activeTab)) {
+      closeBrowserTab(activeTab);
+      return;
+    }
+    closeTab(activeTab);
+  }
+
   // Open `openName` (focusing it) and close `closeName` in a single tab-state
   // update. Used by the React module pointer (issue #2744): once the user
   // jumps to the HTML entry that renders a module, the dead-end module tab is
@@ -950,6 +1004,64 @@ export function FileWorkspace({
       tabBar.scrollLeft += tabRect.right - visibleRight;
     }
   }, [activeTab]);
+
+  // Browser-style shortcuts for the high-frequency Design Files workspace
+  // tabs. Capture phase prevents the host browser/Electron shell from opening
+  // or closing its own top-level tab before the workspace handles the command.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.isComposing) return;
+      const key = e.key;
+      const lowerKey = key.toLowerCase();
+      const primaryModifier = (e.metaKey || e.ctrlKey) && !e.altKey;
+      const ctrlWithoutPlatformModifiers = e.ctrlKey && !e.metaKey && !e.altKey;
+      const commandOption = e.metaKey && e.altKey && !e.ctrlKey;
+
+      if (primaryModifier && !e.shiftKey && lowerKey === 't') {
+        consumeFileWorkspaceTabShortcut(e);
+        openWorkspaceTabLauncher();
+        return;
+      }
+
+      if (primaryModifier && !e.shiftKey && lowerKey === 'w') {
+        consumeFileWorkspaceTabShortcut(e);
+        closeActiveWorkspaceTab();
+        return;
+      }
+
+      if (ctrlWithoutPlatformModifiers && key === 'Tab') {
+        consumeFileWorkspaceTabShortcut(e);
+        activateWorkspaceTabByOffset(e.shiftKey ? -1 : 1);
+        return;
+      }
+
+      if (
+        (ctrlWithoutPlatformModifiers && !e.shiftKey && key === 'PageDown')
+        || (commandOption && !e.shiftKey && key === 'ArrowRight')
+      ) {
+        consumeFileWorkspaceTabShortcut(e);
+        activateWorkspaceTabByOffset(1);
+        return;
+      }
+
+      if (
+        (ctrlWithoutPlatformModifiers && !e.shiftKey && key === 'PageUp')
+        || (commandOption && !e.shiftKey && key === 'ArrowLeft')
+      ) {
+        consumeFileWorkspaceTabShortcut(e);
+        activateWorkspaceTabByOffset(-1);
+        return;
+      }
+
+      if (primaryModifier && !e.shiftKey && /^[1-9]$/u.test(key)) {
+        consumeFileWorkspaceTabShortcut(e);
+        const index = key === '9' ? workspaceTabIds.length - 1 : Number(key) - 1;
+        activateWorkspaceTabByIndex(index);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', onKeyDown, { capture: true });
+  });
 
   // Cmd+P (mac) / Ctrl+P (win/linux) opens the file palette. Capture phase
   // so we beat the browser's default print dialog. Platform-gated so on
@@ -1338,6 +1450,17 @@ export function FileWorkspace({
     () => orderWorkspaceTabs(tabNames, browserTabs),
     [browserTabs, tabNames],
   );
+
+  const workspaceTabIds = useMemo(() => {
+    const ids: string[] = [];
+    if (designSystemProject) ids.push(DESIGN_SYSTEM_TAB);
+    ids.push(DESIGN_FILES_TAB);
+    if (showQuestionsTab) ids.push(QUESTIONS_TAB);
+    for (const entry of orderedWorkspaceTabs) {
+      ids.push(entry.kind === 'browser' ? entry.browserTab.id : entry.name);
+    }
+    return ids;
+  }, [designSystemProject, orderedWorkspaceTabs, showQuestionsTab]);
 
   const workspaceContexts = useMemo<WorkspaceContextItem[]>(() => {
     const out: WorkspaceContextItem[] = [];

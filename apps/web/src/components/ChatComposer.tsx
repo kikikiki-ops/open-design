@@ -1573,17 +1573,17 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       }
       if (mention) {
         // Drive a single index over the visible section union. MentionPopover
-        // renders the same tabs-first section order and highlights the
+        // renders the same files-first section order and highlights the
         // matching row from activeIndex.
-        const showTabs = mentionTab === 'all' || mentionTab === 'tabs';
         const showFiles = mentionTab === 'all' || mentionTab === 'files';
+        const showTabs = mentionTab === 'all' || mentionTab === 'tabs';
         const showPlugins = mentionTab === 'all' || mentionTab === 'plugins';
         const showSkills = mentionTab === 'all' || mentionTab === 'skills';
         const showMcp = mentionTab === 'all' || mentionTab === 'mcp';
         const showConnectors = mentionTab === 'all' || mentionTab === 'connectors';
         const total =
-          (showTabs ? filteredWorkspaceContexts.length : 0) +
           (showFiles ? filteredFiles.length : 0) +
+          (showTabs ? filteredWorkspaceContexts.length : 0) +
           (showPlugins ? filteredPlugins.length : 0) +
           (showSkills ? filteredSkills.length : 0) +
           (showMcp ? filteredMcpServers.length : 0) +
@@ -1607,24 +1607,24 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
     }
 
     // Resolve a flat visible-section index to the right insert call. Section
-    // order MUST match MentionPopover's render order (tabs→files→plugins
+    // order MUST match MentionPopover's render order (files→tabs→plugins
     // →skills→mcp→connectors); the activeIndex highlight and Enter target stay in
     // lockstep across "All" and individual tabs.
     function pickMentionByFlatIndex(flat: number) {
       let i = flat;
-      if (mentionTab === 'all' || mentionTab === 'tabs') {
-        if (i < filteredWorkspaceContexts.length) {
-          insertWorkspaceMention(filteredWorkspaceContexts[i]!);
-          return;
-        }
-        i -= filteredWorkspaceContexts.length;
-      }
       if (mentionTab === 'all' || mentionTab === 'files') {
         if (i < filteredFiles.length) {
           insertMention(filteredFiles[i]!.path ?? filteredFiles[i]!.name);
           return;
         }
         i -= filteredFiles.length;
+      }
+      if (mentionTab === 'all' || mentionTab === 'tabs') {
+        if (i < filteredWorkspaceContexts.length) {
+          insertWorkspaceMention(filteredWorkspaceContexts[i]!);
+          return;
+        }
+        i -= filteredWorkspaceContexts.length;
       }
       if (mentionTab === 'all' || mentionTab === 'plugins') {
         if (i < filteredPlugins.length) {
@@ -4359,8 +4359,8 @@ function MentionPopover({
   const ref = useRef<HTMLDivElement | null>(null);
   const tabs: Array<{ id: MentionTab; label: string }> = [
     { id: 'all', label: t('chat.mentionTabAll') },
-    { id: 'tabs', label: t('chat.mentionTabTabs') },
     { id: 'files', label: t('chat.mentionTabFiles') },
+    { id: 'tabs', label: t('chat.mentionTabTabs') },
     { id: 'plugins', label: t('chat.mentionTabPlugins') },
     { id: 'skills', label: t('chat.mentionTabSkills') },
     { id: 'mcp', label: t('chat.mentionTabMcp') },
@@ -4373,8 +4373,8 @@ function MentionPopover({
   const showMcp = tab === 'all' || tab === 'mcp';
   const showConnectors = tab === 'all' || tab === 'connectors';
   const hasVisibleResults =
-    (showTabs && workspaceContexts.length > 0) ||
     (showFiles && files.length > 0) ||
+    (showTabs && workspaceContexts.length > 0) ||
     (showPlugins && plugins.length > 0) ||
     (showSkills && skills.length > 0) ||
     (showMcp && mcpServers.length > 0) ||
@@ -4410,6 +4410,35 @@ function MentionPopover({
             )}
           </div>
         ) : null}
+        {showFiles && files.length > 0 ? (
+          <>
+            <div className="mention-section-label">{t('chat.mentionSectionFiles')}</div>
+            {files.map((f) => {
+              const key = f.path ?? f.name;
+              const flat = optionIndex;
+              optionIndex += 1;
+              const active = flat === activeIndex;
+              return (
+                <button
+                  key={`file-${key}`}
+                  id={`mention-opt-${flat}`}
+                  role="option"
+                  aria-selected={active}
+                  className={`mention-item${active ? ' is-active' : ''}`}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => onPickFile(key)}
+                >
+                  <Icon name="file" size={12} />
+                  <code>{key}</code>
+                  {f.size != null ? (
+                    <span className="mention-meta">{prettySize(f.size)}</span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </>
+        ) : null}
         {showTabs && workspaceContexts.length > 0 ? (
           <>
             <div className="mention-section-label">{t('chat.mentionSectionTabs')}</div>
@@ -4437,35 +4466,6 @@ function MentionPopover({
                     </span>
                   </span>
                   <span className="mention-meta">{workspaceContextKindLabel(item.kind)}</span>
-                </button>
-              );
-            })}
-          </>
-        ) : null}
-        {showFiles && files.length > 0 ? (
-          <>
-            <div className="mention-section-label">{t('chat.mentionSectionFiles')}</div>
-            {files.map((f) => {
-              const key = f.path ?? f.name;
-              const flat = optionIndex;
-              optionIndex += 1;
-              const active = flat === activeIndex;
-              return (
-                <button
-                  key={`file-${key}`}
-                  id={`mention-opt-${flat}`}
-                  role="option"
-                  aria-selected={active}
-                  className={`mention-item${active ? ' is-active' : ''}`}
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => onPickFile(key)}
-                >
-                  <Icon name="file" size={12} />
-                  <code>{key}</code>
-                  {f.size != null ? (
-                    <span className="mention-meta">{prettySize(f.size)}</span>
-                  ) : null}
                 </button>
               );
             })}

@@ -752,7 +752,7 @@
   --workspace-active-tab-border: color-mix(in srgb, var(--border-strong) 42%, transparent);
   height: 36px;
   min-height: 36px;
-  padding: 0 10px 0 0;
+  padding: 0 10px 0 6px;
   background: var(--workspace-tab-bar-bg);
   border-bottom: 0;
   box-shadow: none;
@@ -1154,14 +1154,15 @@
   background: transparent;
 }
 .app .composer-shell {
-  padding: 0;
-  border-color: var(--border);
+  padding: 8px;
+  border-color: color-mix(in srgb, var(--border) 84%, var(--border-strong));
   border-radius: 10px;
-  box-shadow: none;
+  background: color-mix(in srgb, var(--bg-panel) 96%, var(--bg-subtle));
+  box-shadow: var(--shadow-sm);
 }
 .app .composer-shell:focus-within {
   border-color: var(--border-strong);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 4%, transparent);
+  box-shadow: var(--shadow-sm), 0 0 0 3px var(--accent-soft);
 }
 .app .composer.drag-active .composer-shell {
   border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
@@ -1756,6 +1757,67 @@
   color: var(--text);
   background: var(--bg-panel);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+.app .handoff-path-row {
+  display: flex;
+  min-width: 0;
+}
+.app .handoff-path-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-panel) 94%, var(--text) 3%);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    background 200ms cubic-bezier(0.23, 1, 0.32, 1),
+    border-color 200ms cubic-bezier(0.23, 1, 0.32, 1),
+    color 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.app .handoff-path-button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-panel));
+}
+.app .handoff-path-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.app .handoff-path-button.copied {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-panel));
+}
+.app .handoff-path-button-main,
+.app .handoff-path-button-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.app .handoff-path-button-main {
+  gap: 8px;
+  min-width: 0;
+}
+.app .handoff-path-button-icon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--text);
+}
+.app .handoff-path-button-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .app .handoff-menu-block {
   display: flex;

@@ -1697,7 +1697,7 @@ export const en: Dict = {
   'chat.mentionTabConnectors': 'Connectors',
   'chat.mentionTabFiles': 'Design files',
   'chat.mentionNoResults': 'No results for “{query}”.',
-  'chat.mentionSearchPrompt': 'Search tabs, Design Files, plugins, skills, MCP servers, and connectors.',
+  'chat.mentionSearchPrompt': 'Search Design Files, tabs, plugins, skills, MCP servers, and connectors.',
   'chat.mentionSectionTabs': 'Tabs',
   'chat.mentionSectionPlugins': 'Plugins',
   'chat.mentionSectionSkills': 'Skills',

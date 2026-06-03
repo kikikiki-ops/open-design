@@ -587,13 +587,13 @@ const MAC_WINDOW_CHROME =
 
 const MAC_WINDOW_CHROME_CSS = `
   .app-chrome-header {
-    --app-chrome-traffic-space: 64px !important;
-    --app-chrome-traffic-margin: 4px !important;
+    --app-chrome-traffic-space: 78px !important;
+    --app-chrome-traffic-margin: 8px !important;
     -webkit-app-region: drag;
   }
   .app-chrome-traffic-space {
-    flex: 0 0 64px !important;
-    width: 64px !important;
+    flex: 0 0 78px !important;
+    width: 78px !important;
   }
   .app-chrome-header button,
   .app-chrome-header a,

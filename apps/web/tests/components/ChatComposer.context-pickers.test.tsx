@@ -258,8 +258,8 @@ describe('ChatComposer context pickers', () => {
     await waitFor(() => expect(screen.getByTestId('mention-popover')).toBeTruthy());
     expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
       'All',
-      'Tabs',
       'Design files',
+      'Tabs',
       'Plugins',
       'Skills',
       'MCP',
@@ -271,7 +271,7 @@ describe('ChatComposer context pickers', () => {
     expect(screen.getByRole('tab', { name: 'Connectors' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Design files' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Tabs' })).toBeTruthy();
-    expect(screen.getByText('Search tabs, Design Files, plugins, skills, MCP servers, and connectors.')).toBeTruthy();
+    expect(screen.getByText('Search Design Files, tabs, plugins, skills, MCP servers, and connectors.')).toBeTruthy();
   });
 
   it('localizes @ panel tabs and empty states in Chinese mode', async () => {
@@ -286,8 +286,8 @@ describe('ChatComposer context pickers', () => {
     await waitFor(() => expect(screen.getByRole('tab', { name: '全部' })).toBeTruthy());
     expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
       '全部',
-      '标签页',
       '设计文件',
+      '标签页',
       '插件',
       '技能',
       'MCP',
@@ -299,7 +299,7 @@ describe('ChatComposer context pickers', () => {
     expect(screen.getByRole('tab', { name: '连接器' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: '设计文件' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: '标签页' })).toBeTruthy();
-    expect(screen.getByText('搜索标签页、设计文件、插件、技能、MCP 服务器和连接器。')).toBeTruthy();
+    expect(screen.getByText('搜索设计文件、标签页、插件、技能、MCP 服务器和连接器。')).toBeTruthy();
 
     await typeAndSettle('@missing');
 
@@ -319,6 +319,16 @@ describe('ChatComposer context pickers', () => {
           size: 128,
         },
       ],
+      workspaceContexts: [
+        {
+          id: 'browser:__browser__:1',
+          kind: 'browser' as const,
+          label: 'Dribbble',
+          title: 'Dribbble - Discover designers',
+          url: 'https://dribbble.com/',
+          tabId: '__browser__:1',
+        },
+      ],
     });
     await flushMounts();
 
@@ -330,6 +340,7 @@ describe('ChatComposer context pickers', () => {
       (node) => node.textContent,
     );
     expect(labels[0]).toBe('Design files');
+    expect(labels[1]).toBe('Tabs');
 
     pressEnter();
 

@@ -995,6 +995,10 @@ export function ChatPane({
 
   const activeConversation =
     conversations.find((c) => c.id === activeConversationId) ?? null;
+  const filteredConversations = useMemo(
+    () => filterConversations(conversations, deferredConversationSearch, t),
+    [conversations, deferredConversationSearch, t],
+  );
 
   function jumpToBottom() {
     const el = logRef.current;
@@ -1057,6 +1061,11 @@ export function ChatPane({
                 <span className="chat-history-menu-title">
                   {t('chat.conversationsHeading')}
                 </span>
+                <span className="chat-history-menu-count">
+                  {filteredConversations.length === conversations.length
+                    ? compactCount(conversations.length)
+                    : `${compactCount(filteredConversations.length)} / ${compactCount(conversations.length)}`}
+                </span>
                 {onNewConversation ? (
                   <button
                     type="button"
@@ -1079,17 +1088,42 @@ export function ChatPane({
                   </button>
                 ) : null}
               </div>
+              <label className="chat-history-search">
+                <Icon name="search" size={12} />
+                <input
+                  type="search"
+                  value={conversationSearch}
+                  onChange={(event) => setConversationSearch(event.currentTarget.value)}
+                  placeholder="Search conversations"
+                  data-testid="conversation-history-search"
+                />
+                {conversationSearch ? (
+                  <button
+                    type="button"
+                    className="chat-history-search-clear"
+                    onClick={() => setConversationSearch('')}
+                    aria-label={t('common.clear')}
+                  >
+                    <Icon name="close" size={10} />
+                  </button>
+                ) : null}
+              </label>
               <div className="chat-history-list" data-testid="conversation-list">
                 {conversations.length === 0 ? (
                   <div className="chat-history-empty">
                     {t('chat.emptyConversations')}
                   </div>
+                ) : filteredConversations.length === 0 ? (
+                  <div className="chat-history-empty">
+                    No conversations match.
+                  </div>
                 ) : (
-                  conversations.map((c) => (
+                  filteredConversations.map((c) => (
                     <ConversationRow
                       key={c.id}
                       conversation={c}
                       active={c.id === activeConversationId}
+                      messageCount={conversationMessageCount(c, activeConversationId, messages.length)}
                       onSelect={() => {
                         onSelectConversation(c.id);
                         setShowConvList(false);
@@ -2336,12 +2370,14 @@ function compactCount(value: number): string {
 function ConversationRow({
   conversation,
   active,
+  messageCount,
   onSelect,
   onDelete,
   t,
 }: {
   conversation: Conversation;
   active: boolean;
+  messageCount: number | null;
   onSelect: () => void;
   onDelete: () => void;
   t: TranslateFn;
@@ -2363,7 +2399,10 @@ function ConversationRow({
       >
         {displayTitle}
       </button>
-      <span className="chat-conv-item-meta">{conversationMetaLabel(conversation, t)}</span>
+      <span className="chat-conv-item-meta">
+        {messageCount !== null ? `${compactCount(messageCount)} msg · ` : ''}
+        {conversationMetaLabel(conversation, t)}
+      </span>
       <button
         type="button"
         className="chat-conv-item-del"

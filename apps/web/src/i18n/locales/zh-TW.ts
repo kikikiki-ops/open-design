@@ -1284,7 +1284,7 @@ export const zhTW: Dict = {
   'chat.mentionTabConnectors': '連接器',
   'chat.mentionTabFiles': '設計檔案',
   'chat.mentionNoResults': '找不到「{query}」的結果。',
-  'chat.mentionSearchPrompt': '搜尋分頁、外掛、技能、MCP 伺服器、連接器和設計檔案。',
+  'chat.mentionSearchPrompt': '搜尋設計檔案、分頁、外掛、技能、MCP 伺服器和連接器。',
   'chat.mentionSectionTabs': '分頁',
   'chat.mentionSectionPlugins': '外掛',
   'chat.mentionSectionSkills': '技能',
