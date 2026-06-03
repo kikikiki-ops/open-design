@@ -6,7 +6,9 @@ export interface GithubRepoMeta {
 const REPO_API = 'https://api.github.com/repos/nexu-io/open-design';
 const FALLBACK_META: GithubRepoMeta = {
   starsLabel: '40K+',
-  versionLabel: 'v0.3.0',
+  // Build-time fallback when the GitHub releases API is unavailable / rate
+  // limited. Keep in step with the latest published release.
+  versionLabel: 'v0.9.0',
 };
 
 let repoMetaPromise: Promise<GithubRepoMeta> | null = null;

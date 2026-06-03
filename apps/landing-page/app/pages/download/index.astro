@@ -64,29 +64,23 @@ const cards: PlatformCard[] = [
     osLabel: page.mac,
     arch: page.macArm,
     matchKey: 'mac-arm64',
-    rows: [
-      { key: 'mac-arm64-dmg', variant: page.dmg, asset: m.macArm64Dmg },
-      { key: 'mac-arm64-zip', variant: page.zip, asset: m.macArm64Zip },
-    ],
+    // DMG only — the ZIP is a redundant second download for most users; the
+    // all-releases link below still exposes every artifact.
+    rows: [{ key: 'mac-arm64-dmg', variant: page.dmg, asset: m.macArm64Dmg }],
   },
   {
     os: 'macOS',
     osLabel: page.mac,
     arch: page.macIntel,
     matchKey: 'mac-x64',
-    rows: [
-      { key: 'mac-x64-dmg', variant: page.dmg, asset: m.macX64Dmg },
-      { key: 'mac-x64-zip', variant: page.zip, asset: m.macX64Zip },
-    ],
+    rows: [{ key: 'mac-x64-dmg', variant: page.dmg, asset: m.macX64Dmg }],
   },
   {
     os: 'Windows',
     osLabel: page.windows,
     matchKey: 'win',
-    rows: [
-      { key: 'win-setup', variant: page.windowsInstaller, asset: m.winSetup },
-      { key: 'win-portable', variant: page.windowsPortable, asset: m.winPortable },
-    ],
+    // Installer only — portable zip stays available via the all-releases link.
+    rows: [{ key: 'win-setup', variant: page.windowsInstaller, asset: m.winSetup }],
   },
   {
     os: 'Linux',
@@ -100,6 +94,22 @@ const cards: PlatformCard[] = [
 ];
 
 const publishedLabel = fmtDate(release.publishedAt);
+
+// Platform glyphs for the centered cards (inline so they inherit currentColor
+// and ship no extra requests). macOS + macOS-Intel share the Apple mark.
+const ICON_APPLE =
+  '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true"><path d="M16.36 12.78c.02 2.5 2.19 3.33 2.22 3.34-.02.06-.35 1.2-1.15 2.37-.69 1.01-1.41 2.02-2.54 2.04-1.11.02-1.47-.66-2.74-.66s-1.66.64-2.71.68c-1.09.04-1.92-1.09-2.62-2.1-1.42-2.06-2.51-5.83-1.05-8.37.72-1.27 2.01-2.07 3.41-2.09 1.07-.02 2.08.72 2.74.72.65 0 1.88-.89 3.17-.76.54.02 2.06.22 3.03 1.64-.08.05-1.81 1.06-1.79 3.15M14.28 5.6c.58-.7.97-1.68.86-2.65-.83.03-1.84.55-2.44 1.25-.54.62-1.01 1.61-.88 2.56.93.07 1.87-.47 2.46-1.16"/></svg>';
+const ICON_WINDOWS =
+  '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M3 5.1 10.4 4v7.3H3zm0 13.8L10.4 20v-7.2H3zm8.2 1.2L21 21.3V12.8h-9.8zm0-16.2v7.4H21V2.7z"/></svg>';
+const ICON_LINUX =
+  '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M12 2c-2.2 0-3.3 1.9-3.3 4.1 0 1.4.5 2.3.5 3.4 0 1-.7 1.8-1.4 2.9C6.9 13.9 6 15.6 6 17.3c0 .9.3 1.5.9 1.9-.1.5 0 1 .3 1.3.6.6 1.7.6 2.5.3.5-.2.8-.6.9-1.1.3 0 .6-.1.9-.1s.6 0 .9.1c.1.5.4.9.9 1.1.8.3 1.9.3 2.5-.3.3-.3.4-.8.3-1.3.6-.4.9-1 .9-1.9 0-1.7-.9-3.4-1.8-4.9-.7-1.1-1.4-1.9-1.4-2.9 0-1.1.5-2 .5-3.4C15.3 3.9 14.2 2 12 2m-1.3 4.3c.4 0 .7.4.7.9s-.3.9-.7.9-.7-.4-.7-.9.3-.9.7-.9m2.6 0c.4 0 .7.4.7.9s-.3.9-.7.9-.7-.4-.7-.9.3-.9.7-.9"/></svg>';
+const PLATFORM_ICON: Record<'macOS' | 'Windows' | 'Linux', string> = {
+  macOS: ICON_APPLE,
+  Windows: ICON_WINDOWS,
+  Linux: ICON_LINUX,
+};
+const ICON_DOWNLOAD =
+  '↓';
 
 const jsonLd = [
   {
@@ -132,53 +142,54 @@ const jsonLd = [
     <span aria-current="page">{page.breadcrumb}</span>
   </nav>
 
-  <article class="info-page" data-download-root>
-    <header class="catalog-head">
-      <span class="label">{page.label}</span>
-      <h1 class="display">{page.heading}</h1>
-      <p class="lead">{page.lead}</p>
-
-      <div class="dl-hero-actions">
-        {/*
-         * Static fallback points at the neutral release page, not a specific
-         * asset: with JS disabled/blocked every platform (Windows, Linux, and
-         * Macs whose arch we can't sniff) should reach a usable page rather
-         * than be handed a macOS Apple Silicon DMG. The enhancer below swaps
-         * in the detected platform's direct installer once it runs; platforms
-         * with no single asset (Linux) intentionally keep this release-page href.
-         */}
-        <a
-          class="btn btn-primary"
-          href={release.releaseUrl}
-          data-dl-auto
-          target="_blank"
-          rel="noreferrer noopener"
-        >
-          <span data-dl-auto-label>{page.autoCtaFallback}</span>
-          <span class="dl-auto-os" data-dl-auto-os hidden></span>
-        </a>
-        <span class="dl-version">
-          <a class="inline-link" href={release.releaseUrl} target="_blank" rel="noreferrer noopener">
-            {release.versionLabel}
-          </a>
-          {publishedLabel && <span class="dl-version-date"> · {page.publishedPrefix} {publishedLabel}</span>}
-          <span> · </span>
-          <a class="inline-link" href={release.releaseUrl} target="_blank" rel="noreferrer noopener">{page.releaseNotes}</a>
-        </span>
+  <article class="info-page dl-page" data-download-root>
+    <header class="dl-hero">
+      <div class="dl-hero-mark" aria-hidden="true">
+        <img src="/favicon.svg" alt="" width="48" height="48" />
       </div>
+      <h1 class="dl-hero-heading">{page.heading}</h1>
+      <p class="dl-hero-lead">{page.lead}</p>
+
+      {/*
+       * Static fallback points at the neutral release page, not a specific
+       * asset: with JS disabled/blocked every platform (Windows, Linux, and
+       * Macs whose arch we can't sniff) should reach a usable page rather
+       * than be handed a macOS Apple Silicon DMG. The enhancer below swaps
+       * in the detected platform's direct installer once it runs; platforms
+       * with no single asset (Linux) intentionally keep this release-page href.
+       */}
+      <a
+        class="btn btn-primary dl-hero-cta"
+        href={release.releaseUrl}
+        data-dl-auto
+        target="_blank"
+        rel="noreferrer noopener"
+      >
+        <span data-dl-auto-label>{page.autoCtaFallback}</span>
+        <span class="dl-auto-os" data-dl-auto-os hidden></span>
+      </a>
+      <p class="dl-hero-meta">
+        <a class="inline-link" href={release.releaseUrl} target="_blank" rel="noreferrer noopener">
+          {release.versionLabel}
+        </a>
+        {publishedLabel && <span class="dl-version-date"> · {page.publishedPrefix} {publishedLabel}</span>}
+        <span> · </span>
+        <a class="inline-link" href={release.releaseUrl} target="_blank" rel="noreferrer noopener">{page.releaseNotes}</a>
+      </p>
     </header>
 
-    <section class="info-section" id="platforms">
-      <h2>{page.platformsTitle}</h2>
+    <section class="dl-platforms" id="platforms" aria-label={page.platformsTitle}>
       <div class="dl-grid">
         {cards.map((card) => (
           <div class="dl-card" data-dl-card data-dl-match={card.matchKey}>
-            <div class="dl-card-head">
-              <span class="dl-os">{card.osLabel}</span>
+            <span class="dl-rec" data-dl-rec hidden>{page.recommended}</span>
+            <span class="dl-card-icon" aria-hidden="true" set:html={PLATFORM_ICON[card.os]} />
+            <h2 class="dl-os">{card.osLabel}</h2>
+            <p class="dl-card-sub">
               {card.arch && <span class="dl-arch">{card.arch}</span>}
               <span class="dl-card-version">{release.versionLabel}</span>
-              <span class="dl-rec" data-dl-rec hidden>{page.recommended}</span>
-            </div>
+            </p>
+
             {card.rows.length > 0 && (
               <ul class="dl-rows">
                 {card.rows.map((row) => (
@@ -186,6 +197,7 @@ const jsonLd = [
                     {row.asset ? (
                       <>
                         <a class="dl-link" href={row.asset.url} data-dl-key={row.key}>
+                          <span class="dl-dl-icon" aria-hidden="true">{ICON_DOWNLOAD}</span>
                           {page.downloadVerb} <strong>{row.variant}</strong>
                           {fmtSize(row.asset.size) && <span class="dl-size">{fmtSize(row.asset.size)}</span>}
                         </a>
@@ -195,6 +207,7 @@ const jsonLd = [
                       </>
                     ) : (
                       <a class="dl-link dl-link-fallback" href={release.releaseUrl} target="_blank" rel="noreferrer noopener">
+                        <span class="dl-dl-icon" aria-hidden="true">{ICON_DOWNLOAD}</span>
                         {row.variant} <span class="dl-size">→ Releases</span>
                       </a>
                     )}
@@ -205,9 +218,7 @@ const jsonLd = [
             {/*
              * Keep the platform note visible even when there are rows — e.g.
              * Linux ships an AppImage row but still needs to surface the
-             * Docker / Podman Compose path the page copy advertises. Without
-             * this the second Linux install path vanished once a real release
-             * had an AppImage asset.
+             * Docker / Podman Compose path the page copy advertises.
              */}
             {card.note && (
               <p class="dl-note">
@@ -217,23 +228,18 @@ const jsonLd = [
           </div>
         ))}
       </div>
+
+      <p class="dl-releases-link">
+        <a class="inline-link" href={REPO_RELEASES} target="_blank" rel="noreferrer noopener">{page.allReleasesTitle} →</a>
+      </p>
     </section>
 
-    <section class="info-section" id="requirements">
-      <h2>{page.requirementsTitle}</h2>
+    <section class="dl-requirements" id="requirements" aria-label={page.requirementsTitle}>
       <ul>
         {page.requirements.map((item) => (
           <li><strong>{item.label}</strong> — {item.body}</li>
         ))}
       </ul>
-    </section>
-
-    <section class="info-section" id="all-releases">
-      <h2>{page.allReleasesTitle}</h2>
-      <p>
-        {page.allReleasesBody}{' '}
-        <a class="inline-link" href={REPO_RELEASES} target="_blank" rel="noreferrer noopener">GitHub Releases</a>.
-      </p>
     </section>
 
     <section class="info-cta" aria-label="Open Design call to action">
@@ -348,87 +354,229 @@ const jsonLd = [
   by the layout/sub-pages.css, not this page's scoped component tree.
 -->
 <style is:global>
-  [data-download-root].info-page .catalog-head { margin-bottom: 32px; }
   /*
-   * globals.css gives every <section> 130px top/bottom padding — right for the
-   * homepage's full-bleed bands, far too airy for this short download matrix.
-   * Neutralize it here and drive rhythm with a modest margin between sections.
+   * The download page uses a centered, card-first layout (closer to a focused
+   * landing surface than the left-aligned long-form info pages). globals.css
+   * gives every <section> 130px padding and .info-page a wide measure; both
+   * are neutralized here, scoped to [data-download-root] so other info pages
+   * keep their rhythm. is:global because these elements come from the layout.
    */
-  [data-download-root].info-page .info-section { padding: 0; }
-  [data-download-root].info-page .info-section + .info-section { margin-top: 36px; }
-  [data-download-root].info-page .info-section h2 { margin-bottom: 12px; }
-  [data-download-root].info-page .info-cta { margin-top: 36px; padding-top: 28px; }
-  /* The requirements + all-releases sections are short; pull their bodies in. */
-  [data-download-root].info-page #requirements ul { margin-top: 4px; }
+  [data-download-root].info-page { max-width: none; }
+  [data-download-root].info-page > section { padding: 0; }
+  [data-download-root] .breadcrumb { display: none; }
+  /* Match the CTA to the centered layout instead of the left-aligned
+     two-column grid the shared .info-cta ships with. */
+  [data-download-root].info-page .info-cta {
+    margin: 56px auto 0;
+    max-width: 640px;
+    padding-top: 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 18px;
+  }
+  [data-download-root].info-page .info-cta h2 { margin: 0 0 8px; }
+  [data-download-root].info-page .info-cta-actions { justify-content: center; }
+  [data-download-root].info-page .info-cta-meta { justify-content: center; border-top: 0; padding-top: 0; margin-top: 0; }
 </style>
 
 <style>
-  .dl-hero-actions {
+  /* ---- Centered hero ---- */
+  .dl-hero {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
     align-items: center;
-    gap: 0.75rem 1.25rem;
-    margin-top: 1.25rem;
+    text-align: center;
+    padding-top: 24px;
+  }
+  .dl-hero-mark {
+    width: 76px;
+    height: 76px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 20px;
+    background: var(--surface, rgba(255, 255, 255, 0.6));
+    border: 1px solid var(--border, rgba(0, 0, 0, 0.1));
+    box-shadow: 0 12px 30px -18px rgba(0, 0, 0, 0.4);
+  }
+  .dl-hero-heading {
+    font-family: var(--serif, Georgia, serif);
+    font-weight: 600;
+    font-size: clamp(28px, 4vw, 42px);
+    letter-spacing: -0.02em;
+    margin: 24px 0 0;
+  }
+  .dl-hero-lead {
+    font-size: 16px;
+    line-height: 1.6;
+    color: var(--ink-soft, #555);
+    max-width: 48ch;
+    margin: 12px 0 0;
+  }
+  .dl-hero-cta {
+    margin-top: 28px;
+    font-size: 15px;
+    padding: 15px 30px;
   }
   .dl-auto-os { font-weight: 600; }
-  .dl-version { font-size: 0.9rem; opacity: 0.85; }
-  .dl-version-date { opacity: 0.8; }
+  .dl-hero-meta {
+    margin: 16px 0 0;
+    font-size: 0.85rem;
+    color: var(--ink-soft, #666);
+  }
+  .dl-version-date { opacity: 0.85; }
 
+  /* ---- Platform cards ---- */
+  .dl-platforms { margin-top: 56px; }
   .dl-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 1rem;
-    margin-top: 0.5rem;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    max-width: 920px;
+    margin: 0 auto;
+  }
+  @media (max-width: 860px) {
+    .dl-grid { grid-template-columns: repeat(2, 1fr); max-width: 480px; }
+  }
+  @media (max-width: 420px) {
+    .dl-grid { grid-template-columns: 1fr; max-width: 320px; }
   }
   .dl-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
     border: 1px solid var(--border, rgba(0, 0, 0, 0.12));
-    border-radius: 14px;
-    padding: 1.1rem 1.2rem;
+    border-radius: 16px;
+    padding: 28px 20px 22px;
     background: var(--surface, rgba(255, 255, 255, 0.5));
-    transition: border-color 160ms, box-shadow 160ms;
+    transition: border-color 160ms, box-shadow 160ms, transform 160ms;
   }
+  .dl-card:hover { transform: translateY(-2px); }
   .dl-card[data-dl-recommended='true'] {
     border-color: var(--accent, #14120b);
     box-shadow: 0 0 0 1px var(--accent, #14120b);
   }
-  .dl-card-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
-  .dl-os { font-weight: 650; font-size: 1.05rem; }
-  .dl-arch { font-size: 0.85rem; opacity: 0.7; }
+  .dl-card-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 30px;
+    color: var(--ink, #14120b);
+  }
+  .dl-os {
+    font-family: inherit;
+    font-weight: 650;
+    font-size: 1.05rem;
+    margin: 14px 0 0;
+  }
+  .dl-card-sub {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 6px 0 0;
+    min-height: 20px;
+  }
+  .dl-arch { font-size: 0.82rem; opacity: 0.65; }
   .dl-card-version {
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     font-weight: 600;
     letter-spacing: 0.01em;
-    padding: 0.1rem 0.45rem;
+    padding: 0.08rem 0.42rem;
     border-radius: 999px;
     border: 1px solid var(--border, rgba(0, 0, 0, 0.14));
-    opacity: 0.78;
+    opacity: 0.75;
     white-space: nowrap;
   }
   .dl-rec {
-    margin-left: auto;
-    font-size: 0.7rem;
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    font-size: 0.62rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     font-weight: 600;
-    padding: 0.15rem 0.5rem;
+    padding: 0.14rem 0.48rem;
     border-radius: 999px;
     background: var(--accent, #14120b);
     color: #fff;
   }
-  .dl-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
-  .dl-row { display: flex; align-items: center; gap: 0.6rem; }
+
+  /* ---- Download rows inside each card ---- */
+  .dl-rows {
+    list-style: none;
+    margin: 18px 0 0;
+    padding: 16px 0 0;
+    width: 100%;
+    border-top: 1px solid var(--line, rgba(0, 0, 0, 0.08));
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .dl-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
   .dl-link {
-    flex: 1;
     display: inline-flex;
     align-items: baseline;
-    gap: 0.5rem;
+    gap: 6px;
     text-decoration: none;
-    font-size: 0.95rem;
+    font-size: 0.88rem;
+    white-space: nowrap;
+    color: var(--ink, #14120b);
   }
+  .dl-dl-icon { font-weight: 700; transition: transform 140ms; }
   .dl-link strong { font-weight: 600; }
-  .dl-link:hover { text-decoration: underline; }
-  .dl-size { font-size: 0.78rem; opacity: 0.6; }
-  .dl-sha { font-size: 0.72rem; opacity: 0.55; text-decoration: none; }
+  .dl-link { transition: color 140ms; }
+  .dl-link:hover { color: var(--coral, #ed6f5c); }
+  .dl-link:hover .dl-dl-icon { transform: translateY(2px); }
+  .dl-size { font-size: 0.74rem; opacity: 0.55; }
+  .dl-sha { font-size: 0.68rem; opacity: 0.5; text-decoration: none; }
   .dl-sha:hover { opacity: 1; text-decoration: underline; }
-  .dl-note { font-size: 0.9rem; opacity: 0.8; margin: 0; }
+  .dl-note {
+    font-size: 0.82rem;
+    opacity: 0.78;
+    margin: 16px 0 0;
+    padding: 14px 0 0;
+    border-top: 1px solid var(--line, rgba(0, 0, 0, 0.08));
+    width: 100%;
+  }
+
+  /* ---- Footer links under the grid ---- */
+  .dl-releases-link {
+    text-align: center;
+    margin: 28px 0 0;
+    font-size: 0.9rem;
+  }
+
+  .dl-requirements {
+    margin-top: 40px;
+    text-align: center;
+  }
+  .dl-requirements ul {
+    list-style: none;
+    margin: 0 auto;
+    padding: 0;
+    max-width: 760px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px 28px;
+    font-size: 0.82rem;
+    color: var(--ink-soft, #666);
+  }
+  .dl-requirements li { white-space: nowrap; }
+
+  @media (max-width: 640px) {
+    .dl-requirements ul { flex-direction: column; gap: 6px; }
+    .dl-requirements li { white-space: normal; }
+  }
 </style>
