@@ -21,6 +21,11 @@ const toolsPackBin = join(workspaceRoot, 'tools', 'pack', 'bin', 'tools-pack.mjs
 const maxInstallDurationMs = Number.parseInt(process.env.OD_PACKAGED_E2E_WIN_MAX_INSTALL_MS ?? '120000', 10);
 const smokeProfile = process.env.OD_PACKAGED_E2E_WIN_SMOKE_PROFILE ?? 'core';
 const verifyCoreOnly = smokeProfile === 'core';
+const verifyReinstallWhileRunning = !verifyCoreOnly && process.env.OD_PACKAGED_E2E_WIN_VERIFY_REINSTALL !== '0';
+const verifyRealUpdateInstaller =
+  process.env.OD_PACKAGED_E2E_WIN_REAL_UPDATE_INSTALL == null
+    ? !verifyCoreOnly
+    : process.env.OD_PACKAGED_E2E_WIN_REAL_UPDATE_INSTALL === '1';
 const updateArtifactPath = normalizeOptionalEnv(process.env.OD_PACKAGED_E2E_WIN_UPDATE_ARTIFACT_PATH);
 const updateVersion = normalizeOptionalEnv(process.env.OD_PACKAGED_E2E_WIN_UPDATE_VERSION);
 const updateBuildJsonPath = normalizeOptionalEnv(process.env.OD_PACKAGED_E2E_WIN_UPDATE_BUILD_JSON_PATH);
@@ -211,11 +216,12 @@ winDescribe('packaged windows runtime smoke', () => {
   let installed = false;
   let started = false;
 
-  test('installs, starts, inspects with eval and screenshot, stops, and uninstalls the built windows artifact', async () => {
+  test('[P2] installs, starts, inspects with eval and screenshot, stops, and uninstalls the built windows artifact', async () => {
     const report = await createPackagedSmokeReport('win');
     let passed = false;
     const timings: SmokeTiming[] = [];
     let realUpdateInstaller: RealUpdateInstallerSummary | { skipped: true } = { skipped: true };
+    let reinstall: DirectInstallerResult | { skipped: true } = { skipped: true };
     let logs: LogsResult | { skipped: true } = { skipped: true };
     let stop: WinStopResult | { skipped: true } = { skipped: true };
     let postUpdateHealth: HealthEvalValue | { skipped: true } = { skipped: true };
@@ -295,7 +301,7 @@ winDescribe('packaged windows runtime smoke', () => {
       expect(await fileSizeBytes(preUpdateScreenshotPath)).toBeGreaterThan(0);
       await report.report.save('screenshots/open-design-win-before-update.png', await readFile(preUpdateScreenshotPath));
 
-      if (!verifyCoreOnly) {
+      if (!verifyCoreOnly && verifyRealUpdateInstaller) {
         const updateTarget = await resolveUpgradeTarget();
         realUpdateInstaller = await measureSmokeStep(timings, 'real update installer acceptance', async () =>
           runUpgradeInstallerAcceptance({
@@ -320,6 +326,33 @@ winDescribe('packaged windows runtime smoke', () => {
         expect(postUpdateHealth.status).toBe(200);
         expect(postUpdateHealth.health.ok).toBe(true);
         expect(postUpdateHealth.health.version).toBe(updateTarget.targetVersion);
+      }
+
+      if (verifyReinstallWhileRunning && !verifyRealUpdateInstaller) {
+        reinstall = await measureSmokeStep(timings, 'direct reinstall while running', async () =>
+          runDirectInstaller(install.installerPath, install.installDir),
+        );
+        started = false;
+        expect(reinstall.code).toBe(0);
+        expect(reinstall.nsisLogTail.join('\n')).toContain('running instances detected before silent install');
+        // The installer closes running instances via pwsh.exe, falling back to
+        // powershell.exe (#2799), so the log reads "running instances close via
+        // <shell>.exe exit=0" rather than the older "running instances close exit=0".
+        expect(reinstall.nsisLogTail.join('\n')).toMatch(/running instances close via (?:pwsh|powershell)\.exe exit=0/);
+
+        start = await measureSmokeStep(timings, 'restart after direct reinstall', async () =>
+          runToolsPackJson<WinStartResult>('start'),
+        );
+        started = true;
+        expect(start.namespace).toBe(namespace);
+        expect(start.source).toBe('installed');
+        expectPathInside(start.executablePath, install.installDir);
+
+        const postReinstallInspect = await measureSmokeStep(timings, 'wait healthy inspect after reinstall', async () =>
+          waitForHealthyDesktop(),
+        );
+        expect(postReinstallInspect.status?.state).toBe('running');
+        expect(postReinstallInspect.status?.url).toBe('od://app/');
       }
 
       await mkdir(dirname(screenshotPath), { recursive: true });
@@ -371,6 +404,7 @@ winDescribe('packaged windows runtime smoke', () => {
         logs: 'skipped' in logs ? logs : summarizeLogs(logs),
         namespace,
         realUpdateInstaller,
+        reinstall,
         screenshot: report.screenshotRelpath,
         screenshots: {
           afterUpdate: report.screenshotRelpath,
