@@ -711,38 +711,45 @@ export async function* installFromLocalFolder(
     yield { kind: 'error', message: `Plugin id '${pluginId}' is not a safe folder name`, warnings };
     return;
   }
-  const destFolder = path.join(roots.userPluginsRoot, pluginId);
-
-  // Block overwriting a foreign plugin id. The destination folder may
-  // contain a previous version of the same id, in which case we replace it.
-  if (fs.existsSync(destFolder) && (opts.overwriteExisting ?? true) === false) {
-    yield { kind: 'error', message: `Destination folder already exists: ${destFolder}. Pass overwriteExisting=true to replace.`, warnings };
+  const installId = isBundleManifest(probe.record.manifest)
+    ? bundleNamespaceForRecord(probe.record)
+    : pluginId;
+  const destFolder = resolveInstallFolder(roots.userPluginsRoot, installId);
+  if (!destFolder.ok) {
+    yield { kind: 'error', message: `Plugin id '${installId}' is not a safe install path`, warnings };
     return;
   }
 
-  yield { kind: 'progress', phase: 'copying', message: `Copying to ${destFolder}` };
+  // Block overwriting a foreign plugin id. The destination folder may
+  // contain a previous version of the same id, in which case we replace it.
+  if (fs.existsSync(destFolder.path) && (opts.overwriteExisting ?? true) === false) {
+    yield { kind: 'error', message: `Destination folder already exists: ${destFolder.path}. Pass overwriteExisting=true to replace.`, warnings };
+    return;
+  }
+
+  yield { kind: 'progress', phase: 'copying', message: `Copying to ${destFolder.path}` };
   await fsp.mkdir(roots.userPluginsRoot, { recursive: true });
-  if (fs.existsSync(destFolder)) {
-    await fsp.rm(destFolder, { recursive: true, force: true });
+  if (fs.existsSync(destFolder.path)) {
+    await fsp.rm(destFolder.path, { recursive: true, force: true });
   }
   try {
-    await safeCopyTree(sourceFolder, destFolder, maxBytes);
+    await safeCopyTree(sourceFolder, destFolder.path, maxBytes);
   } catch (err) {
     yield { kind: 'error', message: `Copy failed: ${(err as Error).message}`, warnings };
-    await fsp.rm(destFolder, { recursive: true, force: true }).catch(() => undefined);
+    await fsp.rm(destFolder.path, { recursive: true, force: true }).catch(() => undefined);
     return;
   }
 
   yield { kind: 'progress', phase: 'parsing', message: 'Re-parsing destination' };
   const parsedOptions = buildResolveOptions({
-    folder: destFolder,
+    folder: destFolder.path,
     folderId: pluginId,
     sourceKind: recordedSourceKind,
     source: recordedSource,
   }, opts);
   const parsed = await resolvePluginFolder(parsedOptions);
   if (!parsed.ok) {
-    await fsp.rm(destFolder, { recursive: true, force: true }).catch(() => undefined);
+    await fsp.rm(destFolder.path, { recursive: true, force: true }).catch(() => undefined);
     yield { kind: 'error', message: parsed.errors.join('; '), warnings: [...warnings, ...parsed.warnings] };
     return;
   }
@@ -754,7 +761,7 @@ export async function* installFromLocalFolder(
       ? parsed.record
       : { ...parsed.record, id: namespace };
     const bundleChildren = await resolveBundleChildRecords({
-      bundleRoot: destFolder,
+      bundleRoot: destFolder.path,
       bundleRecord,
       namespace,
       sourceKind: recordedSourceKind,
@@ -762,7 +769,7 @@ export async function* installFromLocalFolder(
       resolveOptions: buildResolveOptions({}, opts),
     });
     if (!bundleChildren.ok) {
-      await fsp.rm(destFolder, { recursive: true, force: true }).catch(() => undefined);
+      await fsp.rm(destFolder.path, { recursive: true, force: true }).catch(() => undefined);
       yield {
         kind: 'error',
         message: bundleChildren.errors.join('; '),
@@ -917,6 +924,14 @@ function isSafeBasename(name: string): boolean {
   if (name === '.' || name === '..') return false;
   if (name.includes('/') || name.includes('\\') || name.includes('\0')) return false;
   return true;
+}
+
+function resolveInstallFolder(root: string, id: string): { ok: true; path: string } | { ok: false } {
+  const segments = id.split('/');
+  if (segments.length === 0 || segments.some((segment) => !SAFE_BASENAME.test(segment))) {
+    return { ok: false };
+  }
+  return { ok: true, path: path.join(root, ...segments) };
 }
 
 function buildResolveOptions(

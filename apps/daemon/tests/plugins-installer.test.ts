@@ -270,6 +270,38 @@ describe('installFromLocalFolder', () => {
       .toBe(path.join(pluginsRoot, 'my-bundle', 'skills', 'deck-skeleton'));
   });
 
+  it('keeps bundle marketplace aliases in separate namespace folders', async () => {
+    const bundleRoot = await writeBundleFixture('shared-bundle');
+
+    for (const entryName of ['market-a/shared-bundle', 'market-b/shared-bundle']) {
+      for await (const ev of installFromLocalFolder(db, {
+        source: bundleRoot,
+        roots: { userPluginsRoot: pluginsRoot },
+        sourceMarketplaceEntryName: entryName,
+      })) {
+        if (ev.kind === 'error') throw new Error(ev.message);
+      }
+    }
+
+    const rows = listInstalledPlugins(db);
+    expect(rows.map((row) => row.id).sort()).toEqual([
+      'market-a/shared-bundle',
+      'market-a/shared-bundle/deck-pacing',
+      'market-a/shared-bundle/deck-skeleton',
+      'market-a/shared-bundle/linear-clone',
+      'market-b/shared-bundle',
+      'market-b/shared-bundle/deck-pacing',
+      'market-b/shared-bundle/deck-skeleton',
+      'market-b/shared-bundle/linear-clone',
+    ]);
+    expect(rows.find((row) => row.id === 'market-a/shared-bundle')?.fsPath)
+      .toBe(path.join(pluginsRoot, 'market-a', 'shared-bundle'));
+    expect(rows.find((row) => row.id === 'market-b/shared-bundle')?.fsPath)
+      .toBe(path.join(pluginsRoot, 'market-b', 'shared-bundle'));
+    await expect(stat(path.join(pluginsRoot, 'market-a', 'shared-bundle'))).resolves.toBeTruthy();
+    await expect(stat(path.join(pluginsRoot, 'market-b', 'shared-bundle'))).resolves.toBeTruthy();
+  });
+
   it('uninstalling a bundle child removes the bundle root and sibling rows', async () => {
     const bundleRoot = await writeBundleFixture('remove-bundle');
 
