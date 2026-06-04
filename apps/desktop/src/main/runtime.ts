@@ -1945,10 +1945,22 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
       return { path: outputPath };
     },
     show() {
-      if (!window.isDestroyed()) {
-        window.show();
-        window.focus();
+      if (window.isDestroyed()) return;
+      // Before the splash reveal gate has fired (revealWhenReady), the main
+      // window is still hidden and surfacing it here would show the half-loaded
+      // web shell and bypass the gate — reintroducing the startup flash this is
+      // meant to remove (e.g. a packaged second-instance focus arriving mid
+      // boot). Bring the splash forward instead; the main window is revealed on
+      // its own once the app has mounted.
+      if (!revealed) {
+        if (splash != null && !splash.isDestroyed()) {
+          splash.show();
+          splash.focus();
+        }
+        return;
       }
+      window.show();
+      window.focus();
     },
     status() {
       return {
