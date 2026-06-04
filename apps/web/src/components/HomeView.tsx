@@ -7,7 +7,8 @@
 // surface by lifting its plugin orchestration up here so the prompt
 // textarea can live centered in the hero.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { OpenDesignHostProjectImportSuccess } from '@open-design/host';
 import type {
   ApplyResult,
   ChatSessionMode,
@@ -36,12 +37,17 @@ import {
   resolvePluginQueryFallback,
 } from '../state/projects';
 import { fetchMcpServers } from '../state/mcp';
-import { useI18n } from '../i18n';
+import { useI18n, useT } from '../i18n';
 import {
   localizeSkillName,
   localizeSkillPrompt,
 } from '../i18n/content';
 import { fetchElevenLabsVoiceOptions } from '../providers/elevenlabs-voices';
+import { IMAGE_MODELS } from '../media/models';
+import {
+  mergeAihubmixImageModels,
+  useAIHubMixImageModels,
+} from '../media/aihubmix-image-models';
 import { fetchProjectFiles, openFolderDialog, projectFileUrl } from '../providers/registry';
 import { isOpenDesignHostAvailable, pickHostWorkingDir } from '@open-design/host';
 import type {
@@ -54,6 +60,7 @@ import type {
 } from '../types';
 import { inlineMentionToken, mentionTokenPresent } from '../utils/inlineMentions';
 import { HomeHero, type ExamplePromptInfo, type HomeHeroHandle } from './HomeHero';
+import { Icon } from './Icon';
 import { findChip, HOME_HERO_CHIPS, type HomeHeroChip } from './home-hero/chips';
 import {
   buildHomeMediaComposer,
@@ -76,6 +83,8 @@ import type { FacetSelection } from './plugins-home/facets';
 import type { PluginUseAction } from './plugins-home/useActions';
 import { RecentProjectsStrip } from './RecentProjectsStrip';
 import { AnimatePresence } from 'motion/react';
+import { Toast } from './Toast';
+import { useOpenFolderImport } from './useOpenFolderImport';
 
 interface ActivePlugin {
   record: InstalledPluginRecord;
@@ -189,6 +198,8 @@ interface Props {
   onBrowseRegistry?: () => void;
   onOpenIntegrations?: () => void;
   onOpenMcp?: () => void;
+  onImportFolder?: (baseDir: string) => Promise<void> | void;
+  onImportFolderResponse?: (response: OpenDesignHostProjectImportSuccess) => Promise<void> | void;
   // Stage B: optional callbacks the rail's migration chips need.
   // HomeView itself never imports them; EntryShell threads them
   // through so the dispatcher can stay declarative.
@@ -198,6 +209,7 @@ interface Props {
   skillsLoading?: boolean;
   connectors?: ConnectorDetail[];
   promptTemplates?: PromptTemplateSummary[];
+  executionSwitcher?: ReactNode;
 }
 
 const EMPTY_DESIGN_SYSTEMS: DesignSystemSummary[] = [];
@@ -216,12 +228,15 @@ export function HomeView({
   onBrowseRegistry,
   onOpenIntegrations,
   onOpenMcp,
+  onImportFolder,
+  onImportFolderResponse,
   onOpenNewProject,
   promptHandoff,
   skills = EMPTY_SKILLS,
   skillsLoading = false,
   connectors = EMPTY_CONNECTORS,
   promptTemplates = EMPTY_PROMPT_TEMPLATES,
+  executionSwitcher,
 }: Props) {
   const { locale, t } = useI18n();
   const analytics = useAnalytics();
@@ -271,6 +286,13 @@ export function HomeView({
   const [designSystemLogoById, setDesignSystemLogoById] = useState<Record<string, string>>({});
   const [elevenLabsVoices, setElevenLabsVoices] = useState<AudioVoiceOption[]>([]);
   const [elevenLabsVoicesLoading, setElevenLabsVoicesLoading] = useState(false);
+  // Live AIHubMix image catalogue merged into the home media composer's model
+  // picker (replaces the static aihubmix seeds when the fetch resolves).
+  const aihubmixImageModels = useAIHubMixImageModels();
+  const composerImageModels = useMemo(
+    () => mergeAihubmixImageModels(IMAGE_MODELS, aihubmixImageModels),
+    [aihubmixImageModels],
+  );
   const [elevenLabsVoicesLoaded, setElevenLabsVoicesLoaded] = useState(false);
   const [elevenLabsVoicesError, setElevenLabsVoicesError] = useState<string | null>(null);
   const [detailsRecord, setDetailsRecord] = useState<InstalledPluginRecord | null>(null);
@@ -296,6 +318,12 @@ export function HomeView({
   const consumedHandoffIdRef = useRef<number | null>(null);
   const pendingPromptFocusEndRef = useRef(false);
   const activePluginApplyRequestRef = useRef(0);
+  const importSkillId = useMemo(() => {
+    const prototypeSkills = skills.filter((skill) => skill.mode === 'prototype');
+    return prototypeSkills.find((skill) => skill.defaultFor.includes('prototype'))?.id
+      ?? prototypeSkills[0]?.id
+      ?? null;
+  }, [skills]);
 
   useEffect(() => {
     let cancelled = false;
@@ -376,6 +404,7 @@ export function HomeView({
       {
         elevenLabsVoiceWarning,
         elevenLabsVoicesLoading,
+        imageModels: composerImageModels,
       },
     );
     const nextRendered = renderPluginBriefTemplate(composer.queryTemplate, composer.inputs);
@@ -407,7 +436,7 @@ export function HomeView({
       };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [promptTemplates, elevenLabsVoices, elevenLabsVoiceWarning, elevenLabsVoicesLoading]);
+  }, [promptTemplates, elevenLabsVoices, elevenLabsVoiceWarning, elevenLabsVoicesLoading, composerImageModels]);
 
   useEffect(() => {
     if (!pendingPromptFocusEndRef.current) return;
@@ -928,7 +957,7 @@ export function HomeView({
     if (!extracted) return;
     const nextInputs = { ...active.inputs, ...extracted };
     const normalizedInputs = active.mediaSurface
-      ? normalizeHomeMediaInputs(active.mediaSurface, nextInputs, promptTemplates, elevenLabsVoices)
+      ? normalizeHomeMediaInputs(active.mediaSurface, nextInputs, promptTemplates, elevenLabsVoices, composerImageModels)
       : nextInputs;
     const inputsValid = pluginInputsAreValid(active.inputFields, normalizedInputs);
     const inputsChanged = !inputsEqual(active.inputs, normalizedInputs);
@@ -995,12 +1024,13 @@ export function HomeView({
   function updateActiveInputs(next: Record<string, unknown>) {
     if (!active) return;
     const normalized = active.mediaSurface
-      ? normalizeHomeMediaInputs(active.mediaSurface, next, promptTemplates, elevenLabsVoices)
+      ? normalizeHomeMediaInputs(active.mediaSurface, next, promptTemplates, elevenLabsVoices, composerImageModels)
       : next;
     const mediaComposer = active.mediaSurface
       ? buildHomeMediaComposer(active.mediaSurface, promptTemplates, normalized, elevenLabsVoices, {
           elevenLabsVoiceWarning,
           elevenLabsVoicesLoading,
+          imageModels: composerImageModels,
         })
       : null;
     const inputFields = mediaComposer?.fields ?? active.inputFields;
@@ -1210,6 +1240,7 @@ export function HomeView({
             {
               elevenLabsVoiceWarning,
               elevenLabsVoicesLoading,
+              imageModels: composerImageModels,
             },
           );
           requestActivePlugin(record, undefined, {
@@ -1463,6 +1494,13 @@ export function HomeView({
           setWorkingDirToken(null);
         }}
         onExamplePromptStatusChange={handleExamplePromptStatusChange}
+        executionSwitcher={executionSwitcher}
+      />
+
+      <HomeExistingProjectAction
+        skillId={importSkillId}
+        onImportFolder={onImportFolder}
+        onImportFolderResponse={onImportFolderResponse}
       />
 
       <RecentProjectsStrip
@@ -1594,6 +1632,60 @@ export function HomeView({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function HomeExistingProjectAction({
+  skillId,
+  onImportFolder,
+  onImportFolderResponse,
+}: {
+  skillId: string | null;
+  onImportFolder?: (baseDir: string) => Promise<void> | void;
+  onImportFolderResponse?: (response: OpenDesignHostProjectImportSuccess) => Promise<void> | void;
+}) {
+  const t = useT();
+  const folderImport = useOpenFolderImport({
+    skillId,
+    onImportFolder,
+    onImportFolderResponse,
+  });
+  if (!folderImport.available) return null;
+
+  return (
+    <section className="home-existing-project" data-testid="home-existing-project">
+      <form
+        className="home-existing-project__form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void folderImport.openFolder();
+        }}
+      >
+        <button
+          type="submit"
+          className="home-existing-project__button"
+          disabled={folderImport.importing}
+        >
+          <Icon name="folder" size={14} />
+          <span>
+            {folderImport.importing
+              ? t('home.openExistingProjectOpening')
+              : t('home.openExistingProject')}
+          </span>
+        </button>
+      </form>
+      <p className="home-existing-project__subtitle">
+        {t('home.chooseFolderSubtitle')}
+      </p>
+      {folderImport.error ? (
+        <Toast
+          message={folderImport.error.message}
+          details={folderImport.error.details ?? null}
+          ttlMs={6000}
+          onDismiss={folderImport.clearError}
+        />
+      ) : null}
+    </section>
   );
 }
 

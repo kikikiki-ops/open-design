@@ -518,13 +518,13 @@ function PreviewViewportControls({
     <div className="viewer-viewport-switcher" ref={menuRef}>
       <button
         type="button"
-        className="viewer-action viewer-viewport-trigger od-tooltip"
+        className={`viewer-action viewer-viewport-trigger${open ? '' : ' od-tooltip'}`}
         aria-label={t('fileViewer.viewportAria')}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listboxId : undefined}
         title={t(activePreset.titleKey)}
-        data-tooltip={t(activePreset.titleKey)}
+        data-tooltip={open ? undefined : t(activePreset.titleKey)}
         data-tooltip-placement="bottom"
         tabIndex={tabIndex}
         onClick={() => setOpen((value) => !value)}
@@ -953,6 +953,9 @@ interface Props {
   onOpenFileReplacing?: (openName: string, closeName: string) => void;
   commentPortalId?: string;
   onCommentModeChange?: (active: boolean) => void;
+  // Bumped nonce asking this viewer to open its Share/Export menu (chat-side
+  // "Share" next-step action). Only HTML artifacts expose a Share menu.
+  shareRequest?: { nonce: number } | null;
 }
 
 export function FileViewer({
@@ -974,6 +977,7 @@ export function FileViewer({
   onOpenFileReplacing,
   commentPortalId,
   onCommentModeChange,
+  shareRequest,
 }: Props) {
   const rendererMatch = artifactRendererRegistry.resolve({
     file,
@@ -1015,6 +1019,7 @@ export function FileViewer({
         onFileSaved={onFileSaved}
         commentPortalId={commentPortalId}
         onCommentModeChange={onCommentModeChange}
+        shareRequest={shareRequest}
       />
     );
   }
@@ -2341,6 +2346,7 @@ export function CommentSidePanel({
   sending,
   queueOnSend = false,
   sendDisabled = false,
+  renderCreateForm = true,
   t,
   composer,
 }: {
@@ -2360,6 +2366,7 @@ export function CommentSidePanel({
   sending: boolean;
   queueOnSend?: boolean;
   sendDisabled?: boolean;
+  renderCreateForm?: boolean;
   t: TranslateFn;
   composer?: ReactNode;
 }) {
@@ -2619,7 +2626,7 @@ export function CommentSidePanel({
         </div>
       ) : null}
       {composer ? <div className="comment-side-composer">{composer}</div> : null}
-      {onCreateComment ? (
+      {renderCreateForm && onCreateComment ? (
         <form
           className="comment-side-new-comment composer"
           onSubmit={(event) => {
@@ -2713,6 +2720,24 @@ function reorderPreviewCommentIds(
   return ids;
 }
 
+export function appendSavedPreviewCommentOrder(
+  currentOrderIds: string[],
+  visibleComments: Array<Pick<PreviewComment, 'id'>>,
+  savedId: string,
+): string[] {
+  if (!savedId) return currentOrderIds;
+  const visibleIds = visibleComments.map((comment) => comment.id);
+  if (currentOrderIds.includes(savedId) || visibleIds.includes(savedId)) {
+    return currentOrderIds;
+  }
+  const visibleIdSet = new Set(visibleIds);
+  const kept = currentOrderIds.filter((id) => visibleIdSet.has(id));
+  const missingVisibleIds = visibleIds.filter((id) => !kept.includes(id));
+  const base = currentOrderIds.length > 0 ? [...kept, ...missingVisibleIds] : visibleIds;
+  const next = [...base, savedId];
+  return next.join('\0') === currentOrderIds.join('\0') ? currentOrderIds : next;
+}
+
 function CommentSideDock({
   comments,
   projectId,
@@ -2730,6 +2755,7 @@ function CommentSideDock({
   sending,
   queueOnSend = false,
   sendDisabled = false,
+  renderCreateForm = true,
   t,
   composer,
 }: {
@@ -2749,6 +2775,7 @@ function CommentSideDock({
   sending: boolean;
   queueOnSend?: boolean;
   sendDisabled?: boolean;
+  renderCreateForm?: boolean;
   t: TranslateFn;
   composer?: ReactNode;
 }) {
@@ -2774,6 +2801,7 @@ function CommentSideDock({
         sending={sending}
         queueOnSend={queueOnSend}
         sendDisabled={sendDisabled}
+        renderCreateForm={renderCreateForm}
         t={t}
         composer={composer}
       />
@@ -4385,6 +4413,7 @@ function HtmlViewer({
   onFileSaved,
   commentPortalId,
   onCommentModeChange,
+  shareRequest,
 }: {
   projectId: string;
   projectKind: TrackingProjectKind;
@@ -4403,6 +4432,7 @@ function HtmlViewer({
   onFileSaved?: () => Promise<void> | void;
   commentPortalId?: string;
   onCommentModeChange?: (active: boolean) => void;
+  shareRequest?: { nonce: number } | null;
 }) {
   const { locale, t } = useI18n();
   const analytics = useAnalytics();
@@ -7016,6 +7046,7 @@ function HtmlViewer({
         boardImages,
       );
       if (saved) {
+        rememberSavedPreviewCommentOrder(saved.id);
         clearBoardComposer();
         setActiveCommentExistingAttachments(saved.attachments ?? []);
         setBoardMode(true);
@@ -7051,6 +7082,7 @@ function HtmlViewer({
     try {
       const saved = await onSavePreviewComment(target, cleanNote, false);
       if (saved) {
+        rememberSavedPreviewCommentOrder(saved.id);
         setCommentSavedToast(t('chat.comments.savedToast'));
         if (activeCommentTarget) clearBoardComposer();
       }
@@ -7091,6 +7123,27 @@ function HtmlViewer({
     const timeout = window.setTimeout(() => setExportReadyNudge(false), 1800);
     return () => window.clearTimeout(timeout);
   }, [canShare, file.name, projectId]);
+
+  // Chat-side "Share" next-step action: when a new share request arrives, open
+  // the share menu (the toolbar's "Share" button → deploy menu, which holds the
+  // share-link items AND the "publish online" providers). This is the right
+  // surface for "share" — publishing is the prerequisite for a shareable link,
+  // and that publish step lives here; the download menu is export-to-disk, a
+  // different intent. The artifact source may still be loading when the request
+  // lands (the file was just auto-opened), so we defer until `canShare` flips
+  // true and only consume each nonce once.
+  const consumedShareNonceRef = useRef<number | null>(null);
+  useEffect(() => {
+    const nonce = shareRequest?.nonce;
+    if (nonce == null) return;
+    if (consumedShareNonceRef.current === nonce) return;
+    if (!canShare) return;
+    consumedShareNonceRef.current = nonce;
+    setExportReadyNudge(false);
+    markExportReadyNudgeSeen(projectId, file.name);
+    setDownloadMenuOpen(false);
+    setDeployMenuOpen(true);
+  }, [shareRequest?.nonce, canShare, projectId, file.name]);
 
   const openDownloadMenu = () => {
     fireArtifactHeaderClick('share_dropdown');
@@ -7286,6 +7339,11 @@ function HtmlViewer({
     const missing = creationSortedSideComments.filter((comment) => !orderedIds.has(comment.id));
     return [...ordered, ...missing];
   }, [creationSortedSideComments, commentOrderIds]);
+  function rememberSavedPreviewCommentOrder(savedId: string) {
+    setCommentOrderIds((current) =>
+      appendSavedPreviewCommentOrder(current, visibleSideComments, savedId),
+    );
+  }
   const activeSideCommentId = activePreviewCommentId;
   const activeCommentTargetVisible = commentTargetIntersectsPreview(
     activeCommentTarget,
@@ -7781,6 +7839,7 @@ function HtmlViewer({
       sending={sendingBoardBatch}
       queueOnSend={commentQueueOnSend}
       sendDisabled={commentSendDisabled}
+      renderCreateForm={!commentPortalHost}
       t={t}
       composer={null}
     />
