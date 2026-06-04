@@ -270,7 +270,7 @@ describe('installFromLocalFolder', () => {
       .toBe(path.join(pluginsRoot, 'my-bundle', 'skills', 'deck-skeleton'));
   });
 
-  it('keeps bundle marketplace aliases in separate namespace folders', async () => {
+  it('keeps bundle marketplace aliases and local reinstalls in separate namespace folders', async () => {
     const bundleRoot = await writeBundleFixture('shared-bundle');
 
     for (const entryName of ['market-a/shared-bundle', 'market-b/shared-bundle']) {
@@ -283,6 +283,13 @@ describe('installFromLocalFolder', () => {
       }
     }
 
+    for await (const ev of installFromLocalFolder(db, {
+      source: bundleRoot,
+      roots: { userPluginsRoot: pluginsRoot },
+    })) {
+      if (ev.kind === 'error') throw new Error(ev.message);
+    }
+
     const rows = listInstalledPlugins(db);
     expect(rows.map((row) => row.id).sort()).toEqual([
       'market-a/shared-bundle',
@@ -293,13 +300,20 @@ describe('installFromLocalFolder', () => {
       'market-b/shared-bundle/deck-pacing',
       'market-b/shared-bundle/deck-skeleton',
       'market-b/shared-bundle/linear-clone',
+      'shared-bundle',
+      'shared-bundle/deck-pacing',
+      'shared-bundle/deck-skeleton',
+      'shared-bundle/linear-clone',
     ]);
     expect(rows.find((row) => row.id === 'market-a/shared-bundle')?.fsPath)
       .toBe(path.join(pluginsRoot, 'market-a', 'shared-bundle'));
     expect(rows.find((row) => row.id === 'market-b/shared-bundle')?.fsPath)
       .toBe(path.join(pluginsRoot, 'market-b', 'shared-bundle'));
+    expect(rows.find((row) => row.id === 'shared-bundle')?.fsPath)
+      .toBe(path.join(pluginsRoot, 'shared-bundle'));
     await expect(stat(path.join(pluginsRoot, 'market-a', 'shared-bundle'))).resolves.toBeTruthy();
     await expect(stat(path.join(pluginsRoot, 'market-b', 'shared-bundle'))).resolves.toBeTruthy();
+    await expect(stat(path.join(pluginsRoot, 'shared-bundle'))).resolves.toBeTruthy();
   });
 
   it('uninstalling a bundle child removes the bundle root and sibling rows', async () => {
