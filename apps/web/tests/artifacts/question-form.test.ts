@@ -160,17 +160,27 @@ describe('parsePartialQuestionForm (true token-by-token streaming)', () => {
     expect(f?.questions).toEqual([]);
   });
 
-  it('keeps the preview form id stable while the body id token streams (no churn)', () => {
-    // No tag attr; the body `id` arrives char-by-char. The preview id must NOT
-    // follow the partial token (which would remount the editable panel and drop
-    // answers) — it stays the stable default until the final parse.
-    for (const buf of [
-      '<question-form>{"id":"d',
-      '<question-form>{"id":"disc',
-      '<question-form>{"id":"discovery-form","questions":[{"id":"a","label":"Q"}]}',
-    ]) {
-      expect(parsePartialQuestionForm(buf)?.id).toBe('discovery');
-    }
+  it('does not adopt a partial body id (no char-by-char churn)', () => {
+    // No tag attr; the body `id` is still arriving — the preview id must NOT
+    // follow the partial token (which would remount the editable panel).
+    expect(parsePartialQuestionForm('<question-form>{"id":"d')?.id).toBe('discovery');
+    expect(parsePartialQuestionForm('<question-form>{"id":"disc')?.id).toBe('discovery');
+  });
+
+  it('adopts the body id once complete so it matches the final parse (no swap remount)', () => {
+    // Once the id string literal is terminated, the preview adopts it — which
+    // is exactly what tryParseForm assigns after the close tag, so there's no
+    // preview→final identity change to remount the panel.
+    const buf = '<question-form>{"id":"discovery-form","questions":[{"id":"a","label":"Q"}]}';
+    expect(parsePartialQuestionForm(buf)?.id).toBe('discovery-form');
+    const seg = splitOnQuestionForms(`${buf}</question-form>`).find((s) => s.kind === 'form');
+    expect(seg && seg.kind === 'form' ? seg.form.id : null).toBe('discovery-form');
+  });
+
+  it('ignores a nested question id when deriving the form id', () => {
+    expect(
+      parsePartialQuestionForm('<question-form>{"questions":[{"id":"platform","label":"P"}')?.id,
+    ).toBe('discovery');
   });
 
   it('does not let a nested question id/description masquerade as form metadata', () => {
