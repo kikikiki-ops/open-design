@@ -4,7 +4,7 @@
 // arrival lands in Phase 2A.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import Database from 'better-sqlite3';
@@ -235,7 +235,7 @@ describe('installFromLocalFolder', () => {
     expect(row?.trust).toBe('restricted');
   });
 
-  it('registers every declared local bundle child under the bundle namespace', async () => {
+  it('registers every declared local bundle child under the bundle namespace with one success event', async () => {
     const bundleRoot = await writeBundleFixture('my-bundle');
 
     const successIds: string[] = [];
@@ -247,13 +247,10 @@ describe('installFromLocalFolder', () => {
       if (ev.kind === 'error') throw new Error(ev.message);
     }
 
-    expect(successIds).toEqual([
-      'my-bundle/deck-skeleton',
-      'my-bundle/linear-clone',
-      'my-bundle/deck-pacing',
-    ]);
+    expect(successIds).toEqual(['my-bundle']);
     const rows = listInstalledPlugins(db);
     expect(rows.map((row) => row.id).sort()).toEqual([
+      'my-bundle',
       'my-bundle/deck-pacing',
       'my-bundle/deck-skeleton',
       'my-bundle/linear-clone',
@@ -261,6 +258,26 @@ describe('installFromLocalFolder', () => {
     expect(rows.every((row) => row.sourceKind === 'local')).toBe(true);
     expect(rows.find((row) => row.id === 'my-bundle/deck-skeleton')?.fsPath)
       .toBe(path.join(pluginsRoot, 'my-bundle', 'skills', 'deck-skeleton'));
+  });
+
+  it('uninstalling a bundle child removes the bundle root and sibling rows', async () => {
+    const bundleRoot = await writeBundleFixture('remove-bundle');
+
+    for await (const ev of installFromLocalFolder(db, {
+      source: bundleRoot,
+      roots: { userPluginsRoot: pluginsRoot },
+    })) {
+      if (ev.kind === 'error') throw new Error(ev.message);
+    }
+
+    const installedFolder = path.join(pluginsRoot, 'remove-bundle');
+    await expect(stat(installedFolder)).resolves.toBeTruthy();
+
+    const result = await uninstallPlugin(db, 'remove-bundle/deck-skeleton', { userPluginsRoot: pluginsRoot });
+
+    expect(result.ok).toBe(true);
+    expect(listInstalledPlugins(db)).toHaveLength(0);
+    await expect(stat(installedFolder)).rejects.toThrow();
   });
 
   it('rejects unsafe bundle child paths without leaving registry rows', async () => {

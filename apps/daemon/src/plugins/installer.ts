@@ -25,6 +25,7 @@ import { x as tarExtract } from 'tar';
 import {
   defaultRegistryRoots,
   deleteInstalledPlugin,
+  getInstalledPlugin,
   listInstalledPlugins,
   resolvePluginFolder,
   upsertInstalledPlugin,
@@ -748,9 +749,12 @@ export async function* installFromLocalFolder(
 
   if (isBundleManifest(parsed.record.manifest)) {
     const namespace = bundleNamespaceForRecord(parsed.record);
+    const bundleRecord: InstalledPluginRecord = namespace === parsed.record.id
+      ? parsed.record
+      : { ...parsed.record, id: namespace };
     const bundleChildren = await resolveBundleChildRecords({
       bundleRoot: destFolder,
-      bundleRecord: parsed.record,
+      bundleRecord,
       namespace,
       sourceKind: recordedSourceKind,
       source: recordedSource,
@@ -768,8 +772,9 @@ export async function* installFromLocalFolder(
     warnings.push(...bundleChildren.warnings);
 
     yield { kind: 'progress', phase: 'persisting', message: 'Writing installed_plugins rows' };
-    persistBundleChildren(db, namespace, bundleChildren.records);
+    persistBundleRecords(db, bundleRecord, namespace, bundleChildren.records);
     if (opts.lockfilePath) {
+      await upsertPluginLockfileEntry(opts.lockfilePath, bundleRecord);
       for (const child of bundleChildren.records) {
         await upsertPluginLockfileEntry(opts.lockfilePath, child.record);
       }
@@ -777,9 +782,7 @@ export async function* installFromLocalFolder(
     for (const child of bundleChildren.records) {
       recordInstallEvent(opts, child.record, warnings);
     }
-    for (const child of bundleChildren.records) {
-      yield { kind: 'success', plugin: child.record, warnings };
-    }
+    yield { kind: 'success', plugin: bundleRecord, warnings };
     return;
   }
 
@@ -805,8 +808,12 @@ export async function uninstallPlugin(
   id: string,
   roots: RegistryRoots = defaultRegistryRoots(),
 ): Promise<UninstallResult> {
-  const removed = deleteInstalledPlugin(db, id);
-  const folder = path.join(roots.userPluginsRoot, id);
+  const target = getInstalledPlugin(db, id);
+  const bundleTarget = resolveBundleUninstallTarget(db, id, target);
+  const folder = bundleTarget?.folder ?? path.join(roots.userPluginsRoot, id);
+  const removed = bundleTarget
+    ? deleteInstalledPluginIds(db, bundleTarget.ids)
+    : deleteInstalledPlugin(db, id);
   let removedFolder: string | undefined;
   try {
     await fsp.rm(folder, { recursive: true, force: true });
@@ -830,6 +837,39 @@ export async function uninstallPlugin(
     });
   }
   return { ok: removed || removedFolder !== undefined, removedFolder };
+}
+
+function resolveBundleUninstallTarget(
+  db: SqliteDb,
+  id: string,
+  target: InstalledPluginRecord | null,
+): { ids: string[]; folder: string } | null {
+  const namespace = target && isBundleManifest(target.manifest)
+    ? id
+    : id.includes('/')
+      ? id.slice(0, id.lastIndexOf('/'))
+      : null;
+  if (!namespace) return null;
+
+  const rows = listInstalledPlugins(db).filter((row) => row.id === namespace || row.id.startsWith(`${namespace}/`));
+  if (rows.length === 0) return null;
+  const root = rows.find((row) => row.id === namespace);
+  if (!root) return null;
+  return {
+    ids: rows.map((row) => row.id),
+    folder: root.fsPath,
+  };
+}
+
+function deleteInstalledPluginIds(db: SqliteDb, ids: string[]): boolean {
+  const remove = db.transaction(() => {
+    let removed = false;
+    for (const id of ids) {
+      removed = deleteInstalledPlugin(db, id) || removed;
+    }
+    return removed;
+  });
+  return remove();
 }
 
 // Recursive copy with budget tracking. Symlinks anywhere in the tree fail
@@ -896,13 +936,19 @@ function installedTrustFromMarketplace(trust: MarketplaceTrust): TrustTier {
   return trust === 'restricted' ? 'restricted' : 'trusted';
 }
 
-function persistBundleChildren(db: SqliteDb, namespace: string, children: BundleChildRecord[]): void {
+function persistBundleRecords(
+  db: SqliteDb,
+  bundle: InstalledPluginRecord,
+  namespace: string,
+  children: BundleChildRecord[],
+): void {
   const replaceNamespace = db.transaction(() => {
     for (const existing of listInstalledPlugins(db)) {
-      if (existing.id.startsWith(`${namespace}/`)) {
+      if (existing.id === namespace || existing.id.startsWith(`${namespace}/`)) {
         deleteInstalledPlugin(db, existing.id);
       }
     }
+    upsertInstalledPlugin(db, bundle);
     for (const child of children) {
       upsertInstalledPlugin(db, child.record);
     }
