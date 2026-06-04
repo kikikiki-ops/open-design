@@ -4,7 +4,7 @@
   "name": "visual-validation",
   "title": "Visual validation",
   "version": "0.1.0",
-  "description": "Render the current HTML artifact, compare it with project reference screenshots, and emit a conservative critique score.",
+  "description": "Reserved atom id for planned post-generation screenshot comparison once the daemon can execute it against fresh artifacts.",
   "license": "MIT",
   "author": {
     "name": "Open Design",

@@ -1,13 +1,16 @@
 // Plan §3.D — built-in atom workers.
 //
-// Registered on first use into the worker registry. Every atom in
-// FIRST_PARTY_ATOMS gets at least a permissive worker so the
-// registry-driven pipeline runner stays at parity with the v1 stub
-// for atoms whose real work happens entirely inside the agent CLI
-// (file-write, todo-write, media-image, …) — the daemon has no
-// independent ground truth to observe there and shipping a real
-// watcher would force the agent into a fixed protocol we explicitly
-// kept out of scope.
+// Registered on first use into the worker registry. Every implemented
+// atom gets at least a permissive worker so the registry-driven
+// pipeline runner stays at parity with the v1 stub for atoms whose
+// real work happens entirely inside the agent CLI (file-write,
+// todo-write, media-image, …) — the daemon has no independent ground
+// truth to observe there and shipping a real watcher would force the
+// agent into a fixed protocol we explicitly kept out of scope.
+//
+// Planned atoms are not registered at all. Plugin doctor already warns
+// that those atoms are not runnable yet, and skipping registration keeps
+// explicit pipeline stages from masquerading as successful no-op runs.
 //
 // One atom does have a daemon-observable signal today:
 // `critique-theater`. The worker walks the run's devloop audit log
@@ -29,6 +32,7 @@ let installed = false;
 export function registerBuiltInAtomWorkers(): void {
   if (installed) return;
   for (const atom of FIRST_PARTY_ATOMS) {
+    if (atom.status !== 'implemented') continue;
     if (atom.id === 'critique-theater') {
       registerAtomWorker({
         id:       atom.id,

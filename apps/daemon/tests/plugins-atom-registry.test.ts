@@ -230,7 +230,7 @@ describe('built-in critique-theater worker', () => {
 });
 
 describe('registerBuiltInAtomWorkers: idempotency', () => {
-  it('registers every first-party atom exactly once even on repeat calls', () => {
+  it('registers every implemented first-party atom exactly once even on repeat calls', () => {
     registerBuiltInAtomWorkers();
     const first = listRegisteredAtomIds();
     registerBuiltInAtomWorkers();
@@ -239,7 +239,7 @@ describe('registerBuiltInAtomWorkers: idempotency', () => {
     expect(first).toContain('critique-theater');
     expect(first).toContain('file-write');
     expect(first).toContain('media-image');
-    expect(first).toContain('visual-validation');
+    expect(first).not.toContain('visual-validation');
   });
 });
 
