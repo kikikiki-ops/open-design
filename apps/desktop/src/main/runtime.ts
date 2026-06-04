@@ -220,12 +220,23 @@ export function signDesktopImportToken(
 
 const PENDING_POLL_MS = 120;
 const RUNNING_POLL_MS = 2000;
-// Minimum time the white splash video stays on screen before we swap in the web
-// runtime. It is sized to outlast the ~1.7s clip so the brand animation always
-// plays through and the window never flips to the app mid-animation. If the web
-// runtime is not ready by then, the <video> simply holds on its final frame (it
-// does not loop) until discovery succeeds. See `createPendingHtml`.
+// Minimum time the white splash window stays on screen before we reveal the main
+// window. It is sized to outlast the ~1.7s clip so the brand animation always
+// plays through. The splash is shown immediately and in parallel with the
+// daemon/web boot (see the packaged entry), so this time overlaps startup rather
+// than adding to it; the <video> holds on its final frame (it does not loop)
+// while the runtime finishes coming up. See `createSplashWindow`.
 const MIN_SPLASH_MS = 2000;
+// While the splash is up, the real web app loads in a hidden main window. We
+// reveal it only once the web bundle reports it has actually mounted (it sets
+// `data-od-app-mounted="1"` on first paint of the real UI), so the user never
+// sees the web's own "Loading Open Design…" shell flash between the splash and
+// the app. Poll cadence + a hard ceiling so a missing mount signal can never
+// strand the user on the splash forever.
+const WEB_MOUNT_POLL_MS = 80;
+const WEB_MOUNT_REVEAL_TIMEOUT_MS = 15000;
+
+const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 const MAX_CONSOLE_ENTRIES = 200;
 const DESKTOP_PET_WINDOW_WIDTH = 360;
 const DESKTOP_PET_WINDOW_HEIGHT = 300;
@@ -355,6 +366,15 @@ export type DesktopRuntimeOptions = {
    */
   rendererLogPath?: string | null;
   requestQuit?: () => void;
+  /**
+   * Optional pre-created splash window. The packaged entry creates the splash
+   * BEFORE awaiting the daemon/web sidecars so the brand animation is on screen
+   * in parallel with startup (no black no-window gap). When omitted (tools-dev,
+   * tests) the runtime creates its own splash — dev boots fast enough that the
+   * window-then-splash ordering is imperceptible. The runtime owns closing it
+   * once the main window is revealed.
+   */
+  splashWindow?: BrowserWindow | null;
   updater?: DesktopUpdater;
 };
 
@@ -819,6 +839,34 @@ function createPendingHtml(): string {
     </script>
   </body>
 </html>`)}`;
+}
+
+/**
+ * Create and immediately show the white brand-splash window. The packaged entry
+ * calls this BEFORE awaiting the daemon/web sidecars so the animation masks the
+ * whole cold boot (no black no-window gap); the desktop runtime then adopts it
+ * via `DesktopRuntimeOptions.splashWindow` and closes it once the real app has
+ * mounted in the (initially hidden) main window. Frameless + matching size so
+ * the reveal swap reads as a single window, never a flash.
+ */
+export function createSplashWindow(): BrowserWindow {
+  const splash = new BrowserWindow({
+    autoHideMenuBar: true,
+    backgroundColor: "#ffffff",
+    frame: false,
+    height: 900,
+    resizable: false,
+    show: true,
+    title: "Open Design",
+    width: 1280,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  void splash.loadURL(createPendingHtml());
+  return splash;
 }
 
 function resolveDesktopIconPath(): string {
@@ -1428,7 +1476,11 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
     // that would shrink the window past the usable breakpoint.
     minHeight: 600,
     minWidth: 900,
-    show: true,
+    // Starts hidden: the splash window is what the user sees while the real web
+    // app loads in here. We reveal this window only once the app has actually
+    // mounted (see `revealWhenReady` below), so there is never a flash of the
+    // web's own "Loading Open Design…" shell.
+    show: false,
     title: "Open Design",
     autoHideMenuBar: true,
     ...MAC_WINDOW_CHROME,
@@ -1722,10 +1774,47 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
     void persistRendererEntry(entry);
   });
 
+  // The splash window carries the white brand animation. In packaged builds the
+  // entry hands us one it created BEFORE the sidecars booted (so it overlaps the
+  // whole cold start); otherwise we create our own. The main window above stays
+  // hidden behind it until the real app has mounted.
   const splashStartedAt = Date.now();
-  await window.loadURL(createPendingHtml());
-  showWindowButtons(window);
-  ensureWindowVisible(window);
+  const splash: BrowserWindow | null = options.splashWindow ?? createSplashWindow();
+
+  let revealed = false;
+  let revealing = false;
+
+  const revealMainWindow = (): void => {
+    if (revealed || window.isDestroyed()) return;
+    revealed = true;
+    showWindowButtons(window);
+    window.show();
+    window.focus();
+    ensureWindowVisible(window);
+    if (splash != null && !splash.isDestroyed()) splash.close();
+  };
+
+  // Hold the splash until BOTH (a) the web bundle reports it has mounted — it
+  // sets `data-od-app-mounted="1"` on first paint of the real UI — so we never
+  // reveal the web's own dark "Loading Open Design…" shell, and (b) the splash
+  // has been up at least MIN_SPLASH_MS so the brand clip plays through. A hard
+  // ceiling guarantees the user is never stranded on the splash if the mount
+  // signal never arrives.
+  const revealWhenReady = async (): Promise<void> => {
+    if (revealing || revealed) return;
+    revealing = true;
+    const deadline = Date.now() + WEB_MOUNT_REVEAL_TIMEOUT_MS;
+    while (!stopped && !window.isDestroyed() && Date.now() < deadline) {
+      const mounted = await window.webContents
+        .executeJavaScript(`document.documentElement.getAttribute("data-od-app-mounted") === "1"`, true)
+        .catch(() => false);
+      if (mounted === true) break;
+      await delay(WEB_MOUNT_POLL_MS);
+    }
+    const remaining = MIN_SPLASH_MS - (Date.now() - splashStartedAt);
+    if (remaining > 0) await delay(remaining);
+    revealMainWindow();
+  };
 
   const schedule = (delayMs: number) => {
     if (stopped) return;
@@ -1739,29 +1828,24 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
 
     try {
       const url = await options.discoverUrl();
-      // Keep the white splash video on screen until it has had time to play
-      // through (MIN_SPLASH_MS), so the window never flips to the web app
-      // mid-animation. Only the first swap into the runtime is gated; once we
-      // have loaded a real URL, later reloads are immediate. When the runtime is
-      // still booting past the hold window the <video> just freezes on its final
-      // frame until discovery succeeds.
-      const splashHold = currentUrl == null && Date.now() - splashStartedAt < MIN_SPLASH_MS;
-      if (url != null && url !== currentUrl && !splashHold) {
+      if (url != null && url !== currentUrl) {
         pendingUrl = url;
+        // Load the web app into the still-hidden main window as soon as it is
+        // discovered; it mounts behind the splash so the swap is instant.
         await window.loadURL(url);
         currentUrl = url;
         pendingUrl = null;
-        showWindowButtons(window);
         const nextPetUrl = desktopPetUrl(url);
         if (!petWindow.isDestroyed() && nextPetUrl !== currentPetUrl) {
           await petWindow.loadURL(nextPetUrl);
           currentPetUrl = nextPetUrl;
         }
-      } else if (url != null && currentUrl == null) {
-        // URL is ready but we are still inside the splash hold — surface it as
-        // pending so the swap fires the moment the hold elapses.
-        pendingUrl = url;
-      } else {
+        if (!revealed) {
+          void revealWhenReady();
+        } else {
+          showWindowButtons(window);
+        }
+      } else if (url == null) {
         pendingUrl = null;
       }
       schedule(currentUrl == null ? PENDING_POLL_MS : RUNNING_POLL_MS);
@@ -1800,6 +1884,7 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
         ipcMain.removeHandler(channel);
       }
       ipcMain.removeHandler("browser:clear-data");
+      if (splash != null && !splash.isDestroyed()) splash.close();
       if (!petWindow.isDestroyed()) petWindow.close();
       if (!window.isDestroyed()) window.close();
     },
