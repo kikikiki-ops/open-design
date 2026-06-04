@@ -323,6 +323,8 @@ docker compose up -d
 # open http://localhost:7456
 ```
 
+> **macOS users:** If the web UI shows `Authorization: Bearer <OD_API_TOKEN> required`, Docker Desktop bridge networking is the cause. See [Docker Desktop on macOS](deploy/README.md#docker-desktop-on-macos) for the fix.
+
 ### 🧑‍💻 Run from source
 
 ```bash
@@ -543,8 +545,7 @@ Plugin registry endpoint: `GET /api/plugins`. Directory overview → [`plugins/R
    └──────────────────────────────────────────────────────────────────┘
 ```
 
-| Layer | Stack |
-|---|---|
+| Layer | Stack ||---|---|
 | Frontend | Next.js 16 App Router + React 18 + TypeScript |
 | Daemon | Node 24 · Express · SSE streaming · `better-sqlite3` |
 | Storage | Files at `.od/projects/<id>/` + SQLite at `.od/app.sqlite` + `media-config.json` (gitignored, auto-created). `OD_DATA_DIR` relocates everything. |
