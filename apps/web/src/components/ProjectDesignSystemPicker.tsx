@@ -179,6 +179,11 @@ export function ProjectDesignSystemPicker({
     });
   }, [query, designSystems, locale]);
 
+  const selectDesignSystem = (id: string | null) => {
+    onChange(id);
+    setOpen(false);
+  };
+
   return (
     <div
       ref={wrapRef}
@@ -249,10 +254,11 @@ export function ProjectDesignSystemPicker({
                     aria-selected={selectedId == null}
                     onMouseEnter={() => setHovered(null)}
                     onFocus={() => setHovered(null)}
-                    onClick={() => {
-                      onChange(null);
-                      setOpen(false);
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      selectDesignSystem(null);
                     }}
+                    onClick={() => selectDesignSystem(null)}
                   >
                     <div className="project-ds-picker-option-head">
                       <span className="project-ds-picker-option-title">{t('designSystemPicker.noneTitle')}</span>
@@ -277,10 +283,11 @@ export function ProjectDesignSystemPicker({
                         aria-selected={active}
                         onMouseEnter={() => setHovered(d)}
                         onFocus={() => setHovered(d)}
-                        onClick={() => {
-                          onChange(d.id);
-                          setOpen(false);
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          selectDesignSystem(d.id);
                         }}
+                        onClick={() => selectDesignSystem(d.id)}
                         data-testid={`project-ds-picker-option-${d.id}`}
                       >
                         <div className="project-ds-picker-option-head">
