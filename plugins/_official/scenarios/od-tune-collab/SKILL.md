@@ -23,7 +23,7 @@ artifact lineage chain stays intact across multi-turn tune cycles.
     { "id": "patch",     "atoms": ["patch-edit"] },
     {
       "id": "critique",
-      "atoms": ["critique-theater", "visual-validation"],
+      "atoms": ["critique-theater"],
       "repeat": true,
       "until": "critique.score>=4 || iterations>=3"
     },
@@ -36,6 +36,7 @@ The handoff stage records `handoffKind: 'patch'` (or
 `'deployable-app'` when the user opted in via
 `od plugin run --target deployable-app` AND `build-test` ran
 successfully somewhere upstream in the project's history). The
-visual-validation atom also runs in the critique stage so screenshot
-references can pull the score back down when the patched artifact is
-still visually off.
+visual-validation atom remains available for explicit pipelines, but
+the default critique loop stays text-only until the daemon can use a
+post-render score to trigger another patch iteration instead of only
+failing after the agent has exited.
