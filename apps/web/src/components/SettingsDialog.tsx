@@ -2627,7 +2627,8 @@ export function SettingsDialog({
   const activeHeader = sectionHeader[activeSection];
   // Open Design AMR is the recommended hosted runtime, so it always leads: when
   // it's available it sits first in "Your CLIs"; when it isn't it gets its own
-  // standalone recommendation slot instead of being buried in the install list.
+  // standalone recommendation slot rendered above "Your CLIs" (regardless of
+  // whether the user already has local CLIs), instead of being buried below.
   const installedAgents = agents
     .filter((a) => a.available)
     .sort((a, b) => {
@@ -3425,7 +3426,10 @@ export function SettingsDialog({
                 </div>
               ) : (
                 <>
-                  {amrRecommendation && installedAgents.length === 0 ? (
+                  {/* AMR is the recommended hosted runtime, so its recommend
+                      slot always leads — above "Your CLIs" — whether or not the
+                      user already has local CLIs configured. */}
+                  {amrRecommendation ? (
                     <div className="agent-amr-recommend">
                       {renderAmrRecommendCard(amrRecommendation)}
                     </div>
@@ -3839,11 +3843,6 @@ export function SettingsDialog({
                       </div>
                     ) : null}
                   </div>
-                  ) : null}
-                  {amrRecommendation && installedAgents.length > 0 ? (
-                    <div className="agent-amr-recommend">
-                      {renderAmrRecommendCard(amrRecommendation)}
-                    </div>
                   ) : null}
                   {unavailableAgents.length > 0 ? (
                     <details

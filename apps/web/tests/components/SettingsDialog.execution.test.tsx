@@ -2794,7 +2794,7 @@ describe('SettingsDialog execution settings Local CLI interactions', () => {
     ).toBe(false);
   });
 
-  it('promotes an unavailable AMR into its own slot under "Your CLIs", not the install list', async () => {
+  it('promotes an unavailable AMR into its own slot above "Your CLIs", not the install list', async () => {
     const unavailableAmr: AgentInfo = {
       id: 'amr',
       name: 'AMR (vela)',
@@ -2830,15 +2830,16 @@ describe('SettingsDialog execution settings Local CLI interactions', () => {
     expect(amrSlot!.querySelector('.agent-card-benefit')).toBeTruthy();
     expect(screen.getByText('Available to install (1)')).toBeTruthy();
 
-    // DOM order: installed grid -> AMR slot -> install collapse.
+    // DOM order: AMR slot -> installed grid -> install collapse. AMR leads even
+    // when the user already has local CLIs configured.
     const installedGrid = document.querySelector('.agent-grid-installed')!;
     const collapse = document.querySelector('.agent-install-collapse')!;
     expect(
-      installedGrid.compareDocumentPosition(amrSlot!) &
+      amrSlot!.compareDocumentPosition(installedGrid) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(
-      amrSlot!.compareDocumentPosition(collapse) &
+      installedGrid.compareDocumentPosition(collapse) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
