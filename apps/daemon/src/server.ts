@@ -156,7 +156,7 @@ import {
   restoreProjectSnapshotLink,
   resolvePluginSnapshot,
   runPipelineForRun,
-  splitPipelineByExecutionBoundary,
+  splitPipelineSnapshotByExecutionBoundary,
   runStageWithRegistry,
   startSnapshotGc,
   uninstallPlugin,
@@ -13977,7 +13977,7 @@ export async function startServer({
     };
     res.status(202).json(body);
     const pipelineSchedule = resolvedSnapshot?.ok
-      ? splitPipelineByExecutionBoundary(resolvedSnapshot.snapshot.pipeline)
+      ? splitPipelineSnapshotByExecutionBoundary(resolvedSnapshot.snapshot)
       : { preRun: null, postRun: null };
     // Fire only pre-run-safe stages before the agent starts. Stages that
     // depend on agent-produced artifacts (`visual-validation`) are
@@ -13986,10 +13986,7 @@ export async function startServer({
     if (resolvedSnapshot?.ok && pipelineSchedule.preRun) {
       firePipelineForRun({
         run,
-        snapshot: {
-          ...resolvedSnapshot.snapshot,
-          pipeline: pipelineSchedule.preRun,
-        },
+        snapshot: pipelineSchedule.preRun,
         runs: design.runs,
         db,
       });
@@ -14004,12 +14001,7 @@ export async function startServer({
         console.warn('[plugins] skill candidate hook setup failed', err);
       }
     }
-    run.postRunPipelineSnapshot = resolvedSnapshot?.ok && pipelineSchedule.postRun
-      ? {
-          ...resolvedSnapshot.snapshot,
-          pipeline: pipelineSchedule.postRun,
-        }
-      : null;
+    run.postRunPipelineSnapshot = pipelineSchedule.postRun;
     design.runs.start(run, () => startChatRun(meta, run));
 
     // Analytics v2: emit run_created (daemon-side authoritative) and

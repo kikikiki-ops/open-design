@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { PluginPipeline } from '@open-design/contracts';
-import { splitPipelineByExecutionBoundary } from '../src/plugins/pipeline-schedule.js';
+import type { AppliedPluginSnapshot, GenUISurfaceSpec, PluginPipeline } from '@open-design/contracts';
+import {
+  splitPipelineByExecutionBoundary,
+  splitPipelineSnapshotByExecutionBoundary,
+} from '../src/plugins/pipeline-schedule.js';
 
 describe('splitPipelineByExecutionBoundary', () => {
   it('keeps pre-run-only pipelines intact', () => {
@@ -39,6 +42,80 @@ describe('splitPipelineByExecutionBoundary', () => {
     ]);
     expect(schedule.postRun?.stages.map((stage) => stage.id)).toEqual([
       'critique',
+    ]);
+  });
+
+  it('keeps the full suffix in post-run order once a post-run atom appears', () => {
+    const pipeline: PluginPipeline = {
+      stages: [
+        { id: 'direction', atoms: ['discovery-question-form'] },
+        { id: 'patch', atoms: ['file-write'] },
+        { id: 'critique', atoms: ['critique-theater', 'visual-validation'] },
+        { id: 'handoff', atoms: ['handoff'] },
+      ],
+    };
+
+    const schedule = splitPipelineByExecutionBoundary(pipeline);
+
+    expect(schedule.preRun?.stages.map((stage) => stage.id)).toEqual([
+      'direction',
+      'patch',
+    ]);
+    expect(schedule.postRun?.stages.map((stage) => stage.id)).toEqual([
+      'critique',
+      'handoff',
+    ]);
+  });
+});
+
+describe('splitPipelineSnapshotByExecutionBoundary', () => {
+  it('keeps triggerless surfaces in pre-run only and stage-scopes the deferred suffix', () => {
+    const surfaces: GenUISurfaceSpec[] = [
+      { id: 'confirm', kind: 'confirmation', persist: 'run' },
+      { id: 'direction-form', kind: 'form', persist: 'run', trigger: { stageId: 'direction' } },
+      { id: 'critique-form', kind: 'form', persist: 'run', trigger: { stageId: 'critique' } },
+      { id: 'handoff-form', kind: 'form', persist: 'run', trigger: { stageId: 'handoff' } },
+    ];
+    const snapshot = {
+      snapshotId: 'snap-1',
+      pluginId: 'sample-plugin',
+      pluginVersion: '1.0.0',
+      manifestSourceDigest: 'digest-1',
+      inputs: {},
+      resolvedContext: { items: [] },
+      capabilitiesGranted: [],
+      capabilitiesRequired: [],
+      assetsStaged: [],
+      taskKind: 'new-generation',
+      appliedAt: 0,
+      connectorsRequired: [],
+      connectorsResolved: [],
+      mcpServers: [],
+      pipeline: {
+        stages: [
+          { id: 'direction', atoms: ['discovery-question-form'] },
+          { id: 'critique', atoms: ['visual-validation'] },
+          { id: 'handoff', atoms: ['handoff'] },
+        ],
+      },
+      genuiSurfaces: surfaces,
+      status: 'fresh',
+    } as AppliedPluginSnapshot;
+
+    const split = splitPipelineSnapshotByExecutionBoundary(snapshot);
+
+    expect(split.preRun?.pipeline?.stages.map((stage) => stage.id)).toEqual(['direction']);
+    expect(split.preRun?.genuiSurfaces?.map((surface) => surface.id)).toEqual([
+      'confirm',
+      'direction-form',
+    ]);
+    expect(split.postRun?.pipeline?.stages.map((stage) => stage.id)).toEqual([
+      'critique',
+      'handoff',
+    ]);
+    expect(split.postRun?.genuiSurfaces?.map((surface) => surface.id)).toEqual([
+      'critique-form',
+      'handoff-form',
     ]);
   });
 });
