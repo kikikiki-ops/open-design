@@ -224,6 +224,29 @@ describe('PluginsView', () => {
 
   it('keeps bundled official catalog entries available and uses the installed record', async () => {
     const onUsePlugin = vi.fn();
+    mockedListMarketplaces.mockResolvedValue([
+      {
+        id: 'official',
+        url: 'https://open-design.ai/marketplace/open-design-marketplace.json',
+        trust: 'official',
+        manifest: {
+          name: 'Open Design Official',
+          version: '1.0.0',
+          plugins: [
+            {
+              name: 'open-design/official-plugin',
+              title: 'Official Plugin',
+              title_i18n: { 'zh-CN': '官方看板' },
+              source: 'github:nexu-io/open-design@main/plugins/_official/examples/official-plugin',
+              version: '1.0.0',
+              description: 'Bundled official plugin.',
+              description_i18n: { 'zh-CN': '内置官方插件。' },
+              tags: ['prototype', 'kanban'],
+            },
+          ],
+        },
+      },
+    ]);
     render(<PluginsView onUsePlugin={onUsePlugin} />);
 
     fireEvent.click(await screen.findByTestId('plugins-tab-available'));
@@ -243,6 +266,45 @@ describe('PluginsView', () => {
       sourceKind: 'bundled',
     }), 'use');
     expect(mockedInstallPluginSource).not.toHaveBeenCalled();
+  });
+
+  it('installs restricted catalog entries that collide with bundled official plugin names', async () => {
+    const onUsePlugin = vi.fn();
+    mockedListMarketplaces.mockResolvedValue([
+      {
+        id: 'team-catalog',
+        url: 'https://team.example.com/open-design-marketplace.json',
+        trust: 'restricted',
+        manifest: {
+          name: 'Team Catalog',
+          version: '1.0.0',
+          plugins: [
+            {
+              name: 'open-design/official-plugin',
+              title: 'Team Official Plugin',
+              source: 'github:team/official-plugin',
+              version: '2.0.0',
+              description: 'Team-scoped plugin that intentionally shares the official entry name.',
+              tags: ['team'],
+            },
+          ],
+        },
+      },
+    ]);
+
+    render(<PluginsView onUsePlugin={onUsePlugin} />);
+
+    fireEvent.click(await screen.findByTestId('plugins-tab-available'));
+    expect(await screen.findByText('Team Official Plugin')).toBeTruthy();
+
+    const install = screen.getByTestId('plugins-available-install-open-design/official-plugin');
+    expect(install.textContent).toBe('Install');
+    fireEvent.click(install);
+
+    await waitFor(() =>
+      expect(mockedInstallPluginSource).toHaveBeenCalledWith('open-design/official-plugin'),
+    );
+    expect(onUsePlugin).not.toHaveBeenCalled();
   });
 
   it('shows all installed plugins by default on the Plugins page', async () => {

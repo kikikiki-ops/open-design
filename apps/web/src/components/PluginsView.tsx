@@ -1762,14 +1762,31 @@ function buildAvailablePlugins(
     return entries.flatMap((entry) => {
       const installedPlugin = installedByName.get(normalizePluginName(entry.name)) ?? null;
       if (installedPlugin && installedPlugin.sourceKind !== 'bundled') return [];
+      const installedRecord = installedPlugin && bundledPluginMatchesMarketplaceEntry(
+        installedPlugin,
+        marketplace,
+        entry,
+      )
+        ? installedPlugin
+        : null;
       return [{
         key: `${marketplace.id}:${entry.name}:${entry.version ?? ''}`,
         marketplace,
         entry,
-        ...(installedPlugin ? { installedRecord: installedPlugin } : {}),
+        ...(installedRecord ? { installedRecord } : {}),
       }];
     });
   });
+}
+
+function bundledPluginMatchesMarketplaceEntry(
+  plugin: InstalledPluginRecord,
+  marketplace: PluginMarketplace,
+  entry: PluginMarketplaceEntry,
+): boolean {
+  return plugin.sourceKind === 'bundled'
+    && plugin.sourceMarketplaceId === marketplace.id
+    && normalizePluginName(plugin.sourceMarketplaceEntryName ?? '') === normalizePluginName(entry.name);
 }
 
 function availablePluginTitle(entry: PluginMarketplaceEntry, locale?: string): string {
