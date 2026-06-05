@@ -2225,8 +2225,6 @@ export interface Dict {
   'workspace.allFiles': string;
   'workspace.createNew': string;
   'workspace.tabOpen': string;
-  'workspace.newSideChat': string;
-  'workspace.newSideChatDescription': string;
   'workspace.sideChatContextBanner': string;
   'workspace.sideChatDefaultTitle': string;
   'workspace.newTerminal': string;

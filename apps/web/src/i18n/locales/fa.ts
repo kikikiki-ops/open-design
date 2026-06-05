@@ -1054,8 +1054,6 @@ export const fa: Dict = {
   'workspace.allFiles': 'All',
   'workspace.createNew': 'Create new',
   'workspace.tabOpen': 'Open',
-  'workspace.newSideChat': 'New Side Chat',
-  'workspace.newSideChatDescription': 'Open a context-aware chat in a new tab',
   'workspace.sideChatContextBanner': 'Integrated context from the current conversation',
   'workspace.sideChatDefaultTitle': 'Side chat',
   'workspace.newTerminal': 'New Terminal',
