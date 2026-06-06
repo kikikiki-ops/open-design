@@ -419,7 +419,7 @@ jobs:
       - name: Prepare mac_arm64 assets
         if: ${{ inputs.publish }}
         env:
-          RELEASE_ARTIFACT_MODE: dmg-only
+          RELEASE_ARTIFACT_MODE: dmg-and-payload
           RELEASE_ASSET_SUFFIX: .signed
           RELEASE_ASSETS_DIR: ${{ runner.temp }}/release-assets/mac_arm64
           RELEASE_CHANNEL: beta
@@ -436,7 +436,7 @@ jobs:
         env:
           RELEASE_ASSET_SUFFIX: .signed
           RELEASE_ASSETS_DIR: ${{ runner.temp }}/release-assets/mac_arm64
-          RELEASE_ARTIFACT_MODE: dmg-only
+          RELEASE_ARTIFACT_MODE: dmg-and-payload
           RELEASE_CHANNEL: beta
           RELEASE_MANIFEST_DIR: ${{ runner.temp }}/release-platform-manifests
           RELEASE_OUTPUTS_PATH: ${{ runner.temp }}/release-platform-outputs/mac_arm64.json

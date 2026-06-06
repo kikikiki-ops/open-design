@@ -98,6 +98,7 @@ const outputs = {
   release_version: process.env.RELEASE_VERSION,
   ...(build.appPath ? { app_path: build.appPath } : {}),
   ...(build.dmgPath ? { dmg_path: build.dmgPath } : {}),
+  ...(build.payloadPath ? { payload_path: build.payloadPath } : {}),
   ...(build.zipPath ? { zip_path: build.zipPath } : {}),
   ...(build.outputRoot ? { output_root: build.outputRoot } : {}),
 };

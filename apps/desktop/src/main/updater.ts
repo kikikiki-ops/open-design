@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { createReadStream } from "node:fs";
 import {
   access,
@@ -16,6 +16,7 @@ import {
 } from "node:fs/promises";
 import { dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
+import { promisify } from "node:util";
 
 import {
   MANAGED_DOWNLOAD_ERROR_CODES,
@@ -24,6 +25,12 @@ import {
   type ManagedDownloadChecksum,
   type ManagedDownloadProgress,
 } from "@open-design/download";
+import {
+  LAUNCHER_SCHEMA_VERSION,
+  resolveLauncherVersionPaths,
+  validateLauncherRuntimeDescriptor,
+  type LauncherRuntimeDescriptor,
+} from "@open-design/launcher-proto";
 import {
   DESKTOP_UPDATE_CHANNELS,
   DESKTOP_UPDATE_MODES,
@@ -86,6 +93,7 @@ const MAC_DEFERRED_INSTALLER_TIMEOUT_MS = 10 * 60 * 1000;
 const WINDOWS_DEFERRED_INSTALLER_TIMEOUT_MS = 10 * 60 * 1000;
 const ARTIFACT_DOWNLOAD_MAX_ATTEMPTS = 3;
 const DESKTOP_UPDATE_CHANNEL_VALUES = new Set<string>(Object.values(DESKTOP_UPDATE_CHANNELS));
+const execFileAsync = promisify(execFile);
 
 export type DesktopUpdaterConfigInput = {
   appVersion?: string | null;
@@ -93,7 +101,10 @@ export type DesktopUpdaterConfigInput = {
   currentVersion?: string | null;
   downloadRoot?: string | null;
   env?: NodeJS.ProcessEnv;
+  launcherRoot?: string | null;
+  launcherPayloadExtractorPath?: string | null;
   installerObservationRoot?: string | null;
+  launcherRuntimePath?: string | null;
   mode?: DesktopUpdateMode;
   namespace?: string | null;
   platform?: string;
@@ -115,6 +126,9 @@ export type DesktopUpdaterConfig = {
   downloadRoot: string;
   enabled: boolean;
   installerObservationRoot?: string;
+  launcherRoot?: string;
+  launcherPayloadExtractorPath?: string;
+  launcherRuntimePath?: string;
   metadataUrl: string;
   mode: DesktopUpdateMode;
   namespace?: string;
@@ -124,6 +138,7 @@ export type DesktopUpdaterConfig = {
 };
 
 export type DesktopUpdaterDeps = {
+  extractLauncherPayloadArchive?: (input: LauncherPayloadExtractInput) => Promise<void>;
   fetch?: typeof globalThis.fetch;
   launchInstallerAfterQuit?: (input: DeferredInstallerLaunchInput) => Promise<string>;
   logger?: DesktopUpdaterLogger;
@@ -131,6 +146,13 @@ export type DesktopUpdaterDeps = {
   openPath?: (path: string) => Promise<string>;
   processPid?: number;
   spawnDetached?: SpawnInstallerHelper;
+};
+
+export type LauncherPayloadExtractInput = {
+  archivePath: string;
+  destinationRoot: string;
+  extractorPath?: string;
+  platform: string;
 };
 
 type DesktopUpdaterLogger = Pick<Console, "error" | "warn">;
@@ -301,6 +323,9 @@ export function resolveDesktopUpdaterConfig(input: DesktopUpdaterConfigInput): D
     "0.0.0";
   const channel = normalizeChannel(env[DESKTOP_UPDATE_ENV.CHANNEL], defaultChannelForVersion(currentVersion));
   const installerObservationRoot = normalizeOptionalRoot(input.installerObservationRoot, "installer observation root");
+  const launcherRoot = normalizeOptionalRoot(input.launcherRoot, "launcher root");
+  const launcherPayloadExtractorPath = normalizeOptionalRoot(input.launcherPayloadExtractorPath, "launcher payload extractor path");
+  const launcherRuntimePath = normalizeOptionalRoot(input.launcherRuntimePath, "launcher runtime path");
   const namespace = normalizeOptionalNonEmpty(input.namespace);
 
   return {
@@ -333,6 +358,9 @@ export function resolveDesktopUpdaterConfig(input: DesktopUpdaterConfigInput): D
     downloadRoot,
     enabled,
     ...(installerObservationRoot == null ? {} : { installerObservationRoot }),
+    ...(launcherRoot == null ? {} : { launcherRoot }),
+    ...(launcherPayloadExtractorPath == null ? {} : { launcherPayloadExtractorPath }),
+    ...(launcherRuntimePath == null ? {} : { launcherRuntimePath }),
     metadataUrl: env[DESKTOP_UPDATE_ENV.METADATA_URL] ?? defaultMetadataUrl(channel),
     mode,
     ...(namespace == null ? {} : { namespace }),
@@ -392,7 +420,7 @@ function sanitizePathSegment(value: string): string {
 
 function extensionForArtifact(name: string | undefined, type: string): string {
   const ext = name == null ? "" : extname(name).toLowerCase();
-  if (ext === ".dmg" || ext === ".zip" || ext === ".exe" || ext === ".appimage") return ext;
+  if (ext === ".7z" || ext === ".dmg" || ext === ".zip" || ext === ".exe" || ext === ".appimage") return ext;
   if (type === "dmg") return ".dmg";
   if (type === "zip") return ".zip";
   if (type === "installer") return ".exe";
@@ -744,26 +772,44 @@ function selectedWinPlatformKey(arch: string): string {
   return `win-${sanitizePathSegment(arch)}`;
 }
 
-function selectedPackageLauncherArtifact(config: DesktopUpdaterConfig): {
-  artifactKey: "dmg" | "installer";
-  artifactType: "dmg" | "installer";
+function selectedPackageLauncherArtifact(config: DesktopUpdaterConfig, preferPayload = false): {
+  artifactKey: "dmg" | "installer" | "payload";
+  artifactType: "dmg" | "installer" | "payload";
   description: string;
   platformKey: string;
 } | null {
   if (config.platform === "darwin") {
+    const platformKey = selectedMacPlatformKey(config.arch);
+    if (preferPayload) {
+      return {
+        artifactKey: "payload",
+        artifactType: "payload",
+        description: "mac launcher payload",
+        platformKey,
+      };
+    }
     return {
       artifactKey: "dmg",
       artifactType: "dmg",
       description: "mac DMG",
-      platformKey: selectedMacPlatformKey(config.arch),
+      platformKey,
     };
   }
   if (config.platform === "win32") {
+    const platformKey = selectedWinPlatformKey(config.arch);
+    if (preferPayload) {
+      return {
+        artifactKey: "payload",
+        artifactType: "payload",
+        description: "Windows launcher payload",
+        platformKey,
+      };
+    }
     return {
       artifactKey: "installer",
       artifactType: "installer",
       description: "Windows installer",
-      platformKey: selectedWinPlatformKey(config.arch),
+      platformKey,
     };
   }
   return null;
@@ -777,6 +823,7 @@ function installerObservationArtifactType(value: string | undefined): InstallerO
 function selectUpdateCandidate(
   metadata: Record<string, unknown>,
   config: DesktopUpdaterConfig,
+  preferPayload = false,
 ): { candidate: UpdateCandidate; ok: true } | { error: DesktopUpdateErrorSnapshot; ok: false; state: DesktopUpdateState } {
   if (config.mode === DESKTOP_UPDATE_MODES.JS_INCREMENTAL) {
     return {
@@ -792,7 +839,7 @@ function selectUpdateCandidate(
       error: createError("update-mode-unsupported", `unsupported update mode: ${config.mode}`),
     };
   }
-  const artifactSelection = selectedPackageLauncherArtifact(config);
+  const artifactSelection = selectedPackageLauncherArtifact(config, preferPayload);
   if (artifactSelection == null) {
     return {
       ok: false,
@@ -891,12 +938,34 @@ function selectUpdateCandidate(
   };
 }
 
+function selectUpdateCandidateWithFallback(
+  metadata: Record<string, unknown>,
+  config: DesktopUpdaterConfig,
+  preferPayload: boolean,
+): { candidate: UpdateCandidate; ok: true } | { error: DesktopUpdateErrorSnapshot; ok: false; state: DesktopUpdateState } {
+  if (!preferPayload) return selectUpdateCandidate(metadata, config);
+  const payload = selectUpdateCandidate(metadata, config, true);
+  if (payload.ok || payload.error.code !== "no-compatible-artifact") return payload;
+  return selectUpdateCandidate(metadata, config);
+}
+
 async function fetchJson(fetchImpl: typeof globalThis.fetch, url: string): Promise<Record<string, unknown>> {
   const response = await fetchImpl(url);
   if (!response.ok) throw new Error(`metadata request returned HTTP ${response.status}`);
   const body = await response.json();
   if (!isRecord(body)) throw new Error("metadata response was not a JSON object");
   return body;
+}
+
+async function hasValidLauncherPayloadContext(config: DesktopUpdaterConfig): Promise<boolean> {
+  if (config.launcherRoot == null || config.launcherRuntimePath == null || config.namespace == null) return false;
+  try {
+    const runtime = await readJsonStrict<LauncherRuntimeDescriptor>(config.launcherRuntimePath);
+    validateLauncherRuntimeDescriptor(runtime, { channel: config.channel, namespace: config.namespace });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function parseChecksumText(text: string, algorithm: "sha256" | "sha512"): string {
@@ -966,6 +1035,162 @@ function desktopDownloadError(error: unknown): DesktopUpdateErrorSnapshot {
     return createError("download-target-locked", "another update download is already using this target");
   }
   return createError("download-failed", userFacingDownloadErrorMessage(error));
+}
+
+type LauncherPayloadManifest = {
+  channel: string;
+  entry?: { cwd?: string; executable?: string };
+  namespace: string;
+  payloadRoot: string;
+  platform: "darwin" | "win32";
+  schemaVersion: typeof LAUNCHER_SCHEMA_VERSION;
+  version: string;
+};
+
+function validateLauncherPayloadManifest(value: unknown, expected: {
+  channel: DesktopUpdateChannel;
+  namespace: string;
+  platform: string;
+  version: string;
+}): LauncherPayloadManifest {
+  if (!isRecord(value)) throw new Error("launcher payload manifest must be an object");
+  if (value.schemaVersion !== LAUNCHER_SCHEMA_VERSION) {
+    throw new Error(`unsupported launcher payload schemaVersion: ${String(value.schemaVersion)}`);
+  }
+  if (stringField(value, "channel") !== expected.channel) {
+    throw new Error(`launcher payload channel does not match expected channel ${expected.channel}`);
+  }
+  if (stringField(value, "namespace") !== expected.namespace) {
+    throw new Error(`launcher payload namespace does not match expected namespace ${expected.namespace}`);
+  }
+  if (stringField(value, "version") !== expected.version) {
+    throw new Error(`launcher payload version does not match expected version ${expected.version}`);
+  }
+  const platform = stringField(value, "platform");
+  if (platform !== expected.platform) {
+    throw new Error(`launcher payload platform ${String(platform)} does not match expected platform ${expected.platform}`);
+  }
+  if (stringField(value, "payloadRoot") !== "payload") throw new Error("launcher payload root must be payload");
+  const entry = objectField(value, "entry");
+  if (entry == null || stringField(entry, "cwd") == null || stringField(entry, "executable") == null) {
+    throw new Error("launcher payload entry must include cwd and executable");
+  }
+  return value as LauncherPayloadManifest;
+}
+
+async function defaultExtractLauncherPayloadArchive(input: LauncherPayloadExtractInput): Promise<void> {
+  await mkdir(input.destinationRoot, { recursive: true });
+  if (input.platform === "darwin") {
+    await execFileAsync("ditto", ["-x", "-k", input.archivePath, input.destinationRoot]);
+    return;
+  }
+  if (input.platform === "win32") {
+    await execFileAsync(input.extractorPath ?? "7z", ["x", "-y", `-o${input.destinationRoot}`, input.archivePath], { windowsHide: true });
+    return;
+  }
+  throw new Error(`launcher payload extraction is not supported on ${input.platform}`);
+}
+
+async function applyLauncherPayloadRelease(input: {
+  activeRelease: LoadedRelease;
+  config: DesktopUpdaterConfig;
+  extractLauncherPayloadArchive: (extractInput: LauncherPayloadExtractInput) => Promise<void>;
+  now: () => Date;
+}): Promise<LauncherRuntimeDescriptor> {
+  if (input.config.launcherRoot == null || input.config.launcherRuntimePath == null || input.config.namespace == null) {
+    throw new Error("launcher payload apply requires launcher root, runtime path, and namespace");
+  }
+
+  const currentRuntime = validateLauncherRuntimeDescriptor(
+    await readJsonStrict<LauncherRuntimeDescriptor>(input.config.launcherRuntimePath),
+    { channel: input.config.channel, namespace: input.config.namespace },
+  );
+  const versionPaths = resolveLauncherVersionPaths({
+    channel: input.config.channel,
+    namespace: input.config.namespace,
+    root: input.config.launcherRoot,
+    version: input.activeRelease.ref.version,
+  });
+  const stagingRoot = join(versionPaths.stagingRoot, `apply-${input.activeRelease.ref.key}`);
+  if (!containsPath(versionPaths.root, stagingRoot)) {
+    throw new Error("launcher payload staging path escaped launcher root");
+  }
+
+  let promoted = false;
+  try {
+    await rm(stagingRoot, { force: true, recursive: true });
+    await mkdir(dirname(stagingRoot), { recursive: true });
+    await input.extractLauncherPayloadArchive({
+      archivePath: input.activeRelease.path,
+      destinationRoot: stagingRoot,
+      ...(input.config.launcherPayloadExtractorPath == null ? {} : { extractorPath: input.config.launcherPayloadExtractorPath }),
+      platform: input.config.platform,
+    });
+
+    const manifest = validateLauncherPayloadManifest(await readJsonStrict<unknown>(join(stagingRoot, "manifest.json")), {
+      channel: input.config.channel,
+      namespace: input.config.namespace,
+      platform: input.config.platform,
+      version: input.activeRelease.ref.version,
+    });
+    const entryCwd = resolve(stagingRoot, manifest.entry?.cwd ?? "");
+    const entryExecutable = resolve(stagingRoot, manifest.entry?.executable ?? "");
+    if (!containsPath(stagingRoot, entryCwd) || !containsPath(stagingRoot, entryExecutable)) {
+      throw new Error("launcher payload entry path escaped extracted payload");
+    }
+    const entryCwdStat = await lstat(entryCwd);
+    if (!entryCwdStat.isDirectory() || entryCwdStat.isSymbolicLink()) {
+      throw new Error("launcher payload entry cwd must be a plain directory");
+    }
+    const entryExecutableStat = await lstat(entryExecutable);
+    if (!entryExecutableStat.isFile() || entryExecutableStat.isSymbolicLink()) {
+      throw new Error("launcher payload entry executable must be a plain file");
+    }
+    const payloadRoot = join(stagingRoot, manifest.payloadRoot);
+    const payloadRootEntry = await lstat(payloadRoot);
+    if (!payloadRootEntry.isDirectory() || payloadRootEntry.isSymbolicLink()) {
+      throw new Error("launcher payload root must be a plain directory");
+    }
+
+    await mkdir(versionPaths.versionsRoot, { recursive: true });
+    await rm(versionPaths.versionRoot, { force: true, recursive: true });
+    await rename(stagingRoot, versionPaths.versionRoot);
+    promoted = true;
+    const previousGeneration = Math.max(
+      currentRuntime.active?.generation ?? 0,
+      currentRuntime.lastSuccessful?.generation ?? 0,
+    );
+    const nextActive = { generation: previousGeneration + 1, version: input.activeRelease.ref.version };
+    const nextRuntime: LauncherRuntimeDescriptor = {
+      active: nextActive,
+      channel: input.config.channel,
+      lastSuccessful: currentRuntime.lastSuccessful ?? currentRuntime.active,
+      namespace: input.config.namespace,
+      schemaVersion: LAUNCHER_SCHEMA_VERSION,
+      updatedAt: input.now().toISOString(),
+    };
+    await writeJson(input.config.launcherRuntimePath, nextRuntime);
+    await cleanupLauncherPayloadRoots(versionPaths, new Set([
+      nextActive.version,
+      ...(currentRuntime.active == null ? [] : [currentRuntime.active.version]),
+      ...(currentRuntime.lastSuccessful == null ? [] : [currentRuntime.lastSuccessful.version]),
+      ...(nextRuntime.lastSuccessful == null ? [] : [nextRuntime.lastSuccessful.version]),
+    ]));
+    return nextRuntime;
+  } catch (error) {
+    if (!promoted) await rm(stagingRoot, { force: true, recursive: true }).catch(() => undefined);
+    throw error;
+  }
+}
+
+async function cleanupLauncherPayloadRoots(versionPaths: ReturnType<typeof resolveLauncherVersionPaths>, keepVersions: ReadonlySet<string>): Promise<void> {
+  await rm(versionPaths.stagingRoot, { force: true, recursive: true });
+  const entries = await readdir(versionPaths.versionsRoot, { withFileTypes: true }).catch(() => []);
+  await Promise.all(entries.map(async (entry) => {
+    if (!entry.isDirectory()) return;
+    if (keepVersions.has(entry.name)) return;
+    await rm(join(versionPaths.versionsRoot, entry.name), { force: true, recursive: true });
+  }));
 }
 
 async function ensureOwnedSubdir(root: string, name: string): Promise<string> {
@@ -1413,6 +1638,7 @@ export function createDesktopUpdater(
   const now = deps.now ?? (() => new Date());
   const openPath = deps.openPath ?? (async () => "openPath is not available");
   const processPid = deps.processPid ?? process.pid;
+  const extractLauncherPayloadArchive = deps.extractLauncherPayloadArchive ?? defaultExtractLauncherPayloadArchive;
   const spawnDetached: SpawnInstallerHelper = deps.spawnDetached ?? ((command, args, options) => spawn(command, args, options));
   const launchInstallerAfterQuit = deps.launchInstallerAfterQuit ?? ((input) => (
     config.platform === "win32"
@@ -1577,7 +1803,7 @@ export function createDesktopUpdater(
         lastCheckedAt,
       }));
       if (root != null) scheduleBackCleanup(root.realRoot, logger);
-      const selected = selectUpdateCandidate(body, config);
+      const selected = selectUpdateCandidateWithFallback(body, config, await hasValidLauncherPayloadContext(config));
       if (!selected.ok) return setState(selected.state, selected.error);
       if (compareVersions(selected.candidate.version, config.currentVersion) <= 0) {
         candidate = null;
@@ -1853,6 +2079,38 @@ export function createDesktopUpdater(
           expected: installChecksum.value,
         }),
       );
+    }
+    if (activeRelease.ref.artifact.type === "payload") {
+      try {
+        const appliedAt = now().toISOString();
+        await applyLauncherPayloadRelease({
+          activeRelease,
+          config,
+          extractLauncherPayloadArchive,
+          now,
+        });
+        installFrozen = true;
+        installResult = {
+          dryRun: false,
+          openedAt: appliedAt,
+          path: resolvedDownload,
+        };
+        await writeStoreMetadata(opened.root, {
+          ...opened.metadata,
+          active: activeRelease.ref,
+          incoming: undefined,
+          installFrozen,
+          installResult,
+          lastCheckedAt,
+          version: STORE_METADATA_VERSION,
+        });
+        return setState(DESKTOP_UPDATE_STATES.DOWNLOADED);
+      } catch (applyError) {
+        return setState(
+          DESKTOP_UPDATE_STATES.ERROR,
+          createError("launcher-payload-apply-failed", applyError instanceof Error ? applyError.message : String(applyError)),
+        );
+      }
     }
     let observation: InstallerObservationHandle | null = null;
     try {

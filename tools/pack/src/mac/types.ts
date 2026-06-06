@@ -30,6 +30,7 @@ export type MacPaths = {
   packagedMainPrebundleMetaPath: string;
   packagedMainPrebundlePath: string;
   packagedConfigPath: string;
+  payloadZipPath: string;
   resourceRoot: string;
   systemApplicationsAppPath: string;
   tarballsRoot: string;
@@ -52,6 +53,7 @@ export type MacPackResult = {
   dmgPath: string | null;
   latestMacYmlPath: string | null;
   outputRoot: string;
+  payloadPath: string | null;
   resourceRoot: string;
   runtimeNamespaceRoot: string;
   sizeReport: MacSizeReport;

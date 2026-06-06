@@ -66,6 +66,7 @@ export type WinPaths = {
   installerBasePayloadPath: string;
   installerOverlayPayloadPath: string;
   installerScriptPath: string;
+  launcherPayloadPath: string;
   publicDesktopShortcutPath: string;
   latestYmlPath: string;
   installMarkerPath: string;
@@ -98,6 +99,7 @@ export type WinPackResult = {
   installerPath: string | null;
   latestYmlPath: string | null;
   outputRoot: string;
+  payloadPath: string | null;
   portableZipPath: string | null;
   resourceRoot: string;
   runtimeNamespaceRoot: string;
