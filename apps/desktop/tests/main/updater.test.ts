@@ -384,7 +384,10 @@ describe("desktop updater", () => {
       version: "1.0.0-beta.3",
     });
     const launcherRuntimePath = join(root, "launcher", "runtime.json");
+    const launcherLaunchPath = join(root, "installed", "Open Design Beta.exe");
     try {
+      await mkdir(join(root, "installed"), { recursive: true });
+      await writeFile(launcherLaunchPath, "");
       await mkdir(join(root, "launcher"), { recursive: true });
       await mkdir(join(root, "launcher", "channels", "beta", "namespaces", "release-beta-win", "versions", "1.0.0-beta.2"), { recursive: true });
       await mkdir(join(root, "launcher", "channels", "beta", "namespaces", "release-beta-win", "versions", "0.9.0-beta.1"), { recursive: true });
@@ -408,7 +411,7 @@ describe("desktop updater", () => {
           [DESKTOP_UPDATE_ENV.OPEN_DRY_RUN]: "0",
         },
         launcherRoot: root,
-        launcherLaunchPath: "C:\\Program Files\\Open Design Beta\\Open Design Beta.exe",
+        launcherLaunchPath,
         launcherRuntimePath,
         namespace: "release-beta-win",
         source: SIDECAR_SOURCES.PACKAGED,
@@ -438,8 +441,11 @@ describe("desktop updater", () => {
     const launcherRuntimePath = join(root, "launcher", "runtime.json");
     const launcherRoot = root;
     const versionRoot = join(root, "launcher", "channels", "beta", "namespaces", "release-beta-win", "versions");
+    const launcherLaunchPath = join(root, "installed", "Open Design Beta.exe");
     const launches: Array<{ appPid: number; installerPath: string; root: string }> = [];
     try {
+      await mkdir(join(root, "installed"), { recursive: true });
+      await writeFile(launcherLaunchPath, "");
       await mkdir(join(root, "launcher"), { recursive: true });
       await mkdir(join(versionRoot, "1.0.0-beta.1"), { recursive: true });
       await mkdir(join(versionRoot, "0.9.0-beta.1"), { recursive: true });
@@ -463,7 +469,7 @@ describe("desktop updater", () => {
           [DESKTOP_UPDATE_ENV.OPEN_DRY_RUN]: "0",
         },
         launcherRoot,
-        launcherLaunchPath: "C:\\Program Files\\Open Design Beta\\Open Design Beta.exe",
+        launcherLaunchPath,
         launcherRuntimePath,
         namespace: "release-beta-win",
         source: SIDECAR_SOURCES.PACKAGED,
@@ -514,7 +520,7 @@ describe("desktop updater", () => {
       expect(launches).toEqual([
         {
           appPid: 4242,
-          installerPath: "C:\\Program Files\\Open Design Beta\\Open Design Beta.exe",
+          installerPath: launcherLaunchPath,
           root: await realpath(join(root, "updates")),
         },
       ]);
@@ -545,7 +551,10 @@ describe("desktop updater", () => {
     });
     const namespaceRoot = join(root, "launcher", "channels", "beta", "namespaces", "release-beta-win");
     const launcherRuntimePath = join(root, "launcher", "runtime.json");
+    const launcherLaunchPath = join(root, "installed", "Open Design Beta.exe");
     try {
+      await mkdir(join(root, "installed"), { recursive: true });
+      await writeFile(launcherLaunchPath, "");
       await mkdir(join(root, "launcher"), { recursive: true });
       await mkdir(join(namespaceRoot, "versions", "1.0.0-beta.1"), { recursive: true });
       await writeFile(
@@ -567,7 +576,7 @@ describe("desktop updater", () => {
           [DESKTOP_UPDATE_ENV.CURRENT_VERSION]: "1.0.0-beta.1",
         },
         launcherRoot: root,
-        launcherLaunchPath: "C:\\Program Files\\Open Design Beta\\Open Design Beta.exe",
+        launcherLaunchPath,
         launcherRuntimePath,
         namespace: "release-beta-win",
         source: SIDECAR_SOURCES.PACKAGED,
@@ -612,7 +621,7 @@ describe("desktop updater", () => {
     }
   });
 
-  it("keeps using the installer when launcher context has no installed launch path", async () => {
+  it("keeps using the installer when launcher context has a missing installed launch path", async () => {
     const root = makeRoot();
     const fixture = await createUpdaterFixture({
       artifactBody: "open design windows installer fixture",
@@ -623,6 +632,7 @@ describe("desktop updater", () => {
       version: "1.0.0-beta.2",
     });
     const launcherRuntimePath = join(root, "launcher", "runtime.json");
+    const launcherLaunchPath = join(root, "missing", "Open Design Beta.exe");
     try {
       await mkdir(join(root, "launcher"), { recursive: true });
       await mkdir(join(root, "launcher", "channels", "beta", "namespaces", "release-beta-win", "versions", "1.0.0-beta.1"), { recursive: true });
@@ -644,6 +654,7 @@ describe("desktop updater", () => {
           ...updaterEnv(fixture.metadataUrl, "win32"),
           [DESKTOP_UPDATE_ENV.CURRENT_VERSION]: "1.0.0-beta.1",
         },
+        launcherLaunchPath,
         launcherRoot: root,
         launcherRuntimePath,
         namespace: "release-beta-win",
@@ -675,8 +686,10 @@ describe("desktop updater", () => {
     });
     const launcherRuntimePath = join(root, "launcher", "runtime.json");
     const launcherRoot = root;
+    const launcherLaunchPath = join(root, "installed", "Open Design Beta.app");
     const launches: Array<{ appPid: number; installerPath: string; root: string }> = [];
     try {
+      await mkdir(launcherLaunchPath, { recursive: true });
       await mkdir(join(root, "launcher"), { recursive: true });
       await mkdir(join(root, "launcher", "channels", "beta", "namespaces", "release-beta", "versions", "1.0.0-beta.2"), { recursive: true });
       await writeFile(
@@ -699,7 +712,7 @@ describe("desktop updater", () => {
           [DESKTOP_UPDATE_ENV.OPEN_DRY_RUN]: "0",
         },
         launcherRoot,
-        launcherLaunchPath: "/Applications/Open Design Beta.app",
+        launcherLaunchPath,
         launcherRuntimePath,
         namespace: "release-beta",
         source: SIDECAR_SOURCES.PACKAGED,
@@ -748,7 +761,7 @@ describe("desktop updater", () => {
       expect(launches).toEqual([
         {
           appPid: 4243,
-          installerPath: "/Applications/Open Design Beta.app",
+          installerPath: launcherLaunchPath,
           root: await realpath(join(root, "updates")),
         },
       ]);
@@ -770,8 +783,11 @@ describe("desktop updater", () => {
     });
     const launcherRuntimePath = join(root, "launcher", "runtime.json");
     const launcherRoot = root;
+    const launcherLaunchPath = join(root, "installed", "Open Design.exe");
     const launches: Array<{ appPid: number; installerPath: string; root: string }> = [];
     try {
+      await mkdir(join(root, "installed"), { recursive: true });
+      await writeFile(launcherLaunchPath, "");
       await mkdir(join(root, "launcher"), { recursive: true });
       await mkdir(join(root, "launcher", "channels", "beta", "namespaces", "release-beta-win", "versions", "1.0.0-beta.2"), { recursive: true });
       await writeFile(
@@ -794,7 +810,7 @@ describe("desktop updater", () => {
           [DESKTOP_UPDATE_ENV.OPEN_DRY_RUN]: "0",
         },
         launcherRoot,
-        launcherLaunchPath: "C:\\Program Files\\Open Design Beta\\Open Design.exe",
+        launcherLaunchPath,
         launcherRuntimePath,
         namespace: "release-beta-win",
         source: SIDECAR_SOURCES.PACKAGED,
@@ -842,7 +858,7 @@ describe("desktop updater", () => {
       expect(launches).toEqual([
         {
           appPid: 4244,
-          installerPath: "C:\\Program Files\\Open Design Beta\\Open Design.exe",
+          installerPath: launcherLaunchPath,
           root: await realpath(join(root, "updates")),
         },
       ]);
@@ -864,7 +880,10 @@ describe("desktop updater", () => {
     const namespaceRoot = join(root, "launcher", "channels", "beta", "namespaces", "release-beta-win");
     const launcherRuntimePath = join(root, "launcher", "runtime.json");
     const existingVersionRoot = join(namespaceRoot, "versions", "1.0.0-beta.2");
+    const launcherLaunchPath = join(root, "installed", "Open Design Beta.exe");
     try {
+      await mkdir(join(root, "installed"), { recursive: true });
+      await writeFile(launcherLaunchPath, "");
       await mkdir(join(root, "launcher"), { recursive: true });
       await mkdir(existingVersionRoot, { recursive: true });
       await writeFile(join(existingVersionRoot, "keep.txt"), "existing");
@@ -887,7 +906,7 @@ describe("desktop updater", () => {
           [DESKTOP_UPDATE_ENV.CURRENT_VERSION]: "1.0.0-beta.1",
         },
         launcherRoot: root,
-        launcherLaunchPath: "C:\\Program Files\\Open Design Beta\\Open Design Beta.exe",
+        launcherLaunchPath,
         launcherRuntimePath,
         namespace: "release-beta-win",
         source: SIDECAR_SOURCES.PACKAGED,

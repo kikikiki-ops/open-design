@@ -967,6 +967,11 @@ async function hasValidLauncherPayloadContext(config: DesktopUpdaterConfig): Pro
     return false;
   }
   try {
+    await access(config.launcherLaunchPath);
+    const launcherTarget = await lstat(config.launcherLaunchPath);
+    if (launcherTarget.isSymbolicLink() || (!launcherTarget.isFile() && !launcherTarget.isDirectory())) {
+      return false;
+    }
     const runtime = await readJsonStrict<LauncherRuntimeDescriptor>(config.launcherRuntimePath);
     validateLauncherRuntimeDescriptor(runtime, { channel: config.channel, namespace: config.namespace });
     return true;
