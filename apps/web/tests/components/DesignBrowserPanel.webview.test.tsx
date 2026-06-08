@@ -402,6 +402,53 @@ describe('DesignBrowserPanel <webview> navigation', () => {
     });
   });
 
+  it('repositions saved browser comment markers from live webview selector measurements', async () => {
+    const previewComments = [{
+      id: 'comment-1',
+      projectId: 'proj-webview-live-comment-marker',
+      conversationId: 'conv-1',
+      filePath: 'browser:https://example.com',
+      elementId: 'dom:#card',
+      selector: '#card',
+      label: 'article.card',
+      note: 'Review this card',
+      text: 'Card',
+      position: { x: 24, y: 32, width: 240, height: 160 },
+      htmlHint: '<article id="card">',
+      status: 'open' as const,
+      createdAt: 1,
+      updatedAt: 1,
+    }];
+    const { container } = render(
+      <DesignBrowserPanel
+        initialUrl="https://example.com"
+        projectId="proj-webview-live-comment-marker"
+        previewComments={previewComments}
+        onOpenFile={() => {}}
+        onRefreshFiles={() => {}}
+      />,
+    );
+
+    const webview = container.querySelector('webview.db-webview') as HTMLElement & {
+      executeJavaScript?: ReturnType<typeof vi.fn>;
+    };
+    webview.executeJavaScript = vi.fn(async () => [{
+      key: 'comment:comment-1',
+      elementId: 'dom:#card',
+      selector: '#card',
+      label: 'article.card',
+      text: 'Card',
+      position: { x: 140, y: 36, width: 240, height: 160 },
+      htmlHint: '<article id="card">',
+      style: {},
+      selectionKind: 'element',
+    }]);
+
+    await waitFor(() => {
+      expect(container.querySelector<HTMLElement>('.db-comment-marker')?.style.left).toBe('140px');
+    });
+  });
+
   it('hides open annotation chrome while taking a browser screenshot', async () => {
     restoreHost?.();
     const capturePage = vi.fn(async () => {
