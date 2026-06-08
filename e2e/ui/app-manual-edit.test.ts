@@ -280,7 +280,7 @@ test('[P0] simple deck keeps the active slide stable across preview mode switche
   await expect(frame.getByText('Slide Three')).toBeVisible();
 });
 
-test('[P0] HTML preview stays rendered after switching from Preview to Code and back', async ({ page }) => {
+test('[P0] @critical HTML preview stays rendered after switching from Preview to Code and back', async ({ page }) => {
   await routeMockAgents(page);
   const projectId = await createEmptyProject(page, 'HTML preview toggle regression');
   await seedHtmlArtifact(

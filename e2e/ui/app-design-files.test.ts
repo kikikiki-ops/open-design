@@ -59,9 +59,14 @@ const designFileFlows = new Set([
   'uploaded-image-renders-in-preview',
   'python-source-preview',
 ]);
+const CRITICAL_DESIGN_FILE_SCENARIO_IDS = new Set([
+  'design-files-upload',
+  'design-files-delete',
+  'design-files-tab-persistence',
+]);
 
 for (const entry of automatedUiScenarios().filter((scenario) => designFileFlows.has(scenario.flow ?? ''))) {
-  test(`[${designFileScenarioPriority(entry)}] ${entry.id}: ${entry.title}`, async ({ page }) => {
+  test(`[${designFileScenarioPriority(entry)}]${criticalDesignFileScenarioTag(entry)} ${entry.id}: ${entry.title}`, async ({ page }) => {
     await page.route('**/api/agents', async (route) => {
       await route.fulfill({
         json: {
@@ -627,4 +632,8 @@ function designFileScenarioPriority(entry: UiScenario): 'P0' | 'P1' {
     default:
       return 'P1';
   }
+}
+
+function criticalDesignFileScenarioTag(entry: UiScenario): string {
+  return CRITICAL_DESIGN_FILE_SCENARIO_IDS.has(entry.id) ? ' @critical' : '';
 }

@@ -366,7 +366,7 @@ test('[P1] project detail header design system picker switches the active projec
   expect(body.designSystemId).toBe('editorial-noir');
 });
 
-test('[P0] project detail header design system switch carries into the next run request', async ({ page }) => {
+test('[P0] @critical project detail header design system switch carries into the next run request', async ({ page }) => {
   const runRequestBodies: Array<Record<string, unknown>> = [];
   await page.route('**/api/runs', async (route) => {
     const raw = route.request().postData();
@@ -420,7 +420,7 @@ test('[P0] project detail header design system switch carries into the next run 
   expect(runRequestBodies[0]?.designSystemId).toBe('editorial-noir');
 });
 
-test('[P0] project instructions flow into the next API run as project-level system prompt context', async ({ page }) => {
+test('[P0] @critical project instructions flow into the next API run as project-level system prompt context', async ({ page }) => {
   let capturedSystemPrompt = '';
   const apiConfig = {
     onboardingCompleted: true,
@@ -485,7 +485,7 @@ test('[P0] project instructions flow into the next API run as project-level syst
   expect(capturedSystemPrompt).toContain(instructions);
 });
 
-test('[P0] project detail avatar menu lets the user switch Local CLI agents and models', async ({ page }) => {
+test('[P0] @critical project detail avatar menu lets the user switch Local CLI agents and models', async ({ page }) => {
   test.setTimeout(60_000);
   await page.goto('/');
   await createProject(page, 'Header agent switch');
@@ -829,7 +829,7 @@ test('[P0] project detail share menu opens the current share page for uploaded h
     .toContain('https://protected-share.example');
 });
 
-test('[P0] project detail share menu publish action opens the deploy flow for the selected provider', async ({ page }) => {
+test('[P0] @critical project detail share menu publish action opens the deploy flow for the selected provider', async ({ page }) => {
   let deployConfigUrl: string | null = null;
   await page.route('**/api/projects/*/deployments', async (route) => {
     await route.fulfill({ json: { deployments: [] } });

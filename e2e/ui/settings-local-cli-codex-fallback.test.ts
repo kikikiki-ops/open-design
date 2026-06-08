@@ -215,7 +215,7 @@ async function fulfillAgentsRoute(route: Route, agents: AgentFixture[]) {
 }
 
 test.describe('Settings Local CLI Codex fallback UX', () => {
-  test('[P0] shows fallback repair actions and can replace the saved path with the detected Codex binary', async ({ page }) => {
+  test('[P0] @critical shows fallback repair actions and can replace the saved path with the detected Codex binary', async ({ page }) => {
     test.setTimeout(60_000);
     const configuredPath = '/bad/codex';
     const detectedPath = '/usr/local/bin/codex';

@@ -19,6 +19,19 @@ const APP_OWNED_SCENARIO_FLOWS = new Set([
   'example-use-prompt',
   'comment-attachment-flow',
 ]);
+const CRITICAL_SCENARIO_IDS = new Set([
+  'prototype-basic',
+  'deck-basic',
+  'hyperframes-basic',
+  'image-basic',
+  'video-basic',
+  'live-artifact-basic',
+  'conversation-persistence',
+  'file-mention',
+  'deep-link-preview',
+  'file-upload-send',
+  'conversation-delete-recovery',
+]);
 test.describe.configure({ timeout: 45_000 });
 
 function artifactPreview(page: Page) {
@@ -73,7 +86,7 @@ test.beforeEach(async ({ page }) => {
 for (const entry of automatedUiScenarios().filter(
   (scenario) => !APP_OWNED_SCENARIO_FLOWS.has(scenario.flow ?? ''),
 )) {
-  test(`[${scenarioPriority(entry)}] ${entry.id}: ${entry.title}`, async ({ page }) => {
+  test(`[${scenarioPriority(entry)}]${criticalScenarioTag(entry)} ${entry.id}: ${entry.title}`, async ({ page }) => {
     await page.route('**/api/agents', async (route) => {
       await route.fulfill({
         json: {
@@ -390,7 +403,7 @@ for (const entry of automatedUiScenarios().filter(
   });
 }
 
-test('[P0] comment attachment flow attaches preview comments to the next run as structured context', async ({ page }) => {
+test('[P0] @critical comment attachment flow attaches preview comments to the next run as structured context', async ({ page }) => {
   test.setTimeout(75_000);
   const entry = automatedUiScenarios().find((scenario) => scenario.id === 'comment-attachment-flow');
   if (!entry?.mockArtifact) {
@@ -603,6 +616,10 @@ function scenarioPriority(entry: UiScenario): 'P0' | 'P1' | 'P2' {
     default:
       return 'P1';
   }
+}
+
+function criticalScenarioTag(entry: UiScenario): string {
+  return CRITICAL_SCENARIO_IDS.has(entry.id) ? ' @critical' : '';
 }
 
 async function routeMockSuccessfulRun(page: Page, runId: string) {

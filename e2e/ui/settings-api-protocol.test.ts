@@ -232,7 +232,7 @@ test('[P1] legacy custom provider preserves custom baseUrl and model when switch
   await expect(customModelInput).toHaveValue('my-custom-model');
 });
 
-test('[P0] BYOK quick fill provider updates fields and saved settings persist after closing and reopening', async ({ page }) => {
+test('[P0] @critical BYOK quick fill provider updates fields and saved settings persist after closing and reopening', async ({ page }) => {
   await openExecutionSettings(page, {
     mode: 'api',
     apiKey: '',
@@ -412,7 +412,7 @@ test('[P0] BYOK auto-loads provider models and reuses cached results for the sam
 });
 
 
-test('[P0] BYOK fetched models are searchable inside the Settings model dropdown', async ({ page }) => {
+test('[P0] @critical BYOK fetched models are searchable inside the Settings model dropdown', async ({ page }) => {
   const providerModelRequests: Array<Record<string, unknown>> = [];
   await page.route('**/api/provider/models', async (route) => {
     const payload = route.request().postDataJSON() as Record<string, unknown>;
@@ -473,7 +473,7 @@ test('[P0] BYOK fetched models are searchable inside the Settings model dropdown
   await expect(popover.getByRole('option', { name: 'BB Nightly Model (bb-nightly-model)' })).toHaveCount(0);
 });
 
-test('[P0] saving Local CLI updates the entry status pill with the selected agent', async ({ page }) => {
+test('[P0] @critical saving Local CLI updates the entry status pill with the selected agent', async ({ page }) => {
   test.setTimeout(60_000);
   await openExecutionSettingsWithAgents(
     page,
