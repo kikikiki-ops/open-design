@@ -364,6 +364,7 @@ function AppInner() {
   const [daemonLive, setDaemonLive] = useState(false);
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const amrModelsRef = useRef<AmrModelsResponse | null>(null);
+  const amrPollGenerationRef = useRef(0);
   const agentStreamRequestSeqRef = useRef(0);
   const [amrPollRestartToken, setAmrPollRestartToken] = useState(0);
   const [providerModelsCache, setProviderModelsCache] = useState<
@@ -439,6 +440,11 @@ function AppInner() {
 
   const isCurrentAgentStreamRequest = useCallback((requestId: number) => {
     return agentStreamRequestSeqRef.current === requestId;
+  }, []);
+
+  const restartAmrPolling = useCallback(() => {
+    amrPollGenerationRef.current += 1;
+    setAmrPollRestartToken((current) => current + 1);
   }, []);
 
   // v2 schema removed the standalone `app_launch` event; the initial
@@ -654,13 +660,23 @@ function AppInner() {
     if (!daemonLive) return;
     let cancelled = false;
     let timer: number | null = null;
+    const pollGeneration = amrPollGenerationRef.current + 1;
+    amrPollGenerationRef.current = pollGeneration;
     const pollDelayMs = 1_000;
     const maxPresetPolls = 10;
     let presetPolls = 0;
 
     const applyAmrModels = async () => {
       const result = await fetchAmrModels();
-      if (cancelled || !result || !Array.isArray(result.models) || result.models.length === 0) return;
+      if (
+        cancelled ||
+        amrPollGenerationRef.current !== pollGeneration ||
+        !result ||
+        !Array.isArray(result.models) ||
+        result.models.length === 0
+      ) {
+        return;
+      }
       amrModelsRef.current = result;
       setAgents((current) => mergeAmrModelsIntoAgents(current, result));
       const shouldPollPreset =
@@ -684,8 +700,8 @@ function AppInner() {
 
   const handleAmrLoginStatusChange = useCallback((status: VelaLoginStatus | null) => {
     if (status?.loggedIn !== true) return;
-    setAmrPollRestartToken((current) => current + 1);
-  }, []);
+    restartAmrPolling();
+  }, [restartAmrPolling]);
 
   // Bootstrap — detect daemon, then fan out independent fetches so each
   // entry-view tab can render the moment its own data lands. Earlier this
@@ -1209,12 +1225,13 @@ function AppInner() {
         saveConfig(next);
         setConfig(next);
         amrModelsRef.current = null;
+        restartAmrPolling();
         void refreshAgents();
       });
     };
     window.addEventListener(APP_CONFIG_CHANGED_EVENT, handleAppConfigChanged);
     return () => window.removeEventListener(APP_CONFIG_CHANGED_EVENT, handleAppConfigChanged);
-  }, [refreshAgents]);
+  }, [refreshAgents, restartAmrPolling]);
 
   const handleCreateProject = useCallback(
     async (
