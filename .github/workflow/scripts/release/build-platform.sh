@@ -66,6 +66,7 @@ notarize_mac_dmg_once() {
   local dmg_path="$1"
   local auth_args=()
   local s3_arg="--no-s3-acceleration"
+  local status
   if [ "${OPEN_DESIGN_NOTARIZE_S3_ACCELERATION:-false}" = "true" ]; then
     s3_arg="--s3-acceleration"
   fi
@@ -73,17 +74,22 @@ notarize_mac_dmg_once() {
     auth_args+=("$arg")
   done < <(notary_auth_args)
 
+  echo "[release notarize] submitting $(basename "$dmg_path") ($(wc -c < "$dmg_path" | tr -d ' ') bytes) with $s3_arg"
   xcrun notarytool submit "$dmg_path" \
     "${auth_args[@]}" \
     --wait \
     --output-format json \
     "$s3_arg"
+  status=$?
+  if [ "$status" -ne 0 ]; then
+    return "$status"
+  fi
   xcrun stapler staple "$dmg_path"
 }
 
 notarize_mac_dmg() {
   local dmg_path="$1"
-  local attempts="${OPEN_DESIGN_NOTARIZE_ATTEMPTS:-3}"
+  local attempts="${OPEN_DESIGN_NOTARIZE_ATTEMPTS:-8}"
   local retry_delay_ms="${OPEN_DESIGN_NOTARIZE_RETRY_DELAY_MS:-15000}"
   local attempt output status
   if [ ! -f "$dmg_path" ]; then
