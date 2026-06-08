@@ -97,7 +97,9 @@ const APPLY_RESULT = {
   ok: true,
   query: 'Run plugin.',
   contextItems: [],
-  inputs: [],
+  inputs: [
+    { name: 'brief', type: 'string', required: false, label: 'Brief' },
+  ],
   assets: [],
   mcpServers: [],
   trust: 'restricted',
@@ -499,6 +501,24 @@ describe('ChatComposer context pickers', () => {
       .querySelector('.composer-inline-mention');
     expect(pill?.textContent).toBe('@My Export');
     expect(pill?.getAttribute('data-mention-kind')).toBe('plugin');
+  });
+
+  it('clears the plugin context form when the inline plugin token is removed', async () => {
+    renderComposer();
+    await flushMounts();
+
+    await typeAndSettle('@export');
+
+    await waitFor(() => expect(screen.getByText('My Export')).toBeTruthy());
+    fireEvent.click(screen.getByText('My Export'));
+
+    await waitFor(() => expect(composerText()).toBe('@My Export '));
+    await waitFor(() => expect(screen.getByTestId('plugin-inputs-form')).toBeTruthy());
+
+    await typeAndSettle('');
+
+    await waitFor(() => expect(screen.queryByTestId('plugin-inputs-form')).toBeNull());
+    expect(screen.queryByTestId('context-chip-strip')).toBeNull();
   });
 
   it('sends the applied plugin snapshot as per-turn context', async () => {

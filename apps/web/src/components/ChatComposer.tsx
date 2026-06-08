@@ -50,6 +50,7 @@ import { PluginsSection, type PluginsSectionHandle } from "./PluginsSection";
 import { BUILT_IN_PETS, CUSTOM_PET_ID } from "./pet/pets";
 import {
   inlineMentionToken,
+  mentionTokenPresent,
   type InlineMentionEntity,
 } from '../utils/inlineMentions';
 import {
@@ -466,6 +467,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
     const [activeAppliedPlugin, setActiveAppliedPlugin] =
       useState<AppliedPluginSnapshot | null>(null);
     const pluginsSectionRef = useRef<PluginsSectionHandle | null>(null);
+    const inlineBackedPluginRef = useRef<{ id: string; label: string } | null>(null);
     // Consolidated "tools" popover — a single dropdown anchored to the
     // leading sliders icon that hosts project context, MCP, Import actions,
     // and a shortcut to open the full Settings dialog. Replaces the previous
@@ -607,6 +609,14 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
         stopListening();
       };
     }, [composerEngaged]);
+
+    useEffect(() => {
+      const inlinePlugin = inlineBackedPluginRef.current;
+      if (!activeAppliedPlugin || inlinePlugin?.id !== activeAppliedPlugin.pluginId) return;
+      if (mentionTokenPresent(draft, inlinePlugin.label)) return;
+      inlineBackedPluginRef.current = null;
+      pluginsSectionRef.current?.clear();
+    }, [activeAppliedPlugin, draft]);
 
     // Composer-side plugin list: hide bundled atoms (pipeline-only). Keep
     // the full installed list available even when the project was created
@@ -887,6 +897,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       setStagedConnectors([]);
       setStagedWorkspaceContexts([]);
       pluginsSectionRef.current?.clear();
+      inlineBackedPluginRef.current = null;
       setActiveAppliedPlugin(null);
       setUploadError(null);
       setMention(null);
@@ -1085,6 +1096,10 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
 
       if (resource.kind === 'plugin') {
         void (async () => {
+          inlineBackedPluginRef.current = {
+            id: resource.plugin.id,
+            label: resource.plugin.title,
+          };
           await pluginsSectionRef.current?.applyById(resource.plugin.id, resource.plugin);
           applyDesignToolboxDraft(`${inlineMentionToken(resource.plugin.title)}\n${prompt}`);
         })();
@@ -1503,6 +1518,14 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       draftRef.current = text;
       setDraft(text);
       const set = new Set(present.map((e) => `${e.kind}:${e.id}`));
+      if (
+        activeAppliedPlugin
+        && inlineBackedPluginRef.current?.id === activeAppliedPlugin.pluginId
+        && !set.has(`plugin:${activeAppliedPlugin.pluginId}`)
+      ) {
+        inlineBackedPluginRef.current = null;
+        pluginsSectionRef.current?.clear();
+      }
       setStagedSkills((prev) => prev.filter((s) => set.has(`skill:${s.id}`)));
       setStagedMcpServers((prev) => prev.filter((m) => set.has(`mcp:${m.id}`)));
       setStagedConnectors((prev) =>
@@ -1679,6 +1702,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
         entity: { id: record.id, kind: 'plugin', label: record.title },
       });
       setMention(null);
+      inlineBackedPluginRef.current = { id: record.id, label: record.title };
       await pluginsSectionRef.current?.applyById(record.id, record);
     }
 
@@ -1931,7 +1955,10 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
                   setDraft((cur) => (cur.trim().length === 0 ? brief : cur));
                 }
               }}
-              onCleared={() => setActiveAppliedPlugin(null)}
+              onCleared={() => {
+                inlineBackedPluginRef.current = null;
+                setActiveAppliedPlugin(null);
+              }}
               onChipDetails={(item: ContextItem) => {
                 if (item.kind !== 'plugin') return;
                 const record = installedPlugins.find((p) => p.id === item.id);
@@ -2189,6 +2216,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
             record={detailsRecord}
             onClose={() => setDetailsRecord(null)}
             onUse={async (record) => {
+              inlineBackedPluginRef.current = null;
               await pluginsSectionRef.current?.applyById(record.id, record);
               setDetailsRecord(null);
             }}
