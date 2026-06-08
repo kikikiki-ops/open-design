@@ -106,6 +106,43 @@ describe("AMR Environment Profile desktop menu helpers", () => {
     });
   });
 
+  it("preserves the saved AMR model when re-selecting the normalized current profile", () => {
+    const result = mergeAmrEnvironmentProfileConfig(
+      {
+        agentModels: {
+          amr: {
+            model: "deepseek-v4-flash",
+          },
+          claude: {
+            model: "sonnet",
+          },
+        },
+        agentCliEnv: {
+          amr: {
+            OPEN_DESIGN_AMR_PROFILE: " prod ",
+          },
+        },
+      },
+      "prod",
+    );
+
+    expect(result).toEqual({
+      agentModels: {
+        amr: {
+          model: "deepseek-v4-flash",
+        },
+        claude: {
+          model: "sonnet",
+        },
+      },
+      agentCliEnv: {
+        amr: {
+          OPEN_DESIGN_AMR_PROFILE: "prod",
+        },
+      },
+    });
+  });
+
   it("builds radio menu items for prod, test, and local", () => {
     const selected: string[] = [];
     const [profileMenu] = createAmrEnvironmentProfileMenuItems("test", (profile) => {
