@@ -208,6 +208,10 @@ function hasLangfuseCredentials(env: Env): boolean {
   return Boolean(env.LANGFUSE_PUBLIC_KEY?.trim() && env.LANGFUSE_SECRET_KEY?.trim());
 }
 
+function hasObjectRelayConfig(env: Env): boolean {
+  return Boolean(env.TRACE_OBJECT_BUCKET && env.TRACE_OBJECT_UPLOAD_SECRET?.trim());
+}
+
 function isHealthPath(request: Request): boolean {
   const { pathname } = new URL(request.url);
   return pathname === '/api/langfuse' || pathname === '/health';
@@ -439,7 +443,7 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
       ok: true,
       service: 'open-design-telemetry-relay',
       configured: hasLangfuseCredentials(env),
-      objectRelayConfigured: Boolean(env.TRACE_OBJECT_BUCKET),
+      objectRelayConfigured: hasObjectRelayConfig(env),
       upstream: resolveLangfuseUrl(env),
     });
   }

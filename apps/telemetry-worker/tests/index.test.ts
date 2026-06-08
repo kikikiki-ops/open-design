@@ -95,6 +95,17 @@ describe('telemetry worker', () => {
     });
   });
 
+  it('reports object relay unconfigured when the bucket exists without an upload secret', async () => {
+    const response = await worker.fetch(new Request('https://telemetry.open-design.ai/health'), {
+      TRACE_OBJECT_BUCKET: { put: vi.fn(async () => ({})) },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      objectRelayConfigured: false,
+    });
+  });
+
   it('forwards valid Langfuse ingestion batches with server-side auth', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ successes: [{ id: 'evt-1' }], errors: [] }), {
