@@ -17,6 +17,11 @@ attachments, produced artifacts, and over-threshold input text snapshots, writes
 them through the `TRACE_OBJECT_BUCKET` R2 binding, and returns trace-safe
 `storage_ref` / `sha256` / size metadata for Langfuse manifests.
 
+This object ingest path is Worker/test substrate only until upload authority is
+issued by trusted server-side infrastructure. Released daemon telemetry does not
+upload trace objects or configure object relay URLs; it continues to report
+trace-safe manifests without object-backed input snapshots.
+
 Local development can bypass the relay by setting direct `LANGFUSE_PUBLIC_KEY`
 and `LANGFUSE_SECRET_KEY` environment variables for the daemon. Packaged
 release config should use only `OPEN_DESIGN_TELEMETRY_RELAY_URL`.

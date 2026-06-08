@@ -10,7 +10,6 @@
 
 import { createHash } from 'node:crypto';
 import os from 'node:os';
-import path from 'node:path';
 
 import { modelIdForTracking } from '@open-design/contracts/analytics';
 
@@ -46,8 +45,6 @@ import {
 import { collectStderrTailSummary } from './run-diagnostics.js';
 import { classifyRunFailure } from './run-failure-classification.js';
 import { deriveRunErrorCode, runResultFromStatus } from './run-result.js';
-import { buildTraceObjectManifests } from './trace-object-manifest.js';
-import type { TraceArtifactObjectSource } from './trace-object-manifest.js';
 
 interface DaemonRunRecord {
   id: string;
@@ -514,31 +511,6 @@ function summarizeProducedFiles(items: unknown): ArtifactSummary[] {
   return out;
 }
 
-function buildTraceObjectArtifactSources(items: unknown): TraceArtifactObjectSource[] {
-  if (!Array.isArray(items)) return [];
-  const out: TraceArtifactObjectSource[] = [];
-  for (const item of items) {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
-    const obj = item as Record<string, unknown>;
-    const slug = sanitizeProducedFileSlug(obj);
-    if (!slug) continue;
-    const rawPath = typeof obj.path === 'string' && obj.path.trim()
-      ? obj.path
-      : typeof obj.name === 'string' && obj.name.trim()
-        ? obj.name
-        : undefined;
-    out.push({
-      summary: {
-        slug,
-        type: typeof obj.kind === 'string' ? obj.kind : 'unknown',
-        sizeBytes: typeof obj.size === 'number' ? obj.size : 0,
-      },
-      ...(rawPath ? { sourcePath: rawPath } : {}),
-    });
-  }
-  return out;
-}
-
 function collectPriorUserAttachments(
   messages: Array<Record<string, unknown>>,
   assistantIndex: number,
@@ -828,18 +800,6 @@ export async function reportRunCompletedFromDaemon(
       attachmentsRaw,
       producedFilesRaw,
     });
-    const uploadedManifests = await buildTraceObjectManifests({
-      installationId,
-      projectId: run.projectId ?? '',
-      runId: run.id,
-      projectsRoot: path.join(dataDir, 'projects'),
-      ...(run.projectMetadata ? { projectMetadata: run.projectMetadata } : {}),
-      ...(run.projectAttachmentPaths ? { attachmentPaths: run.projectAttachmentPaths } : {}),
-      artifacts: buildTraceObjectArtifactSources(producedFilesRaw),
-      prompt: telemetryPrompt,
-      prefs,
-      ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}),
-    });
     const ctx: ReportContext = {
       installationId,
       projectId: run.projectId ?? '',
@@ -868,12 +828,9 @@ export async function reportRunCompletedFromDaemon(
         ...(usage ? { usage } : {}),
       },
       artifacts,
-      attachmentManifest: uploadedManifests?.attachmentManifest ?? manifests.attachmentManifest,
-      artifactManifest: uploadedManifests?.artifactManifest ?? manifests.artifactManifest,
-      ...(uploadedManifests?.inputTextSnapshotManifest
-        ? { inputTextSnapshotManifest: uploadedManifests.inputTextSnapshotManifest }
-        : {}),
-      manifestCompleteness: uploadedManifests?.completeness ?? manifests.completeness,
+      attachmentManifest: manifests.attachmentManifest,
+      artifactManifest: manifests.artifactManifest,
+      manifestCompleteness: manifests.completeness,
       tools: collectToolCalls(run.events, startedAt, endedAt),
       agentEvents: collectAgentEvents(run.events, startedAt, endedAt, run.agentId),
       eventsSummary: summarizeEvents(run.events, durationMs),

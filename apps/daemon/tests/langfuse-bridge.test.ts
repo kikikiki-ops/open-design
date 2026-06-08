@@ -440,7 +440,7 @@ describe('langfuse-bridge.reportRunCompletedFromDaemon', () => {
     });
   });
 
-  it('uploads trace objects before reporting Langfuse manifests', async () => {
+  it('reports trace-safe manifests without daemon object uploads', async () => {
     await writeAppCfg({
       installationId: 'install-uuid-1',
       telemetry: { metrics: true, content: true, artifactManifest: true },
@@ -457,34 +457,26 @@ describe('langfuse-bridge.reportRunCompletedFromDaemon', () => {
     );
     const tailMarker = 'TAIL_MARKER_SHOULD_NOT_REACH_LANGFUSE';
     const prompt = `${'长'.repeat(70 * 1024)}${tailMarker}`;
-    const fetchSpy = vi
-      .fn()
-      .mockImplementationOnce(async (_url: string, init: RequestInit) => {
-        const requestBody = JSON.parse(init.body as string) as {
-          objects: Array<{ storage_ref: string; content_base64: string }>;
-        };
-        return new Response(
-          JSON.stringify({
-            objects: requestBody.objects.map((object) => ({
-              storage_ref: object.storage_ref,
-              status: 'available',
-              size_bytes: Buffer.from(object.content_base64, 'base64').byteLength,
-              sha256: `sha256:${object.storage_ref.split('/').at(-1)}`,
-            })),
-          }),
-          { status: 200 },
-        );
-      })
-      .mockResolvedValueOnce(new Response('{}', { status: 207 }));
+    const fetchSpy = vi.fn().mockResolvedValue(new Response('{}', { status: 207 }));
 
-    process.env.OPEN_DESIGN_OBJECT_RELAY_URL = 'https://telemetry.open-design.ai/api/objects/batch';
-    process.env.OPEN_DESIGN_OBJECT_UPLOAD_SECRET = 'object-upload-secret';
     process.env.LANGFUSE_PUBLIC_KEY = 'pk';
     process.env.LANGFUSE_SECRET_KEY = 'sk';
     try {
       await reportRunCompletedFromDaemon({
         db: makeDbWithListMessages({
           'conv-1': [
+            {
+              id: 'user-1',
+              role: 'user',
+              content: prompt,
+              attachments: [
+                {
+                  path: 'brief.txt',
+                  name: 'brief.txt',
+                  size: 'attachment body should stay out of langfuse'.length,
+                },
+              ],
+            },
             {
               id: 'msg-1',
               role: 'assistant',
@@ -501,24 +493,13 @@ describe('langfuse-bridge.reportRunCompletedFromDaemon', () => {
         fetchImpl: fetchSpy as any,
       });
     } finally {
-      delete process.env.OPEN_DESIGN_OBJECT_RELAY_URL;
-      delete process.env.OPEN_DESIGN_OBJECT_UPLOAD_SECRET;
       delete process.env.LANGFUSE_PUBLIC_KEY;
       delete process.env.LANGFUSE_SECRET_KEY;
     }
 
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
-    expect(fetchSpy.mock.calls[0]![0]).toBe('https://telemetry.open-design.ai/api/objects/batch');
-    const objectInit = fetchSpy.mock.calls[0]![1] as RequestInit;
-    expect((objectInit.headers as Record<string, string>)['X-Open-Design-Telemetry']).toBe(
-      'object-ingestion-v1',
-    );
-    const objectBody = JSON.parse(objectInit.body as string);
-    expect(objectBody.objects).toHaveLength(3);
-    expect(objectBody.objects.map((object: { object_class: string }) => object.object_class))
-      .toEqual(['attachment', 'artifact', 'input_text_snapshot']);
-
-    const langfuseInit = fetchSpy.mock.calls[1]![1] as RequestInit;
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy.mock.calls[0]![0]).not.toContain('/api/objects/batch');
+    const langfuseInit = fetchSpy.mock.calls[0]![1] as RequestInit;
     const langfuseBody = langfuseInit.body as string;
     expect(langfuseBody).not.toContain('attachment body should stay out of langfuse');
     expect(langfuseBody).not.toContain('<!doctype html><h1>artifact body</h1>');
@@ -528,16 +509,13 @@ describe('langfuse-bridge.reportRunCompletedFromDaemon', () => {
     expect(trace.metadata.manifest_completeness).toBe('complete');
     expect(trace.metadata.attachment_manifest).toHaveLength(1);
     expect(trace.metadata.artifact_manifest).toHaveLength(1);
-    expect(trace.metadata.input_text_snapshot_manifest).toHaveLength(1);
+    expect(trace.metadata.input_text_snapshot_manifest).toBeUndefined();
     expect(trace.metadata.attachment_manifest[0]).toMatchObject({
       object_class: 'attachment',
       status: 'ok',
       stored_in_open_design: true,
-      access_policy: 'open_design_auth_required',
-      open_in_open_design_url: null,
-      preview_status: 'not_available',
       source: 'user_upload',
-      retention_policy: 'observability_90d',
+      retention_policy: 'project_lifetime',
       access_scope: 'project',
       sensitivity: 'private',
     });
@@ -546,18 +524,7 @@ describe('langfuse-bridge.reportRunCompletedFromDaemon', () => {
       status: 'ok',
       stored_in_open_design: true,
       source: 'agent_generated',
-      retention_policy: 'observability_90d',
-      access_policy: 'open_design_auth_required',
-    });
-    expect(trace.metadata.input_text_snapshot_manifest[0]).toMatchObject({
-      object_class: 'input_text_snapshot',
-      status: 'ok',
-      stored_in_open_design: true,
-      access_policy: 'open_design_auth_required',
-      open_in_open_design_url: null,
-      preview_status: 'not_available',
-      source: 'user_prompt',
-      type: 'text',
+      retention_policy: 'project_lifetime',
     });
     expect(JSON.stringify(trace.metadata)).toContain(
       'od://objects/workspaces/unknown/projects/proj-1/runs/run-id-1',
@@ -576,31 +543,8 @@ describe('langfuse-bridge.reportRunCompletedFromDaemon', () => {
     await writeFile(path.join(importedRoot, 'dist', 'index.html'), '<!doctype html><h1>imported</h1>');
     await writeFile(path.join(managedRoot, 'index.html'), '<!doctype html><h1>managed</h1>');
 
-    const fetchSpy = vi.fn(async (url: string, init: RequestInit) => {
-      if (url.includes('/api/objects/batch')) {
-        const parsed = JSON.parse(init.body as string) as {
-          objects: Array<{ storage_ref: string; filename: string; content_base64: string }>;
-        };
-        expect(parsed.objects).toHaveLength(1);
-        expect(parsed.objects[0]!.filename).toBe('dist/index.html');
-        expect(Buffer.from(parsed.objects[0]!.content_base64, 'base64').toString('utf8'))
-          .toBe('<!doctype html><h1>imported</h1>');
-        return new Response(
-          JSON.stringify({
-            objects: parsed.objects.map((object) => ({
-              storage_ref: object.storage_ref,
-              status: 'available',
-              size_bytes: Buffer.from(object.content_base64, 'base64').byteLength,
-            })),
-          }),
-          { status: 200 },
-        );
-      }
-      return new Response('{}', { status: 207 });
-    });
+    const fetchSpy = vi.fn().mockResolvedValue(new Response('{}', { status: 207 }));
 
-    process.env.OPEN_DESIGN_OBJECT_RELAY_URL = 'https://telemetry.open-design.ai/api/objects/batch';
-    process.env.OPEN_DESIGN_OBJECT_UPLOAD_SECRET = 'object-upload-secret';
     process.env.LANGFUSE_PUBLIC_KEY = 'pk';
     process.env.LANGFUSE_SECRET_KEY = 'sk';
     try {
@@ -625,14 +569,13 @@ describe('langfuse-bridge.reportRunCompletedFromDaemon', () => {
         fetchImpl: fetchSpy as any,
       });
     } finally {
-      delete process.env.OPEN_DESIGN_OBJECT_RELAY_URL;
-      delete process.env.OPEN_DESIGN_OBJECT_UPLOAD_SECRET;
       delete process.env.LANGFUSE_PUBLIC_KEY;
       delete process.env.LANGFUSE_SECRET_KEY;
     }
 
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
-    const langfuseInit = fetchSpy.mock.calls[1]![1] as RequestInit;
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy.mock.calls[0]![0]).not.toContain('/api/objects/batch');
+    const langfuseInit = fetchSpy.mock.calls[0]![1] as RequestInit;
     const langfuseBody = langfuseInit.body as string;
     expect(langfuseBody).not.toContain(importedRoot);
     expect(langfuseBody).not.toContain('dist/index.html');
@@ -971,16 +914,13 @@ describe('langfuse-bridge.reportRunCompletedFromDaemon', () => {
         }),
       ],
     });
-    expect(trace.metadata.promptStack.sections[0].redactedContent).toContain(
-      '[REDACTED:path]',
+    expect(trace.metadata.promptStack).toBeUndefined();
+    expect(generation.metadata.promptStack).toBeUndefined();
+    expect(trace.metadata.promptStack_sectionCount).toBe(2);
+    expect(generation.metadata.promptStack_sectionCount).toBe(2);
+    expect(trace.metadata.promptStack_promptFingerprint).toEqual(
+      generation.metadata.promptStack_promptFingerprint,
     );
-    expect(generation.metadata.promptStack).toEqual(trace.metadata.promptStack);
-    expect(
-      trace.metadata.promptStack.sections.some(
-        (section: { kind: string }) => section.kind === 'userRequest',
-      ),
-    ).toBe(true);
-    expect(trace.metadata.promptStack_section_userRequest_present).toBeUndefined();
   });
 
   it('attaches turn-level config (model / reasoning / skill / DS) to trace + generation', async () => {
