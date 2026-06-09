@@ -219,6 +219,38 @@ function messagesWithTodoThenDone(): ChatMessage[] {
   ];
 }
 
+function messageWithTodoBetweenProse(): ChatMessage[] {
+  return [
+    { id: 'u1', role: 'user' as const, content: 'build something', createdAt: Date.now() },
+    {
+      id: 'a1',
+      role: 'assistant' as const,
+      content: 'Before todo.\n\nAfter todo.',
+      createdAt: Date.now(),
+      events: [
+        {
+          kind: 'text' as const,
+          text: 'Before todo.',
+        },
+        {
+          kind: 'tool_use' as const,
+          id: 'tw-1',
+          name: 'TodoWrite',
+          input: {
+            todos: [
+              { content: 'Task 1', status: 'pending' },
+            ],
+          },
+        },
+        {
+          kind: 'text' as const,
+          text: 'After todo.',
+        },
+      ],
+    },
+  ];
+}
+
 function longConversationWithEarlyTodo(): ChatMessage[] {
   const messages = messagesWithTodo(2);
   for (let i = 0; i < 90; i += 1) {
@@ -261,7 +293,7 @@ describe('chat-log autoscroll when inline todo card grows', () => {
     expect(screen.queryAllByText('Task 1').length).toBeGreaterThan(0);
   });
 
-  it('keeps one standalone todo card in the chat log and updates it from the latest snapshot', async () => {
+  it('keeps one todo card in the chat log and updates it from the latest snapshot', async () => {
     render(chatPaneEl(messagesWithTwoTodoSnapshots()));
     await flushFrames();
 
@@ -269,7 +301,7 @@ describe('chat-log autoscroll when inline todo card grows', () => {
     expect(screen.queryAllByText('Task 2 updated').length).toBeGreaterThan(0);
   });
 
-  it('renders the standalone todo card at the first TodoWrite position', async () => {
+  it('renders the todo card at the first TodoWrite message position', async () => {
     render(chatPaneEl(messagesWithTodoThenDone()));
     await flushFrames();
 
@@ -278,11 +310,25 @@ describe('chat-log autoscroll when inline todo card grows', () => {
     const assistantMessages = document.querySelectorAll('.chat-log .msg.assistant');
     expect(assistantMessages).toHaveLength(2);
 
-    expect(assistantMessages[0]!.compareDocumentPosition(todoCard!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    const firstAssistantPosition = assistantMessages[0]!.compareDocumentPosition(todoCard!);
+    expect(firstAssistantPosition & Node.DOCUMENT_POSITION_CONTAINED_BY).toBeTruthy();
     expect(todoCard!.compareDocumentPosition(assistantMessages[1]!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
-  it('keeps the standalone todo card rendered when virtualization omits the original TodoWrite row', async () => {
+  it('renders the todo card between prose around the first TodoWrite event', async () => {
+    render(chatPaneEl(messageWithTodoBetweenProse()));
+    await flushFrames();
+
+    const before = screen.getByText('Before todo.');
+    const after = screen.getByText('After todo.');
+    const todoCard = document.querySelector('.chat-log .op-card.op-todo');
+    expect(todoCard).not.toBeNull();
+
+    expect(before.compareDocumentPosition(todoCard!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(todoCard!.compareDocumentPosition(after)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it('keeps the todo card rendered when virtualization omits the original TodoWrite row from the tail window', async () => {
     geom = { scrollHeight: 20000, clientHeight: 400, scrollTop: 20000 };
     render(chatPaneEl(longConversationWithEarlyTodo()));
     await flushFrames();

@@ -34,7 +34,6 @@ import type { AppConfig, ChatAttachment, ChatCommentAttachment, ChatMessage, Cha
 import { exactDateTime, messageTime, shortTime } from '../utils/chatTime';
 import { commentTargetDisplayName, commentsToAttachments, simplePositionLabel } from '../comments';
 import { AssistantMessage, type QuestionFormOpenRequest } from './AssistantMessage';
-import { TodoCard } from './ToolCard';
 import { AmrGuidance } from './AmrGuidance';
 import { amrRechargeUrlForProfile, resolveRunFailureUi } from '../runtime/amr-guidance';
 import {
@@ -2101,17 +2100,11 @@ interface AssistantCallbacks {
   onShareToOpenDesign: ((assistantMessageId: string) => void) | undefined;
 }
 
-type ChatRenderItem =
-  | {
-      kind: 'message';
-      key: string;
-      message: ChatMessage;
-    }
-  | {
-      kind: 'conversation-todo';
-      key: string;
-      input: unknown;
-    };
+type ChatRenderItem = {
+  kind: 'message';
+  key: string;
+  message: ChatMessage;
+};
 
 function ChatConversationLoading({ t }: { t: TranslateFn }) {
   return (
@@ -2210,9 +2203,13 @@ function ChatRows({
     () => latestTodoWriteInputForPinnedCard(messages),
     [messages],
   );
+  const conversationTodoAnchorMessageId = useMemo(
+    () => firstTodoWriteAssistantMessageId(messages),
+    [messages],
+  );
   const items = useMemo(
-    () => buildChatRenderItems(messages, conversationTodoInput),
-    [messages, conversationTodoInput],
+    () => buildChatRenderItems(messages),
+    [messages],
   );
   const virtualized = items.length > CHAT_MESSAGE_VIRTUALIZE_THRESHOLD;
   const virtualWindow = useMeasuredVirtualWindow(items, {
@@ -2222,21 +2219,13 @@ function ChatRows({
     overscanPx: CHAT_MESSAGE_OVERSCAN_PX,
     resetKey: activeConversationKey,
     initialTailRows: CHAT_VIRTUAL_INITIAL_TAIL_ROWS,
-    alwaysIncludeKey: conversationTodoInput != null ? 'conversation-todo' : undefined,
+    alwaysIncludeKey:
+      conversationTodoInput != null && conversationTodoAnchorMessageId
+        ? `message:${conversationTodoAnchorMessageId}`
+        : undefined,
   });
 
   const renderItem = (item: ChatRenderItem) => {
-    if (item.kind === 'conversation-todo') {
-      return (
-        <div className="chat-conversation-todo-row">
-          <TodoCard
-            input={item.input}
-            runStreaming={streaming}
-            runSucceeded={!streaming}
-          />
-        </div>
-      );
-    }
     const m = item.message;
     const messageStreaming = isAssistantMessageStreaming(
       m,
@@ -2275,6 +2264,8 @@ function ChatRows({
         // get a stable `undefined`, so adding `liveToolInput` to the memo
         // comparator re-renders just this row per `tool_input_delta`, not all N.
         liveToolInput={messageStreaming ? liveToolInput : undefined}
+        showConversationTodoCard={m.id === conversationTodoAnchorMessageId}
+        conversationTodoInput={conversationTodoInput}
         projectId={projectId}
         projectKind={projectKindForTracking}
         conversationId={activeConversationId}
@@ -2400,9 +2391,8 @@ function VirtualChatRow({
   );
 }
 
-function buildChatRenderItems(messages: ChatMessage[], conversationTodoInput: unknown | null): ChatRenderItem[] {
+function buildChatRenderItems(messages: ChatMessage[]): ChatRenderItem[] {
   const items: ChatRenderItem[] = [];
-  let insertedConversationTodo = false;
   for (let i = 0; i < messages.length; i += 1) {
     const message = messages[i]!;
     items.push({
@@ -2410,32 +2400,22 @@ function buildChatRenderItems(messages: ChatMessage[], conversationTodoInput: un
       key: `message:${message.id}`,
       message,
     });
-    if (
-      conversationTodoInput != null &&
-      !insertedConversationTodo &&
-      message.role === 'assistant' &&
-      message.events?.some((event) => event.kind === 'tool_use' && isTodoWriteToolName(event.name))
-    ) {
-      items.push({
-        kind: 'conversation-todo',
-        key: 'conversation-todo',
-        input: conversationTodoInput,
-      });
-      insertedConversationTodo = true;
-    }
-  }
-  if (conversationTodoInput != null && !insertedConversationTodo) {
-    items.push({
-      kind: 'conversation-todo',
-      key: 'conversation-todo',
-      input: conversationTodoInput,
-    });
   }
   return items;
 }
 
+function firstTodoWriteAssistantMessageId(messages: ChatMessage[]): string | null {
+  const message = messages.find(
+    (candidate) =>
+      candidate.role === 'assistant' &&
+      candidate.events?.some(
+        (event) => event.kind === 'tool_use' && isTodoWriteToolName(event.name),
+      ),
+  );
+  return message?.id ?? null;
+}
+
 function estimateChatRenderItemHeight(item: ChatRenderItem): number {
-  if (item.kind === 'conversation-todo') return 180 + CHAT_VIRTUAL_ROW_GAP_PX;
   const message = item.message;
   const contentLength = message.content?.length ?? 0;
   const attachmentCount = (message.attachments?.length ?? 0) + (message.commentAttachments?.length ?? 0);
