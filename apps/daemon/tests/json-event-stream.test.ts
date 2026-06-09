@@ -273,18 +273,6 @@ test('gemini stream emits TodoWrite from native write_todos tool', () => {
         ],
       },
     },
-    {
-      type: 'tool_use',
-      id: 'write_todos__1',
-      name: 'write_todos',
-      input: {
-        todos: [
-          { description: 'Inspect context', status: 'in_progress' },
-          { description: 'Answer user', status: 'pending' },
-          { description: 'Wait for input', status: 'blocked' },
-        ],
-      },
-    },
   ]);
 });
 
@@ -405,6 +393,55 @@ test('gemini stream suppresses duplicate artifact text split across chunks', () 
     {
       type: 'text_delta',
       delta: 'Tail',
+    },
+  ]);
+});
+
+test('gemini stream preserves later artifact text after suppressing immediate file-write echo', () => {
+  const { events, handler } = collectEvents('gemini');
+
+  handler.feed(
+    JSON.stringify({
+      type: 'tool_use',
+      tool_name: 'write_file',
+      tool_id: 'write_file__1',
+      parameters: {
+        file_path: 'helper.html',
+        content: '<!doctype html><html>helper</html>',
+      },
+    }) +
+    '\n' +
+    JSON.stringify({
+      type: 'message',
+      role: 'assistant',
+      content: 'Helper written.\\n\\n<artifact identifier="helper" type="text/html">\\n<!doctype html><html>helper</html>\\n</artifact>',
+    }) +
+    '\n' +
+    JSON.stringify({
+      type: 'message',
+      role: 'assistant',
+      content: 'Final artifact:\\n\\n<artifact identifier="final" type="text/html">\\n<!doctype html><html>final</html>\\n</artifact>',
+    }) +
+    '\n',
+  );
+
+  assert.deepEqual(events, [
+    {
+      type: 'tool_use',
+      id: 'write_file__1',
+      name: 'write_file',
+      input: {
+        file_path: 'helper.html',
+        content: '<!doctype html><html>helper</html>',
+      },
+    },
+    {
+      type: 'text_delta',
+      delta: 'Helper written.\\n\\n',
+    },
+    {
+      type: 'text_delta',
+      delta: 'Final artifact:\\n\\n<artifact identifier="final" type="text/html">\\n<!doctype html><html>final</html>\\n</artifact>',
     },
   ]);
 });

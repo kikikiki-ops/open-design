@@ -69,7 +69,7 @@ export function createClaudeStreamHandler(onEvent: EventSink) {
   const runtimeTasks = new Map<string, RuntimeTask>();
   const canonicalTaskToolUseIds = new Set<string>();
   let nextRuntimeTaskId = 1;
-  let fileWriteSeen = false;
+  let suppressNextArtifactText = false;
   let suppressDuplicateArtifactText = false;
   let artifactOpenCandidate = '';
 
@@ -83,9 +83,9 @@ export function createClaudeStreamHandler(onEvent: EventSink) {
     return 'pending';
   }
 
-  function emitCanonicalTaskSnapshot(toolUseId: unknown, name: unknown, input: unknown): void {
-    if (typeof toolUseId !== 'string' || typeof name !== 'string' || !isRecord(input)) return;
-    if (canonicalTaskToolUseIds.has(toolUseId)) return;
+  function emitCanonicalTaskSnapshot(toolUseId: unknown, name: unknown, input: unknown): boolean {
+    if (typeof toolUseId !== 'string' || typeof name !== 'string' || !isRecord(input)) return false;
+    if (canonicalTaskToolUseIds.has(toolUseId)) return true;
     let changed = false;
     if (name === 'TaskCreate') {
       const content = typeof input.subject === 'string'
@@ -93,7 +93,7 @@ export function createClaudeStreamHandler(onEvent: EventSink) {
         : typeof input.description === 'string'
           ? input.description
           : '';
-      if (!content) return;
+      if (!content) return false;
       const id = typeof input.taskId === 'string' && input.taskId
         ? input.taskId
         : String(nextRuntimeTaskId++);
@@ -106,9 +106,9 @@ export function createClaudeStreamHandler(onEvent: EventSink) {
       });
       changed = true;
     } else if (name === 'TaskUpdate') {
-      if (typeof input.taskId !== 'string') return;
+      if (typeof input.taskId !== 'string') return false;
       const existing = runtimeTasks.get(input.taskId);
-      if (!existing) return;
+      if (!existing) return false;
       const content = typeof input.subject === 'string'
         ? input.subject
         : typeof input.description === 'string'
@@ -122,9 +122,11 @@ export function createClaudeStreamHandler(onEvent: EventSink) {
         ...(activeForm ? { activeForm } : {}),
       });
       changed = true;
+    } else {
+      return false;
     }
     canonicalTaskToolUseIds.add(toolUseId);
-    if (!changed || runtimeTasks.size === 0) return;
+    if (!changed || runtimeTasks.size === 0) return false;
     onEvent({
       type: 'tool_use',
       id: `${toolUseId}:todo-task`,
@@ -137,12 +139,13 @@ export function createClaudeStreamHandler(onEvent: EventSink) {
         })),
       },
     });
+    return true;
   }
 
   function emitToolUse(id: unknown, name: unknown, input: unknown): void {
-    emitCanonicalTaskSnapshot(id, name, input);
+    if (emitCanonicalTaskSnapshot(id, name, input)) return;
     if (isFileWriteToolUse(name, input)) {
-      fileWriteSeen = true;
+      suppressNextArtifactText = true;
     }
     onEvent({
       type: 'tool_use',
@@ -197,7 +200,13 @@ export function createClaudeStreamHandler(onEvent: EventSink) {
   }
 
   function stripDuplicateArtifactText(text: string): string {
-    if (!fileWriteSeen) return text;
+    if (
+      !suppressNextArtifactText &&
+      !suppressDuplicateArtifactText &&
+      artifactOpenCandidate.length === 0
+    ) {
+      return text;
+    }
     const openTag = '<artifact';
     const current = `${artifactOpenCandidate}${text}`;
     artifactOpenCandidate = '';
@@ -205,18 +214,21 @@ export function createClaudeStreamHandler(onEvent: EventSink) {
       const closeIndex = current.indexOf('</artifact>');
       if (closeIndex === -1) return '';
       suppressDuplicateArtifactText = false;
+      suppressNextArtifactText = false;
       return stripDuplicateArtifactText(current.slice(closeIndex + '</artifact>'.length));
     }
     const openIndex = current.indexOf(openTag);
     if (openIndex === -1) {
       const candidateLength = artifactOpenCandidateLength(current, openTag);
-      if (candidateLength > 0) {
+      if (suppressNextArtifactText && candidateLength > 0) {
         artifactOpenCandidate = current.slice(-candidateLength);
         return current.slice(0, -candidateLength);
       }
+      suppressNextArtifactText = false;
       return current;
     }
     suppressDuplicateArtifactText = true;
+    suppressNextArtifactText = false;
     return `${current.slice(0, openIndex)}${stripDuplicateArtifactText(current.slice(openIndex))}`;
   }
 

@@ -189,6 +189,19 @@ function messagesWithTwoTodoSnapshots(): ChatMessage[] {
   ];
 }
 
+function longConversationWithEarlyTodo(): ChatMessage[] {
+  const messages = messagesWithTodo(2);
+  for (let i = 0; i < 90; i += 1) {
+    messages.push({
+      id: `tail-${i}`,
+      role: i % 2 === 0 ? 'user' : 'assistant',
+      content: `tail message ${i}`,
+      createdAt: Date.now() + i + 1,
+    });
+  }
+  return messages;
+}
+
 function chatPaneEl(messages: ChatMessage[]) {
   return (
     <ChatPane
@@ -218,12 +231,22 @@ describe('chat-log autoscroll when inline todo card grows', () => {
     expect(screen.queryAllByText('Task 1').length).toBeGreaterThan(0);
   });
 
-  it('keeps one inline todo card at the first TodoWrite position and updates it from the latest snapshot', async () => {
+  it('keeps one standalone todo card in the chat log and updates it from the latest snapshot', async () => {
     render(chatPaneEl(messagesWithTwoTodoSnapshots()));
     await flushFrames();
 
     expect(document.querySelectorAll('.chat-log .op-card.op-todo')).toHaveLength(1);
     expect(screen.queryAllByText('Task 2 updated').length).toBeGreaterThan(0);
+  });
+
+  it('keeps the standalone todo card rendered when virtualization omits the original TodoWrite row', async () => {
+    geom = { scrollHeight: 20000, clientHeight: 400, scrollTop: 20000 };
+    render(chatPaneEl(longConversationWithEarlyTodo()));
+    await flushFrames();
+
+    expect(document.querySelector('[data-testid="chat-virtual-spacer"]')).not.toBeNull();
+    expect(document.querySelectorAll('.chat-log .op-card.op-todo')).toHaveLength(1);
+    expect(screen.queryAllByText('Task 1').length).toBeGreaterThan(0);
   });
 
   it('scrolls to the bottom when pinned and the inline todo card grows', async () => {

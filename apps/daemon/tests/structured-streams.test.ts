@@ -86,6 +86,21 @@ describe('structured agent stream fixtures', () => {
         ],
       },
     });
+    expect(events).not.toContainEqual(expect.objectContaining({
+      type: 'tool_use',
+      id: 'toolu-create-1',
+      name: 'TaskCreate',
+    }));
+    expect(events).not.toContainEqual(expect.objectContaining({
+      type: 'tool_use',
+      id: 'toolu-create-2',
+      name: 'TaskCreate',
+    }));
+    expect(events).not.toContainEqual(expect.objectContaining({
+      type: 'tool_use',
+      id: 'toolu-update-1',
+      name: 'TaskUpdate',
+    }));
   });
 
   it('suppresses duplicate Claude artifact text after writing a file', () => {
@@ -186,6 +201,51 @@ describe('structured agent stream fixtures', () => {
       if (typeof event !== 'object' || event === null) return false;
       const record = event as { type?: string; delta?: string };
       return record.type === 'text_delta' && typeof record.delta === 'string' && record.delta.includes('<!doctype html>');
+    })).toBe(false);
+  });
+
+  it('preserves later Claude artifact text after suppressing immediate file-write echo', () => {
+    const events: unknown[] = [];
+    const handler = createClaudeStreamHandler((event: unknown) => events.push(event));
+    handler.feed(`${JSON.stringify({
+      type: 'assistant',
+      message: {
+        id: 'msg-1',
+        content: [
+          {
+            type: 'tool_use',
+            id: 'toolu-write-1',
+            name: 'Write',
+            input: {
+              file_path: 'helper.html',
+              content: '<!doctype html><html>helper</html>',
+            },
+          },
+          {
+            type: 'text',
+            text: 'Helper written.\\n\\n<artifact identifier="helper" type="text/html">\\n<!doctype html><html>helper</html>\\n</artifact>',
+          },
+          {
+            type: 'text',
+            text: 'Final artifact:\\n\\n<artifact identifier="final" type="text/html">\\n<!doctype html><html>final</html>\\n</artifact>',
+          },
+        ],
+      },
+    })}\n`);
+    handler.flush();
+
+    expect(events).toContainEqual({
+      type: 'text_delta',
+      delta: 'Helper written.\\n\\n',
+    });
+    expect(events).toContainEqual({
+      type: 'text_delta',
+      delta: 'Final artifact:\\n\\n<artifact identifier="final" type="text/html">\\n<!doctype html><html>final</html>\\n</artifact>',
+    });
+    expect(events.some((event) => {
+      if (typeof event !== 'object' || event === null) return false;
+      const record = event as { type?: string; delta?: string };
+      return record.type === 'text_delta' && typeof record.delta === 'string' && record.delta.includes('<html>helper</html>');
     })).toBe(false);
   });
 

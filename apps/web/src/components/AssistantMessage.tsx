@@ -255,9 +255,9 @@ interface Props {
   // in-flight Write/Edit's code in real time before the full `tool_use`
   // arrives. Never persisted.
   liveToolInput?: Record<string, { name: string; text: string; seq?: number }>;
-  // ChatPane keeps one conversation-level TodoWrite card at the original
-  // message position where TodoWrite first appeared, while the card contents
-  // update from the latest TodoWrite snapshot in the conversation.
+  // ChatPane renders the canonical conversation-level TodoWrite card as its
+  // own row, while this message strips TodoWrite tool groups to avoid a
+  // duplicate per-message card.
   showConversationTodoCard?: boolean;
   conversationTodoInput?: unknown | null;
   projectId: string | null;
@@ -410,9 +410,9 @@ function AssistantMessageImpl({
   // shows the questions + options, so suppressing the trailing prose
   // avoids rendering the same content twice. The system prompt asks the
   // model not to do this; this is the belt-and-suspenders.
-  // The chat-pane-level PinnedTodoBar renders the canonical TodoWrite card
-  // above the composer, so we strip any TodoWrite tool-groups out of the
-  // per-message flow to avoid the same task list rendering twice.
+  // ChatPane renders the canonical TodoWrite card as a standalone chat row, so
+  // we strip TodoWrite tool-groups out of the per-message flow to avoid the
+  // same task list rendering twice.
   const settledUseIds = useMemo(
     () => new Set(events.filter((e) => e.kind === "tool_use").map((e) => e.id)),
     [events],

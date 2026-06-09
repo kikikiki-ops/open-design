@@ -10,7 +10,7 @@ type ParserState = {
   codexErrorEmitted: boolean;
   codexPreviousEventWasAgentMessage: boolean;
   codexLastAgentMessageEndedWithNewline: boolean;
-  fileWriteSeen: boolean;
+  suppressNextArtifactText: boolean;
   suppressDuplicateArtifactText: boolean;
   artifactOpenCandidate: string;
 };
@@ -259,10 +259,11 @@ function handleGeminiEvent(obj: unknown, onEvent: StreamEventHandler, state: Par
           name: 'TodoWrite',
           input: todoInput,
         });
+        return true;
       }
     }
     if (isFileWriteToolUse(obj.tool_name, input)) {
-      state.fileWriteSeen = true;
+      state.suppressNextArtifactText = true;
     }
     onEvent({
       type: 'tool_use',
@@ -398,7 +399,13 @@ function todoWriteInputFromParsedValue(value: unknown): JsonObject | null {
 }
 
 function stripDuplicateArtifactText(text: string, state: ParserState): string {
-  if (!state.fileWriteSeen) return text;
+  if (
+    !state.suppressNextArtifactText &&
+    !state.suppressDuplicateArtifactText &&
+    state.artifactOpenCandidate.length === 0
+  ) {
+    return text;
+  }
   const openTag = '<artifact';
   const current = `${state.artifactOpenCandidate}${text}`;
   state.artifactOpenCandidate = '';
@@ -406,18 +413,21 @@ function stripDuplicateArtifactText(text: string, state: ParserState): string {
     const closeIndex = current.indexOf('</artifact>');
     if (closeIndex === -1) return '';
     state.suppressDuplicateArtifactText = false;
+    state.suppressNextArtifactText = false;
     return stripDuplicateArtifactText(current.slice(closeIndex + '</artifact>'.length), state);
   }
   const openIndex = current.indexOf(openTag);
   if (openIndex === -1) {
     const candidateLength = artifactOpenCandidateLength(current, openTag);
-    if (candidateLength > 0) {
+    if (state.suppressNextArtifactText && candidateLength > 0) {
       state.artifactOpenCandidate = current.slice(-candidateLength);
       return current.slice(0, -candidateLength);
     }
+    state.suppressNextArtifactText = false;
     return current;
   }
   state.suppressDuplicateArtifactText = true;
+  state.suppressNextArtifactText = false;
   return `${current.slice(0, openIndex)}${stripDuplicateArtifactText(current.slice(openIndex), state)}`;
 }
 
@@ -679,7 +689,7 @@ export function createJsonEventStreamHandler(kind: ParserKind, onEvent: StreamEv
     codexErrorEmitted: false,
     codexPreviousEventWasAgentMessage: false,
     codexLastAgentMessageEndedWithNewline: false,
-    fileWriteSeen: false,
+    suppressNextArtifactText: false,
     suppressDuplicateArtifactText: false,
     artifactOpenCandidate: '',
   };
