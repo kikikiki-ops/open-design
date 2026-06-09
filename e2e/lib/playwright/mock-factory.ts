@@ -94,6 +94,11 @@ export async function fulfillAgentsRoute(
   }
 
   const url = new URL(route.request().url());
+  if (url.pathname !== '/api/agents') {
+    await route.fallback();
+    return;
+  }
+
   if (url.searchParams.get('stream') !== '1') {
     await route.fulfill({ json: { agents } });
     return;

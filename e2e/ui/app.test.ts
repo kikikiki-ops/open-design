@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { ensureRailOpen } from '@/playwright/rail';
+import { routeAgents } from '@/playwright/mock-factory';
 import type { Dialog, Locator, Page, Request, Response } from '@playwright/test';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -93,22 +94,7 @@ for (const entry of automatedUiScenarios().filter(
   (scenario) => !APP_OWNED_SCENARIO_FLOWS.has(scenario.flow ?? ''),
 )) {
   test(`[${scenarioPriority(entry)}]${criticalScenarioTag(entry)} ${entry.id}: ${entry.title}`, async ({ page }) => {
-    await page.route('**/api/agents', async (route) => {
-      await route.fulfill({
-        json: {
-          agents: [
-            {
-              id: 'mock',
-              name: 'Mock Agent',
-              bin: 'mock-agent',
-              available: true,
-              version: 'test',
-              models: [{ id: 'default', label: 'Default' }],
-            },
-          ],
-        },
-      });
-    });
+    await routeMockAgents(page);
 
     if (entry.flow === 'example-use-prompt') {
       const exampleSummary = {
@@ -579,22 +565,16 @@ test('[P0] sending preview comments opens the refreshed follow-up artifact', asy
 });
 
 async function routeMockAgents(page: Page) {
-  await page.route('**/api/agents', async (route) => {
-    await route.fulfill({
-      json: {
-        agents: [
-          {
-            id: 'mock',
-            name: 'Mock Agent',
-            bin: 'mock-agent',
-            available: true,
-            version: 'test',
-            models: [{ id: 'default', label: 'Default' }],
-          },
-        ],
-      },
-    });
-  });
+  await routeAgents(page, [
+    {
+      id: 'mock',
+      name: 'Mock Agent',
+      bin: 'mock-agent',
+      available: true,
+      version: 'test',
+      models: [{ id: 'default', label: 'Default' }],
+    },
+  ]);
 }
 
 function scenarioPriority(entry: UiScenario): 'P0' | 'P1' | 'P2' {

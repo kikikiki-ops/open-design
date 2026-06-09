@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { ensureRailOpen } from '@/playwright/rail';
+import { routeAgents } from '@/playwright/mock-factory';
 import type { Page } from '@playwright/test';
 import { openSettingsDialog } from '../lib/playwright/amr.js';
 
@@ -40,22 +41,16 @@ async function seedSettingsBase(page: Page) {
     });
   });
 
-  await page.route('**/api/agents', async (route) => {
-    await route.fulfill({
-      json: {
-        agents: [
-          {
-            id: 'codex',
-            name: 'Codex CLI',
-            bin: 'codex',
-            available: true,
-            version: '0.130.0',
-            models: [{ id: 'default', label: 'Default' }],
-          },
-        ],
-      },
-    });
-  });
+  await routeAgents(page, [
+    {
+      id: 'codex',
+      name: 'Codex CLI',
+      bin: 'codex',
+      available: true,
+      version: '0.130.0',
+      models: [{ id: 'default', label: 'Default' }],
+    },
+  ]);
 }
 
 async function waitForLoadingToClear(page: Page) {
