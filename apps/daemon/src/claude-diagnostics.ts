@@ -101,8 +101,8 @@ export function diagnoseClaudeCliFailure(
   // a flaky local hop:
   //   - SSE stream cut after it started  -> "API Error: The socket connection
   //     was closed unexpectedly. ... pass verbose: true ..."
-  //   - TLS tunnel reset                 -> "API Error: Unable to connect to
-  //     API (ECONNRESET)"
+  //   - TLS tunnel reset/timeout         -> "API Error: Unable to connect to
+  //     API (ECONNRESET)" / "API Error: Unable to connect to API (ETIMEDOUT)"
   // Both are transient and worth retrying; the CLI retries internally for a
   // minute or more before surfacing them, which is why long runs appear to
   // "abort after a while". Most visible on large generations whose streaming
@@ -111,7 +111,7 @@ export function diagnoseClaudeCliFailure(
   const connectionDropped =
     /socket connection was closed/i.test(text) ||
     /closed unexpectedly/i.test(text) ||
-    /unable to connect to api/i.test(text) ||
+    /unable to connect to api \((econnreset|etimedout)\)/i.test(text) ||
     /socket hang up/i.test(text) ||
     /econnreset/i.test(text) ||
     /etimedout/i.test(text) ||

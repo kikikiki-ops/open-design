@@ -235,6 +235,18 @@ describe('diagnoseClaudeCliFailure', () => {
     expect(diagnostic?.retryable).toBe(true);
   });
 
+  it('does not classify generic first-connect API failures as mid-stream drops', () => {
+    const diagnostic = diagnoseClaudeCliFailure({
+      agentId: 'claude',
+      exitCode: 1,
+      stdoutTail:
+        '{"type":"result","subtype":"success","is_error":true,"result":"API Error: Unable to connect to API (ENOTFOUND)","stop_reason":"stop_sequence"}',
+      env: {},
+    });
+
+    expect(diagnostic).toBeNull();
+  });
+
   it('classifies ECONNRESET and socket hang up as connection drops', () => {
     for (const tail of ['Error: socket hang up', 'read ECONNRESET', 'TypeError: fetch failed']) {
       const diagnostic = diagnoseClaudeCliFailure({
