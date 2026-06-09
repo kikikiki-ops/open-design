@@ -17,8 +17,7 @@ import { createPortal } from 'react-dom';
 import { useAnalytics } from '../analytics/provider';
 import { trackChatPanelClick, trackRunFailedToastSurfaceView } from '../analytics/events';
 import { attributedAmrUrl, recordAmrEntry } from '../analytics/amr-attribution';
-import { useI18n, useT } from '../i18n';
-import { localizeSkillName } from '../i18n/content';
+import { useT } from '../i18n';
 import {
   FEATURED_DESIGN_TOOLBOX_ACTION_IDS,
   findDesignToolboxSkill,
@@ -750,7 +749,6 @@ export function ChatPane({
   config,
 }: Props) {
   const t = useT();
-  const { locale } = useI18n();
   const analytics = useAnalytics();
   const amrProfile = config?.agentCliEnv?.amr?.[AMR_PROFILE_ENV_KEY] ?? null;
   const logRef = useRef<HTMLDivElement | null>(null);
@@ -832,10 +830,11 @@ export function ChatPane({
     () =>
       skills.map((skill) => ({
         id: skill.id,
-        name: localizeSkillName(locale, skill),
+        // Raw name — matches the @<skill> token the composer inlines on pick.
+        name: skill.name,
         description: skill.description,
       })),
-    [locale, skills],
+    [skills],
   );
   const [tab, setTab] = useState<Tab>('chat');
   const [showConvList, setShowConvList] = useState(false);
