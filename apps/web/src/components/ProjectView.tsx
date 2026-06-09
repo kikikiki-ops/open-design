@@ -2636,6 +2636,14 @@ export function ProjectView({
               textBuffer.flush();
               textBuffer.cancel();
               unregisterTextBuffer();
+              // A reattached run interrupted by a "send now" still receives a
+              // late onDone from the daemon. Capture ownership before
+              // clearCurrentRunStreamingMarker clears the refs so its
+              // completion-only side effects (artifact persist, produced-file
+              // attachment) don't run over the replacement run that now owns
+              // the conversation.
+              const isCurrentRun =
+                abortRef.current === controller && cancelRef.current === cancelController;
               for (const ev of parser.flush()) {
                 if (ev.type === 'artifact:end') {
                   parsedArtifact = parsedArtifact
@@ -2664,6 +2672,7 @@ export function ProjectView({
               reattachControllersRef.current.delete(runId);
               reattachCancelControllersRef.current.delete(runId);
               clearCurrentRunStreamingMarker(reattachConversationId, controller, cancelController);
+              if (!isCurrentRun) return;
               void (async () => {
                 const preTurn = message.preTurnFileNames;
                 let nextFiles = await refreshProjectFiles();
@@ -2708,20 +2717,26 @@ export function ProjectView({
             },
             onError: (err) => {
               const errorCode = (err as Error & { code?: string }).code;
+              // A superseded reattached run must not paint a global failure
+              // banner or re-finalize its message over the replacement run.
+              const isCurrentRun =
+                abortRef.current === controller && cancelRef.current === cancelController;
               textBuffer.flush();
               textBuffer.cancel();
               unregisterTextBuffer();
-              setError(err.message);
-              appendAssistantErrorEvent(message.id, err.message, errorCode);
-              updateMessageById(
-                message.id,
-                (prev) => ({
-                  ...prev,
-                  runStatus: 'failed',
-                  endedAt: prev.endedAt ?? Date.now(),
-                }),
-                true,
-              );
+              if (isCurrentRun) {
+                setError(err.message);
+                appendAssistantErrorEvent(message.id, err.message, errorCode);
+                updateMessageById(
+                  message.id,
+                  (prev) => ({
+                    ...prev,
+                    runStatus: 'failed',
+                    endedAt: prev.endedAt ?? Date.now(),
+                  }),
+                  true,
+                );
+              }
               completedReattachRunsRef.current.add(runId);
               reattachControllersRef.current.delete(runId);
               reattachCancelControllersRef.current.delete(runId);
@@ -2757,7 +2772,12 @@ export function ProjectView({
           },
         })
           .catch((err) => {
-            if ((err as Error).name !== 'AbortError') {
+            // Skip AbortError (expected on interrupt) and any error from a run
+            // that has already been superseded — only the run still holding the
+            // active controllers may surface a global failure here.
+            const isCurrentRun =
+              abortRef.current === controller && cancelRef.current === cancelController;
+            if ((err as Error).name !== 'AbortError' && isCurrentRun) {
               const msg = err instanceof Error ? err.message : String(err);
               setError(msg);
               appendAssistantErrorEvent(message.id, msg);
