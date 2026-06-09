@@ -863,6 +863,60 @@ describe('ProjectView conversation run isolation', () => {
     expect(payload.history?.at(-1)).toMatchObject({ role: 'user', content: 'hello from c' });
   });
 
+  it('keeps the replacement run streaming when the interrupted run reports canceled late', async () => {
+    const queuedSend = {
+      id: 'queued-1',
+      conversationId: 'conv-a',
+      prompt: 'hello from c',
+      attachments: [],
+      commentAttachments: [],
+      createdAt: 1,
+    };
+    window.localStorage.setItem(
+      'od:chat-queued-sends:project-1:v1',
+      JSON.stringify([queuedSend]),
+    );
+
+    const interruptedRunStatuses: Array<(status: NonNullable<ChatMessage['runStatus']>) => void> = [];
+    reattachDaemonRun.mockImplementation(async (input: unknown) => {
+      const onRunStatus = (input as {
+        onRunStatus?: (status: NonNullable<ChatMessage['runStatus']>) => void;
+      }).onRunStatus;
+      if (onRunStatus) interruptedRunStatuses.push(onRunStatus);
+      return new Promise<void>(() => {});
+    });
+    streamViaDaemon.mockImplementation(async (input: unknown) => {
+      const options = input as {
+        onRunStatus?: (status: NonNullable<ChatMessage['runStatus']>) => void;
+      };
+      options.onRunStatus?.('running');
+    });
+
+    renderProjectView(
+      config,
+      project,
+      [{ id: 'agent-1', name: 'OpenCode', bin: 'opencode', available: true, models: [] }],
+    );
+
+    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
+    await waitFor(() => expect(screen.getByTestId('streaming-state').textContent).toBe('streaming'));
+    await waitFor(() => expect(screen.getByTestId('send-queued-0')).toBeTruthy());
+
+    fireEvent.click(screen.getByTestId('send-queued-0'));
+
+    await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(1));
+    interruptedRunStatuses[0]?.('canceled');
+
+    await waitFor(() => expect(screen.getByTestId('streaming-state').textContent).toBe('streaming'));
+    expect(screen.getByTestId('workspace-streaming-state').textContent).toBe('streaming');
+    expect(streamViaDaemon).toHaveBeenCalledWith(expect.objectContaining({
+      conversationId: 'conv-a',
+      history: expect.arrayContaining([
+        expect.objectContaining({ role: 'user', content: 'hello from c' }),
+      ]),
+    }));
+  });
+
   it('auto-starts queued sends one at a time after the active run completes', async () => {
     let finishReattach: (() => void) | null = null;
     let reattachHandlers: { onDone: () => void } | null = null;
