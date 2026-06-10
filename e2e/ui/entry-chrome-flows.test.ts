@@ -799,7 +799,7 @@ test('[P1] home starters Use plugin from the details modal applies the plugin to
   await expect(page.getByTestId('home-hero-input')).toHaveText('');
 });
 
-test('[P0] @critical home starters direct Use routes the plugin as the active driver and keeps the prompt freeform', async ({ page }) => {
+test('[P0] @critical home starters Use-plugin-only routes the plugin as the active driver and keeps the prompt freeform', async ({ page }) => {
   await page.route('**/api/plugins', async (route) => {
     await route.fulfill({
       json: {
@@ -818,11 +818,14 @@ test('[P0] @critical home starters direct Use routes the plugin as the active dr
 
   const applyResponsePromise = page.waitForResponse('**/api/plugins/localized-plugin/apply');
   // Community is a gallery (no inline Use button): open the starter's detail
-  // modal and use it from there.
+  // modal and use it from there. This starter ships an example query, so the
+  // primary Use button now replicates (seeds the prompt) — the structure-only
+  // freeform path lives in the caret menu's "Use plugin only" option.
   await page.getByTestId('plugins-home-details-localized-plugin').click({ force: true });
-  await page.getByTestId('plugin-details-use-localized-plugin').click();
-  // Plain "Use" routes the starter as the active driver (active-plugin chip)
-  // without seeding the prompt; the user can still type their own brief.
+  await page.getByTestId('plugin-details-use-localized-plugin-menu').click();
+  await page.getByTestId('plugin-details-use-option-localized-plugin').click();
+  // "Use plugin only" routes the starter as the active driver (active-plugin
+  // chip) without seeding the prompt; the user can still type their own brief.
   await expect(page.getByTestId('home-hero-active-plugin')).toBeVisible();
   await expect(input).toHaveText('');
   // Wait for the apply roundtrip to resolve so the active snapshot is bound
