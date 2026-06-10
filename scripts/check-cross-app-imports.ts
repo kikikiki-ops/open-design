@@ -103,6 +103,12 @@ type ImportSpecifierReference = {
   specifier: string;
 };
 
+type CreateRequireBindings = {
+  createRequireIdentifiers: Set<string>;
+  createRequireNamespaces: Set<string>;
+  requireLikeIdentifiers: Set<string>;
+};
+
 function scriptKindForRepositoryPath(repositoryPath: string): ts.ScriptKind {
   switch (path.extname(repositoryPath)) {
     case ".js":
@@ -129,12 +135,94 @@ function stringLiteralReference(node: ts.Node, sourceFile: ts.SourceFile): Impor
   return { index: node.getStart(sourceFile), specifier: node.text };
 }
 
-function isRequireResolveExpression(expression: ts.Expression): boolean {
+function isNodeModuleSpecifier(node: ts.Node | undefined): boolean {
+  return node != null && ts.isStringLiteralLike(node) && (node.text === "node:module" || node.text === "module");
+}
+
+function collectCreateRequireBindings(sourceFile: ts.SourceFile): CreateRequireBindings {
+  const bindings: CreateRequireBindings = {
+    createRequireIdentifiers: new Set(),
+    createRequireNamespaces: new Set(),
+    requireLikeIdentifiers: new Set(["require"]),
+  };
+
+  const collectCreateRequireImports = (node: ts.Node): void => {
+    if (
+      ts.isImportDeclaration(node) &&
+      isNodeModuleSpecifier(node.moduleSpecifier) &&
+      node.importClause?.namedBindings != null
+    ) {
+      const { namedBindings } = node.importClause;
+      if (ts.isNamedImports(namedBindings)) {
+        for (const element of namedBindings.elements) {
+          const importedName = element.propertyName?.text ?? element.name.text;
+          if (importedName === "createRequire") {
+            bindings.createRequireIdentifiers.add(element.name.text);
+          }
+        }
+      } else if (ts.isNamespaceImport(namedBindings)) {
+        bindings.createRequireNamespaces.add(namedBindings.name.text);
+      }
+    } else if (ts.isVariableDeclaration(node) && ts.isObjectBindingPattern(node.name)) {
+      if (
+        node.initializer != null &&
+        ts.isCallExpression(node.initializer) &&
+        ts.isIdentifier(node.initializer.expression)
+      ) {
+        const [moduleSpecifier] = node.initializer.arguments;
+        if (node.initializer.expression.text === "require" && isNodeModuleSpecifier(moduleSpecifier)) {
+          for (const element of node.name.elements) {
+            const propertyName = element.propertyName != null && ts.isIdentifier(element.propertyName)
+              ? element.propertyName.text
+              : ts.isIdentifier(element.name)
+                ? element.name.text
+                : null;
+            if (propertyName === "createRequire" && ts.isIdentifier(element.name)) {
+              bindings.createRequireIdentifiers.add(element.name.text);
+            }
+          }
+        }
+      }
+    }
+
+    ts.forEachChild(node, collectCreateRequireImports);
+  };
+
+  const collectRequireLikeIdentifiers = (node: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer != null &&
+      isCreateRequireCall(node.initializer, bindings)
+    ) {
+      bindings.requireLikeIdentifiers.add(node.name.text);
+    }
+
+    ts.forEachChild(node, collectRequireLikeIdentifiers);
+  };
+
+  collectCreateRequireImports(sourceFile);
+  collectRequireLikeIdentifiers(sourceFile);
+  return bindings;
+}
+
+function isCreateRequireCall(expression: ts.Expression, bindings: CreateRequireBindings): boolean {
+  return (
+    ts.isCallExpression(expression) &&
+    ((ts.isIdentifier(expression.expression) && bindings.createRequireIdentifiers.has(expression.expression.text)) ||
+      (ts.isPropertyAccessExpression(expression.expression) &&
+        ts.isIdentifier(expression.expression.expression) &&
+        bindings.createRequireNamespaces.has(expression.expression.expression.text) &&
+        expression.expression.name.text === "createRequire"))
+  );
+}
+
+function isRequireResolveExpression(expression: ts.Expression, bindings: CreateRequireBindings): boolean {
   return (
     ts.isPropertyAccessExpression(expression) &&
-    ts.isIdentifier(expression.expression) &&
-    expression.expression.text === "require" &&
-    expression.name.text === "resolve"
+    expression.name.text === "resolve" &&
+    ((ts.isIdentifier(expression.expression) && bindings.requireLikeIdentifiers.has(expression.expression.text)) ||
+      isCreateRequireCall(expression.expression, bindings))
   );
 }
 
@@ -147,6 +235,7 @@ function collectImportSpecifierReferences(repositoryPath: string, source: string
     scriptKindForRepositoryPath(repositoryPath),
   );
   const references: ImportSpecifierReference[] = [];
+  const createRequireBindings = collectCreateRequireBindings(sourceFile);
 
   const pushStringLiteral = (node: ts.Node | undefined): void => {
     if (node == null) return;
@@ -169,9 +258,12 @@ function collectImportSpecifierReferences(repositoryPath: string, source: string
       const firstArgument = node.arguments[0];
       if (node.expression.kind === ts.SyntaxKind.ImportKeyword) {
         pushStringLiteral(firstArgument);
-      } else if (ts.isIdentifier(node.expression) && node.expression.text === "require") {
+      } else if (
+        ts.isIdentifier(node.expression) &&
+        createRequireBindings.requireLikeIdentifiers.has(node.expression.text)
+      ) {
         pushStringLiteral(firstArgument);
-      } else if (isRequireResolveExpression(node.expression)) {
+      } else if (isRequireResolveExpression(node.expression, createRequireBindings)) {
         pushStringLiteral(firstArgument);
       }
     }

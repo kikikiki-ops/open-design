@@ -61,6 +61,37 @@ test("cross-app import check rejects another app's package name in require.resol
   assert.equal(violations[0]?.lineNumber, 1);
 });
 
+test("cross-app import check rejects createRequire-based cross-app resolution", () => {
+  const violations = collectCrossAppImportViolationsFromSource(
+    "apps/web/src/setup-runtime.ts",
+    [
+      "import { createRequire, createRequire as makeRequire } from 'node:module';",
+      "import * as nodeModule from 'node:module';",
+      "const directDaemonManifest = createRequire(import.meta.url).resolve('@open-design/daemon/package.json');",
+      "const aliasDaemonManifest = makeRequire(import.meta.url).resolve('@open-design/daemon/package.json');",
+      "const nodeRequire = nodeModule.createRequire(import.meta.url);",
+      "const daemonCli = nodeRequire('@open-design/daemon/dist/cli.js');",
+      "const daemonPackageJson = nodeRequire.resolve('@open-design/daemon/package.json');",
+    ].join("\n"),
+    registry,
+  );
+
+  assert.deepEqual(
+    violations.map((violation) => violation.specifier),
+    [
+      "@open-design/daemon/package.json",
+      "@open-design/daemon/package.json",
+      "@open-design/daemon/dist/cli.js",
+      "@open-design/daemon/package.json",
+    ],
+  );
+  assert.deepEqual(
+    violations.map((violation) => violation.lineNumber),
+    [3, 4, 6, 7],
+  );
+  assert.ok(violations.every((violation) => violation.targetApp === "daemon"));
+});
+
 test("cross-app import check rejects cross-app imports from app-owned mjs entrypoints", () => {
   assert.equal(isCrossAppImportSourceFile("entry.js"), true);
   assert.equal(isCrossAppImportSourceFile("entry.cjs"), true);
