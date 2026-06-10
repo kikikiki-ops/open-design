@@ -1909,7 +1909,6 @@ export interface Dict {
   'avatar.useLocal': string;
   'avatar.useApi': string;
   'avatar.byokAccountMeta': string;
-  'avatar.byokSetupRequired': string;
   'avatar.codeAgent': string;
   'avatar.rescan': string;
   'avatar.amrConsole': string;
@@ -1983,6 +1982,7 @@ export interface Dict {
   'chat.amrPreflight.body': string;
   'chat.amrPreflight.inlineTitle': string;
   'chat.amrPreflight.detailByokIncomplete': string;
+  'chat.amrPreflight.detailByokMissing': string;
   'chat.amrPreflight.detailAgentUnselected': string;
   'chat.amrPreflight.detailAgentUnavailable': string;
   'chat.amrPreflight.detailAgentAuthMissing': string;

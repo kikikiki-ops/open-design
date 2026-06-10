@@ -5519,7 +5519,7 @@ export function ProjectView({
       onOpenSettings={onOpenSettings}
       onRefreshAgents={onRefreshAgents}
       onBack={onBack}
-      amrPreflightIssueKind={amrSendPreflightIssue?.kind ?? null}
+      amrPreflightIssue={amrSendPreflightIssue}
       onUseAmrPreflight={handleUseAmrFromPreflightHint}
       placement="up"
     />

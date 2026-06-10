@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import { useT } from '../i18n';
+import { useI18n } from '../i18n';
 import type { Dict } from '../i18n/types';
 import { AgentIcon } from './AgentIcon';
 import { RemixIcon } from './RemixIcon';
@@ -13,7 +13,11 @@ import { apiProtocolLabel } from '../utils/apiProtocol';
 import { fetchProviderModels } from '../providers/provider-models';
 import { isMacPlatform } from '../utils/platform';
 import { amrConsoleUrlForProfile } from '../runtime/amr-guidance';
-import type { AmrSendPreflightIssueKind } from '../runtime/amr-preflight';
+import type {
+  AmrByokField,
+  AmrSendPreflightIssue,
+  AmrSendPreflightIssueKind,
+} from '../runtime/amr-preflight';
 
 interface Props {
   config: AppConfig;
@@ -33,7 +37,7 @@ interface Props {
   placement?: 'down' | 'up';
   /** Fired when the dropdown transitions from closed to open. */
   onOpen?: () => void;
-  amrPreflightIssueKind?: AmrSendPreflightIssueKind | null;
+  amrPreflightIssue?: AmrSendPreflightIssue | null;
   onUseAmrPreflight?: () => void;
 }
 
@@ -59,10 +63,10 @@ export function AvatarMenu({
   onBack,
   placement = 'down',
   onOpen,
-  amrPreflightIssueKind = null,
+  amrPreflightIssue = null,
   onUseAmrPreflight,
 }: Props) {
-  const t = useT();
+  const { locale, t } = useI18n();
   const [open, setOpen] = useState(false);
   // Toggle that reports the closed→open transition (for analytics) without
   // firing on close.
@@ -227,12 +231,12 @@ export function AvatarMenu({
     fetchedByokModels,
     SUGGESTED_MODELS_BY_PROTOCOL[apiProtocol] ?? [],
   );
-  const hasAmrPreflightWarning = Boolean(amrPreflightIssueKind);
+  const hasAmrPreflightWarning = Boolean(amrPreflightIssue);
+  // The warning card below the header owns the "what is missing" message, so
+  // the header keeps its regular account meta even while unconfigured.
   const headerMeta =
     config.mode === 'api'
-      ? amrPreflightIssueKind === 'byok-incomplete'
-        ? t('avatar.byokSetupRequired')
-        : t('avatar.byokAccountMeta')
+      ? t('avatar.byokAccountMeta')
       : currentAgent
         ? `${displayAgentName(currentAgent)}${
             currentAgent.id !== 'amr' && currentAgent.version
@@ -247,6 +251,19 @@ export function AvatarMenu({
   const triggerLabel = hasAmrPreflightWarning
     ? `${t('avatar.title')} · ${t('avatar.unconfigured')}`
     : t('avatar.title');
+  const amrPreflightDetail = amrPreflightIssue
+    ? amrPreflightIssue.kind === 'byok-incomplete' &&
+      amrPreflightIssue.missingByokFields?.length
+      ? t('chat.amrPreflight.detailByokMissing', {
+          fields: formatByokFieldList(
+            locale,
+            amrPreflightIssue.missingByokFields.map((field) =>
+              t(BYOK_FIELD_LABEL_KEYS[field]),
+            ),
+          ),
+        })
+      : t(avatarAmrPreflightDetailKey(amrPreflightIssue.kind))
+    : null;
 
   return (
     <div className={`avatar-menu avatar-menu--${placement}`} ref={wrapRef}>
@@ -289,26 +306,20 @@ export function AvatarMenu({
             </span>
             <span className="where">{headerMeta}</span>
           </div>
-          {amrPreflightIssueKind ? (
+          {amrPreflightIssue ? (
             <div className="avatar-preflight-warning" role="status">
               <span className="avatar-preflight-warning__icon" aria-hidden>
                 <RemixIcon name="error-warning-line" size={15} />
               </span>
               <span className="avatar-preflight-warning__copy">
                 <strong>{t('chat.amrPreflight.inlineTitle')}</strong>
-                <span>{t(avatarAmrPreflightDetailKey(amrPreflightIssueKind))}</span>
+                <span>{amrPreflightDetail}</span>
               </span>
+              {/* No "configure" action here: this popover already is the
+                  configuration surface (model picker below, execution
+                  settings entry at the bottom). Only offer the AMR escape
+                  hatch. */}
               <span className="avatar-preflight-warning__actions">
-                <button
-                  type="button"
-                  className="avatar-preflight-warning__link"
-                  onClick={() => {
-                    setOpen(false);
-                    onOpenSettings('execution');
-                  }}
-                >
-                  {t('chat.amrPreflight.configureCta')}
-                </button>
                 <button
                   type="button"
                   className="avatar-preflight-warning__primary"
@@ -368,7 +379,13 @@ export function AvatarMenu({
             </span>
             <span>{t('avatar.useLocal')}</span>
             {config.mode === 'daemon' ? (
-              <span className="avatar-item-meta">{t('avatar.metaActive')}</span>
+              hasAmrPreflightWarning ? (
+                <span className="avatar-item-meta avatar-item-meta--warning">
+                  {t('avatar.unconfigured')}
+                </span>
+              ) : (
+                <span className="avatar-item-meta">{t('avatar.metaActive')}</span>
+              )
             ) : !daemonLive ? (
               <span className="avatar-item-meta">{t('avatar.metaOffline')}</span>
             ) : null}
@@ -387,7 +404,13 @@ export function AvatarMenu({
             </span>
             <span>{t('avatar.useApi')}</span>
             {config.mode === 'api' ? (
-              <span className="avatar-item-meta">{t('avatar.metaActive')}</span>
+              hasAmrPreflightWarning ? (
+                <span className="avatar-item-meta avatar-item-meta--warning">
+                  {t('avatar.unconfigured')}
+                </span>
+              ) : (
+                <span className="avatar-item-meta">{t('avatar.metaActive')}</span>
+              )
             ) : null}
             {config.mode === 'api' ? (
               <RemixIcon name="check-line" size={14} className="avatar-item-check" />
@@ -575,6 +598,23 @@ export function AvatarMenu({
       ) : null}
     </div>
   );
+}
+
+const BYOK_FIELD_LABEL_KEYS: Record<AmrByokField, keyof Dict> = {
+  apiKey: 'settings.apiKey',
+  baseUrl: 'settings.baseUrl',
+  model: 'avatar.modelLabel',
+};
+
+function formatByokFieldList(locale: string, labels: string[]): string {
+  try {
+    return new Intl.ListFormat(locale, {
+      style: 'narrow',
+      type: 'conjunction',
+    }).format(labels);
+  } catch {
+    return labels.join(', ');
+  }
 }
 
 function avatarAmrPreflightDetailKey(kind: AmrSendPreflightIssueKind): keyof Dict {

@@ -7,9 +7,13 @@ export type AmrSendPreflightIssueKind =
   | 'agent-auth-missing'
   | 'model-unavailable';
 
+export type AmrByokField = 'apiKey' | 'baseUrl' | 'model';
+
 export interface AmrSendPreflightIssue {
   kind: AmrSendPreflightIssueKind;
   agentId?: string | null;
+  /** Set for `byok-incomplete`: the exact BYOK fields the user still has to fill in. */
+  missingByokFields?: AmrByokField[];
 }
 
 export function resolveAmrSendPreflightIssue(
@@ -19,8 +23,12 @@ export function resolveAmrSendPreflightIssue(
   if (!config) return null;
 
   if (config.mode === 'api') {
-    if (!config.apiKey.trim() || !config.baseUrl.trim() || !config.model.trim()) {
-      return { kind: 'byok-incomplete' };
+    const missingByokFields: AmrByokField[] = [];
+    if (!config.apiKey.trim()) missingByokFields.push('apiKey');
+    if (!config.baseUrl.trim()) missingByokFields.push('baseUrl');
+    if (!config.model.trim()) missingByokFields.push('model');
+    if (missingByokFields.length > 0) {
+      return { kind: 'byok-incomplete', missingByokFields };
     }
     return null;
   }

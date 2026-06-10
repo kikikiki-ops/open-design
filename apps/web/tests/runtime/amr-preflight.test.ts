@@ -35,7 +35,25 @@ describe('resolveAmrSendPreflightIssue', () => {
         },
         [agent()],
       ),
-    ).toEqual({ kind: 'byok-incomplete' });
+    ).toEqual({ kind: 'byok-incomplete', missingByokFields: ['apiKey'] });
+  });
+
+  it('reports every missing BYOK field', () => {
+    expect(
+      resolveAmrSendPreflightIssue(
+        {
+          ...baseConfig,
+          mode: 'api',
+          apiKey: ' ',
+          baseUrl: '',
+          model: '',
+        },
+        [agent()],
+      ),
+    ).toEqual({
+      kind: 'byok-incomplete',
+      missingByokFields: ['apiKey', 'baseUrl', 'model'],
+    });
   });
 
   it('does not block a healthy local agent', () => {
