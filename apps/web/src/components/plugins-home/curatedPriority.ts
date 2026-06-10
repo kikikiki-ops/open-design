@@ -29,6 +29,10 @@ const PINNED_TEMPLATE_PLUGIN_IDS = [
   'example-acreage-farming',
   'example-evergreen-finance',
   'example-stellar-launch',
+  'example-3d-creator-portfolio',
+  'example-dashboard-ui-glass',
+  'example-deck-open-slide-canvas',
+  'example-velar-luxury-real-estate',
 ] as const;
 
 const CURATED_PROTOTYPE_PLUGIN_IDS = [
