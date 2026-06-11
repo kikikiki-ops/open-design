@@ -232,6 +232,45 @@ export function mergeSavedPreviewComment(current: PreviewComment[], saved: Previ
   return current.map((comment, index) => (index === existingIndex ? saved : comment));
 }
 
+function mergeServerMessageWithLocal(server: ChatMessage, local?: ChatMessage): ChatMessage {
+  if (!local) return server;
+  const merged: ChatMessage = { ...server };
+  if (!server.producedFiles?.length && local.producedFiles?.length) {
+    merged.producedFiles = local.producedFiles;
+  }
+  if (!server.preTurnFileNames?.length && local.preTurnFileNames?.length) {
+    merged.preTurnFileNames = local.preTurnFileNames;
+  }
+  if (!server.lastRunEventId && local.lastRunEventId) {
+    merged.lastRunEventId = local.lastRunEventId;
+  }
+  if (!server.startedAt && local.startedAt) {
+    merged.startedAt = local.startedAt;
+  }
+  if (!server.endedAt && local.endedAt) {
+    merged.endedAt = local.endedAt;
+  }
+  if (!server.runStatus && local.runStatus) {
+    merged.runStatus = local.runStatus;
+  }
+  return merged;
+}
+
+export function mergeServerMessagesIntoConversation(
+  current: ChatMessage[],
+  serverMessages: ChatMessage[],
+): ChatMessage[] {
+  const currentById = new Map(current.map((message) => [message.id, message]));
+  const serverIds = new Set(serverMessages.map((message) => message.id));
+  const merged = serverMessages.map((message) =>
+    mergeServerMessageWithLocal(message, currentById.get(message.id)),
+  );
+  for (const message of current) {
+    if (!serverIds.has(message.id)) merged.push(message);
+  }
+  return merged;
+}
+
 interface Props {
   project: Project;
   routeFileName: string | null;
@@ -1223,14 +1262,27 @@ export function ProjectView({
   }, [messages]);
   const openQuestionsTab = useCallback((request?: QuestionFormOpenRequest) => {
     if (request) {
-      setManualQuestionFormRequest({
-        ...request,
-        submittedAnswers:
-          request.submittedAnswers ?? submittedAnswersForQuestionFormRequest(request) ?? undefined,
-      });
+      const opensCurrentLiveForm =
+        request.messageId === lastAssistantMessageId
+        && questionForm?.id === request.form.id
+        && questionFormSubmittedAnswers === undefined;
+      if (opensCurrentLiveForm) {
+        setManualQuestionFormRequest(null);
+      } else {
+        setManualQuestionFormRequest({
+          ...request,
+          submittedAnswers:
+            request.submittedAnswers ?? submittedAnswersForQuestionFormRequest(request) ?? undefined,
+        });
+      }
     }
     setQuestionsFocusNonce((n) => n + 1);
-  }, [submittedAnswersForQuestionFormRequest]);
+  }, [
+    lastAssistantMessageId,
+    questionForm,
+    questionFormSubmittedAnswers,
+    submittedAnswersForQuestionFormRequest,
+  ]);
 
   const currentConversationQueuedItems = activeConversationId
     ? queuedChatSends
@@ -2222,6 +2274,32 @@ export function ProjectView({
     [activeConversationId, project.id],
   );
 
+  const refreshConversationMessagesFromServer = useCallback(
+    async (conversationId: string) => {
+      if (messagesConversationIdRef.current !== conversationId) return;
+      try {
+        const serverMessages = await listMessages(project.id, conversationId);
+        if (messagesConversationIdRef.current !== conversationId) return;
+        setMessages((current) => mergeServerMessagesIntoConversation(current, serverMessages));
+        setMessagesInitialized(true);
+        setMessagesConversationId(conversationId);
+        setFailedMessagesConversationId(null);
+      } catch (err) {
+        console.warn('Failed to refresh conversation messages after run completion', err);
+      }
+    },
+    [project.id],
+  );
+
+  const scheduleConversationMessageRefresh = useCallback(
+    (conversationId: string) => {
+      window.setTimeout(() => {
+        void refreshConversationMessagesFromServer(conversationId);
+      }, 150);
+    },
+    [refreshConversationMessagesFromServer],
+  );
+
   const markStreamingConversation = useCallback((conversationId: string) => {
     streamingConversationIdRef.current = conversationId;
     setStreaming(true);
@@ -2788,6 +2866,9 @@ export function ProjectView({
               clearCurrentRunStreamingMarker(reattachConversationId, controller, cancelController);
               persistNow({ telemetryFinalized: true });
             }
+            if (isTerminalRunStatus(runStatus)) {
+              scheduleConversationMessageRefresh(reattachConversationId);
+            }
           },
           onRunEventId: (lastRunEventId) => {
             textBuffer.flush();
@@ -2847,6 +2928,7 @@ export function ProjectView({
     persistArtifact,
     requestOpenFile,
     onProjectsRefresh,
+    scheduleConversationMessageRefresh,
   ]);
 
   const commitQueuedChatSends = useCallback((next: QueuedChatSend[]) => {
@@ -3608,6 +3690,7 @@ export function ProjectView({
             updateConversationLatestRun(runStatus, endedAt);
             if (isTerminalRunStatus(runStatus)) {
               clearCurrentRunStreamingMarker(runConversationId, controller, cancelController);
+              scheduleConversationMessageRefresh(runConversationId);
             }
           },
           onRunEventId: (lastRunEventId) => {
@@ -3760,6 +3843,7 @@ export function ProjectView({
       markStreamingConversation,
       clearStreamingMarker,
       clearCurrentRunStreamingMarker,
+      scheduleConversationMessageRefresh,
       onProjectsRefresh,
       onProjectChange,
     ],
@@ -4817,10 +4901,6 @@ export function ProjectView({
             onSend: handleSend,
             onRetry: handleRetry,
             onStop: handleStop,
-            onSubmitForm: (text: string) => {
-              if (currentConversationActionDisabled) return;
-              void handleSend(text, [], []);
-            },
             onRemoveQueuedSend: removeQueuedChatSend,
             onUpdateQueuedSend: updateQueuedChatSend,
             onReorderQueuedSends: reorderCurrentConversationQueuedChatSends,
@@ -5533,7 +5613,6 @@ export function ProjectView({
       }}
       onOpenSettings={onOpenSettings}
       onRefreshAgents={onRefreshAgents}
-      onBack={onBack}
       amrPreflightIssue={amrSendPreflightIssue}
       onUseAmrPreflight={handleUseAmrFromPreflightHint}
       placement="up"
@@ -5611,10 +5690,6 @@ export function ProjectView({
               shareToOpenDesignBusyMessageId={shareToOpenDesignBusyMessageId}
               forceStreamingMessageIds={forceStreamingPluginMessageIds}
               initialDraft={chatInitialDraft}
-              onSubmitForm={(text) => {
-                if (currentConversationActionDisabled) return;
-                void handleSend(text, [], []);
-              }}
               onOpenQuestions={openQuestionsTab}
               onContinueRemainingTasks={handleContinueRemainingTasks}
               onAssistantFeedback={handleAssistantFeedback}
@@ -5841,6 +5916,7 @@ export function ProjectView({
                 config={config}
                 onThemeChange={handleThemeChange}
                 onOpenSettings={onOpenSettings}
+                trackingPageName="artifact"
                 onTrackTriggerClick={() => {
                   // Spec row 52: the settings gear in the artifact header.
                   // Carry the active artifact so settings slices line up with

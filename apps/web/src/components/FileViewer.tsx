@@ -20,6 +20,7 @@ import {
   trackArtifactHeaderClick,
   trackArtifactToolbarClick,
   trackCommentPopoverClick,
+  trackDrawToolbarClick,
   trackPageView,
   trackPresentPopoverClick,
   trackShareOptionPopoverClick,
@@ -103,7 +104,7 @@ import { Icon } from './Icon';
 import { RemixIcon } from './RemixIcon';
 import { SocialShareGrid } from './SocialShareGrid';
 import { Toast } from './Toast';
-import { PreviewDrawOverlay } from './PreviewDrawOverlay';
+import { PreviewDrawOverlay, type DrawToolbarElement } from './PreviewDrawOverlay';
 import {
   buildBoardCommentAttachments,
   commentSnapshotEqual,
@@ -4514,10 +4515,21 @@ function HtmlViewer({
       const out = fn();
       if (out && typeof (out as Promise<unknown>).then === 'function') {
         (out as Promise<unknown>).then(
-          () => { finish('success'); if (toastFormats.has(format)) setExportToast({ message: t('fileViewer.exportStarted'), tone: 'default' }); },
+          (result) => {
+            if (result === 'cancelled') {
+              finish('cancelled');
+              return;
+            }
+            finish('success');
+            if (toastFormats.has(format)) setExportToast({ message: t('fileViewer.exportStarted'), tone: 'default' });
+          },
           (err) => finish('failed', err instanceof Error ? err.name : 'UNKNOWN'),
         );
       } else {
+        if (out === 'cancelled') {
+          finish('cancelled');
+          return;
+        }
         finish('success');
         if (toastFormats.has(format)) setExportToast({ message: t('fileViewer.exportStarted'), tone: 'default' });
       }
@@ -4548,6 +4560,19 @@ function HtmlViewer({
       page_name: 'artifact',
       area: 'artifact_toolbar',
       element,
+      artifact_id: anonymizeArtifactId({ projectId, fileName: file.name }),
+      artifact_kind: artifactKindToTracking({ fileKind: file.kind ?? null }),
+    });
+  };
+  const fireDrawToolbarClick = (
+    element: DrawToolbarElement,
+    submitAction?: 'draft' | 'queue' | 'send',
+  ) => {
+    trackDrawToolbarClick(analytics.track, {
+      page_name: 'artifact',
+      area: 'draw_toolbar',
+      element,
+      ...(submitAction ? { submit_action: submitAction } : {}),
       artifact_id: anonymizeArtifactId({ projectId, fileName: file.name }),
       artifact_kind: artifactKindToTracking({ fileKind: file.kind ?? null }),
     });
@@ -8505,6 +8530,7 @@ function HtmlViewer({
                     filePath={file.name}
                     sendDisabled={streaming}
                     sendDisabledReason={t('chat.annotationSendDisabledReason')}
+                    onToolbarClick={fireDrawToolbarClick}
                   >
                     <div className="artifact-preview-transport-stack">
                       {OD_PREVIEW_KEEP_ALIVE ? (
