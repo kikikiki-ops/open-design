@@ -1,6 +1,8 @@
 <h1 align="center">Open Design: открытая альтернатива Claude Design</h1>
 
-> 🔥 **Open Design 0.9.0 уже здесь: создавайте без настройки.** [официальный Model Router](https://open-design.ai/amr) встроен прямо в приложение — никакой дополнительной конфигурации, никакого CLI для установки, никакого API-ключа заранее. Просто откройте приложение, войдите в систему и сразу начинайте проектировать и творить. [Скачать 0.9.0](https://github.com/nexu-io/open-design/releases) · [Присоединиться к обсуждению](https://github.com/nexu-io/open-design/discussions/3524)
+> 🔥 **Open Design 0.10.0 уже здесь: универсальное Agentic-рабочее пространство для дизайна.** Всё ремесло теперь живёт в одном окне — от смутной идеи к поиску референсов, сбору материала, интерактивному редактированию, очереди комментариев, полировке анимаций и передаче результата редактору или Code Agent — не покидая приложение. С параллельными сессиями это уже не один ассистент, а целая локальная команда дизайнеров, работающая на вас. [Скачать 0.10.0](https://github.com/nexu-io/open-design/releases) · [Присоединиться к обсуждению](https://github.com/nexu-io/open-design/discussions/4153)
+>
+> ⚡ **Open Design AMR — официальный сервис моделей.** Одно пополнение — и GPT, Claude, Gemini и DeepSeek доступны прямо в Open Design: 20+ флагманских моделей, ноль настройки, оплата по реальному расходу токенов. [Попробовать AMR](https://open-design.ai/amr/)
 >
 > 🏅 **Программа Open Design Fellow теперь открыта.** Если вы тоже верите, что дизайн должен быть открытым — станьте Open Design Fellow, формируйте продукт вместе с основной командой и помогайте большему числу людей участвовать в определении будущего дизайна. Подробности → [`MAINTAINERS.md`](../../MAINTAINERS.md) и [Discord](https://discord.gg/qhbcCH8Am4).
 
@@ -11,6 +13,7 @@
 <p align="center">
   <a href="https://open-design.ai/">Сайт</a> ·
   <a href="https://open-design.ai/">Скачать</a> ·
+  <a href="https://open-design.ai/amr/">AMR</a> ·
   <a href="https://discord.gg/qhbcCH8Am4">Discord</a> ·
   <a href="https://x.com/nexudotio">Подписаться @nexudotio</a>
 </p>

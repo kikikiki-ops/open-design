@@ -2,7 +2,9 @@
 
 <h1 align="center">Open Design: البديل مفتوح المصدر لـ Claude Design</h1>
 
-> 🔥 **‏Open Design 0.9.0 وصل: أنشئ دون أي إعداد.** [Model Router الرسمي](https://open-design.ai/amr) مدمج مباشرة في التطبيق — لا إعدادات إضافية، ولا CLI لتثبيته، ولا مفتاح API لتجهيزه. ما عليك سوى فتح التطبيق وتسجيل الدخول والبدء فورًا في التصميم والإنشاء. [حمّل 0.9.0](https://github.com/nexu-io/open-design/releases) · [انضم إلى النقاش](https://github.com/nexu-io/open-design/discussions/3524)
+> 🔥 **‏Open Design 0.10.0 وصل: مساحة عمل التصميم الوكيلة الكل-في-واحد.** الحِرفة كلها تعيش الآن في نافذة واحدة — من فكرة غامضة إلى اكتشاف المراجع، وجمع المواد، والتحرير التفاعلي، ووضع التعليقات في قائمة الانتظار، وصقل الحركة، وتسليم النتيجة إلى محرر أو Code Agent — دون مغادرة التطبيق. ومع الجلسات المتوازية، لم يعد يبدو كمساعد واحد، بل كفريق تصميم محلي كامل يعمل من أجلك. [حمّل 0.10.0](https://github.com/nexu-io/open-design/releases) · [انضم إلى النقاش](https://github.com/nexu-io/open-design/discussions/4153)
+>
+> ⚡ **‏Open Design AMR — خدمة النماذج الرسمية.** شحنة واحدة لاستخدام GPT وClaude وGemini وDeepSeek داخل Open Design: أكثر من 20 نموذجًا رائدًا، بدون أي إعداد، وفوترة حسب الاستخدام الفعلي للرموز. [جرّب AMR](https://open-design.ai/amr/)
 >
 > 🏅 **برنامج Open Design Fellow مفتوح الآن.** إن كنت تؤمن أنت أيضًا بأن التصميم يجب أن يكون مفتوحًا — كُن Open Design Fellow، وشارك في تشكيل المنتج جنبًا إلى جنب مع الفريق الأساسي، وساعد المزيد من الناس على المشاركة في تحديد مستقبل التصميم. التفاصيل ← [`MAINTAINERS.md`](../../MAINTAINERS.md) و[Discord](https://discord.gg/qhbcCH8Am4).
 
@@ -13,6 +15,7 @@
 <p align="center">
   <a href="https://open-design.ai/">الموقع</a> ·
   <a href="https://open-design.ai/">التنزيل</a> ·
+  <a href="https://open-design.ai/amr/">AMR</a> ·
   <a href="https://discord.gg/qhbcCH8Am4">Discord</a> ·
   <a href="https://x.com/nexudotio">تابع ‎@nexudotio</a>
 </p>
