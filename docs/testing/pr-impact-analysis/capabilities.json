@@ -298,6 +298,8 @@
       "manualQaRequired": true,
       "ownerRole": "p0-ui-qa",
       "pathGlobs": [
+        { "glob": "apps/web/src/components/WorkingDirPicker.tsx", "weight": 5, "reason": "Direct working-directory picker UI used from composer and home entry surfaces." },
+        { "glob": "apps/web/src/components/ProjectLocationsSection.tsx", "weight": 4, "reason": "Settings working-directory section directly changes picker and persistence UX." },
         { "glob": "apps/web/src/state/project-locations.ts", "weight": 5, "reason": "Core project location state." },
         { "glob": "apps/web/src/state/projects.ts", "weight": 3, "reason": "Project state persistence can alter selected location." },
         { "glob": "apps/daemon/src/*project*.ts", "weight": 4, "reason": "Daemon project APIs persist and return working-directory state." },

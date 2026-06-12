@@ -172,7 +172,7 @@
       "priority": "P0",
       "confidence": "medium",
       "reason": "Working-directory state spans web state and daemon project persistence.",
-      "pathGlobs": ["apps/web/src/state/project-locations.ts", "apps/web/src/state/projects.ts", "apps/daemon/src/*project*.ts", "packages/contracts/src/api/projects.ts"],
+      "pathGlobs": ["apps/web/src/components/WorkingDirPicker.tsx", "apps/web/src/components/ProjectLocationsSection.tsx", "apps/web/src/state/project-locations.ts", "apps/web/src/state/projects.ts", "apps/daemon/src/*project*.ts", "packages/contracts/src/api/projects.ts"],
       "testPathGlobs": ["e2e/ui/app-design-files.test.ts", "e2e/ui/app-restoration.test.ts"],
       "validation": {
         "required": ["pnpm -C e2e exec tsx scripts/ui-p0-shards.ts project-workspace"],
