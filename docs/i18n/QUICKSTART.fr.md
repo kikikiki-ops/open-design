@@ -45,7 +45,7 @@ Pour le shell desktop et tous les sidecars gérés en arrière-plan :
 pnpm tools-dev # démarre daemon + web + desktop en arrière-plan
 ```
 
-Au premier chargement, l’app détecte votre CLI de coding agent installée (Claude Code / Codex / Devin for Terminal / Gemini / OpenCode / Cursor Agent / Qwen), la sélectionne automatiquement, puis utilise par défaut le Skill `web-prototype` et le Design System `Neutral Modern`. Tapez un prompt et cliquez sur **Send**. Les sorties de l’agent s’affichent en streaming dans le panneau gauche ; la balise `<artifact>` est extraite et le HTML s’affiche en direct à droite. Une fois la génération terminée, cliquez sur **Save to disk** pour enregistrer l’artifact sous `./.od/artifacts/<timestamp>-<slug>/index.html`.
+Before documenting or changing any artifact storage path, you MUST read root AGENTS.md / **Daemon data directory contract**.
 
 Le menu déroulant **Design System** charge les Design Systems depuis `design-systems/*/DESIGN.md` : starters écrits à la main, product systems intégrés et design skills normalisés. Choisissez-en un pour habiller chaque prototype dans l’esthétique de cette marque.
 
@@ -197,25 +197,9 @@ OD_API_TOKEN=
 
 ## Stockage persistant
 
-Open Design stocke les projets et les données SQLite dans un volume Docker :
-
-```text
-open_design_data
-```
-
-Le volume est monté sur :
-
-```text
-/app/.od
-```
-
-Les données persistent entre les redémarrages de conteneurs et les mises à jour d'image.
-
-Inspectez le volume :
-
-```bash
-docker volume inspect open-design_open_design_data
-```
+Before documenting, changing, or choosing any persistent daemon storage path,
+you MUST read root AGENTS.md / **Daemon data directory contract**.
+This Quickstart MUST NOT restate that contract or define storage paths.
 
 ---
 
@@ -354,10 +338,6 @@ open-design/
 │   └── …systems               # starters · product systems · design skills normalisés
 ├── scripts/sync-design-systems.ts    # réimport depuis le tarball getdesign upstream
 ├── docs/                      # vision produit + spec
-├── .od/                       # données runtime (gitignored, auto-créées)
-│   ├── app.sqlite              #   projects / conversations / messages / tabs
-│   ├── artifacts/              #   rendus ponctuels "Save to disk"
-│   └── projects/<id>/          #   dossier de travail par projet + cwd de l’agent
 ├── pnpm-workspace.yaml        # apps/* + packages/* + tools/* + e2e
 └── package.json               # scripts qualité root + bin `od`
 ```
