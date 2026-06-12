@@ -1153,6 +1153,9 @@ export function ProjectView({
   // "live" tab that was causing flicker against manual opens.
   const pendingWritesRef = useRef<Map<string, string>>(new Map());
   const traceTouchedFilePathsRef = useRef<Set<string>>(new Set());
+  const clearTraceTouchedFilePaths = useCallback(() => {
+    traceTouchedFilePathsRef.current.clear();
+  }, []);
   // Track which conversation the current messages belong to, so we can
   // correctly gate new-conversation creation even during async loads.
   const messagesConversationIdRef = useRef<string | null>(null);
@@ -3766,8 +3769,7 @@ export function ProjectView({
           });
         }
         if (ev.kind === 'tool_use' && isFileWriteToolName(ev.name)) {
-          const input = ev.input as { file_path?: unknown; filePath?: unknown } | null;
-          const filePath = input?.file_path ?? input?.filePath;
+          const filePath = extractFileWriteToolPath(ev.input);
           if (typeof filePath === 'string' && filePath.length > 0) {
             // Preserve the full path so decideAutoOpenAfterWrite can do a
             // path-suffix match against the project's relative file paths.
@@ -3905,6 +3907,7 @@ export function ProjectView({
           if (!runMayFinalize) {
             textBuffer.cancel();
             cancelSendTextBuffer();
+            clearTraceTouchedFilePaths();
             return;
           }
           textBuffer.flush();
@@ -3956,6 +3959,7 @@ export function ProjectView({
             if (ownsCurrentRun) updateConversationLatestRun('failed', endedAt);
             void refreshProjectFiles();
             onProjectsRefresh();
+            clearTraceTouchedFilePaths();
             return;
           }
           const endedAt = Date.now();
@@ -3982,50 +3986,53 @@ export function ProjectView({
           // and attach the new files to the assistant message as download
           // chips.
           void (async () => {
-            let nextFiles = await refreshProjectFiles();
-            const finalText = streamedText || fullText;
-            const artifactToPersist = parsedArtifact?.html
-              ? parsedArtifact
-              : artifactFromStandaloneHtml(finalText);
-            if (artifactToPersist?.html) {
-              const producedBeforeFallback = computeProducedFiles(beforeFileNames, nextFiles) ?? [];
-              const sameTurnHtmlWrite = await findSameTurnHtmlWriteForRecoveredArtifact({
-                artifactHtml: resolvePersistedArtifactHtml({
-                  artifactHtml: artifactToPersist.html,
-                  identifier: artifactToPersist.identifier,
-                  sourceText: finalText,
-                }),
-                producedFiles: producedBeforeFallback,
-                readProjectHtml,
-              });
-              if (sameTurnHtmlWrite) {
-                savedArtifactRef.current = sameTurnHtmlWrite.name;
-                requestOpenFile(sameTurnHtmlWrite.name);
-              } else {
-                await persistArtifact(artifactToPersist, nextFiles, finalText);
-                nextFiles = await refreshProjectFiles();
+            try {
+              let nextFiles = await refreshProjectFiles();
+              const finalText = streamedText || fullText;
+              const artifactToPersist = parsedArtifact?.html
+                ? parsedArtifact
+                : artifactFromStandaloneHtml(finalText);
+              if (artifactToPersist?.html) {
+                const producedBeforeFallback = computeProducedFiles(beforeFileNames, nextFiles) ?? [];
+                const sameTurnHtmlWrite = await findSameTurnHtmlWriteForRecoveredArtifact({
+                  artifactHtml: resolvePersistedArtifactHtml({
+                    artifactHtml: artifactToPersist.html,
+                    identifier: artifactToPersist.identifier,
+                    sourceText: finalText,
+                  }),
+                  producedFiles: producedBeforeFallback,
+                  readProjectHtml,
+                });
+                if (sameTurnHtmlWrite) {
+                  savedArtifactRef.current = sameTurnHtmlWrite.name;
+                  requestOpenFile(sameTurnHtmlWrite.name);
+                } else {
+                  await persistArtifact(artifactToPersist, nextFiles, finalText);
+                  nextFiles = await refreshProjectFiles();
+                }
               }
+              const produced = computeProducedFiles(beforeFileNames, nextFiles) ?? [];
+              const traceObjectFiles = computeTraceObjectFiles(
+                beforeFileNames,
+                nextFiles,
+                traceTouchedFilePathsRef.current,
+              ) ?? [];
+              const producedHtmlToOpen = selectAutoOpenProducedHtml(produced);
+              if (producedHtmlToOpen) requestOpenFile(producedHtmlToOpen);
+              setMessages((curr) => {
+                const updated = curr.map((m) =>
+                  m.id === assistantId
+                    ? { ...m, producedFiles: produced, traceObjectFiles }
+                    : m,
+                );
+                const finalized = updated.find((m) => m.id === assistantId);
+                if (finalized) persistMessage(finalized, { telemetryFinalized: true });
+                return updated;
+              });
+              await auditDesignSystemWorkspaceAfterRun(assistantId);
+            } finally {
+              clearTraceTouchedFilePaths();
             }
-            const produced = computeProducedFiles(beforeFileNames, nextFiles) ?? [];
-            const traceObjectFiles = computeTraceObjectFiles(
-              beforeFileNames,
-              nextFiles,
-              traceTouchedFilePathsRef.current,
-            ) ?? [];
-            const producedHtmlToOpen = selectAutoOpenProducedHtml(produced);
-            if (producedHtmlToOpen) requestOpenFile(producedHtmlToOpen);
-            setMessages((curr) => {
-              const updated = curr.map((m) =>
-                m.id === assistantId
-                  ? { ...m, producedFiles: produced, traceObjectFiles }
-                  : m,
-              );
-              const finalized = updated.find((m) => m.id === assistantId);
-              if (finalized) persistMessage(finalized, { telemetryFinalized: true });
-              return updated;
-            });
-            traceTouchedFilePathsRef.current.clear();
-            await auditDesignSystemWorkspaceAfterRun(assistantId);
           })();
           onProjectsRefresh();
         },
@@ -4070,6 +4077,7 @@ export function ProjectView({
             return curr;
           });
           void refreshProjectFiles();
+          clearTraceTouchedFilePaths();
         },
       };
 
@@ -4192,6 +4200,7 @@ export function ProjectView({
             if (isTerminalRunStatus(runStatus)) {
               clearCurrentRunStreamingMarker(runConversationId, controller, cancelController);
               scheduleConversationMessageRefresh(runConversationId);
+              if (runStatus !== 'succeeded') clearTraceTouchedFilePaths();
             }
           },
           onRunEventId: (lastRunEventId) => {
@@ -4397,6 +4406,7 @@ export function ProjectView({
       requestOpenFile,
       persistMessage,
       persistMessageById,
+      clearTraceTouchedFilePaths,
       auditDesignSystemWorkspaceAfterRun,
       patchAttachedStatuses,
       updateMessageById,
@@ -4432,6 +4442,7 @@ export function ProjectView({
       controller.abort();
     }
     reattachControllersRef.current.clear();
+    clearTraceTouchedFilePaths();
     setStreaming(false);
     streamingConversationIdRef.current = null;
     setStreamingConversationId(null);
@@ -4440,7 +4451,7 @@ export function ProjectView({
       for (const message of finalized) persistMessage(message, { telemetryFinalized: true });
       return next;
     });
-  }, [cancelSendTextBuffer, cancelReattachTextBuffers, persistMessage]);
+  }, [cancelSendTextBuffer, cancelReattachTextBuffers, clearTraceTouchedFilePaths, persistMessage]);
 
   // Flip the deck preview to the slide a queued send's marked element lives on
   // the moment that send starts processing. No-op for plain prompts or marks
@@ -7066,10 +7077,7 @@ export function extractTouchedFilePathsFromEvents(events: ChatMessage['events'])
     if (!event || typeof event !== 'object') continue;
     const rec = event as Record<string, unknown>;
     if (rec.kind === 'tool_use' && isFileWriteToolName(rec.name)) {
-      const input = rec.input && typeof rec.input === 'object'
-        ? rec.input as Record<string, unknown>
-        : null;
-      const filePath = input?.file_path ?? input?.filePath ?? input?.path;
+      const filePath = extractFileWriteToolPath(rec.input);
       if (typeof rec.id === 'string' && typeof filePath === 'string' && filePath) {
         pending.set(rec.id, filePath);
       }
@@ -7090,7 +7098,22 @@ export function extractTouchedFilePathsFromEvents(events: ChatMessage['events'])
 }
 
 function isFileWriteToolName(value: unknown): boolean {
-  return value === 'Write' || value === 'write' || value === 'Edit';
+  return (
+    value === 'Write'
+    || value === 'write'
+    || value === 'create_file'
+    || value === 'Edit'
+    || value === 'str_replace_edit'
+    || value === 'MultiEdit'
+    || value === 'multi_edit'
+  );
+}
+
+function extractFileWriteToolPath(input: unknown): string | null {
+  if (!input || typeof input !== 'object') return null;
+  const rec = input as Record<string, unknown>;
+  const filePath = rec.file_path ?? rec.filePath ?? rec.path;
+  return typeof filePath === 'string' && filePath ? filePath : null;
 }
 
 export function clearStreamingConversationMarker(
