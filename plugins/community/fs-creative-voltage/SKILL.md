@@ -98,7 +98,7 @@ Google Fonts (the only external reference allowed):
 | Master | Seed slide | Notes |
 | ------ | ---------- | ----- |
 | Cover (split blue/dark) | 1 | badge + giant Syne title + script tagline left; mono metadata + neon rule right |
-| Agenda | 2 | rows with neon mono index, Syne uppercase name, faint mono hint |
+| Agenda | 2 | rows with neon mono index, Syne uppercase name, dim mono hint |
 | Section divider | 3 | giant ghost numeral on blue panel + badge + intro paragraph |
 | Bullets | 4 | max 3-4 items: rotated neon tick (inline SVG) + Syne heading + mono support line |
 | Big stat | 5 | one oversized neon Syne number (≈480px) + side note column |

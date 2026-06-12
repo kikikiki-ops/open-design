@@ -134,6 +134,9 @@ img, video, canvas, svg {
         animation-duration: 0.01ms !important;
         transition-duration: 0.2s !important;
     }
+    /* no movement: reveals fade only, chart bars render at full height */
+    .reveal { transform: none !important; }
+    .bar { transform: none !important; }
 }
 
 /* ===========================================
@@ -388,7 +391,7 @@ img, video, canvas, svg {
 .divider-bar { width: 120px; height: 16px; border-radius: 4px; margin-bottom: 34px; }
 
 /* === BULLETS === */
-.points { display: flex; flex-direction: column; gap: 34px; margin-top: 14px; }
+.points { display: flex; flex-direction: column; gap: 30px; margin-top: 10px; }
 .point { display: flex; gap: 30px; align-items: flex-start; max-width: 1180px; }
 .point .pin {
     flex: none;
@@ -436,7 +439,15 @@ img, video, canvas, svg {
     line-height: 0.9;
     color: var(--text-primary);
 }
-.stat-num .unit { font-size: 120px; font-style: italic; font-weight: 400; color: var(--text-secondary); }
+.stat-num .unit {
+    display: block;
+    font-size: 120px;
+    font-style: italic;
+    font-weight: 400;
+    line-height: 1;
+    margin-top: 18px;
+    color: var(--text-secondary);
+}
 .stat-side { max-width: 560px; border-left: 4px solid var(--tab-1); padding-left: 44px; }
 .stat-side h3 { font-family: var(--font-display); font-size: 40px; font-weight: 700; margin-bottom: 16px; color: var(--text-primary); }
 .stat-side p { font-family: var(--font-body); font-size: var(--body-size); line-height: 1.55; color: var(--text-secondary); }

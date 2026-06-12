@@ -130,6 +130,7 @@ img, video, canvas, svg {
     *, *::before, *::after {
         animation-duration: 0.01ms !important;
         transition-duration: 0.2s !important;
+        transition-delay: 0s !important;
     }
 }
 
@@ -175,7 +176,9 @@ img, video, canvas, svg {
     color: var(--text-faint);
 }
 .crumbs .on { color: var(--text-primary); }
-/* Baseline rule across the bottom of each slide */
+/* Baseline rule across the bottom of each slide.
+   Captions carry real content (repo link, page numbers), so they read at
+   --text-secondary for WCAG AA; --text-faint stays reserved for pure chrome. */
 .baseline {
     position: absolute;
     left: var(--slide-pad);
@@ -188,7 +191,7 @@ img, video, canvas, svg {
     font-size: 19px;
     letter-spacing: 0.18em;
     text-transform: uppercase;
-    color: var(--text-faint);
+    color: var(--text-secondary);
 }
 
 /* ===========================================
@@ -238,6 +241,27 @@ img, video, canvas, svg {
 .reveal:nth-child(4) { transition-delay: 0.38s; }
 .reveal:nth-child(5) { transition-delay: 0.48s; }
 .reveal:nth-child(6) { transition-delay: 0.58s; }
+/* Nested content groups restart nth-child counting inside their container,
+   which would let rows/cards land BEFORE the kicker/h2 (those sit at
+   nth-child 3-4 of .slide-inner, i.e. 0.28s/0.38s). Re-stagger nested
+   reveals so the heading always leads, then content follows in ~0.08s steps. */
+.agenda .reveal:nth-child(1) { transition-delay: 0.38s; }
+.agenda .reveal:nth-child(2) { transition-delay: 0.46s; }
+.agenda .reveal:nth-child(3) { transition-delay: 0.54s; }
+.agenda .reveal:nth-child(4) { transition-delay: 0.62s; }
+.points .reveal:nth-child(1) { transition-delay: 0.48s; }
+.points .reveal:nth-child(2) { transition-delay: 0.56s; }
+.points .reveal:nth-child(3) { transition-delay: 0.64s; }
+.compare .reveal:nth-child(1) { transition-delay: 0.40s; }
+.compare .reveal:nth-child(2) { transition-delay: 0.50s; }
+.grid4 .reveal:nth-child(1) { transition-delay: 0.38s; }
+.grid4 .reveal:nth-child(2) { transition-delay: 0.46s; }
+.grid4 .reveal:nth-child(3) { transition-delay: 0.54s; }
+.grid4 .reveal:nth-child(4) { transition-delay: 0.62s; }
+.chart .reveal:nth-child(1) { transition-delay: 0.48s; }
+.chart .reveal:nth-child(2) { transition-delay: 0.56s; }
+.chart .reveal:nth-child(3) { transition-delay: 0.64s; }
+.chart .reveal:nth-child(4) { transition-delay: 0.72s; }
 
 /* ===========================================
    S1 · TITLE — the orange focal card
@@ -283,7 +307,8 @@ img, video, canvas, svg {
 .agenda-row .hint {
     margin-left: auto;
     font-size: 23px;
-    color: var(--text-faint);
+    /* Duration hints are content, not chrome: --text-secondary keeps them AA-legible */
+    color: var(--text-secondary);
     letter-spacing: 0.08em;
     text-transform: uppercase;
 }
@@ -358,7 +383,7 @@ img, video, canvas, svg {
 .compare h3 { font-family: var(--font-display); font-size: 40px; text-transform: uppercase; margin-bottom: 36px; }
 .compare ul { list-style: none; display: grid; gap: 24px; font-size: 27px; line-height: 1.45; }
 .compare .col li { padding-left: 40px; position: relative; color: var(--text-secondary); }
-.compare .col.hot li { color: rgba(26, 26, 26, 0.82); }
+.compare .col.hot li { color: rgba(26, 26, 26, 0.88); }
 .compare li::before {
     content: "";
     position: absolute;
@@ -396,8 +421,11 @@ img, video, canvas, svg {
     transition: transform 0.9s var(--ease-out-expo);
 }
 .bar.solid { background: var(--card-bg); }
-.slide.visible .bar { transform: scaleY(1); }
-.slide.visible .bar:nth-of-type(1) { transition-delay: 0.15s; }
+/* Bars rise left to right, each just after its group reveal lands */
+.slide.visible .bar { transform: scaleY(1); transition-delay: 0.55s; }
+.slide.visible .bar-group:nth-child(2) .bar { transition-delay: 0.65s; }
+.slide.visible .bar-group:nth-child(3) .bar { transition-delay: 0.75s; }
+.slide.visible .bar-group:nth-child(4) .bar { transition-delay: 0.85s; }
 .bar-val {
     position: absolute;
     top: -52px; left: 0; right: 0;
@@ -424,11 +452,13 @@ img, video, canvas, svg {
     font-family: var(--font-body);
     font-size: 14px;
     letter-spacing: 0.22em;
-    color: rgba(255, 255, 255, 0.5);
+    /* Match the --text-secondary alpha so chrome shares the deck's contrast rhythm */
+    color: rgba(255, 255, 255, 0.62);
     background: rgba(13, 13, 13, 0.6);
     border: 1px solid rgba(255, 255, 255, 0.14);
     padding: 8px 18px;
-    border-radius: 999px;
+    /* Sharp rectangle: Bold Signal allows no rounded corners, chrome included */
+    border-radius: 0;
     user-select: none;
 }
 .deck-controls .cur { color: #FF5722; font-weight: 700; }
@@ -521,6 +551,7 @@ img, video, canvas, svg {
         <!-- === SLIDE 6: QUOTE === -->
         <section class="slide">
             <div class="slide-inner" style="justify-content: center;">
+                <div class="slide-no">06</div>
                 <nav class="crumbs"><span>Intro</span><span>Why</span><span class="on">Product</span><span>CTA</span></nav>
                 <div class="quote-mark reveal">&ldquo;</div>
                 <p class="quote-text reveal">File-system semantics plus git-diffable design artifacts &mdash; design is finally under version control.</p>

@@ -66,7 +66,7 @@ Forbidden: any other hue, gradients, purple/indigo (#6366f1), warm accents, phot
 - **Display / H2** — Manrope 800, tight negative letter-spacing (`-0.025em` to `-0.035em`), line-height ≤ 1.08. Title ~152px, H2 60–88px. A terminal period in `--accent-blue` (`<span class="blue">.</span>`) is a signature flourish.
 - **Quote hero** — Manrope 800 at ~92px with an oversized cobalt `“` mark (~220px): **quote typography is the deck's hero visual.**
 - **Kicker** — 22px, 800, uppercase, `letter-spacing: 0.34em`, cobalt on white / white on cobalt.
-- **Body / lede** — 400/500, 25–33px, soft text colors for support copy.
+- **Body / lede** — 400/500, 25–33px. Support copy on the white panel uses `--text-dark-soft`; body copy on the cobalt panel stays full `--text-light` for WCAG AA contrast (the soft light alpha is reserved for bold uppercase chrome: marks, hints, separators).
 - **Marks** — 19px, 800, uppercase, `letter-spacing: 0.22em`.
 - Never substitute Inter, Roboto, Arial, serifs, or any second typeface.
 

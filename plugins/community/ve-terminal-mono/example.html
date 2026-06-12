@@ -32,7 +32,7 @@
     --border: rgba(80, 250, 123, 0.06);
     --border-bright: rgba(80, 250, 123, 0.12);
     --text: #c8d6e5;
-    --text-dim: #5a6a7a;
+    --text-dim: #7d8c9b;
     --accent: #50fa7b;
     --accent-dim: rgba(80, 250, 123, 0.08);
     --code-bg: #060a10;
@@ -118,9 +118,13 @@
   .slide.visible .reveal:nth-child(6) { transition-delay: 0.6s; }
 
   @media (prefers-reduced-motion: reduce) {
+    .deck { scroll-behavior: auto; }
     .slide, .slide .reveal {
       opacity: 1 !important;
       transform: none !important;
+      transition: none !important;
+    }
+    .deck-progress, .deck-dot, .deck-hints, .data-table tbody tr {
       transition: none !important;
     }
   }
@@ -160,7 +164,7 @@
   .deck-hints {
     position: fixed; bottom: clamp(12px, 2vh, 24px); left: 50%;
     transform: translateX(-50%); font-family: var(--font-mono);
-    font-size: 11px; color: var(--text-dim); opacity: 0.6; z-index: 100;
+    font-size: 11px; color: var(--text-dim); opacity: 1; z-index: 100;
     transition: opacity 0.5s ease; white-space: nowrap;
   }
   .deck-hints.faded { opacity: 0; pointer-events: none; }
@@ -370,6 +374,11 @@
     flex: 0 1 clamp(24px, 4vw, 64px);
     min-width: 20px;
   }
+  /* labeled connectors get more run so edge labels clear the node boxes */
+  .pipe-link:has(.pipe-link__label) {
+    flex: 0 1 clamp(72px, 9vw, 128px);
+    min-width: 56px;
+  }
 
   .pipe-link__line {
     width: 100%;
@@ -545,6 +554,8 @@
   .slide__code-block .cm { color: var(--text-dim); }
   @media (prefers-color-scheme: light) {
     .slide__code-block .hl { color: #50fa7b; }
+    /* code stays dark in light mode; comments keep the dark-theme dim tone for AA contrast */
+    .slide__code-block .cm { color: #7d8c9b; }
   }
 
   /* ============ SLIDE TYPE: QUOTE ============ */

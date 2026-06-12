@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Open Design · 致创作者的一封信 — Annual Letter</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=Noto+Serif+SC:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Noto+Sans+SC:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=Noto+Serif+SC:wght@400;500;600&family=Inter:wght@400;500;600&family=Noto+Sans+SC:wght@400;500&display=swap');
 
 :root {
   /* ===== Annual Letter design tokens (editorial longform) ===== */
@@ -20,7 +20,7 @@
 
   --serif: "Newsreader", "Source Serif 4", "Noto Serif SC", Georgia, serif;
   --serif-text: "Source Serif 4", "Newsreader", "Noto Serif SC", Georgia, serif;
-  --sans: "Inter", "Noto Sans SC", "PingFang SC", -apple-system, sans-serif;
+  --sans: "Inter", "Noto Sans SC", -apple-system, sans-serif;
 }
 
 html, body {
@@ -56,13 +56,20 @@ html, body {
 }
 .slide.active { display: flex; flex-direction: column; }
 
-/* faint paper warmth */
-.slide::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse at 28% 18%, rgba(99, 91, 255, 0.025), transparent 58%);
-  pointer-events: none;
+/* ===== Motion: enter only, transform/opacity, staggered ease-out ===== */
+@media (prefers-reduced-motion: no-preference) {
+  .slide.active > * { animation: rise 0.56s cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+  .slide.active > :nth-child(2) { animation-delay: 0.06s; }
+  .slide.active > :nth-child(3) { animation-delay: 0.12s; }
+  .slide.active > :nth-child(4) { animation-delay: 0.18s; }
+  .slide.active > :nth-child(5) { animation-delay: 0.24s; }
+  .slide.active > :nth-child(6) { animation-delay: 0.3s; }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(14px); }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .slide.active > * { animation: none; }
 }
 
 /* ===== Letter chrome ===== */
@@ -109,14 +116,14 @@ html, body {
 }
 .kicker::before { content: ''; width: 44px; height: 3px; background: var(--accent); }
 
-h1, h2 { font-family: var(--serif); font-weight: 500; margin: 0; }
+h1, h2 { font-family: var(--serif); font-weight: 500; margin: 0; letter-spacing: -0.01em; }
 .hl { color: var(--accent); }
 .en-sub {
   font-family: var(--serif);
   font-style: italic;
   font-size: 28px;
   font-weight: 400;
-  color: var(--ink-45);
+  color: var(--ink-70);
 }
 .en-sub b { color: var(--accent); font-weight: 500; }
 
@@ -169,7 +176,7 @@ h1, h2 { font-family: var(--serif); font-weight: 500; margin: 0; }
   font-family: var(--sans);
   font-size: 16px;
   line-height: 1.6;
-  color: var(--ink-45);
+  color: var(--ink-70);
   margin: 12px 0 0;
 }
 
@@ -177,7 +184,7 @@ h1, h2 { font-family: var(--serif); font-weight: 500; margin: 0; }
   font-family: var(--sans);
   font-size: 15px;
   line-height: 1.7;
-  color: var(--ink-45);
+  color: var(--ink-70);
   margin: 0;
 }
 
@@ -191,9 +198,9 @@ h1, h2 { font-family: var(--serif); font-weight: 500; margin: 0; }
   font-size: 13px;
   letter-spacing: 0.14em;
   font-variant-numeric: tabular-nums;
-  color: rgba(251, 250, 248, 0.82);
-  background: rgba(19, 17, 32, 0.62);
-  border: 1px solid rgba(251, 250, 248, 0.2);
+  color: rgba(251, 250, 248, 0.95);
+  background: rgba(19, 17, 32, 0.78);
+  border: 1px solid rgba(251, 250, 248, 0.28);
   border-radius: 999px;
   padding: 7px 16px;
   user-select: none;
@@ -206,7 +213,11 @@ h1, h2 { font-family: var(--serif); font-weight: 500; margin: 0; }
   font-family: "Inter", ui-monospace, monospace;
   font-size: 12px;
   letter-spacing: 0.1em;
-  color: rgba(251, 250, 248, 0.45);
+  color: rgba(251, 250, 248, 0.92);
+  background: rgba(19, 17, 32, 0.78);
+  border: 1px solid rgba(251, 250, 248, 0.28);
+  border-radius: 999px;
+  padding: 7px 14px;
   user-select: none;
 }
 </style>
@@ -218,7 +229,7 @@ h1, h2 { font-family: var(--serif); font-weight: 500; margin: 0; }
   <section class="slide" data-screen-label="01 刊头">
     <div class="letterhead"><span><strong>Open Design</strong> · Annual Letter</span><span>致创作者的一封信 · 2026 年 6 月</span></div>
     <div class="kicker">开源 · 本地 · Agent 驱动的设计平台</div>
-    <h1 style="font-size:128px; line-height:1.18; margin-top:48px; letter-spacing:0.01em;">Open <span class="hl">Design</span></h1>
+    <h1 style="font-size:128px; line-height:1.18; margin-top:48px; letter-spacing:-0.012em;">Open <span class="hl">Design</span></h1>
     <p class="en-sub" style="margin-top:30px;">From idea to prototypes, pages, slides, and video — <b>on your own machine</b>.</p>
     <div class="footer"><span>Cover</span><span>Apache-2.0 · 本地运行 · BYOK · 无需注册</span></div>
   </section>
@@ -232,22 +243,22 @@ h1, h2 { font-family: var(--serif); font-weight: 500; margin: 0; }
       <div style="display:flex; align-items:baseline; gap:36px; border-top:1px solid var(--hairline); padding:26px 8px;">
         <span class="num" style="font-family:var(--serif); font-size:30px; color:var(--accent); width:56px;">一</span>
         <span style="font-family:var(--serif); font-size:34px; font-weight:500;">为何开放</span>
-        <span style="font-size:19px; color:var(--ink-45); margin-left:auto;">Claude Design 证明了可能，Open Design 让它开放</span>
+        <span style="font-size:19px; color:var(--ink-70); margin-left:auto;">Claude Design 证明了可能，Open Design 让它开放</span>
       </div>
       <div style="display:flex; align-items:baseline; gap:36px; border-top:1px solid var(--hairline); padding:26px 8px;">
         <span class="num" style="font-family:var(--serif); font-size:30px; color:var(--accent); width:56px;">二</span>
         <span style="font-family:var(--serif); font-size:34px; font-weight:500;">三大主张</span>
-        <span style="font-size:19px; color:var(--ink-45); margin-left:auto;">桌面原生、接入 Agent、越用越懂你</span>
+        <span style="font-size:19px; color:var(--ink-70); margin-left:auto;">桌面原生、接入 Agent、越用越懂你</span>
       </div>
       <div style="display:flex; align-items:baseline; gap:36px; border-top:1px solid var(--hairline); padding:26px 8px;">
         <span class="num" style="font-family:var(--serif); font-size:30px; color:var(--accent); width:56px;">三</span>
         <span style="font-family:var(--serif); font-size:34px; font-weight:500;">数字与生态</span>
-        <span style="font-size:19px; color:var(--ink-45); margin-left:auto;">60K+ Stars 背后的社区</span>
+        <span style="font-size:19px; color:var(--ink-70); margin-left:auto;">60K+ Stars 背后的社区</span>
       </div>
       <div style="display:flex; align-items:baseline; gap:36px; border-top:1px solid var(--hairline); border-bottom:1px solid var(--hairline); padding:26px 8px;">
         <span class="num" style="font-family:var(--serif); font-size:30px; color:var(--accent); width:56px;">四</span>
         <span style="font-family:var(--serif); font-size:34px; font-weight:500;">工作流与来年</span>
-        <span style="font-size:19px; color:var(--ink-45); margin-left:auto;">从想法到交付，5 步完成</span>
+        <span style="font-size:19px; color:var(--ink-70); margin-left:auto;">从想法到交付，5 步完成</span>
       </div>
     </div>
     <div class="footer"><span>Contents</span><span>Open Design · 致创作者的一封信</span></div>
@@ -282,7 +293,7 @@ h1, h2 { font-family: var(--serif); font-weight: 500; margin: 0; }
   <section class="slide" data-screen-label="04 数字锚点">
     <div class="letterhead"><span><strong>Open Design</strong> · Annual Letter</span><span>一 · 为何开放</span></div>
     <div style="margin:auto 0; text-align:center;">
-      <p style="font-family:var(--sans); font-size:17px; font-weight:500; letter-spacing:0.26em; text-transform:uppercase; color:var(--ink-45); margin:0 0 8px;">社区给出的回答 · GitHub Stars</p>
+      <p style="font-family:var(--sans); font-size:17px; font-weight:500; letter-spacing:0.26em; text-transform:uppercase; color:var(--ink-70); margin:0 0 8px;">社区给出的回答 · GitHub Stars</p>
       <p class="num" style="font-family:var(--serif); font-size:252px; font-weight:500; line-height:1.16; color:var(--accent); margin:0;">60K+</p>
       <p style="font-family:var(--serif); font-size:36px; font-weight:500; margin:18px 0 0;"><span class="hl num">300+</span> 位贡献者 · <span class="hl num">217+</span> 个插件 · <span class="hl num">129</span> 套 Design System</p>
       <p class="footnote" style="margin-top:26px;">口径：GitHub 公开数据 · github.com/nexu-io/open-design · Apache-2.0 开源。</p>
@@ -337,9 +348,9 @@ h1, h2 { font-family: var(--serif); font-weight: 500; margin: 0; }
         <text x="80" y="340" text-anchor="middle" font-family="Inter, sans-serif" font-size="20" fill="rgba(35,32,54,0.72)" style="font-variant-numeric:tabular-nums;">8K</text>
         <text x="520" y="216" text-anchor="middle" font-family="Inter, sans-serif" font-size="20" fill="rgba(35,32,54,0.72)" style="font-variant-numeric:tabular-nums;">31K</text>
         <text x="940" y="28" text-anchor="middle" font-family="Inter, sans-serif" font-size="24" font-weight="600" fill="#635BFF" style="font-variant-numeric:tabular-nums;">60K+</text>
-        <text x="80" y="430" text-anchor="middle" font-family="Inter, sans-serif" font-size="18" fill="rgba(35,32,54,0.46)">开源首月</text>
-        <text x="520" y="430" text-anchor="middle" font-family="Inter, sans-serif" font-size="18" fill="rgba(35,32,54,0.46)">三个月后</text>
-        <text x="940" y="430" text-anchor="middle" font-family="Inter, sans-serif" font-size="18" fill="rgba(35,32,54,0.46)">今天</text>
+        <text x="80" y="430" text-anchor="middle" font-family="Inter, sans-serif" font-size="18" fill="rgba(35,32,54,0.72)">开源首月</text>
+        <text x="520" y="430" text-anchor="middle" font-family="Inter, sans-serif" font-size="18" fill="rgba(35,32,54,0.72)">三个月后</text>
+        <text x="940" y="430" text-anchor="middle" font-family="Inter, sans-serif" font-size="18" fill="rgba(35,32,54,0.72)">今天</text>
       </svg>
       <div style="width:480px; padding-top:24px;">
         <p class="prose" style="font-size:24px;">曲线本身并不稀奇，稀奇的是它的构成：<strong>300+ 位贡献者</strong>、217+ 个插件、129 套 Design System。我们没有增长团队，社区就是增长团队。</p>
@@ -355,7 +366,7 @@ h1, h2 { font-family: var(--serif); font-weight: 500; margin: 0; }
     <div style="margin:auto 0; max-width:1420px; position:relative;">
       <span aria-hidden="true" style="position:absolute; top:-150px; left:-40px; font-family:var(--serif); font-size:420px; line-height:1; color:var(--accent-soft); user-select:none;">“</span>
       <p style="font-family:var(--serif); font-size:68px; font-weight:500; line-height:1.62; margin:0; position:relative;">文件系统语义，加上能 git diff 的设计产物，设计终于能<span class="hl">版本控制</span>了。</p>
-      <p style="font-family:var(--sans); font-size:17px; font-weight:500; letter-spacing:0.22em; text-transform:uppercase; color:var(--ink-45); margin:52px 0 0;">—— 一位独立开发者 · Open Design 社区</p>
+      <p style="font-family:var(--sans); font-size:17px; font-weight:500; letter-spacing:0.22em; text-transform:uppercase; color:var(--ink-70); margin:52px 0 0;">—— 一位独立开发者 · Open Design 社区</p>
     </div>
     <div class="footer"><span>Quote</span><span>Open Design · 致创作者的一封信</span></div>
   </section>

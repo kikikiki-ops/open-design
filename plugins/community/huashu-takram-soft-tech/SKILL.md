@@ -81,8 +81,8 @@ DNA: data visualization treated as an art piece.
 | `--gray-line` | `#D4CFC6` | delicate axis / rule lines |
 | `--gray-dash` | `#DDD9D2` | dashed grid circles |
 | `--gray-bg` | `#E8E4DC` | faint outermost rings |
-| `--muted` | `#999999` | secondary text |
-| `--faint` | `#BBBBBB` | tertiary captions |
+| `--muted` | `#615C54` | secondary text (warm ink, WCAG AA on paper) |
+| `--faint` | `#736D64` | tertiary captions (warm ink, WCAG AA) |
 | `--card` | `rgba(255,255,255,0.6)` | translucent card background |
 | `--card-line` | `rgba(168,181,160,0.18)` | card hairline border |
 | `--serif` | `'Noto Serif SC', 'Songti SC', serif` | display headings, quotes, insight text |
@@ -114,7 +114,7 @@ neon, no pure black, no gradients other than the two locked radial washes.**
    special callout).
 4. **Hairline masthead** on every page: 64px strip, bottom border
    `rgba(107,143,113,0.15)`; left = green dot + 11px/500/3px-tracking
-   uppercase deck name; right = 10px/300 warm-gray section label. Footer:
+   uppercase deck name; right = 10px/400 `--faint` section label. Footer:
    11px faint credit line bottom-left, `Fig./Sec.` note bottom-right. Page
    numbering lives **only** in the runtime counter pill.
 5. **Serif/sans mixing discipline**: headings, quotes and insight prose in

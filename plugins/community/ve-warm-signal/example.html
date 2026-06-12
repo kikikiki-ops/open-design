@@ -32,13 +32,13 @@
     --border: rgba(60, 40, 20, 0.08);
     --border-bright: rgba(60, 40, 20, 0.16);
     --text: #2c2a25;
-    --text-dim: #7c756a;
+    --text-dim: #6f675c;
     --accent: #c2410c;
     --accent-dim: rgba(194, 65, 12, 0.08);
     --code-bg: #2c2520;
     --code-text: #f5ece0;
-    --green: #16a34a;
-    --green-dim: rgba(22, 163, 74, 0.08);
+    --green: #166534;
+    --green-dim: rgba(22, 101, 52, 0.08);
     --red: #dc2626;
     --red-dim: rgba(220, 38, 38, 0.08);
   }
@@ -150,6 +150,11 @@
       transform: none !important;
       transition: none !important;
     }
+    /* Chrome (progress bar, dots, hints, toggle) also goes static */
+    .deck-progress, .deck-dot, .deck-hints, .theme-toggle {
+      transition: none !important;
+    }
+    .deck { scroll-behavior: auto; }
   }
 
   /* ============ NAV CHROME ============ */
@@ -185,7 +190,7 @@
   .deck-hints {
     position: fixed; bottom: clamp(12px, 2vh, 24px); left: 50%;
     transform: translateX(-50%); font-family: var(--font-mono);
-    font-size: 11px; color: var(--text-dim); opacity: 0.6; z-index: 100;
+    font-size: 11px; color: var(--text-dim); opacity: 1; z-index: 100; /* full ink so the dim token keeps its AA ratio */
     transition: opacity 0.5s ease; white-space: nowrap;
   }
   .deck-hints.faded { opacity: 0; pointer-events: none; }
@@ -214,7 +219,7 @@
   .slide__display {
     font-size: clamp(48px, 10vw, 116px);
     font-weight: 800;
-    letter-spacing: -3px;
+    letter-spacing: -0.026em; /* em-based so the tight tracking survives the responsive clamps */
     line-height: 0.98;
     text-wrap: balance;
   }
@@ -222,7 +227,7 @@
   .slide__heading {
     font-size: clamp(28px, 5vw, 46px);
     font-weight: 700;
-    letter-spacing: -1px;
+    letter-spacing: -0.022em;
     line-height: 1.12;
     text-wrap: balance;
   }
@@ -259,6 +264,11 @@
     z-index: 0;
   }
 
+  /* SVG presentation attributes cannot resolve var(); enforce the mono label face here */
+  .slide__aside svg text {
+    font-family: var(--font-mono);
+  }
+
   /* ============ SLIDE TYPE: TITLE ============ */
   .slide--title {
     justify-content: center;
@@ -287,7 +297,7 @@
   .slide__agenda .agenda-title {
     font-size: clamp(20px, 3vw, 32px);
     font-weight: 700;
-    letter-spacing: -0.5px;
+    letter-spacing: -0.018em; /* em-based so the tracking survives the clamp */
     flex: 1;
   }
   .slide__agenda .agenda-hint {
@@ -411,7 +421,7 @@
   .pipe-node__title {
     font-size: clamp(16px, 2.2vw, 24px);
     font-weight: 700;
-    letter-spacing: -0.4px;
+    letter-spacing: -0.018em;
     margin-top: 6px;
   }
 
@@ -485,7 +495,7 @@
   .slide__kpi-val {
     font-size: clamp(36px, 6vw, 62px);
     font-weight: 800;
-    letter-spacing: -2px;
+    letter-spacing: -0.032em;
     line-height: 1.1;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -504,7 +514,9 @@
   .slide__kpi-trend {
     font-family: var(--font-mono);
     font-size: 12px;
+    line-height: 1.5;
     margin-top: 4px;
+    text-wrap: balance; /* avoid a lone orphan word when the trend line wraps */
   }
 
   /* ============ SLIDE TYPE: TABLE ============ */
@@ -515,7 +527,8 @@
     border: 1px solid var(--border-bright);
     border-radius: 16px;
     overflow: hidden;
-    flex: 1;
+    /* hug the rows; never stretch into an empty white slab below the table */
+    flex: 0 1 auto;
     min-height: 0;
   }
   .table-scroll { overflow-x: auto; }
@@ -574,7 +587,7 @@
   .slide--quote blockquote {
     font-size: clamp(24px, 4vw, 46px);
     font-weight: 700;
-    letter-spacing: -1px;
+    letter-spacing: -0.022em;
     line-height: 1.3;
   }
 
@@ -872,7 +885,7 @@
   <section class="slide slide--table">
     <p class="slide__label reveal">Capabilities</p>
     <h2 class="slide__heading reveal">Core Capabilities</h2>
-    <div class="table-wrap reveal" style="flex:1; min-height:0; margin-top:clamp(8px,1.5vh,20px);">
+    <div class="table-wrap reveal" style="margin-top:clamp(8px,1.5vh,20px);">
       <div class="table-scroll">
         <table class="data-table">
           <thead><tr><th>Capability</th><th>What it does</th><th>Scale</th><th>Status</th></tr></thead>

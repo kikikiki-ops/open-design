@@ -1762,7 +1762,7 @@
     --serif: "Source Serif 4", "Source Serif Pro", Georgia, serif;
     --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
   }
-  html, body { margin: 0; padding: 0; background: #111; }
+  html, body { margin: 0; padding: 0; background: var(--ink); }
   deck-stage { font-family: var(--serif); color: var(--ink); }
 
   section {
@@ -2335,6 +2335,18 @@
     margin: 0;
     color: var(--cream);
     font-weight: 400;
+  }
+
+  /* Motion discipline: author-side slides are static by design; this guard
+     keeps any future light-DOM transition/animation quiet for users who
+     prefer reduced motion. */
+  @media (prefers-reduced-motion: reduce) {
+    deck-stage section *,
+    deck-stage section {
+      animation-duration: 0.001s !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001s !important;
+    }
   }
 </style>
 </head>

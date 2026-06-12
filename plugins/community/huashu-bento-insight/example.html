@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Open Design · 开源、本地、Agent 驱动的设计平台 — Bento Insight Grid</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Geist:wght@400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Geist:wght@300;400;700;800;900&family=Geist+Mono:wght@400;600;700;800&display=swap');
 
 /* ============================================================
    Bento Insight Grid · 便当格洞见
@@ -87,7 +87,7 @@ body {
 }
 .page-head .right {
   font-family: var(--mono); font-size: 14px;
-  letter-spacing: 2px; color: var(--faint);
+  letter-spacing: 2px; color: var(--muted);
 }
 .title {
   font-family: var(--display);
@@ -142,6 +142,10 @@ body {
 .delta.up   { color: var(--green);  background: var(--tint-green); }
 .delta.down { color: var(--orange); background: var(--tint-warm); }
 .card.dark .delta.up { background: rgba(48,209,88,.16); color: #4CD377; }
+/* on tinted cards the matching tint pill would melt into the surface:
+   lift it onto the white card token so the delta stays legible */
+.card.tg .delta.up   { background: var(--card); }
+.card.tw .delta.down { background: var(--card); }
 
 .spark { display: block; width: 100%; }
 
@@ -223,7 +227,7 @@ body {
 .bento .kpi-lg { font-size: 64px; }
 .bento .kpi-md { font-size: 52px; }
 .bento .row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.bento .foot { font-size: 14px; color: var(--faint); margin-top: 14px; }
+.bento .foot { font-size: 14px; color: var(--muted); margin-top: 14px; }
 .card.dark .foot { color: var(--dark-mut); }
 
 /* ============ 04 one-insight ============ */
@@ -284,7 +288,7 @@ body {
 .product-grid p { font-size: 15.5px; color: var(--muted); line-height: 1.7; margin-top: 10px; }
 .product-grid .meta {
   margin-top: auto; padding-top: 20px;
-  font-family: var(--mono); font-size: 14px; color: var(--faint);
+  font-family: var(--mono); font-size: 14px; color: var(--muted);
   display: flex; justify-content: space-between;
 }
 .product-grid .meta b { color: var(--green); font-weight: 600; }
@@ -367,7 +371,23 @@ body {
 .closing .sum-row .card-label { font-size: 14.5px; }
 .closing .foot-row {
   display: flex; justify-content: space-between; align-items: center;
-  font-family: var(--mono); font-size: 14px; color: var(--faint); letter-spacing: 1px;
+  font-family: var(--mono); font-size: 14px; color: var(--muted); letter-spacing: 1px;
+}
+
+/* ---- entrance motion (transform/opacity only, ease-out stagger) ---- */
+@keyframes slide-rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.slide.active > * {
+  animation: slide-rise .55s cubic-bezier(.16, 1, .3, 1) backwards;
+}
+.slide.active > *:nth-child(2) { animation-delay: .07s; }
+.slide.active > *:nth-child(3) { animation-delay: .14s; }
+.slide.active > *:nth-child(4) { animation-delay: .21s; }
+.slide.active > *:nth-child(5) { animation-delay: .28s; }
+@media (prefers-reduced-motion: reduce) {
+  .slide.active > * { animation: none; }
 }
 
 /* ---- runtime chrome ---- */
@@ -384,7 +404,7 @@ body {
 #keyhint {
   position: fixed; left: 28px; bottom: 22px; z-index: 50;
   font-family: var(--mono); font-size: 12px; letter-spacing: 1.5px;
-  color: var(--faint);
+  color: var(--muted);
 }
 </style>
 </head>
@@ -410,7 +430,7 @@ body {
         <span class="card-label">GitHub Stars</span>
         <span class="delta up">Apache-2.0</span>
       </div>
-      <div class="kpi" style="font-size:46px;">60K<span class="unit">+</span></div>
+      <div class="kpi" style="font-size:44px;">60K<span class="unit">+</span></div>
     </div>
     <div class="card">
       <span class="card-label">贡献者 Contributors</span>
@@ -545,10 +565,10 @@ body {
         <span class="delta up">↑ 60K+ · 持续创新高</span>
       </div>
       <div class="bars">
-        <div class="bar-col"><span class="val">8K</span><div class="bar" style="height:16%;"></div><span class="q">T1</span></div>
-        <div class="bar-col"><span class="val">16K</span><div class="bar" style="height:30%;"></div><span class="q">T2</span></div>
-        <div class="bar-col"><span class="val">28K</span><div class="bar" style="height:48%;"></div><span class="q">T3</span></div>
-        <div class="bar-col"><span class="val">44K</span><div class="bar" style="height:70%;"></div><span class="q">T4</span></div>
+        <div class="bar-col"><span class="val">8K</span><div class="bar" style="height:12%;"></div><span class="q">T1</span></div>
+        <div class="bar-col"><span class="val">16K</span><div class="bar" style="height:24%;"></div><span class="q">T2</span></div>
+        <div class="bar-col"><span class="val">28K</span><div class="bar" style="height:42%;"></div><span class="q">T3</span></div>
+        <div class="bar-col"><span class="val">44K</span><div class="bar" style="height:66%;"></div><span class="q">T4</span></div>
         <div class="bar-col hot"><span class="val">60K+</span><div class="bar" style="height:90%;"></div><span class="q">NOW</span></div>
       </div>
     </div>
@@ -558,7 +578,7 @@ body {
         <span class="delta up">↑ 社区共建</span>
       </div>
       <div class="kpi" style="font-size:56px;">300<span class="unit">+</span></div>
-      <div class="foot" style="font-size:14px;color:var(--faint);margin-top:12px;">Apache-2.0 · Fork、自部署、商用全部允许</div>
+      <div class="foot" style="font-size:14px;color:var(--muted);margin-top:12px;">Apache-2.0 · Fork、自部署、商用全部允许</div>
     </div>
     <div class="card tw side">
       <div class="row" style="display:flex;justify-content:space-between;">
@@ -630,7 +650,7 @@ body {
       <div class="card">
         <span class="card-label">内置 Design System</span>
         <div class="kpi">129<span class="unit">套</span></div>
-        <div class="foot" style="font-size:14px;color:var(--faint);margin-top:10px;">GitHub / Figma / 本地导入</div>
+        <div class="foot" style="font-size:14px;color:var(--muted);margin-top:10px;">GitHub / Figma / 本地导入</div>
       </div>
       <div class="card tg">
         <span class="card-label">接入 Coding Agent</span>

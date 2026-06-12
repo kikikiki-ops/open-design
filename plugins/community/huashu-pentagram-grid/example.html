@@ -57,8 +57,17 @@
     color: var(--ink);
     overflow: hidden;
   }
-  .slide.active { display: block; }
+  .slide.active { display: block; animation: slide-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) both; }
   .slide.dark { background: var(--night); color: var(--night-ink); }
+
+  /* page entrance: opacity only - the stage scaler owns transform */
+  @keyframes slide-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .slide.active { animation: none; }
+  }
 
   /* ---- chrome: 64px black top / bottom bars (light pages) ---- */
   .top-bar, .bottom-bar {
@@ -89,7 +98,7 @@
   .bottom-left { display: flex; align-items: center; gap: 24px; }
   .bottom-logo { font-size: 14px; font-weight: 900; color: #fff; letter-spacing: 1px; }
   .bottom-divider { width: 1px; height: 20px; background: #444; }
-  .bottom-note { font-size: 11px; font-weight: 400; color: var(--muted-2); }
+  .bottom-note { font-size: 11px; font-weight: 400; color: var(--night-mut); }
 
   /* dark pages swap solid bars for hairline strips */
   .slide.dark .top-bar, .slide.dark .bottom-bar {
@@ -152,7 +161,7 @@
   .bar-group { display: flex; flex-direction: column; gap: 24px; }
   .bar-row { display: flex; align-items: center; gap: 16px; }
   .bar-label {
-    font-size: 13px; font-weight: 600; color: var(--night-mut);
+    font-size: 13px; font-weight: 600; color: var(--muted-2);
     width: 90px; flex-shrink: 0; text-align: right;
   }
   .bar-label.highlight { color: var(--ink); font-weight: 700; }
@@ -166,7 +175,7 @@
   .bar-fill.dark   { background: var(--night); }
   .bar-fill.winner { background: var(--accent); }
   .bar-value { font-size: 15px; font-weight: 700; color: #fff; }
-  .bar-fill.base .bar-value { color: var(--night-mut); }
+  .bar-fill.base .bar-value { color: var(--muted-2); }
   .delta {
     font-size: 12px; font-weight: 700; color: var(--accent);
     letter-spacing: 1px; text-transform: uppercase;
@@ -182,7 +191,9 @@
   }
   .bench-type { font-size: 11px; font-weight: 400; color: var(--faint); margin-bottom: 56px; }
   .bench-hero {
-    font-size: 80px; font-weight: 900; color: var(--accent);
+    /* ink, not accent: the red bar is the page's one red device
+       (SKILL red budget: <= 4 touches per page) */
+    font-size: 80px; font-weight: 900; color: var(--ink);
     letter-spacing: -3px; line-height: 1; margin-bottom: 56px;
   }
 
@@ -196,17 +207,28 @@
     letter-spacing: 1px; text-transform: uppercase; margin-top: 8px;
   }
 
-  /* ---- runtime chrome ---- */
+  /* ---- runtime chrome ----
+     The 64px chrome bars carry text at their left and right edges but
+     leave the horizontal middle empty, so the runtime pills live there:
+     counter centered in the bottom bar, key hint centered in the top
+     bar. --fit mirrors the JS fit() scale so both stay locked to the
+     bar centerlines at any viewport size, never covering the bar's red
+     labels or the logotype. */
+  :root { --fit: min(100vw / 1920, 100vh / 1080); }
   #counter {
-    position: fixed; right: 24px; bottom: 20px;
-    z-index: 99; background: var(--night); color: #fff;
+    position: fixed; left: 50%;
+    bottom: calc((100vh - 1080 * var(--fit)) / 2 + 32 * var(--fit));
+    transform: translate(-50%, 50%);
+    z-index: 99; color: #fff;
     font-family: var(--sans); font-size: 12px; font-weight: 700;
-    letter-spacing: 2px; padding: 8px 16px;
+    letter-spacing: 2px;
   }
   #counter b { color: var(--accent); font-weight: 700; }
   #hint {
-    position: fixed; left: 24px; bottom: 20px;
-    z-index: 99; color: #777;
+    position: fixed; left: 50%;
+    top: calc((100vh - 1080 * var(--fit)) / 2 + 32 * var(--fit));
+    transform: translate(-50%, -50%);
+    z-index: 99; color: var(--night-mut);
     font-family: var(--sans); font-size: 11px; font-weight: 600;
     letter-spacing: 2px; text-transform: uppercase;
   }
@@ -385,7 +407,7 @@
 
     <div style="position:absolute; left:80px; top:104px; width:480px;">
       <div class="tag" style="margin-bottom:8px;">Plugin Ecosystem</div>
-      <div style="font-size:48px; font-weight:900; line-height:1; letter-spacing:-2px;">插件 <span class="red">生态</span></div>
+      <div style="font-size:48px; font-weight:900; line-height:1; letter-spacing:-2px;">插件 生态</div>
       <div class="hero-number" style="font-size:200px; letter-spacing:-10px; margin-top:24px;">217<span class="decimal">+</span></div>
       <div class="hero-context" style="margin-top:8px;">插件总数 · 持续增长</div>
       <div class="key-message" style="font-size:16px; margin-top:32px; max-width:400px;">

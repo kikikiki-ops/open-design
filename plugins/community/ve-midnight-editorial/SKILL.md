@@ -105,7 +105,7 @@ html[data-theme="light"] {
   --border: rgba(30, 30, 50, 0.08);
   --border-bright: rgba(30, 30, 50, 0.16);
   --text: #1a1814;
-  --text-dim: #7a7468;
+  --text-dim: #6e685c;
   --accent: #b8860b;
   --accent-dim: rgba(184, 134, 11, 0.08);
   --code-bg: #2a2520;
@@ -158,7 +158,7 @@ No third font. No bold serif — drama comes from size, not weight.
 | Table | `.slide--table` + `.data-table` | mono uppercase headers, zebra rows, gold hover (CSS available in seed) |
 | Code | `.slide--code` | `--code-bg` block, gold filename tab, `.hl`/`.cm` spans (CSS available in seed) |
 | Quote | `.slide--quote` | ghost gold `“` at opacity 0.06, italic serif quote, mono cite |
-| Full-bleed closing | `.slide--bleed` | fixed dark `#1a0f3c → #0f1729 → #162040` gradient + scrim, white text (intentionally stays dark in light mode) |
+| Full-bleed closing | `.slide--bleed` | fixed dark `#0a0f1e → #0f1729 → #162040` gradient (code-bg → bg → surface, all in-family navy) + scrim, white text (intentionally stays dark in light mode) |
 
 ## Decorative devices (locked)
 

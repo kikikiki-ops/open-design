@@ -66,7 +66,7 @@
     --border: rgba(30, 30, 50, 0.08);
     --border-bright: rgba(30, 30, 50, 0.16);
     --text: #1a1814;
-    --text-dim: #7a7468;
+    --text-dim: #6e685c;
     --accent: #b8860b;
     --accent-dim: rgba(184, 134, 11, 0.08);
     --code-bg: #2a2520;
@@ -89,7 +89,7 @@
       --border: rgba(30, 30, 50, 0.08);
       --border-bright: rgba(30, 30, 50, 0.16);
       --text: #1a1814;
-      --text-dim: #7a7468;
+      --text-dim: #6e685c;
       --accent: #b8860b;
       --accent-dim: rgba(184, 134, 11, 0.08);
       --code-bg: #2a2520;
@@ -166,6 +166,10 @@
       transform: none !important;
       transition: none !important;
     }
+    /* Ghost devices keep their locked ghost opacity even with motion off. */
+    .slide__quote-mark { opacity: 0.06 !important; }
+    .deck { scroll-behavior: auto; }
+    .deck-progress, .deck-dot { transition: none; }
   }
 
   /* ============ NAV CHROME ============ */
@@ -219,6 +223,14 @@
     transition: color 0.2s ease, border-color 0.2s ease;
   }
   .deck-theme:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* Text shadows on chrome are for the dark page only; cream pages stay clean. */
+  html[data-theme="light"] .deck-counter,
+  html[data-theme="light"] .deck-hints { text-shadow: none; }
+  @media (prefers-color-scheme: light) {
+    html:not([data-theme]) .deck-counter,
+    html:not([data-theme]) .deck-hints { text-shadow: none; }
+  }
 
   /* ============ SHARED SLIDE ELEMENTS ============ */
   .slide__display {
@@ -458,7 +470,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-width: clamp(36px, 5vw, 80px);
+    min-width: clamp(48px, 8vw, 112px);
     position: relative;
   }
 
@@ -484,7 +496,7 @@
 
   .pipeline__edge-label {
     font-family: var(--font-mono);
-    font-size: clamp(9px, 1vw, 12px);
+    font-size: clamp(9px, 0.85vw, 11px);
     color: var(--text-dim);
     background: var(--surface);
     padding: 2px 6px;
@@ -723,6 +735,10 @@
     color: var(--accent);
   }
 
+  /* The ghost mark stays ghost: the .reveal stagger must land at the locked
+     0.06 opacity, not the generic 1 (".slide.visible .reveal" would win otherwise). */
+  .slide.visible .slide__quote-mark.reveal { opacity: 0.06; }
+
   .slide--quote blockquote {
     font-size: clamp(24px, 4vw, 48px);
     font-weight: 400;
@@ -754,7 +770,8 @@
   }
 
   .slide__bg--gradient {
-    background: linear-gradient(135deg, #1a0f3c 0%, #0f1729 40%, #162040 100%);
+    /* In-family navy gradient: --code-bg -> --bg -> --surface (no off-family violet). */
+    background: linear-gradient(135deg, #0a0f1e 0%, #0f1729 40%, #162040 100%);
   }
 
   .slide__scrim {
@@ -860,11 +877,11 @@
         </ul>
       </div>
       <div class="slide__aside reveal">
-        <svg viewBox="0 0 160 160" width="160" height="160">
-          <circle cx="80" cy="80" r="60" fill="none" stroke="var(--red)" stroke-width="2" opacity="0.3"/>
-          <circle cx="80" cy="80" r="40" fill="none" stroke="var(--red)" stroke-width="1.5" opacity="0.2" stroke-dasharray="4 4"/>
-          <circle cx="80" cy="80" r="8" fill="var(--red)" opacity="0.4"/>
-          <text x="80" y="130" text-anchor="middle" font-family="var(--font-mono)" font-size="11" fill="var(--text-dim)">CLOSED &middot; PAID &middot; CLOUD-ONLY</text>
+        <svg viewBox="0 0 220 160" width="220" height="160">
+          <circle cx="110" cy="74" r="54" fill="none" stroke="var(--red)" stroke-width="2" opacity="0.3"/>
+          <circle cx="110" cy="74" r="36" fill="none" stroke="var(--red)" stroke-width="1.5" opacity="0.2" stroke-dasharray="4 4"/>
+          <circle cx="110" cy="74" r="8" fill="var(--red)" opacity="0.4"/>
+          <text x="110" y="150" text-anchor="middle" style="font-family:var(--font-mono);" font-size="11" fill="var(--text-dim)">CLOSED &middot; PAID &middot; CLOUD-ONLY</text>
         </svg>
       </div>
     </div>

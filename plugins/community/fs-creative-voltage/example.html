@@ -139,6 +139,8 @@ img, video, canvas, svg {
     *, *::before, *::after {
         animation-duration: 0.01ms !important;
         transition-duration: 0.2s !important;
+        /* Stagger delays must collapse too, or reduced-motion users still wait for the cascade */
+        transition-delay: 0s !important;
     }
 }
 
@@ -181,10 +183,17 @@ img, video, canvas, svg {
     font-size: 19px;
     letter-spacing: 0.16em;
     text-transform: uppercase;
-    color: var(--text-faint);
+    color: var(--text-dim);
     z-index: 4;
 }
-.crumbs .on { color: var(--accent-neon); }
+/* Bold active crumb: neon on electric blue is ~4.2:1, which clears WCAG AA
+   only at the bold large-text threshold (>= 18.66px). Mono metrics keep width stable. */
+.crumbs .on { color: var(--accent-neon); font-weight: 700; }
+/* Contrast fix: chrome that overlaps an electric-blue panel needs full white
+   (dim white over #0066ff lands below WCAG AA). Tokens unchanged. */
+.panel-blue ~ .baseline,
+.panel-blue.right ~ .crumbs { color: var(--text-light); }
+.panel-blue.right ~ .crumbs .on { color: var(--accent-neon); }
 /* Baseline rule across the bottom of each slide */
 .baseline {
     position: absolute;
@@ -199,7 +208,7 @@ img, video, canvas, svg {
     font-size: 18px;
     letter-spacing: 0.18em;
     text-transform: uppercase;
-    color: var(--text-faint);
+    color: var(--text-dim);
     z-index: 4;
 }
 
@@ -374,7 +383,7 @@ img, video, canvas, svg {
     font-size: 20px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--text-faint);
+    color: var(--text-dim);
 }
 
 /* ===========================================
@@ -514,7 +523,7 @@ img, video, canvas, svg {
     line-height: 1.55;
     color: var(--text-dim);
 }
-.gcard.hot p { color: rgba(255, 255, 255, 0.82); }
+.gcard.hot p { color: var(--text-light); }
 
 /* ===========================================
    SLIDE 7 — CSS BAR CHART
@@ -566,7 +575,7 @@ img, video, canvas, svg {
     font-size: 19px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--text-faint);
+    color: var(--text-dim);
     margin-top: 6px;
 }
 .chart-row { display: flex; gap: 70px; padding: 0 40px; z-index: 2; }
@@ -599,15 +608,17 @@ img, video, canvas, svg {
 .quote-by {
     font-family: var(--font-script);
     font-size: 52px;
+    line-height: 1.3; /* Yellowtail's tight line box collides with the role line otherwise */
     color: var(--accent-neon);
     transform: rotate(-2deg);
+    margin-bottom: 26px;
 }
 .quote-role {
     font-family: var(--font-mono);
     font-size: 21px;
     letter-spacing: 0.16em;
     text-transform: uppercase;
-    color: var(--text-faint);
+    color: var(--text-dim);
 }
 
 /* ===========================================
@@ -634,7 +645,7 @@ img, video, canvas, svg {
     padding: 8px 18px;
     margin-bottom: 34px;
 }
-.cmp-col.old .cmp-tag { border: 2px solid var(--line); color: var(--text-faint); }
+.cmp-col.old .cmp-tag { border: 2px solid var(--line); color: var(--text-dim); }
 .cmp-col.new .cmp-tag { background: var(--accent-neon); color: var(--text-on-neon); transform: rotate(-2deg); }
 .cmp-li {
     display: flex;
@@ -646,7 +657,7 @@ img, video, canvas, svg {
     padding: 16px 0;
     color: var(--text-dim);
 }
-.cmp-col.new .cmp-li { color: rgba(255, 255, 255, 0.9); }
+.cmp-col.new .cmp-li { color: var(--text-light); }
 .cmp-li .dot { color: var(--accent-neon); font-weight: 700; }
 
 /* ===========================================
@@ -671,7 +682,7 @@ img, video, canvas, svg {
     font-family: var(--font-mono);
     font-size: 24px;
     letter-spacing: 0.1em;
-    color: var(--text-dim);
+    color: var(--text-light); /* sits over the blue panel; dim white fails AA there */
 }
 .close-links .lk { display: flex; align-items: center; gap: 14px; }
 .close-links svg { width: 30px; height: 30px; flex: 0 0 30px; }

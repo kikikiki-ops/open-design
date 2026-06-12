@@ -71,8 +71,8 @@ code,kbd,pre,samp{font-family:var(--font-mono)}
 .slide>*{position:relative;z-index:2}
 
 /* ============ TYPOGRAPHY ============ */
-.eyebrow{font-size:13px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--text-3);margin:0}
-.kicker{font-size:14px;font-weight:700;color:var(--accent);letter-spacing:.1em;text-transform:uppercase;margin:0 0 10px}
+.eyebrow{font-size:13px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--text-2);margin:0}
+.kicker{font-size:14px;font-weight:700;color:var(--accent-2);letter-spacing:.1em;text-transform:uppercase;margin:0 0 10px}
 /* Signature device #4 — Playfair Display headlines in brick red with a
    heavy offset shadow, like silkscreened titles on a TV-guide cover. */
 .h1{font-family:var(--font-display);font-size:clamp(46px,5.6vw,74px);line-height:1.04;font-weight:800;letter-spacing:var(--letter-tight);margin:0 0 18px;color:var(--accent-2);text-shadow:3px 3px 0 rgba(80,40,0,.18)}
@@ -106,7 +106,7 @@ code,kbd,pre,samp{font-family:var(--font-mono)}
   font-family:var(--font-mono);letter-spacing:.06em;
   background:var(--surface);color:var(--text-2);border:1.5px solid var(--border-strong);
   box-shadow:0 3px 0 rgba(80,40,0,.12)}
-.pill-amber{background:var(--accent);color:#fff;border-color:var(--accent)}
+.pill-amber{background:var(--accent);color:var(--text-1);border-color:var(--accent)}
 .pill-brick{background:var(--accent-2);color:#fff;border-color:var(--accent-2)}
 .pill-gold{background:var(--accent-3);color:var(--text-1);border-color:var(--accent-3)}
 /* Signature device #5 — ON AIR lamp: brick-red pill with a softly pulsing dot. */
@@ -181,6 +181,14 @@ code,kbd,pre,samp{font-family:var(--font-mono)}
 .anim-stagger-list>*:nth-child(4){animation-delay:.35s}
 .anim-stagger-list>*:nth-child(5){animation-delay:.45s}
 .anim-stagger-list>*:nth-child(n+6){animation-delay:.55s}
+
+/* ============ REDUCED MOTION (entry effects settle instantly; the
+   ON AIR lamp stops pulsing; progress bar jumps without easing) ============ */
+@media (prefers-reduced-motion: reduce){
+  .anim-rise-in,.anim-fade-up,.anim-tube-on,.anim-stagger-list>*{animation:none;opacity:1;transform:none}
+  .on-air::before{animation:none}
+  .progress-bar>span{transition:none}
+}
 
 /* ============ PRINT ============ */
 @media print{
@@ -298,7 +306,7 @@ code,kbd,pre,samp{font-family:var(--font-mono)}
       <div class="bar" style="height:72%;background:var(--accent-3)"><em>72</em><span>HyperFrames Video</span></div>
       <div class="bar" style="height:58%;background:var(--good)"><em>58</em><span>Posters &amp; Images</span></div>
     </div>
-    <p class="dim2 mt-l" style="margin-top:56px">Plugin coverage by artifact type, indexed to 100 (illustrative demo data). One platform produces prototypes, decks, posters, dashboards, and HTML-to-MP4 video.</p>
+    <p class="dim mt-l" style="margin-top:56px">Plugin coverage by artifact type, indexed to 100 (illustrative demo data). One platform produces prototypes, decks, posters, dashboards, and HTML-to-MP4 video.</p>
     <div class="notes">Bar chart rebuilt in pure CSS — parchment-outlined bars filled with the flat accent palette, chunky tube shadow under each. No chart library anywhere in this file.</div>
   </section>
 

@@ -58,7 +58,7 @@ every deck.
   --border: rgba(80, 250, 123, 0.06);    /* low-opacity green hairline */
   --border-bright: rgba(80, 250, 123, 0.12);
   --text: #c8d6e5;
-  --text-dim: #5a6a7a;
+  --text-dim: #7d8c9b;                   /* AA on --bg for body text */
   --accent: #50fa7b;                     /* Dracula green — the only voice */
   --accent-dim: rgba(80, 250, 123, 0.08);
   --code-bg: #060a10;

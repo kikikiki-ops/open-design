@@ -130,6 +130,13 @@ img, video, canvas, svg {
     *, *::before, *::after {
         animation-duration: 0.01ms !important;
         transition-duration: 0.2s !important;
+        transition-delay: 0ms !important;
+    }
+    /* Neutralize movement: entrances become a plain opacity fade,
+       chart columns render at full height with no scaleY sweep. */
+    .reveal,
+    .chart-bar {
+        transform: none !important;
     }
 }
 
@@ -193,7 +200,7 @@ img, video, canvas, svg {
     font-weight: 400;
     letter-spacing: 0.26em;
     text-transform: uppercase;
-    color: var(--text-faint);
+    color: var(--text-secondary); /* AA-readable nav; --text-faint stays decorative-only */
 }
 .crumbs .on { color: var(--accent-warm); }
 /* Baseline rule across the bottom of each slide */
@@ -209,7 +216,7 @@ img, video, canvas, svg {
     font-size: 17px;
     letter-spacing: 0.3em;
     text-transform: uppercase;
-    color: var(--text-faint);
+    color: var(--text-secondary); /* AA-readable labels on the baseline rule */
 }
 
 /* ===========================================
@@ -266,12 +273,15 @@ img, video, canvas, svg {
                 transform var(--duration-normal) var(--ease-botanic);
 }
 .slide.visible .reveal { opacity: 1; transform: translateY(0); }
-.reveal:nth-child(1) { transition-delay: 0.1s; }
-.reveal:nth-child(2) { transition-delay: 0.22s; }
-.reveal:nth-child(3) { transition-delay: 0.34s; }
-.reveal:nth-child(4) { transition-delay: 0.46s; }
-.reveal:nth-child(5) { transition-delay: 0.58s; }
-.reveal:nth-child(6) { transition-delay: 0.7s; }
+/* Stagger counts .reveal siblings only, so shell chrome (slide-no, crumbs)
+   never pushes headings behind their content. Unsupported browsers simply
+   drop the delays and reveal together — graceful. */
+.reveal:nth-child(1 of .reveal) { transition-delay: 0.1s; }
+.reveal:nth-child(2 of .reveal) { transition-delay: 0.22s; }
+.reveal:nth-child(3 of .reveal) { transition-delay: 0.34s; }
+.reveal:nth-child(4 of .reveal) { transition-delay: 0.46s; }
+.reveal:nth-child(5 of .reveal) { transition-delay: 0.58s; }
+.reveal:nth-child(6 of .reveal) { transition-delay: 0.7s; }
 
 /* ===========================================
    S1 · COVER — centered title, corner orbs
@@ -305,8 +315,8 @@ img, video, canvas, svg {
     margin-left: auto;
     font-family: var(--font-body);
     font-size: 18px;
-    font-weight: 300;
-    color: var(--text-faint);
+    font-weight: 400;
+    color: var(--text-secondary); /* AA-readable section hints */
     letter-spacing: 0.26em;
     text-transform: uppercase;
 }
@@ -449,14 +459,14 @@ img, video, canvas, svg {
     font-family: var(--font-body);
     font-size: 13px;
     letter-spacing: 0.3em;
-    color: rgba(232, 228, 223, 0.5);
+    color: rgba(232, 228, 223, 0.66);
     background: rgba(15, 15, 15, 0.6);
     border: 1px solid rgba(232, 228, 223, 0.14);
     padding: 8px 18px;
     border-radius: 999px;
     user-select: none;
 }
-.deck-controls .cur { color: #d4a574; font-weight: 500; }
+.deck-controls .cur { color: var(--accent-warm); font-weight: 500; }
 </style>
 </head>
 <body>
@@ -518,7 +528,7 @@ img, video, canvas, svg {
                 <div class="slide-no">IV</div>
                 <nav class="crumbs"><span class="on">Why</span><span>Numbers</span><span>Outputs</span><span>Join</span></nav>
                 <p class="kicker reveal">The claims</p>
-                <h2 class="h2 reveal" style="font-size: 72px; margin-top: 24px;">Three promises, kept open</h2>
+                <h2 class="h2 reveal" style="font-size: 72px; margin-top: 24px;">Three promises, kept <em>open</em></h2>
                 <div class="pillars">
                     <div class="pillar p1 reveal">
                         <div class="vline"></div>
@@ -563,7 +573,7 @@ img, video, canvas, svg {
                 <div class="slide-no">VI</div>
                 <nav class="crumbs"><span>Why</span><span class="on">Numbers</span><span>Outputs</span><span>Join</span></nav>
                 <p class="kicker reveal">Community growth &middot; demo data</p>
-                <h2 class="h2 reveal" style="font-size: 68px; margin-top: 20px;">Stars over time</h2>
+                <h2 class="h2 reveal" style="font-size: 68px; margin-top: 20px;">Stars over <em>time</em></h2>
                 <div class="chart reveal">
                     <div class="chart-col">
                         <span class="chart-val">13K</span>
@@ -642,7 +652,7 @@ img, video, canvas, svg {
                 <div class="slide-no">IX</div>
                 <nav class="crumbs"><span>Why</span><span>Numbers</span><span class="on">Outputs</span><span>Join</span></nav>
                 <p class="kicker reveal">Outputs</p>
-                <h2 class="h2 reveal" style="font-size: 68px; margin-top: 20px;">What can you make?</h2>
+                <h2 class="h2 reveal" style="font-size: 68px; margin-top: 20px;">What can you <em>make</em>?</h2>
                 <div class="grid4">
                     <div class="gcard reveal">
                         <span class="dot pink"></span>

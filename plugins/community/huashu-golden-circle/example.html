@@ -81,14 +81,14 @@
     font-weight: 600;
     letter-spacing: 3px;
     text-transform: uppercase;
-    color: var(--muted);
+    color: var(--muted-2); /* AA at 13px on paper; --muted is reserved for larger labels */
   }
   .head { top: 0; border-bottom: 1px solid var(--line); }
   .foot { bottom: 0; border-top: 1px solid var(--line); }
   .head b, .foot b { color: var(--ink); font-weight: 700; }
   .head .sep, .foot .sep { color: var(--accent); padding: 0 12px; }
-  .dark .head { border-bottom-color: var(--night-line); }
-  .dark .foot { border-top-color: var(--night-line); }
+  .dark .head { border-bottom-color: var(--night-line); color: var(--faint); }
+  .dark .foot { border-top-color: var(--night-line); color: var(--faint); }
   .dark .head b, .dark .foot b { color: var(--night-ink); }
 
   .body {
@@ -147,7 +147,7 @@
   .gc.mode-how .ring-how   { background: var(--accent); }
   .gc.mode-how .ring-why   { background: var(--paper); }
   .gc.mode-how .lbl-how    { color: var(--paper); }
-  .gc.mode-how .lbl-why    { color: var(--faint); }
+  .gc.mode-how .lbl-why    { color: var(--muted); }
 
   .gc.mode-what .ring-what { background: var(--accent); }
   .gc.mode-what .ring-how  { background: var(--paper); }
@@ -205,7 +205,7 @@
     font-weight: 600;
     letter-spacing: 3px;
     text-transform: uppercase;
-    color: var(--faint);
+    color: var(--muted-2); /* AA at 12px; --muted stays for large diagram labels only */
   }
 
   /* mini glyph: 3 nested circles, used as section markers */
@@ -254,7 +254,7 @@
     font-family: var(--display);
     font-size: 13px; font-weight: 600;
     letter-spacing: 3px; text-transform: uppercase;
-    color: var(--muted);
+    color: var(--muted-2);
   }
 
   /* ============================================================ 03 master */
@@ -265,7 +265,9 @@
     gap: 96px;
   }
   .master-fig { position: relative; flex: none; }
-  .gc-arrow { position: absolute; top: 50%; left: 50%; transform: translateY(-50%); z-index: 4; overflow: visible; }
+  /* inside-out arrow: starts inside the gold core but below the WHY label,
+     and stops inside the column gap so it never overlaps the notes copy */
+  .gc-arrow { position: absolute; top: 58%; left: 50%; transform: translateY(-50%); z-index: 4; overflow: visible; }
   .master-notes { display: flex; flex-direction: column; gap: 36px; }
   .note { display: flex; gap: 24px; align-items: flex-start; }
   .note .nt { font-weight: 800; font-size: 22px; margin-bottom: 8px; }
@@ -310,7 +312,7 @@
     font-family: var(--display);
     font-size: 15px; font-weight: 600;
     letter-spacing: 4px; text-transform: uppercase;
-    color: rgba(250, 250, 247, 0.85);
+    color: var(--ink); /* AA on accent (6.8:1); translucent paper was ~2.2:1 */
   }
   .pillars { display: flex; gap: 0; margin-top: 48px; border-top: 1px solid var(--line); }
   .pillar { flex: 1; padding: 32px 36px 0 0; }
@@ -330,7 +332,7 @@
     display: flex;
     align-items: center;
     gap: 22px;
-    background: #FFFFFF;
+    background: var(--paper); /* hairline border groups the card; no pure #fff surface */
   }
   .what-card .t { font-weight: 800; font-size: 19px; }
   .what-card .d { font-size: 14px; color: var(--muted-2); margin-top: 5px; }
@@ -370,7 +372,7 @@
     display: block;
     font-family: var(--display); font-weight: 600; font-size: 13px;
     letter-spacing: 3px; text-transform: uppercase;
-    color: var(--muted); margin-top: 10px; text-align: center;
+    color: var(--muted-2); margin-top: 10px; text-align: center;
   }
   .vs-col ul { list-style: none; text-align: center; }
   .vs-col li { font-size: 17px; line-height: 2.1; color: var(--muted-2); }
@@ -381,7 +383,7 @@
     letter-spacing: 4px; text-transform: uppercase;
     display: flex; align-items: center; gap: 14px;
   }
-  .vs-dir.in  { color: var(--muted); }
+  .vs-dir.in  { color: var(--muted-2); }
   .vs-dir.out { color: var(--accent); }
 
   /* ============================================================ 09 quote */
@@ -426,7 +428,7 @@
   .end-grid { display: flex; align-items: center; justify-content: space-between; height: 100%; gap: 80px; }
   .end-copy h2 { font-size: 92px; letter-spacing: -2px; }
   .end-copy h2 .dot { color: var(--accent); }
-  .end-copy .lede { color: #A8A294; margin-top: 36px; }
+  .end-copy .lede { color: var(--faint); margin-top: 36px; }
   .end-copy .lede strong { color: var(--night-ink); }
   .end-cta {
     margin-top: 56px;
@@ -443,11 +445,16 @@
     color: var(--accent);
   }
 
-  /* ---- runtime chrome: counter pill + key hint ---- */
+  /* ---- runtime chrome: counter pill + key hint ----
+     Lives INSIDE #stage so it scales with the canvas and can never
+     collide with the .foot strip text (fixed-to-viewport chrome used
+     to overlap the scaled footer at exact 16:9). Sits just above the
+     foot hairline; pointer-events off so click navigation is unchanged. */
   #counter {
-    position: fixed;
-    right: 28px; bottom: 22px;
+    position: absolute;
+    right: 80px; bottom: 100px;
     z-index: 99;
+    pointer-events: none;
     font-family: var(--display);
     font-size: 12px;
     font-weight: 600;
@@ -460,15 +467,36 @@
   }
   #counter b { color: var(--accent); font-weight: 700; }
   #hint {
-    position: fixed;
-    left: 28px; bottom: 22px;
+    position: absolute;
+    left: 80px; bottom: 100px;
     z-index: 99;
+    pointer-events: none;
     font-family: var(--display);
     font-size: 11px;
     font-weight: 500;
     letter-spacing: 2px;
     text-transform: uppercase;
-    color: var(--faint);
+    color: var(--muted-2);
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 8px 16px;
+  }
+  #stage:has(.slide.dark.active) #counter,
+  #stage:has(.slide.dark.active) #hint {
+    background: var(--night);
+    border-color: var(--night-line);
+    color: var(--night-ink);
+  }
+
+  /* motion discipline: the deck swaps slides via display toggle (no motion),
+     but neutralize any residual animation for reduced-motion users anyway */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 </style>
 </head>
@@ -579,10 +607,10 @@
             <span class="lbl lbl-what">What</span>
             <span class="lbl lbl-how">How</span>
           </div>
-          <svg class="gc-arrow" width="470" height="28" viewBox="0 0 470 28" aria-hidden="true">
+          <svg class="gc-arrow" width="410" height="28" viewBox="0 0 410 28" aria-hidden="true">
             <circle cx="6" cy="14" r="5" fill="#141414"/>
-            <line x1="6" y1="14" x2="446" y2="14" stroke="#141414" stroke-width="2.5"/>
-            <polygon points="446,5 468,14 446,23" fill="#141414"/>
+            <line x1="6" y1="14" x2="386" y2="14" stroke="#141414" stroke-width="2.5"/>
+            <polygon points="386,5 408,14 386,23" fill="#141414"/>
           </svg>
         </div>
         <div class="master-notes">
@@ -864,10 +892,10 @@
     </footer>
   </section>
 
-</div>
+  <div id="counter">01 <b>/</b> 10</div>
+  <div id="hint">←/→ · Space</div>
 
-<div id="counter">01 <b>/</b> 10</div>
-<div id="hint">←/→ · Space</div>
+</div>
 
 <script>
 (function () {

@@ -51,12 +51,12 @@ Light theme (the default — this deck is light-first):
   --border: rgba(60, 40, 20, 0.08);
   --border-bright: rgba(60, 40, 20, 0.16);
   --text: #2c2a25;
-  --text-dim: #7c756a;
+  --text-dim: #6f675c;
   --accent: #c2410c;                      /* terracotta */
   --accent-dim: rgba(194, 65, 12, 0.08);
   --code-bg: #2c2520;
   --code-text: #f5ece0;
-  --green: #16a34a;  --green-dim: rgba(22, 163, 74, 0.08);
+  --green: #166534;  --green-dim: rgba(22, 101, 52, 0.08);
   --red: #dc2626;    --red-dim: rgba(220, 38, 38, 0.08);
 }
 ```

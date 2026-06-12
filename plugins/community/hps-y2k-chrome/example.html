@@ -6,9 +6,9 @@
 <title>Y2K Chrome · Open Design Demo Deck</title>
 <style>
 /* hps-y2k-chrome :: webfonts (Google Fonts @import only — no other external deps) */
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
 </style>
 <style>
 /* ============================================================
@@ -30,7 +30,7 @@
   --radius:26px; --radius-sm:16px; --radius-lg:36px;
   --shadow:0 12px 30px rgba(70,90,130,.22),inset 0 1px 0 rgba(255,255,255,.9),inset 0 -1px 0 rgba(80,100,140,.2);
   --shadow-lg:0 24px 60px rgba(70,90,130,.35),inset 0 2px 0 rgba(255,255,255,.95);
-  --font-sans:'Space Grotesk','Inter','Noto Sans SC',-apple-system,BlinkMacSystemFont,sans-serif;
+  --font-sans:'Space Grotesk','Inter','Noto Sans SC',sans-serif;
   --font-display:'Space Grotesk','Inter',sans-serif;
   --font-mono:'JetBrains Mono',SFMono-Regular,Menlo,monospace;
   --letter-tight:-.03em; --letter-normal:-.01em;
@@ -62,13 +62,13 @@ code,kbd,pre,samp{font-family:var(--font-mono)}
   padding:72px 96px;overflow:hidden}
 
 /* ============ TYPOGRAPHY ============ */
-.eyebrow{font-size:13px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--text-3);margin:0}
+.eyebrow{font-size:13px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:var(--text-1);margin:0}
 .kicker{font-size:14px;font-weight:600;color:var(--accent);letter-spacing:.08em;text-transform:uppercase;margin:0 0 10px}
 .h1{font-family:var(--font-display);font-size:clamp(44px,5.6vw,72px);line-height:1.05;font-weight:700;letter-spacing:var(--letter-tight);margin:0 0 18px}
 .h2{font-family:var(--font-display);font-size:clamp(34px,4.2vw,54px);line-height:1.1;font-weight:700;letter-spacing:var(--letter-tight);margin:0 0 14px;color:var(--text-1)}
 .h3{font-size:clamp(22px,2.5vw,32px);line-height:1.2;font-weight:600;margin:0 0 10px}
 .h4{font-size:clamp(17px,1.7vw,22px);line-height:1.3;font-weight:600;margin:0 0 8px}
-.lede{font-size:clamp(17px,1.7vw,22px);line-height:1.55;color:var(--text-2);font-weight:300;max-width:62ch;margin:0}
+.lede{font-size:clamp(17px,1.7vw,22px);line-height:1.55;color:var(--text-1);font-weight:400;max-width:62ch;margin:0}
 .dim{color:var(--text-2)}
 .dim2{color:var(--text-3)}
 .mono{font-family:var(--font-mono)}
@@ -76,8 +76,9 @@ code,kbd,pre,samp{font-family:var(--font-mono)}
 .h1,.chrome-text,.stat-big{background:var(--chrome-text);
   -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;
   filter:drop-shadow(0 2px 3px rgba(40,55,85,.38))}
-.gradient-text{background:linear-gradient(135deg,var(--accent),var(--accent-2) 55%,var(--accent-3));
-  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
+.gradient-text{background:linear-gradient(135deg,var(--accent) 0%,var(--accent) 55%,var(--accent-2) 82%,var(--accent-3) 100%);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;
+  filter:drop-shadow(0 1px 2px rgba(40,55,85,.25))}
 
 /* ============ LAYOUT PRIMITIVES ============ */
 .row{display:flex;gap:24px;align-items:center}
@@ -116,26 +117,26 @@ code,kbd,pre,samp{font-family:var(--font-mono)}
 
 /* ============ DECK CHROME ============ */
 .deck-header{position:fixed;top:24px;left:40px;right:40px;display:flex;align-items:center;justify-content:space-between;
-  font-size:12px;color:var(--text-3);letter-spacing:.12em;text-transform:uppercase;z-index:10;pointer-events:none}
+  font-size:12px;color:var(--text-2);letter-spacing:.12em;text-transform:uppercase;z-index:10;pointer-events:none}
 .deck-footer{position:fixed;bottom:24px;left:40px;right:40px;display:flex;align-items:center;justify-content:space-between;
-  font-size:12px;color:var(--text-3);z-index:10;pointer-events:none}
+  font-size:12px;color:var(--text-2);z-index:10;pointer-events:none}
 .theme-chip{font-family:var(--font-mono);font-size:11px;letter-spacing:.04em;text-transform:none}
 .progress-bar{position:fixed;left:0;right:0;bottom:0;height:3px;z-index:20;pointer-events:none}
 .progress-bar>span{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent-2));transition:width .3s var(--ease)}
 
 /* ============ SLIDE-LOCAL COMPONENTS ============ */
-.section-num{position:absolute;right:72px;bottom:24px;font-size:clamp(120px,17vw,220px);font-weight:700;line-height:.9;
+.section-num{position:absolute;right:72px;bottom:56px;font-size:clamp(120px,17vw,220px);font-weight:700;line-height:.9;
   letter-spacing:-.05em;z-index:0;pointer-events:none;
   background:var(--chrome-text);-webkit-background-clip:text;background-clip:text;
   -webkit-text-fill-color:transparent;color:transparent}
 .kpi .num{font-size:clamp(34px,4vw,52px);font-weight:700;letter-spacing:var(--letter-tight);line-height:1.1}
-.kpi .lbl{font-size:14px;color:var(--text-3);margin-top:6px}
+.kpi .lbl{font-size:14px;color:var(--text-2);margin-top:6px}
 .stat-big{font-size:clamp(110px,15vw,200px);font-weight:700;line-height:1;letter-spacing:-.05em;margin:0}
 .bar-chart{display:flex;align-items:flex-end;gap:18px;height:240px;margin-top:40px;max-width:820px}
 .bar-chart .bar{flex:1;background:linear-gradient(180deg,var(--accent-2),var(--accent));border-radius:14px 14px 6px 6px;
   position:relative;min-height:18px;box-shadow:inset 0 2px 0 rgba(255,255,255,.55),0 10px 24px rgba(70,90,130,.25)}
 .bar-chart .bar.alt{background:linear-gradient(180deg,#f5f7fb,#8a9ab8 70%,#6b7a95)}
-.bar-chart .bar span{position:absolute;bottom:-30px;left:0;right:0;text-align:center;font-size:13px;color:var(--text-3)}
+.bar-chart .bar span{position:absolute;bottom:-30px;left:0;right:0;text-align:center;font-size:13px;color:var(--text-1)}
 .bar-chart .bar em{position:absolute;top:-30px;left:0;right:0;text-align:center;font-size:14px;font-weight:700;font-style:normal;color:var(--text-1)}
 .steps{counter-reset:step}
 .steps .card{padding-top:34px}
@@ -143,8 +144,14 @@ code,kbd,pre,samp{font-family:var(--font-mono)}
   font-family:var(--font-mono);font-size:13px;font-weight:700;color:var(--accent);
   position:absolute;top:14px;left:28px;letter-spacing:.08em}
 .quote{font-family:var(--font-display);font-size:clamp(30px,3.6vw,48px);line-height:1.3;font-weight:600;max-width:26ch;margin:0;color:var(--text-1)}
+/* semantic mini-orb dots: carry good/bad color on a glossy sphere (token colors only)
+   so eyebrow text can stay --text-1 and keep WCAG AA contrast on frosted cards */
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:9px;vertical-align:-1px;
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.85),inset 0 -2px 4px rgba(80,100,140,.28)}
+.dot-good{background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.9),var(--good) 70%)}
+.dot-bad{background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.9),var(--bad) 70%)}
 .check{list-style:none;padding:0;margin:0;font-size:clamp(15px,1.5vw,19px)}
-.check li{padding:9px 0 9px 34px;position:relative;color:var(--text-2)}
+.check li{padding:9px 0 9px 34px;position:relative;color:var(--text-1)}
 .check li::before{content:"";position:absolute;left:0;top:14px;width:18px;height:18px;border-radius:8px;
   background:linear-gradient(180deg,#f3edff,#ddd0ff);border:1.5px solid var(--accent);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.9)}
@@ -166,6 +173,12 @@ code,kbd,pre,samp{font-family:var(--font-mono)}
 .anim-stagger-list>*:nth-child(4){animation-delay:.35s}
 .anim-stagger-list>*:nth-child(5){animation-delay:.45s}
 .anim-stagger-list>*:nth-child(n+6){animation-delay:.55s}
+
+/* Reduced-motion degrade: entry effects resolve instantly, content stays visible */
+@media (prefers-reduced-motion:reduce){
+  .anim-rise-in,.anim-fade-up,.anim-stagger-list>*{animation:none;opacity:1;transform:none}
+  .progress-bar>span{transition:none}
+}
 
 /* ============ PRINT ============ */
 @media print{
@@ -239,7 +252,7 @@ code,kbd,pre,samp{font-family:var(--font-mono)}
         </ul>
       </div>
       <div class="card">
-        <p class="eyebrow" style="color:var(--accent-2)">Engineering manager</p>
+        <p class="eyebrow" style="color:var(--accent)">Engineering manager</p>
         <h3 class="h3">“Compared to Claude Design, our monthly bill dropped from $500 to ~$73.”</h3>
         <p class="dim mt-m">That is <b>over 80% less</b>, with bring-your-own-key across model and media providers. Same frontier capability, your own machine.</p>
       </div>
@@ -281,7 +294,7 @@ code,kbd,pre,samp{font-family:var(--font-mono)}
       <div class="bar" style="height:64%"><em>52</em><span>Slides</span></div>
       <div class="bar" style="height:100%"><em>86</em><span>Prototype</span></div>
     </div>
-    <p class="dim2" style="margin-top:56px">Demo split of the 217+ plugin catalog · chrome bar = cinematic generative video. Pure CSS, no chart library.</p>
+    <p style="margin-top:56px;color:var(--text-1)">Demo split of the 217+ plugin catalog · chrome bar = cinematic generative video. Pure CSS, no chart library.</p>
     <div class="notes">Bar chart rebuilt in pure CSS: aqua-to-purple gradient bars with an inset gloss line, one chrome bar for the video category. Works inside any sandboxed iframe.</div>
   </section>
 
@@ -304,12 +317,12 @@ code,kbd,pre,samp{font-family:var(--font-mono)}
     <h2 class="h2">Closed cloud vs an open desktop</h2>
     <div class="grid g2 mt-l">
       <div class="card card-soft">
-        <p class="eyebrow" style="color:var(--bad)">Closed cloud tools</p>
+        <p class="eyebrow"><span class="dot dot-bad"></span>Closed cloud tools</p>
         <h3 class="h3">Locked, metered, cloud-only</h3>
         <ul class="check"><li>One model, no agent choice</li><li>No self-hosting, no BYOK</li><li>Your design context lives on their servers</li></ul>
       </div>
       <div class="card card-accent">
-        <p class="eyebrow" style="color:var(--good)">Open Design</p>
+        <p class="eyebrow"><span class="dot dot-good"></span>Open Design</p>
         <h3 class="h3">Open, local, agent-native</h3>
         <ul class="check"><li>21 coding agents, auto-detected, zero config</li><li>Full-stack BYOK across model and media providers</li><li>Apache-2.0 — fork, self-host, commercial use</li></ul>
       </div>
@@ -329,7 +342,7 @@ code,kbd,pre,samp{font-family:var(--font-mono)}
   <!-- 11 · layout: thanks / cta -->
   <section class="slide center" data-title="Thanks">
     <div class="orb orb-pink" style="width:120px;height:120px;left:12%;top:18%"></div>
-    <div class="orb orb-chrome" style="width:80px;height:80px;right:14%;top:30%"></div>
+    <div class="orb orb-chrome" style="width:80px;height:80px;right:12%;top:14%"></div>
     <div class="orb orb-aqua" style="width:54px;height:54px;left:24%;bottom:20%"></div>
     <p class="kicker">Open · Local · Agent-native</p>
     <h1 class="h1">Frontier AI design,<br>back on your desk</h1>

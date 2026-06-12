@@ -216,7 +216,9 @@ img, video, canvas, svg {
     font-size: var(--lede-size);
     line-height: 1.5;
     font-weight: 400;
-    color: var(--text-light-soft);
+    /* Body copy on cobalt uses full --text-light for WCAG AA contrast;
+       soft alpha stays reserved for bold uppercase chrome (marks, hints). */
+    color: var(--text-light);
     max-width: 56ch;
 }
 .blue { color: var(--accent-blue); }
@@ -275,7 +277,7 @@ img, video, canvas, svg {
 .agenda-row .hint {
     margin-left: auto;
     font-size: 21px;
-    font-weight: 500;
+    font-weight: 800;
     color: var(--text-light-soft);
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -299,9 +301,9 @@ img, video, canvas, svg {
 /* ===========================================
    S4 · BULLETS — proofs on white, takeaway on blue
    =========================================== */
-.s-bullets .panel-white { flex: 1; padding-top: 140px; }
+.s-bullets .panel-white { flex: 1; padding-top: 108px; }
 .s-bullets .panel-blue { flex: none; height: 240px; display: flex; align-items: center; }
-.points { margin-top: 56px; display: grid; gap: 40px; max-width: 1420px; }
+.points { margin-top: 44px; display: grid; gap: 34px; max-width: 1420px; }
 .point { display: flex; gap: 38px; align-items: flex-start; }
 .point .tick {
     flex: none;
@@ -333,7 +335,7 @@ img, video, canvas, svg {
 .stat-num .unit { font-size: 150px; letter-spacing: -0.02em; }
 .stat-side { max-width: 980px; display: flex; gap: 64px; align-items: baseline; }
 .stat-side h3 { font-size: 40px; font-weight: 800; flex: none; }
-.stat-side p { font-size: 26px; line-height: 1.5; color: var(--text-light-soft); }
+.stat-side p { font-size: 26px; line-height: 1.5; color: var(--text-light); }
 
 /* ===========================================
    S6 · QUOTE HERO — typography as the visual
@@ -360,7 +362,7 @@ img, video, canvas, svg {
     letter-spacing: 0.2em;
     text-transform: uppercase;
 }
-.quote-attr .soft { color: var(--text-light-soft); font-weight: 500; margin-left: 24px; letter-spacing: 0.14em; }
+.quote-attr .soft { color: var(--text-light); font-weight: 500; margin-left: 24px; letter-spacing: 0.14em; }
 
 /* ===========================================
    S7 · COMPARISON — the split itself is the contrast
@@ -401,7 +403,7 @@ img, video, canvas, svg {
 .gcard { border: 2px solid var(--line-light); padding: 42px 48px; }
 .gcard .gno { font-weight: 800; font-size: 24px; letter-spacing: 0.18em; margin-bottom: 18px; }
 .gcard h3 { font-size: 31px; font-weight: 800; margin-bottom: 10px; letter-spacing: -0.01em; }
-.gcard p { font-size: 23px; line-height: 1.45; color: var(--text-light-soft); }
+.gcard p { font-size: 25px; line-height: 1.45; color: var(--text-light); }
 
 /* ===========================================
    S9 · BAR CHART — pure CSS, cobalt bars on white
@@ -468,14 +470,25 @@ img, video, canvas, svg {
     font-size: 14px;
     font-weight: 500;
     letter-spacing: 0.22em;
-    color: rgba(255, 255, 255, 0.55);
+    color: rgba(255, 255, 255, 0.72);
     background: rgba(10, 10, 10, 0.65);
     border: 1px solid rgba(255, 255, 255, 0.16);
     padding: 8px 18px;
     border-radius: 999px;
     user-select: none;
 }
-.deck-controls .cur { color: #4361ee; font-weight: 800; }
+.deck-controls .cur { color: var(--text-light); font-weight: 800; }
+
+/* ===========================================
+   REDUCED MOTION - strict degrade (supplements
+   the base block): no slide-up, no bar scale,
+   no stagger delays; content appears in place.
+   =========================================== */
+@media (prefers-reduced-motion: reduce) {
+    .reveal { transform: none; transition-delay: 0s !important; }
+    .bar,
+    .slide.visible .bar { transform: none; transition-delay: 0s !important; }
+}
 </style>
 </head>
 <body>

@@ -8,7 +8,6 @@
 /* hps-bauhaus :: webfonts (Google Fonts @import only — no other external deps) */
 @import url('https://fonts.googleapis.com/css2?family=Archivo+Black&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
 </style>
@@ -73,7 +72,9 @@ code,kbd,pre,samp{font-family:var(--font-mono)}
 .dim{color:var(--text-2)}
 .dim2{color:var(--text-3)}
 .mono{font-family:var(--font-mono)}
-.gradient-text{background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
+.gradient-text{background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;
+  /* ink outline (token #111) keeps the yellow band legible on the canvas ground; classic outlined-poster device */
+  -webkit-text-stroke:.02em var(--text-1)}
 
 /* ============ LAYOUT PRIMITIVES ============ */
 .row{display:flex;gap:24px;align-items:center}
@@ -121,7 +122,7 @@ code,kbd,pre,samp{font-family:var(--font-mono)}
 .bar-chart{display:flex;align-items:flex-end;gap:22px;height:250px;margin-top:46px;max-width:840px}
 .bar-chart .bar{flex:1;border:2px solid var(--border);box-shadow:var(--shadow);border-radius:0;position:relative;min-height:18px}
 .bar-chart .bar span{position:absolute;bottom:-32px;left:0;right:0;text-align:center;font-size:13px;font-weight:600;color:var(--text-2)}
-.bar-chart .bar em{position:absolute;top:-34px;left:0;right:0;text-align:center;font-size:15px;font-weight:800;font-style:normal;color:var(--text-1)}
+.bar-chart .bar em{position:absolute;top:-34px;left:0;right:0;text-align:center;font-size:15px;font-weight:700;font-style:normal;color:var(--text-1)}
 .steps{counter-reset:step}
 .steps .card{padding-top:38px}
 .steps .card::before{counter-increment:step;content:counter(step,decimal-leading-zero);
@@ -156,6 +157,12 @@ code,kbd,pre,samp{font-family:var(--font-mono)}
 .anim-stagger-list>*:nth-child(4){animation-delay:.35s}
 .anim-stagger-list>*:nth-child(5){animation-delay:.45s}
 .anim-stagger-list>*:nth-child(n+6){animation-delay:.55s}
+
+/* Reduced motion: entries land instantly, progress fill snaps. */
+@media (prefers-reduced-motion: reduce){
+  .anim-rise-in,.anim-fade-up,.anim-stagger-list>*{animation:none!important;opacity:1!important;transform:none!important}
+  .progress-bar>span{transition:none}
+}
 
 /* ============ PRINT ============ */
 @media print{

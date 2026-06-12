@@ -22,8 +22,8 @@
     --card-bg: #FF5722;
     --card-bg-soft: rgba(255, 87, 34, 0.12);
     --text-primary: #ffffff;
-    --text-secondary: rgba(255, 255, 255, 0.62);
-    --text-faint: rgba(255, 255, 255, 0.34);
+    --text-secondary: rgba(255, 255, 255, 0.72);
+    --text-faint: rgba(255, 255, 255, 0.58);
     --text-on-card: #1a1a1a;
     --line: rgba(255, 255, 255, 0.14);
 
@@ -129,7 +129,10 @@ img, video, canvas, svg {
     *, *::before, *::after {
         animation-duration: 0.01ms !important;
         transition-duration: 0.2s !important;
+        transition-delay: 0s !important;
     }
+    .reveal { transform: none; }
+    .bar { transform: scaleY(1); }
 }
 
 /* ===========================================
@@ -235,6 +238,24 @@ img, video, canvas, svg {
 .reveal:nth-child(4) { transition-delay: 0.38s; }
 .reveal:nth-child(5) { transition-delay: 0.48s; }
 .reveal:nth-child(6) { transition-delay: 0.58s; }
+/* Nested reveal groups enter after the slide heading, top-down */
+.agenda .reveal:nth-child(1),
+.points .reveal:nth-child(1),
+.compare .reveal:nth-child(1),
+.grid4 .reveal:nth-child(1),
+.chart .reveal:nth-child(1) { transition-delay: 0.46s; }
+.agenda .reveal:nth-child(2),
+.points .reveal:nth-child(2),
+.compare .reveal:nth-child(2),
+.grid4 .reveal:nth-child(2),
+.chart .reveal:nth-child(2) { transition-delay: 0.54s; }
+.agenda .reveal:nth-child(3),
+.points .reveal:nth-child(3),
+.grid4 .reveal:nth-child(3),
+.chart .reveal:nth-child(3) { transition-delay: 0.62s; }
+.agenda .reveal:nth-child(4),
+.grid4 .reveal:nth-child(4),
+.chart .reveal:nth-child(4) { transition-delay: 0.7s; }
 
 /* ===========================================
    S1 · TITLE — orange card focal point
@@ -309,7 +330,7 @@ img, video, canvas, svg {
     display: grid;
     place-items: center;
 }
-.point .tick svg { width: 26px; height: 26px; }
+.point .tick svg { width: 26px; height: 26px; stroke: var(--card-bg); }
 .point h3 { font-size: 35px; font-weight: 700; margin-bottom: 8px; }
 .point p { font-size: 26px; line-height: 1.5; color: var(--text-secondary); }
 
@@ -355,7 +376,7 @@ img, video, canvas, svg {
 .compare h3 { font-family: var(--font-display); font-size: 40px; text-transform: uppercase; margin-bottom: 36px; }
 .compare ul { list-style: none; display: grid; gap: 24px; font-size: 27px; line-height: 1.45; }
 .compare .col li { padding-left: 40px; position: relative; color: var(--text-secondary); }
-.compare .col.hot li { color: rgba(26, 26, 26, 0.82); }
+.compare .col.hot li { color: rgba(26, 26, 26, 0.92); }
 .compare li::before {
     content: "";
     position: absolute;
@@ -394,7 +415,10 @@ img, video, canvas, svg {
 }
 .bar.solid { background: var(--card-bg); }
 .slide.visible .bar { transform: scaleY(1); }
-.slide.visible .bar:nth-of-type(1) { transition-delay: 0.15s; }
+.slide.visible .bar-group:nth-child(1) .bar { transition-delay: 0.5s; }
+.slide.visible .bar-group:nth-child(2) .bar { transition-delay: 0.62s; }
+.slide.visible .bar-group:nth-child(3) .bar { transition-delay: 0.74s; }
+.slide.visible .bar-group:nth-child(4) .bar { transition-delay: 0.86s; }
 .bar-val {
     position: absolute;
     top: -52px; left: 0; right: 0;
@@ -412,7 +436,7 @@ img, video, canvas, svg {
 .close-card .display span { color: var(--card-bg); }
 .close-links { display: flex; gap: 56px; margin-top: 64px; font-size: 26px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
 .close-links .lk { display: flex; align-items: center; gap: 16px; color: var(--text-secondary); }
-.close-links svg { width: 30px; height: 30px; }
+.close-links svg { width: 30px; height: 30px; stroke: var(--card-bg); }
 
 /* ===========================================
    DECK CHROME — page counter (outside the stage)
@@ -421,14 +445,14 @@ img, video, canvas, svg {
     font-family: var(--font-body);
     font-size: 14px;
     letter-spacing: 0.22em;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.72);
     background: rgba(13, 13, 13, 0.6);
     border: 1px solid rgba(255, 255, 255, 0.14);
     padding: 8px 18px;
     border-radius: 999px;
     user-select: none;
 }
-.deck-controls .cur { color: #FF5722; font-weight: 700; }
+.deck-controls .cur { color: var(--card-bg); font-weight: 700; }
 </style>
 </head>
 <body>

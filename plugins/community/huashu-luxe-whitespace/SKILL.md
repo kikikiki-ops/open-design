@@ -80,11 +80,11 @@ comparison bars, and the gradient hairline separators.
 | `--rule` | `#EEECE8` | horizontal section rules / counter border |
 | `--track` | `#EEECEA` | comparison bar track |
 | `--bar` | `#D8D5D0` | baseline / losing bar |
-| `--muted` | `#888888` | metric names, strong captions |
-| `--soft` | `#A0A09A` | subtitles |
+| `--muted` | `#696963` | metric names, strong captions |
+| `--soft` | `#74746E` | subtitles |
 | `--faint` | `#B8B4AE` | tertiary captions, eyebrow |
 | `--ghost` | `#C8C4BC` | brand text, source notes, oldest timeline year |
-| `--body` | `#999999` | insight body copy |
+| `--body` | `#6E6E68` | insight body copy (WCAG AA on `--bg`) |
 | `--sans` | `'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif` | the only family |
 
 - **Font loading**: exactly one
