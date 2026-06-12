@@ -96,7 +96,7 @@ No other colors are permitted. No purple, no blue, no saturated hues. Forbidden:
 
 ## Content rules
 
-- 8–11 slides for a standard deck; split content rather than shrinking type. No scrolling, no overflow at 1920×1080.
+- Default 8–11 slides for a standard deck; honor the requested slide count when the user picks one; split content rather than shrinking type. No scrolling, no overflow at 1920×1080.
 - Low-density speaker-led by default: one idea per slide, max 3 pillars / 4 cards / 4 chart columns.
 - Icons are inline SVG, 1.6px stroke, `--accent-warm`. No external images, no CDN scripts, no chart libraries — single self-contained HTML file.
 - Comment every section: `/* === SECTION NAME === */`. CSS gotcha: never negate CSS functions directly — use `calc(-1 * ...)`.
