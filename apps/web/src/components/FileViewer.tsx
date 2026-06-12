@@ -5475,9 +5475,6 @@ const [manualEditTargets, setManualEditTargets] = useState<ManualEditTarget[]>([
         return;
       }
       if (data.type === 'od-edit-hover') {
-        if (data.target.id !== selectedManualEditTargetIdRef.current) {
-          void selectManualEditTarget(data.target);
-        }
         return;
       }
       if (data.type === 'od-edit-text-commit') {

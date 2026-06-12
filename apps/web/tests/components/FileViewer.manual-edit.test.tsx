@@ -32,8 +32,22 @@ describe('FileViewer manual edit regressions', () => {
         source: frame.contentWindow,
       }));
     });
+  }
+
+  async function selectManualEditTarget(target = heroTarget()) {
+    const frame = await waitFor(() => {
+      const node = screen.getByTestId('artifact-preview-frame') as HTMLIFrameElement;
+      if (!node.contentWindow) throw new Error('Preview frame not ready');
+      return node;
+    });
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: { type: 'od-edit-select', target },
+        source: frame.contentWindow,
+      }));
+    });
     await waitFor(() => {
-      expect(document.querySelector('.manual-edit-right')).not.toBeNull();
+      expect(document.querySelector('.manual-edit-content-editor')).not.toBeNull();
     });
   }
 
@@ -94,6 +108,29 @@ describe('FileViewer manual edit regressions', () => {
 
     await hoverManualEditTarget();
     expect(document.querySelector('.manual-edit-right')).not.toBeNull();
+    expect(screen.getByText('PAGE')).toBeTruthy();
+    expect(document.querySelector('.manual-edit-content-editor')).toBeNull();
+  });
+
+  it('switches from the page inspector to content editing only after explicit target selection', async () => {
+    const source = '<!doctype html><html><body><main data-od-id="hero">Hero</main></body></html>';
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      new Response(source, { status: 200, headers: { 'Content-Type': 'text/html' } }),
+    ));
+
+    render(
+      <FileViewer projectId="project-1" projectKind="prototype" file={htmlPreviewFile()}
+        liveHtml={source}
+      />,
+    );
+
+    clickManualTool('manual-edit-mode-toggle');
+    await hoverManualEditTarget();
+    expect(screen.getByText('PAGE')).toBeTruthy();
+
+    await selectManualEditTarget();
+    expect(screen.getByText('Content')).toBeTruthy();
+    expect(screen.getByText('Apply Content')).toBeTruthy();
   });
 
   it('does not let a pending manual edit style save survive a file switch', async () => {
@@ -117,7 +154,7 @@ describe('FileViewer manual edit regressions', () => {
     );
 
     fireEvent.click(screen.getByTestId('manual-edit-mode-toggle'));
-    await hoverManualEditTarget();
+    await selectManualEditTarget();
     const baseSizeInput = await findStyleInput('Size');
     fireEvent.change(baseSizeInput, { target: { value: '18' } });
 
@@ -162,7 +199,7 @@ describe('FileViewer manual edit regressions', () => {
         {},
       ));
       fireEvent.click(screen.getByTestId('manual-edit-mode-toggle'));
-      await hoverManualEditTarget();
+      await selectManualEditTarget();
       const baseSizeInput = await findStyleInput('Size');
       fireEvent.change(baseSizeInput, { target: { value: '18' } });
 
@@ -213,7 +250,7 @@ describe('FileViewer manual edit regressions', () => {
     );
 
     clickManualTool('manual-edit-mode-toggle');
-    await hoverManualEditTarget();
+    await selectManualEditTarget();
     const baseSizeInput = await findStyleInput('Size');
 
     fireEvent.change(baseSizeInput, { target: { value: '18' } });
@@ -243,7 +280,7 @@ describe('FileViewer manual edit regressions', () => {
     );
 
     clickManualTool('manual-edit-mode-toggle');
-    await hoverManualEditTarget();
+    await selectManualEditTarget();
     const baseSizeInput = await findStyleInput('Size');
 
     fireEvent.change(baseSizeInput, { target: { value: '18' } });
@@ -279,7 +316,7 @@ describe('FileViewer manual edit regressions', () => {
     );
 
     clickManualTool('manual-edit-mode-toggle');
-    await hoverManualEditTarget();
+    await selectManualEditTarget();
     const baseSizeInput = await findStyleInput('Size');
 
     fireEvent.change(baseSizeInput, { target: { value: '18' } });
