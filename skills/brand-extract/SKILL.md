@@ -40,12 +40,16 @@ drive it with the `agent-browser` tool.
 The extraction project opens with **`brand.html` as the active tab** — a
 self-contained brand-kit page (template:
 `brand-extract/templates/brand-kit.html`) that the daemon renders from
-`brand.json`. It starts as skeletons + an "Extracting…" pill and **fills in
-live** as you work. You never hand-edit it: you write `brand.json`, then run
-`od brand preview <brandId>` and the daemon re-renders the page (the page
-soft-reloads itself while extracting). Optimize for **fast first paint** —
-write a partial `brand.json` and preview it the moment you have a name, a couple
-of colors, and a logo, rather than waiting for the whole kit.
+`brand.json`. The daemon **pre-seeds** it with a deterministic first paint — a
+harvested logo, an approximate palette, font families, and a few cover images —
+so it is NOT all-skeleton when it opens. Your job is to **replace that seed with
+measured truth** and fill in the rest, **progressively**, so the user watches it
+complete module by module. You never hand-edit it: you write `brand.json`, then
+run `od brand preview <brandId>` and the daemon re-renders the page (the page
+soft-reloads itself while extracting). Optimize for **fast first paint and
+progressive fill-in** — write a partial `brand.json` and preview it the moment
+you have a name, a couple of colors, and a logo, then preview again after each
+field group rather than batching the whole kit to the end.
 
 > The trap to avoid: an LLM left alone regresses to the mean — Inter, an indigo
 > accent, a purple gradient. That is off-brand for everyone. Every value you emit
@@ -136,9 +140,12 @@ od brand preview <brandId>
 ```
 
 This re-renders `brand.html` so the user immediately sees a real, on-brand page
-forming. Keep measuring, update `brand.json`, and re-run `od brand preview`
-after each pass — partial data renders with skeletons for the modules you have
-not filled yet, which is exactly the live "filling in" experience.
+forming. Then **preview after each field group, do not batch to the end** —
+after you measure and add each of (a) colors, (b) typography/fonts, (c) logo
+candidates, (d) cover/hero imagery samples, (e) voice & tone, (f) imagery /
+layout posture, update `brand.json` and re-run `od brand preview`. Partial data
+renders the filled modules with skeletons for the rest, which is exactly the
+progressive "filling in" experience the user should watch.
 
 **`brand.json`** — must parse as JSON, with this exact shape:
 

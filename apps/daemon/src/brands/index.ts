@@ -33,6 +33,8 @@ import {
   createUserDesignSystem,
   deleteUserDesignSystem,
   linkUserDesignSystemProject,
+  updateUserDesignSystem,
+  type UserDesignSystemInput,
 } from '../design-systems.js';
 import {
   getProject,
@@ -49,7 +51,8 @@ import { extractJsonBlock, validateBrand } from './validate.js';
 import { BRAND_KIT_FILE, writeBrandKitPreview } from './kit-render.js';
 import { selfHostGoogleFonts } from './fonts.js';
 import { adoptExistingLogos, ensureLogoFallback, type LogoFallbackFn, type LogoSlot } from './logo-fallback.js';
-import { ensureImageryFallback, type ImageryFallbackFn } from './imagery-fallback.js';
+import { ensureImageryFallback, type ImageryFallbackFn, type ImagerySlot } from './imagery-fallback.js';
+import { ensureBrandSeed, type SeedFallbackFn, type SeedSlot } from './seed-fallback.js';
 import {
   createBrandDir,
   deleteBrandDir,
@@ -90,6 +93,14 @@ export interface StartBrandExtractionOptions {
   /** Override the deterministic logo harvester (tests inject a no-op / stub to
    *  avoid real network calls). Defaults to the live icon-fetching fallback. */
   logoFallback?: LogoFallbackFn;
+  /** Override the deterministic palette/typography seed harvester (tests inject
+   *  a no-op to avoid real network calls). Defaults to the live CSS harvester
+   *  so the first paint already shows a real palette + fonts. */
+  seedFallback?: SeedFallbackFn;
+  /** Override the deterministic imagery harvester (tests inject a no-op to avoid
+   *  real network calls). Defaults to the live cover/hero-image fallback so the
+   *  first paint already shows representative images. */
+  imageryFallback?: ImageryFallbackFn;
 }
 
 export interface StartBrandExtractionResult {
@@ -141,6 +152,8 @@ export async function startBrandExtraction(
     db,
     randomId = randomUUID,
     logoFallback = ensureLogoFallback,
+    seedFallback = ensureBrandSeed,
+    imageryFallback = ensureImageryFallback,
   } = opts;
   const id = newBrandId(url);
   const projectId = brandProjectId(id);
@@ -194,18 +207,33 @@ export async function startBrandExtraction(
   // starts as skeletons + "Extracting…" and fills in as the agent writes
   // brand.json and re-runs `od brand preview`.
   //
-  // Best-effort deterministic logo: fetch the site's icon assets up front so
-  // the live page shows a real mark from the very first paint, instead of "No
-  // logo found", even before the agent saves a logo. Bounded + failure-tolerant
-  // (offline / blocked → empty, the prior behavior).
+  // Best-effort deterministic harvest of the parts the page would otherwise
+  // show as all-skeleton for the first few seconds (the "feels stuck" symptom):
+  //   - logo: the site's icon assets (so the page is never "No logo found");
+  //   - palette + typography: derived from the site's CSS (so colors + fonts
+  //     paint on first render, before the agent measures anything);
+  //   - imagery: the site's cover/hero images (so the Images gallery is seeded).
+  // All three run in parallel and are bounded + failure-tolerant (offline /
+  // blocked → that piece stays empty, the prior behavior), so the first paint
+  // is fast and the agent then progressively enriches each module.
   const seedBrand: Record<string, unknown> = { name: host, sourceUrl: url, colors: [], typography: {} };
   try {
     const projectDir = resolveProjectDir(projectsRoot, projectId, metadata);
     const logo = { primary: null as string | null, alternates: [] as string[], notes: '' };
-    const result = await logoFallback(url, path.join(projectDir, 'logos'), logo);
-    if (result.changed) seedBrand.logo = logo;
+    const seedSlot: SeedSlot = {};
+    const imagery: ImagerySlot = { samples: [] };
+    const noChange = () => ({ changed: false });
+    const [logoRes] = await Promise.all([
+      logoFallback(url, path.join(projectDir, 'logos'), logo).catch(noChange),
+      seedFallback(url, seedSlot).catch(noChange),
+      imageryFallback(url, path.join(projectDir, 'imagery'), imagery).catch(noChange),
+    ]);
+    if (logoRes.changed) seedBrand.logo = logo;
+    if (seedSlot.colors && seedSlot.colors.length) seedBrand.colors = seedSlot.colors;
+    if (seedSlot.typography) seedBrand.typography = seedSlot.typography;
+    if (imagery.samples && imagery.samples.length) seedBrand.imagery = { samples: imagery.samples };
   } catch {
-    // Best-effort only — never block project creation on icon fetching.
+    // Best-effort only — never block project creation on the seed harvest.
   }
   await writeBrandKitPreview({
     skillsRoot,
@@ -354,7 +382,7 @@ export async function finalizeBrand(
   const systemBuild = await rebuildSystem(brandsRoot, id);
 
   const body = brandToDesignMd(brand);
-  const summary = await createUserDesignSystem(userDesignSystemsRoot, {
+  const summary = await registerBrandDesignSystem(userDesignSystemsRoot, meta.designSystemId, {
     title: brand.name,
     category: 'Brands',
     surface: 'web',
@@ -529,9 +557,9 @@ function brandExtractionPrompt(input: { url: string; brandId: string; host: stri
     `Source URL: ${input.url}`,
     `Brand id: ${input.brandId}`,
     '',
-    'A live brand-kit page (`brand.html`) is ALREADY open as the active tab — right now it shows skeletons and "Extracting…". Your job is to make it fill in with the real brand as fast as possible. The target site is also open in a secondary in-app Browser tab. Use the `brand-extract` skill and the `agent-browser` tool to drive and observe the site. Do not guess — measure.',
+    'A live brand-kit page (`brand.html`) is ALREADY open as the active tab. The daemon has pre-seeded it with a deterministic first paint — a harvested logo, an approximate palette, font families, and a few cover images — so it is NOT all-skeleton. Your job is to REPLACE that seed with measured truth and fill in every remaining module, progressively, so the user watches it complete piece by piece. The target site is also open in a secondary in-app Browser tab. Use the `brand-extract` skill and the `agent-browser` tool to drive and observe the site. Do not guess — measure.',
     '',
-    'Work the branding-agent chain, optimizing for FAST first paint:',
+    'Work the branding-agent chain, optimizing for FAST first paint and PROGRESSIVE fill-in (never batch everything to the end):',
     '',
     '1. MEASURE — drive the site with agent-browser. Snapshot it, then harvest the real design language: frequency-ranked color literals (background / surface / foreground / muted / border / accent / accent-secondary), the @font-face + font-family declarations, and representative headings + copy for voice.',
     '   - LOGO (extract MULTIPLE candidates): save every logo you can find as a file under `logos/` — the inline header/nav SVG (write the literal `<svg>…</svg>` markup verbatim to `logos/header.svg`, do NOT just reference it), any `<img>` logo, the `apple-touch-icon`, the `favicon`, and the `og:image`. Set `logo.primary` to the best vector/transparent lockup and list the rest in `logo.alternates` (the kit page shows them as switchable thumbnails). NEVER leave `logo.primary` empty when the site has any mark — fetch the asset URLs directly and save real files. (The daemon also auto-fetches a favicon/og:image fallback so the page is never logo-less, but that is a safety net, not a substitute for the real wordmark.)',
@@ -539,8 +567,8 @@ function brandExtractionPrompt(input: { url: string; brandId: string; host: stri
     '   - IMAGERY (save 6–8 of the site’s LARGE / COVER / HERO images): this is the Images module. Harvest the site’s actual big representative pictures — the `og:image`/`twitter:image` social card, the hero/banner art, the largest `<img>` (use the highest-res `srcset`/`<picture>` source), CSS `background-image` hero blocks, product/app screenshots, and illustration/photography samples. Filter by RENDERED size: keep only big images (roughly ≥320px on the long edge) and DROP icons, sprites, logos, avatars, and tracking pixels. Save each as a file under `imagery/` and list them in `brand.json` as `imagery.samples: [{ "file": "imagery/<file>", "kind": "cover|hero|product|illustration|photo", "caption": "short label" }]`. The kit page renders these as a clean labeled Images gallery (a thumbnail grid). Fetch the asset URLs directly; pick 6–8 varied, on-brand images — never UI chrome or icons. (The daemon also runs a deterministic cover/hero-image fallback at finalize so the gallery is rarely empty, but that safety net is no substitute for picking the real hero images yourself.)',
     '   - ANTI-BOT WALL: if the page is a Cloudflare / DataDome / "Just a moment…" / "Verify you are human" interstitial instead of the real site, STOP and emit a `<question-form>` asking the user to complete the verification in the browser, then Continue. Do NOT try to bypass it yourself. When the user submits the form, re-snapshot and resume.',
     '',
-    '2. SYNTHESIZE INCREMENTALLY — write `brand.json` into this project AS SOON AS you have the name, a couple of colors, and a logo candidate (do not wait for everything). It must parse as JSON and use exactly the seven color roles (background, surface, foreground, muted, border, accent, accent-secondary), each with `hex` (#rrggbb), `oklch`, `name`, `usage`; plus `name`, `tagline`, `description`, `sourceUrl`, `logo` ({ primary, alternates, notes } with `logos/<file>` paths), `typography` ({ display, body, mono? } each { family, fallbacks[], weights[], googleFontsUrl? }), `voice`, `imagery` (incl. `samples` — the `imagery/<file>` images you saved), and `layout`. Never invent colors from memory — pick them from what you measured.',
-    '   - After that FIRST write, run `od brand preview ' + input.brandId + '` to render the kit page, and tell the user it is filling in. Then keep measuring, update `brand.json`, and re-run `od brand preview ' + input.brandId + '` after each pass so they watch it complete. Also write `BRAND.md`, a prose brand guide an autonomous design agent can follow.',
+    '2. SYNTHESIZE INCREMENTALLY — write `brand.json` AS SOON AS you have the name, a couple of colors, and a logo candidate (do not wait for everything), then run `od brand preview ' + input.brandId + '` and tell the user it is filling in. It must parse as JSON and use exactly the seven color roles (background, surface, foreground, muted, border, accent, accent-secondary), each with `hex` (#rrggbb), `oklch`, `name`, `usage`; plus `name`, `tagline`, `description`, `sourceUrl`, `logo` ({ primary, alternates, notes } with `logos/<file>` paths), `typography` ({ display, body, mono? } each { family, fallbacks[], weights[], googleFontsUrl? }), `voice`, `imagery` (incl. `samples` — the `imagery/<file>` images you saved), and `layout`. Never invent colors from memory — pick them from what you measured.',
+    '   - PREVIEW AFTER EACH FIELD GROUP, do not batch to the end. The kit fills in live, so after you measure and add each group — (a) colors, (b) typography/fonts, (c) logo candidates, (d) cover/hero imagery samples, (e) voice & tone, (f) imagery/layout posture — update `brand.json` and re-run `od brand preview ' + input.brandId + '`. Partial data renders the filled modules and keeps skeletons for the rest, which is exactly the progressive "filling in" the user should watch. Also write `BRAND.md`, a prose brand guide an autonomous design agent can follow.',
     '',
     '3. BUILD & REGISTER — when `brand.json` is complete, run `od brand finalize ' + input.brandId + '` (add `--json` for machine output). That validates it, derives the light/dark/compact design tokens and the six brand-system artifacts (landing, deck, poster, email, newsletter, form), registers the reusable design system, and lights up the Brand Assets tiles on the kit page. Fix `brand.json` and re-run if it reports a validation error.',
     '',
@@ -565,6 +593,30 @@ function brandLogoSlot(raw: unknown): LogoSlot {
 
 function brandProjectId(brandId: string): string {
   return `brand-${brandId}`;
+}
+
+/**
+ * Register the brand's reusable `user:<id>` design system, reusing the one the
+ * brand already owns when finalize runs more than once.
+ *
+ * Invariant: a brand owns exactly ONE user design system for its whole
+ * lifetime. Finalize is not a one-shot — the live extraction agent re-runs
+ * `od brand finalize` after fixing a validation error or enriching the kit, and
+ * `createUserDesignSystem` allocates a fresh unique slug on every call. Without
+ * this reuse, each re-finalize left an orphaned duplicate behind (the brand
+ * only tracks its latest design system id, so the older one was never cleaned
+ * up), and the brand surfaced twice in every design-system picker.
+ */
+async function registerBrandDesignSystem(
+  userDesignSystemsRoot: string,
+  existingDesignSystemId: string | undefined,
+  input: UserDesignSystemInput,
+): Promise<Awaited<ReturnType<typeof createUserDesignSystem>>> {
+  if (existingDesignSystemId) {
+    const updated = await updateUserDesignSystem(userDesignSystemsRoot, existingDesignSystemId, input);
+    if (updated) return updated;
+  }
+  return createUserDesignSystem(userDesignSystemsRoot, input);
 }
 
 /** Read a UTF-8 project file, returning null when it is absent. */

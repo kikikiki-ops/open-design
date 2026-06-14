@@ -113,6 +113,15 @@
   white-space: nowrap;
 }
 
+/* The clicked chip stays lit (not dimmed) while its extraction kicks off. */
+.chipLoading,
+.chipLoading:disabled {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--accent);
+  opacity: 1;
+}
+
 /* ── Controls: search + category chips ────────────────────────────── */
 .controls {
   display: flex;
@@ -269,6 +278,14 @@
   box-shadow: none;
 }
 
+/* The clicked card stays lit (not dimmed) and shows its spinner while the
+   extraction kicks off, so the click visibly registers. */
+.cardLoading,
+.cardLoading:disabled {
+  border-color: var(--accent);
+  opacity: 1;
+}
+
 .cardThumb {
   display: flex;
   align-items: center;
@@ -360,6 +377,58 @@
   transform: translateY(0);
 }
 
+/* ── Loading spinner + status line ────────────────────────────────── */
+.spinner {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: brandPickerSpin 0.7s linear infinite;
+}
+
+.cardThumb .spinner {
+  width: 20px;
+  height: 20px;
+}
+
+.quickChip .spinner {
+  width: 18px;
+  height: 18px;
+}
+
+@keyframes brandPickerSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.statusBusy,
+.statusError {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.statusBusy {
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  background: var(--accent-tint);
+  color: var(--accent);
+}
+
+.statusError {
+  border: 1px solid color-mix(in srgb, var(--red) 35%, transparent);
+  background: color-mix(in srgb, var(--red) 8%, transparent);
+  color: var(--red);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .quickChip,
   .card,
@@ -369,6 +438,9 @@
   .quickChip:hover,
   .card:hover {
     transform: none;
+  }
+  .spinner {
+    animation-duration: 1.4s;
   }
 }
 

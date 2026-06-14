@@ -27,7 +27,14 @@ export interface BrandReferencePickerProps {
    *  scroll within a bounded-height parent (e.g. the New Brand modal). When
    *  false the whole picker flows and the page owns the scroll. */
   fillHeight?: boolean;
-  /** Disable interaction while an extraction is already in flight. */
+  /** Extraction kickoff is in flight. Locks further picks and lights up a
+   *  spinner on the clicked card/chip plus an "opening project" status line so
+   *  the click visibly registers in the gap before navigation. */
+  busy?: boolean;
+  /** Localized failure reason; surfaced inline so a failed kickoff never reads
+   *  as "nothing happened". */
+  error?: string | null;
+  /** Hard-disable interaction (rarely needed on top of `busy`). */
   disabled?: boolean;
   className?: string;
 }
@@ -92,10 +99,16 @@ function SearchGlyph() {
   );
 }
 
+function Spinner({ className }: { className?: string }) {
+  return <span className={[styles.spinner, className].filter(Boolean).join(' ')} aria-hidden />;
+}
+
 export function BrandReferencePicker({
   onPick,
   variant = 'full',
   fillHeight = false,
+  busy = false,
+  error = null,
   disabled = false,
   className,
 }: BrandReferencePickerProps) {
@@ -105,6 +118,9 @@ export function BrandReferencePicker({
   const [category, setCategory] = useState(ALL);
   const [query, setQuery] = useState('');
   const [limit, setLimit] = useState(pageSize);
+  // The brand the user most recently clicked — drives which card/chip shows a
+  // spinner and which name the status line names.
+  const [picked, setPicked] = useState<BrandReference | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const scrollAreaRef = useRef<HTMLDivElement | null>(null);
 
@@ -149,14 +165,20 @@ export function BrandReferencePicker({
 
   const visible = filtered.slice(0, limit);
   const showQuickPicks = category === ALL && query.trim() === '';
+  const locked = disabled || busy;
 
   const handlePick = useCallback(
     (brand: BrandReference) => {
-      if (disabled) return;
+      if (disabled || busy) return;
+      // Record the pick first so the spinner/status reflect this card the
+      // instant the kickoff begins, even before the parent flips `busy`.
+      setPicked(brand);
       onPick(brand);
     },
-    [disabled, onPick],
+    [disabled, busy, onPick],
   );
+
+  const pickedDomain = picked?.domain ?? null;
 
   const rootClass = [
     styles.root,
@@ -184,19 +206,27 @@ export function BrandReferencePicker({
         >
           <span className={styles.quickPicksLabel}>{t('brandPicker.quickPicksLabel')}</span>
           <div className={styles.quickPicks}>
-            {QUICK_PICK_BRANDS.map((brand) => (
-              <button
-                key={`quick-${brand.domain}`}
-                type="button"
-                className={styles.quickChip}
-                disabled={disabled}
-                onClick={() => handlePick(brand)}
-                data-testid={`brand-quick-${brand.domain}`}
-              >
-                <BrandFavicon domain={brand.domain} name={brand.name} />
-                <span className={styles.quickName}>{brand.name}</span>
-              </button>
-            ))}
+            {QUICK_PICK_BRANDS.map((brand) => {
+              const loadingThis = busy && brand.domain === pickedDomain;
+              return (
+                <button
+                  key={`quick-${brand.domain}`}
+                  type="button"
+                  className={`${styles.quickChip} ${loadingThis ? styles.chipLoading : ''}`}
+                  disabled={locked}
+                  aria-busy={loadingThis || undefined}
+                  onClick={() => handlePick(brand)}
+                  data-testid={`brand-quick-${brand.domain}`}
+                >
+                  {loadingThis ? (
+                    <Spinner />
+                  ) : (
+                    <BrandFavicon domain={brand.domain} name={brand.name} />
+                  )}
+                  <span className={styles.quickName}>{brand.name}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       ) : null}
@@ -228,30 +258,49 @@ export function BrandReferencePicker({
         </div>
       </div>
 
+      {error ? (
+        <p className={styles.statusError} role="alert" data-testid="brand-picker-error">
+          {error}
+        </p>
+      ) : busy && picked ? (
+        <p className={styles.statusBusy} role="status" data-testid="brand-picker-status">
+          <Spinner />
+          {t('brandPicker.opening', { brand: picked.name })}
+        </p>
+      ) : null}
+
       <div className={styles.scrollArea} ref={scrollAreaRef}>
         <div className={styles.grid} data-testid="brand-picker-grid">
-          {visible.map((brand) => (
-            <button
-              key={brand.domain}
-              type="button"
-              className={styles.card}
-              disabled={disabled}
-              onClick={() => handlePick(brand)}
-              data-testid={`brand-card-${brand.domain}`}
-            >
-              <span className={styles.cardThumb}>
-                <BrandFavicon domain={brand.domain} name={brand.name} />
-              </span>
-              <span className={styles.cardBody}>
-                <span className={styles.cardName}>{brand.name}</span>
-                <span className={styles.cardCategory}>{categoryLabel(brand.category)}</span>
-              </span>
-              <span className={styles.extractPill} aria-hidden>
-                {t('brandPicker.extractAction')}
-                <ArrowGlyph />
-              </span>
-            </button>
-          ))}
+          {visible.map((brand) => {
+            const loadingThis = busy && brand.domain === pickedDomain;
+            return (
+              <button
+                key={brand.domain}
+                type="button"
+                className={`${styles.card} ${loadingThis ? styles.cardLoading : ''}`}
+                disabled={locked}
+                aria-busy={loadingThis || undefined}
+                onClick={() => handlePick(brand)}
+                data-testid={`brand-card-${brand.domain}`}
+              >
+                <span className={styles.cardThumb}>
+                  {loadingThis ? (
+                    <Spinner />
+                  ) : (
+                    <BrandFavicon domain={brand.domain} name={brand.name} />
+                  )}
+                </span>
+                <span className={styles.cardBody}>
+                  <span className={styles.cardName}>{brand.name}</span>
+                  <span className={styles.cardCategory}>{categoryLabel(brand.category)}</span>
+                </span>
+                <span className={styles.extractPill} aria-hidden>
+                  {t('brandPicker.extractAction')}
+                  <ArrowGlyph />
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         {limit < filtered.length ? (

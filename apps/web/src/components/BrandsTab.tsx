@@ -37,7 +37,10 @@ export function BrandsTab({ onApplyDesignSystem }: BrandsTabProps = {}) {
   const [query, setQuery] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null);
-  const { run: runExtract } = useBrandExtract();
+  const { state: extractState, run: runExtract } = useBrandExtract();
+  const extractStarting = extractState.phase === 'starting';
+  const extractError =
+    extractState.phase === 'error' ? extractState.error ?? t('brand.failed') : null;
 
   const refresh = useCallback(async () => {
     const next = await fetchBrands();
@@ -194,7 +197,12 @@ export function BrandsTab({ onApplyDesignSystem }: BrandsTabProps = {}) {
           />
         ) : isEmpty ? (
           <div className={styles.pickerPane} data-testid="brands-picker-pane">
-            <BrandReferencePicker variant="full" onPick={handlePickReference} />
+            <BrandReferencePicker
+              variant="full"
+              busy={extractStarting}
+              error={extractError}
+              onPick={handlePickReference}
+            />
           </div>
         ) : (
           <div className={styles.previewEmpty}>

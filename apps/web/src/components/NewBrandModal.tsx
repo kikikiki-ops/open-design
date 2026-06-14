@@ -142,7 +142,8 @@ export function NewBrandModal({ open, onClose, onCreated }: Props) {
           <BrandReferencePicker
             variant="compact"
             fillHeight
-            disabled={starting}
+            busy={starting}
+            error={failed ? state.error ?? t('brand.failed') : null}
             onPick={handlePick}
           />
         </div>

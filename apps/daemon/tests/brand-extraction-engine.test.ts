@@ -17,6 +17,7 @@ import {
   startBrandExtraction,
 } from '../src/brands/index.js';
 import { ensureLogoFallback } from '../src/brands/logo-fallback.js';
+import { listDesignSystems } from '../src/design-systems.js';
 import {
   adoptExistingImagery,
   findImageRefs,
@@ -230,6 +231,58 @@ describe('agent-driven brand extraction engine', () => {
     expect(html).toContain('system/kit.html');
     expect(existsSync(path.join(projectDir, 'system', 'kit.html'))).toBe(true);
     expect(html).toMatch(/"colorPrimary":"#/);
+  });
+
+  it('finalizeBrand is idempotent — re-finalizing reuses the brand design system', async () => {
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+    const started = await startBrandExtraction({
+      url: 'acme.com',
+      brandsRoot,
+      projectsRoot,
+      skillsRoot: SKILLS_ROOT,
+      db,
+      logoFallback: NO_LOGO_FALLBACK,
+    });
+
+    const projectDir = path.join(projectsRoot, started.projectId);
+    writeFileSync(
+      path.join(projectDir, 'brand.json'),
+      JSON.stringify({ ...VALID_BRAND, sourceUrl: started.sourceUrl }, null, 2),
+      'utf8',
+    );
+
+    const finalizeOnce = () =>
+      finalizeBrand({
+        id: started.id,
+        brandsRoot,
+        userDesignSystemsRoot,
+        projectsRoot,
+        skillsRoot: SKILLS_ROOT,
+        db,
+        logoFallback: NO_LOGO_FALLBACK,
+        imageryFallback: NO_IMAGERY_FALLBACK,
+      });
+
+    // The live extraction agent may re-run `od brand finalize` (e.g. after
+    // fixing a validation error or enriching the kit). A second finalize must
+    // reuse the brand's existing design system, not register a duplicate.
+    const first = await finalizeOnce();
+    const second = await finalizeOnce();
+
+    expect(second.designSystemId).toBe(first.designSystemId);
+
+    // Exactly one `user:<id>` design system exists for the brand, so it never
+    // shows up twice in any design-system picker.
+    const systems = await listDesignSystems(userDesignSystemsRoot, {
+      idPrefix: 'user:',
+      source: 'user',
+      isEditable: true,
+      defaultStatus: 'draft',
+    });
+    expect(systems.filter((s) => s.title === 'Acme')).toHaveLength(1);
+
+    const detail = readBrandDetail(brandsRoot, started.id);
+    expect(detail?.meta.designSystemId).toBe(first.designSystemId);
   });
 
   it('finalizeBrand fails clearly when the agent has not written brand.json yet', async () => {
