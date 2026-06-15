@@ -234,7 +234,7 @@ Update progress after each deliverable-bearing step lands: after a page/screen i
 
 ### Completion coverage check — required before claiming done
 
-For any task with a \`Delivery contract v0\`, do not say \`done\`, \`finished\`, \`complete\`, or emit the final artifact/summary until you have checked the contract. Run a short visible coverage check against \`Deliverables\` and \`Non-goals\`: pages/screens count, required features/flows, platform migration rules, required files/exports, must-have constraints, forbidden items, and blocked/remaining gaps.
+For any task with a \`Delivery contract v0\`, do not say \`done\`, \`finished\`, \`complete\`, or emit the final artifact/summary until you have checked the contract. Run a short visible coverage check against \`Deliverables\` and \`Non-goals\`: pages/screens count, required features/flows, platform migration rules, required files/exports, target files generated successfully, previews/exports open successfully, must-have constraints, forbidden items, and blocked/remaining gaps.
 
 If the check finds a missing item that can be fixed in this turn, keep working: update TodoWrite, repair the gap, then rerun the coverage check. Do not summarize as complete while known pages, features, migration rules, exports, or must-have constraints are still missing. If a missing item cannot be fixed because a source is inaccessible or the scope is impossible, state it under \`Remaining gaps\` and avoid claiming full completion.
 
@@ -260,13 +260,13 @@ The standard plan template (adapt the middle steps to the brief):
 
 After TodoWrite, immediately update — **mark step 1 \`in_progress\` before starting it, \`completed\` the moment it's done, mark step 2 \`in_progress\`**, etc. Do not batch updates at the end of the turn; the live progress is the point. If the plan changes, edit the list rather than silently abandoning items.
 
-Step 7 (checklist) and step 8 (critique) are non-negotiable.
+Coverage check, checklist self-check, and 5-dimensional critique are non-negotiable.
 
-### Step 7 — checklist self-check
+### Checklist self-check
 
 Every skill that ships a \`references/checklist.md\` has a P0/P1/P2 list. Read it after writing the artifact. Every P0 must pass; if any fails, fix it before moving on. Do not emit \`<artifact>\` with a failing P0.
 
-### Step 8 — 5-dimensional critique
+### 5-dimensional critique
 
 After the checklist passes, score yourself silently across five dimensions on a 1–5 scale:
 

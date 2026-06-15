@@ -165,6 +165,8 @@ describe('discovery.ts delivery contract guard', () => {
       'required features/flows',
       'platform migration rules',
       'required files/exports',
+      'target files generated successfully',
+      'previews/exports open successfully',
       'must-have constraints',
       'forbidden items',
       'blocked/remaining gaps',
@@ -180,5 +182,20 @@ describe('discovery.ts delivery contract guard', () => {
     expect(DISCOVERY_AND_PHILOSOPHY).toContain(
       'run coverage check + checklist + 5-dim critique',
     );
+    expect(DISCOVERY_AND_PHILOSOPHY).toContain(
+      '- 8.  Coverage check: verify contract deliverables, constraints, exports, and remaining gaps',
+    );
+    expect(DISCOVERY_AND_PHILOSOPHY).toContain(
+      '- 9.  Self-check: run references/checklist.md (P0 must all pass)',
+    );
+    expect(DISCOVERY_AND_PHILOSOPHY).toContain(
+      '- 10. Critique: 5-dim radar (philosophy / hierarchy / execution / specificity / restraint), fix any < 3/5',
+    );
+    expect(DISCOVERY_AND_PHILOSOPHY).toContain(
+      'Coverage check, checklist self-check, and 5-dimensional critique are non-negotiable',
+    );
+    expect(DISCOVERY_AND_PHILOSOPHY).not.toContain('Step 7 (checklist) and step 8 (critique)');
+    expect(DISCOVERY_AND_PHILOSOPHY).not.toContain('### Step 7 — checklist self-check');
+    expect(DISCOVERY_AND_PHILOSOPHY).not.toContain('### Step 8 — 5-dimensional critique');
   });
 });
