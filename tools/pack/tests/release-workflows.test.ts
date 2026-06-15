@@ -198,6 +198,15 @@ describe("release workflows", () => {
     expect(stable).toContain("tools\\release\\scripts\\prepare-platform-assets.ps1");
     expect(countOccurrences(stable, "tools-release publish-platform")).toBeGreaterThanOrEqual(4);
     expect(stable).toContain("tools-release publish-metadata");
+    // The stable promotion gate validates prerelease metadata.github fields; the
+    // publish steps must therefore pass the resolved release attribution through.
+    expect(stable).toContain("RELEASE_COMMIT: ${{ needs.metadata.outputs.commit }}");
+    expect(stable).toContain("RELEASE_REPOSITORY: ${{ github.repository }}");
+    expect(stable).toContain("RELEASE_WORKFLOW: ${{ github.workflow }}");
+    expect(countOccurrences(stable, "RELEASE_COMMIT: ${{ needs.metadata.outputs.commit }}")).toBeGreaterThanOrEqual(5);
+    expect(stable).toContain("RELEASE_RUN_ID: ${{ github.run_id }}");
+    expect(countOccurrences(stable, "RELEASE_BRANCH: ${{ needs.metadata.outputs.branch }}")).toBeGreaterThanOrEqual(5);
+    expect(stable).not.toContain("RELEASE_BRANCH: ${{ github.ref_name }}");
     expect(stable).toContain("tools-release verify-metadata");
     expect(stable).toContain("tools-release summary-metadata");
     expect(stable).toContain("open-design-release-mac-arm64-publish-manifest");

@@ -142,6 +142,15 @@ export interface AmrEntryAttribution {
   sourceProduct: 'open_design';
   sourceDetail: TrackingAmrEntrySource;
   occurredAt: string;
+  // Self-reported onboarding profile, forwarded to AMR (anchored to entryId) so
+  // AMR can segment paid conversion by who the visitor is. Open strings, not a
+  // union: onboarding keeps these open so a new option never forces a contract
+  // bump. Absent when the visitor skipped or never reached onboarding. useCase
+  // is multi-select, hence an array.
+  odRole?: string;
+  odOrgSize?: string;
+  odUseCase?: string[];
+  odSource?: string;
 }
 
 // The six tabs inside the New project modal (CSV row 7 tab_name).
@@ -1553,6 +1562,7 @@ export interface IntegrationsConnectorsTabClickProps {
     | 'save_key'
     | 'clear'
     | 'get_api_key'
+    | 'gate_card'
     | 'provider_chip'
     | 'search_connectors';
 }
@@ -2658,7 +2668,7 @@ export interface LangfuseReportResultProps {
   langfuse_delivery_status: TrackingLangfuseDeliveryStatus;
   langfuse_drop_reason?: TrackingLangfuseDropReason;
   langfuse_report_result: TrackingLangfuseReportResult;
-  langfuse_report_trigger: 'final_message';
+  langfuse_report_trigger: 'final_message' | 'terminal_fallback';
   langfuse_report_skip_reason?: TrackingLangfuseReportSkipReason;
   report_duration_ms?: number;
   result?: TrackingRunResult;

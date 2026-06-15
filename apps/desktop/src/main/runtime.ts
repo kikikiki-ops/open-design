@@ -1298,6 +1298,27 @@ async function reportRendererCrash(
   }
 }
 
+/**
+ * Native directory picker, parented to the renderer window that initiated
+ * the IPC call. Parenting makes the dialog window-modal and hands it
+ * keyboard focus (most visibly on Windows): without a parent the focus
+ * stays on the Electron window, so pressing Esc falls through to the web
+ * app and closes the in-app modal *behind* the still-open native picker.
+ * With a parent the picker owns Esc and cancels itself.
+ */
+async function showDirectoryPickerForSender(
+  sender: Electron.WebContents,
+): Promise<Electron.OpenDialogReturnValue> {
+  const parent =
+    BrowserWindow.fromWebContents(sender) ?? BrowserWindow.getFocusedWindow();
+  const pickerOptions: Electron.OpenDialogOptions = {
+    properties: ["openDirectory", "createDirectory"],
+  };
+  return parent
+    ? dialog.showOpenDialog(parent, pickerOptions)
+    : dialog.showOpenDialog(pickerOptions);
+}
+
 export async function createDesktopRuntime(options: DesktopRuntimeOptions): Promise<DesktopRuntime> {
   const preloadPath = options.preloadPath ?? join(dirname(fileURLToPath(import.meta.url)), "preload.cjs");
   applyDockIcon();
@@ -1342,7 +1363,7 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
   // import boundary while leaving web-only deployments untouched.
   ipcMain.handle(
     "dialog:pick-and-import",
-    async (_event, init?: { name?: string; skillId?: string | null; designSystemId?: string | null }) => {
+    async (event, init?: { name?: string; skillId?: string | null; designSystemId?: string | null }) => {
       // Defensive failsafe for non-production runtimes (test harnesses
       // that construct createDesktopRuntime without a secret). Round-5
       // production wiring in runDesktopMain ALWAYS passes the per-process
@@ -1365,7 +1386,7 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
       if (!apiBaseUrl) {
         return { ok: false, reason: "daemon API URL not available" };
       }
-      const result = await dialog.showOpenDialog({ properties: ["openDirectory", "createDirectory"] });
+      const result = await showDirectoryPickerForSender(event.sender);
       if (result.canceled || result.filePaths.length === 0) {
         return { ok: false, canceled: true };
       }
@@ -1394,7 +1415,7 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
   // POST are a single main-process transaction.
   ipcMain.handle(
     "dialog:pick-and-replace-working-dir",
-    async (_event, init?: { projectId?: string }) => {
+    async (event, init?: { projectId?: string }) => {
       if (options.desktopAuthSecret == null) {
         return { ok: false, reason: "desktop auth secret not registered" };
       }
@@ -1408,7 +1429,7 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
       if (!apiBaseUrl) {
         return { ok: false, reason: "daemon API URL not available" };
       }
-      const result = await dialog.showOpenDialog({ properties: ["openDirectory", "createDirectory"] });
+      const result = await showDirectoryPickerForSender(event.sender);
       if (result.canceled || result.filePaths.length === 0) {
         return { ok: false, canceled: true };
       }
@@ -1431,11 +1452,11 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
   // spends the token on POST /api/projects/:id/working-dir once the project
   // exists. Main remains the single source of filesystem paths crossing into
   // the daemon (same trust boundary as dialog:pick-and-replace-working-dir).
-  ipcMain.handle("dialog:pick-working-dir", async () => {
+  ipcMain.handle("dialog:pick-working-dir", async (event) => {
     if (options.desktopAuthSecret == null) {
       return { ok: false, reason: "desktop auth secret not registered" };
     }
-    const result = await dialog.showOpenDialog({ properties: ["openDirectory", "createDirectory"] });
+    const result = await showDirectoryPickerForSender(event.sender);
     if (result.canceled || result.filePaths.length === 0) {
       return { ok: false, canceled: true };
     }
@@ -1503,6 +1524,12 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
   let pendingUrl: string | null = null;
   let stopped = false;
   let timer: NodeJS.Timeout | null = null;
+  // Set when the main-frame load fails or the renderer process is gone. The
+  // poll loop reloads the current URL to recover instead of leaving a blank app.
+  let rendererFailed = false;
+  // True while a `tick()` is mid-flight, so load failures do not schedule two
+  // independent polling loops.
+  let ticking = false;
 
   const consoleEntries: DesktopConsoleEntry[] = [];
   const petWindow = createDesktopPetWindow(preloadPath, options.osLocale);
@@ -1600,6 +1627,17 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
       reason: details.reason,
       exit_code: typeof details.exitCode === "number" ? details.exitCode : null,
     });
+    // A clean-exit is intentional teardown; a crash / OOM / OS kill of a
+    // backgrounded renderer leaves the window blank, so flag it for the poll
+    // loop to reload the app.
+    if (details.reason !== "clean-exit") markRendererFailed();
+  });
+  // A failed main-frame navigation parks the renderer on chrome-error:// (blank
+  // white) with no auto-retry. errorCode -3 (ABORTED) is a normal navigation
+  // cancel (a new load started), so ignore it and sub-frame failures; anything
+  // else means the load to the web server failed and needs a retry.
+  window.webContents.on("did-fail-load", (_event, errorCode, _description, _url, isMainFrame) => {
+    if (isMainFrame && errorCode !== -3) markRendererFailed();
   });
 
   const sendUpdaterStatus = (status = options.updater?.snapshot() ?? unavailableUpdaterStatus()) => {
@@ -1916,12 +1954,34 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
     }, delayMs);
   };
 
+  // Flag the renderer as needing a reload and poll again promptly, rather than
+  // waiting up to RUNNING_POLL_MS. The next `tick` re-loads the current URL (see
+  // the `rendererFailed` branch) and clears the flag once the load succeeds. If
+  // the web server is still unreachable, discovery returns null and the loop
+  // naturally backs off to RUNNING_POLL_MS until it returns.
+  const markRendererFailed = () => {
+    if (stopped || window.isDestroyed()) return;
+    rendererFailed = true;
+    // Mid-tick failures (a rejecting loadURL) are rescheduled by the tick's own
+    // catch/success path; scheduling here too would spawn a second poll loop.
+    if (ticking) return;
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    schedule(PENDING_POLL_MS);
+  };
+
   const tick = async () => {
     if (stopped || window.isDestroyed()) return;
 
+    ticking = true;
     try {
       const url = await options.discoverUrl();
-      if (url != null && url !== currentUrl) {
+      // Reload when the discovered URL changes, OR when the renderer is in a
+      // failed/blank state (URL unchanged but the page died), so a window
+      // restored from the background recovers instead of staying blank.
+      if (url != null && (url !== currentUrl || rendererFailed)) {
         pendingUrl = url;
         // Load the web app into the still-hidden main window as soon as it is
         // discovered; it mounts behind the splash so the swap is instant.
@@ -1929,6 +1989,7 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
         await window.loadURL(url);
         console.info("[open-design desktop] main window loadURL success", { url });
         currentUrl = url;
+        rendererFailed = false;
         pendingUrl = null;
         const nextPetUrl = desktopPetUrl(url);
         if (!petWindow.isDestroyed() && nextPetUrl !== currentPetUrl) {
@@ -1948,6 +2009,8 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
       pendingUrl = null;
       console.error("desktop web discovery failed", error);
       schedule(PENDING_POLL_MS);
+    } finally {
+      ticking = false;
     }
   };
 
