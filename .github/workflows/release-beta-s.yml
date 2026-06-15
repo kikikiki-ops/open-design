@@ -688,6 +688,15 @@ jobs:
           source "$OPEN_DESIGN_RELEASE_PROFILE"
           fnm exec --using=24 -- pnpm exec tools-release publish-platform
 
+      - name: Upload mac_arm64 publish manifest fallback
+        if: ${{ inputs.publish && success() }}
+        uses: actions/upload-artifact@v7
+        continue-on-error: true
+        with:
+          name: open-design-betas-mac-arm64-publish-manifest
+          path: ${{ runner.temp }}/release-platform-manifests/mac_arm64.json
+          if-no-files-found: warn
+
   build_win_x64:
     name: Build self-hosted beta win_x64
     needs: metadata
@@ -809,6 +818,15 @@ jobs:
         shell: pwsh
         run: '& "C:\Users\runner\.cargo\bin\fnm.exe" exec --using=24 -- pnpm.cmd exec tools-release publish-platform'
 
+      - name: Upload win_x64 publish manifest fallback
+        if: ${{ inputs.publish && success() }}
+        uses: actions/upload-artifact@v7
+        continue-on-error: true
+        with:
+          name: open-design-betas-win-x64-publish-manifest
+          path: C:\.tmp\runner\od-beta\win_x64\release-platform-manifests\win_x64.json
+          if-no-files-found: warn
+
   publish:
     name: Publish betas metadata to Nexu S3
     needs:
@@ -862,10 +880,19 @@ jobs:
           source "$OPEN_DESIGN_RELEASE_PROFILE"
           fnm exec --using=24 -- pnpm install --frozen-lockfile --prefer-offline
 
+      - name: Download mac_arm64 publish manifest fallback
+        if: ${{ inputs.enable_mac_arm64 && needs.build_mac_arm64.result == 'success' }}
+        uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: open-design-betas-mac-arm64-publish-manifest
+          path: ${{ runner.temp }}/release-platform-manifest-fallbacks/mac_arm64
+
       - name: Download mac_arm64 platform manifest
         if: ${{ inputs.enable_mac_arm64 && needs.build_mac_arm64.result == 'success' }}
         env:
           RELEASE_ASSET_SUFFIX: ${{ (inputs.mac_arm64_delivery_mode == 'internal-updater' || inputs.mac_arm64_sign_mode != 'no') && '.signed' || '.unsigned' }}
+          RELEASE_FALLBACK_MANIFEST_DIR: ${{ runner.temp }}/release-platform-manifest-fallbacks/mac_arm64
           RELEASE_MANIFEST_DIR: ${{ runner.temp }}/release-platform-manifests
           RELEASE_PUBLIC_ORIGIN: ${{ inputs.release_public_origin }}
           RELEASE_TARGET: mac_arm64
@@ -879,21 +906,36 @@ jobs:
           source "$OPEN_DESIGN_RELEASE_PROFILE"
           mkdir -p "$RELEASE_MANIFEST_DIR"
           manifest_url="${RELEASE_PUBLIC_ORIGIN%/}/betas/versions/${RELEASE_VERSION}${RELEASE_ASSET_SUFFIX}/platforms/${RELEASE_TARGET}.json"
+          fallback_manifest="$RELEASE_FALLBACK_MANIFEST_DIR/$RELEASE_TARGET.json"
           for attempt in 1 2 3; do
             if curl -fsSL "$manifest_url" -o "$RELEASE_MANIFEST_DIR/$RELEASE_TARGET.json"; then
               break
             fi
             if [ "$attempt" -eq 3 ]; then
+              if [ -f "$fallback_manifest" ]; then
+                cp "$fallback_manifest" "$RELEASE_MANIFEST_DIR/$RELEASE_TARGET.json"
+                echo "::warning::Using best-effort artifact fallback for $RELEASE_TARGET after S3 manifest download failed: $manifest_url"
+                break
+              fi
               echo "failed to download $manifest_url after $attempt attempts" >&2
               exit 1
             fi
             sleep "$((attempt * 5))"
           done
 
+      - name: Download win_x64 publish manifest fallback
+        if: ${{ inputs.enable_win_x64 && needs.build_win_x64.result == 'success' }}
+        uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: open-design-betas-win-x64-publish-manifest
+          path: ${{ runner.temp }}/release-platform-manifest-fallbacks/win_x64
+
       - name: Download win_x64 platform manifest
         if: ${{ inputs.enable_win_x64 && needs.build_win_x64.result == 'success' }}
         env:
           RELEASE_ASSET_SUFFIX: ${{ inputs.win_x64_sign_mode == 'on' && '.signed' || '.unsigned' }}
+          RELEASE_FALLBACK_MANIFEST_DIR: ${{ runner.temp }}/release-platform-manifest-fallbacks/win_x64
           RELEASE_MANIFEST_DIR: ${{ runner.temp }}/release-platform-manifests
           RELEASE_PUBLIC_ORIGIN: ${{ inputs.release_public_origin }}
           RELEASE_TARGET: win_x64
@@ -907,11 +949,17 @@ jobs:
           source "$OPEN_DESIGN_RELEASE_PROFILE"
           mkdir -p "$RELEASE_MANIFEST_DIR"
           manifest_url="${RELEASE_PUBLIC_ORIGIN%/}/betas/versions/${RELEASE_VERSION}${RELEASE_ASSET_SUFFIX}/platforms/${RELEASE_TARGET}.json"
+          fallback_manifest="$RELEASE_FALLBACK_MANIFEST_DIR/$RELEASE_TARGET.json"
           for attempt in 1 2 3; do
             if curl -fsSL "$manifest_url" -o "$RELEASE_MANIFEST_DIR/$RELEASE_TARGET.json"; then
               break
             fi
             if [ "$attempt" -eq 3 ]; then
+              if [ -f "$fallback_manifest" ]; then
+                cp "$fallback_manifest" "$RELEASE_MANIFEST_DIR/$RELEASE_TARGET.json"
+                echo "::warning::Using best-effort artifact fallback for $RELEASE_TARGET after S3 manifest download failed: $manifest_url"
+                break
+              fi
               echo "failed to download $manifest_url after $attempt attempts" >&2
               exit 1
             fi
