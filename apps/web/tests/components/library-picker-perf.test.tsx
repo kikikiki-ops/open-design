@@ -78,7 +78,7 @@ describe('LibraryPicker debounced search', () => {
     render(<LibraryPicker onClose={() => {}} onConfirm={() => {}} />);
     await screen.findByText('Acme Brand System');
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Brand kit' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Design system' }));
 
     expect(screen.getByText('Acme Brand System')).toBeTruthy();
     expect(screen.queryByText('Alpha')).toBeNull();

@@ -14,12 +14,112 @@
   const I18N = globalThis.OD_CLIPPER_I18N;
   let activeLocale = I18N?.currentLocale ? I18N.currentLocale() : 'en';
 
+  // Built-in English copy for every label this capture renders. The extension's
+  // shared i18n bundle (i18n.js) is preferred when present — it carries the
+  // translations — but injection/order glitches have shipped captures with the
+  // bundle missing, which used to bake raw keys ("brandPalette") straight into
+  // the saved HTML. This map guarantees real words no matter what; `tr` only
+  // falls back to the raw key when a string is genuinely unknown.
+  const EN_FALLBACK = {
+    brandFallbackTitle: 'Captured site',
+    brandFallbackDescription: 'Programmatically extracted from the live web page.',
+    brandPageTitleSuffix: 'Design System',
+    brandFileTitle: '{title}',
+    brandReady: 'Captured',
+    brandLogo: 'Logo',
+    brandNoLogoFound: 'No logo detected',
+    brandTypography: 'Typography',
+    brandPalette: 'Palette',
+    brandVoiceTone: 'Voice & tone',
+    brandImageryLayout: 'Imagery & layout',
+    brandImages: 'Images',
+    brandComponentKit: 'Component kit',
+    brandComponentKitSub: 'A working UI kit colored entirely from the captured palette, type and corner radius.',
+    brandSubjectsLabel: 'Subjects',
+    brandRadiusLabel: 'Corner radius',
+    brandLayoutPosture: 'Layout posture',
+    brandImageryStyle: '{count} representative images captured from this page.',
+    brandImageryStyleNone: 'No representative imagery was captured from this page.',
+    brandViewAll: 'View all ({count})',
+    brandAllImages: 'All images · {count}',
+    brandClose: 'Close',
+    brandPrevImage: 'Previous image',
+    brandNextImage: 'Next image',
+    brandImageLabel: 'Image {index}',
+    brandKeywordFallback: 'captured',
+    brandDataNote: 'A structured JSON payload is embedded at <code>#od-design-system-data</code> for downstream automation.',
+    swatchBackground: 'Background',
+    swatchSurface: 'Surface',
+    swatchForeground: 'Foreground',
+    swatchMuted: 'Muted',
+    swatchBorder: 'Border',
+    swatchAccent: 'Accent',
+    swatchSupport: 'Secondary',
+    swatchHighlight: 'Highlight',
+    swatchColor: 'Color {index}',
+    swatchUseBackground: 'Page background',
+    swatchUseSurface: 'Cards and raised panels',
+    swatchUseForeground: 'Primary text and icons',
+    swatchUseMuted: 'Secondary text and captions',
+    swatchUseBorder: 'Dividers and outlines',
+    swatchUseAccent: 'Primary actions and emphasis',
+    swatchUseSupport: 'Secondary highlights',
+    swatchUseHighlight: 'Accents and details',
+    layoutSquare: 'Square, sharp corners',
+    layoutRounded: 'Rounded corners (~{px}px radius)',
+    layoutShadow: 'Soft shadows add depth',
+    layoutFlat: 'Flat surfaces, minimal shadow',
+    layoutBordered: 'Hairline borders frame content',
+    kitButtons: 'Buttons',
+    kitPrimary: 'Primary',
+    kitSecondary: 'Secondary',
+    kitGhost: 'Ghost',
+    kitDisabled: 'Disabled',
+    kitForms: 'Form controls',
+    kitFieldLabel: 'Email address',
+    kitFieldPlaceholder: 'you@example.com',
+    kitSelectLabel: 'Plan',
+    kitTextareaPlaceholder: 'Write a message…',
+    kitCheckbox: 'Email me updates',
+    kitRadioA: 'Monthly',
+    kitRadioB: 'Annual',
+    kitSwitch: 'Enabled',
+    kitBadges: 'Badges & navigation',
+    kitBadgeNew: 'New',
+    kitBadgeBeta: 'Beta',
+    kitBadgePro: 'Pro',
+    kitCardTitle: 'Card title',
+    kitCardBody: 'Cards, fields and chips inherit the captured radius, border and color.',
+    kitAlert: 'Heads up — this kit is generated from one captured design seed.',
+    kitTabs: 'Table',
+    kitTabOverview: 'Overview',
+    kitTabActivity: 'Activity',
+    kitTabSettings: 'Settings',
+    kitTableHead1: 'Name',
+    kitTableHead2: 'Role',
+    kitTableHead3: 'Status',
+    kitTableStatus: 'Active',
+  };
+
+  function interpolateLocal(raw, vars) {
+    if (!vars) return raw;
+    return String(raw).replace(/\{(\w+)\}/g, (_, name) => (vars[name] == null ? `{${name}}` : String(vars[name])));
+  }
+
   function setActiveLocale(locale) {
-    activeLocale = I18N?.normalizeLocale ? (I18N.normalizeLocale(locale) || activeLocale) : (locale || activeLocale);
+    const api = globalThis.OD_CLIPPER_I18N || I18N;
+    activeLocale = api?.normalizeLocale ? (api.normalizeLocale(locale) || activeLocale) : (locale || activeLocale);
   }
 
   function tr(key, vars) {
-    return I18N?.t ? I18N.t(key, vars, activeLocale) : key;
+    const api = globalThis.OD_CLIPPER_I18N || I18N;
+    if (api?.t) {
+      const value = api.t(key, vars, activeLocale);
+      // The shared bundle returns the key unchanged when it has no entry; treat
+      // that as a miss and fall through to the built-in English copy.
+      if (value != null && value !== key) return value;
+    }
+    return interpolateLocal(EN_FALLBACK[key] || key, vars);
   }
 
   function text(value) {
@@ -538,275 +638,502 @@
     };
   }
 
-  function swatchName(index, color, role) {
-    const names = [
-      tr('swatchBackground'),
-      tr('swatchSurface'),
-      tr('swatchForeground'),
-      tr('swatchMuted'),
-      tr('swatchBorder'),
-      tr('swatchAccent'),
-      tr('swatchSupport'),
-      tr('swatchHighlight'),
-    ];
-    return role || names[index] || tr('swatchColor', { index: index + 1 });
-  }
-
   function renderHtml(data, fontFaces) {
-    const palette = data.palette.length ? data.palette : [
-      { hex: '#FFFFFF', roles: ['background'] },
-      { hex: '#111111', roles: ['foreground'] },
-      { hex: '#C96442', roles: ['accent'] },
-    ];
-    const light = data.theme.light;
-    const dark = data.theme.dark;
-    const logo = data.assets.logos[0];
+    const content = data.content;
+    const colors =
+      data.brand && data.brand.colors && data.brand.colors.length
+        ? data.brand.colors
+        : [roleColor('background', '#FFFFFF'), roleColor('foreground', '#1A1A18'), roleColor('accent', '#C96442')];
+    const byRole = (role, fallback) => {
+      const found = colors.find((c) => c.role === role);
+      return found ? found.hex : fallback;
+    };
+    const background = byRole('background', '#FFFFFF');
+    const foreground = byRole('foreground', '#1A1A18');
+    const accent = byRole('accent', '#C96442');
+    const ink = accentInk(accent, foreground);
+    const onAccent = contrastText(accent);
+
+    const specs = (data.typography && data.typography.specs) || [];
+    const stackAt = (i, fallback) => (specs[i] && specs[i].stack) || fallback;
+    const fontDisplay = stackAt(0, 'ui-serif, Georgia, "Times New Roman", serif');
+    const fontBody = stackAt(1, 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif');
+    const fontMono = stackAt(3, 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace');
+
+    const logos = data.assets.logos || [];
+    const images = data.assets.images || [];
+    const logo = logos[0];
     const fontCss = fontFaces.length ? `${fontFaces.join('\n')}\n` : '';
-    const logoHtml = data.assets.logos.length
-      ? data.assets.logos.map((item) => `
-        <figure class="asset-card logo-card">
-          <img src="${escapeHtml(item.src)}" alt="${escapeHtml(item.label || tr('brandAssetAlt'))}" />
-          <figcaption>${escapeHtml(item.label || tr('brandLogoAsset'))}</figcaption>
-        </figure>`).join('')
-      : `<div class="empty-card">${escapeHtml(data.content.title.slice(0, 1).toUpperCase())}</div>`;
-    const imagesHtml = data.assets.images.length
-      ? data.assets.images.map((item, i) => `
-        <figure class="asset-card image-card">
-          <img src="${escapeHtml(item.src)}" alt="${escapeHtml(item.label || tr('brandImageAlt', { index: i + 1 }))}" />
-          <figcaption>${escapeHtml(item.label || tr('brandImageLabel', { index: i + 1 }))}</figcaption>
-        </figure>`).join('')
-      : `<div class="empty-note">${escapeHtml(tr('brandNoImages'))}</div>`;
-    const paletteHtml = palette.map((item, i) => {
-      const role = item.roles?.[0] ? String(item.roles[0]).replace(/^--/, '') : '';
-      return `
-        <article class="swatch">
-          <div class="swatch-color" style="background:${escapeHtml(item.hex)};color:${contrastText(item.hex)}">${escapeHtml(item.hex)}</div>
-          <div class="swatch-body">
-            <strong>${escapeHtml(swatchName(i, item.hex, role))}</strong>
-            <span>${escapeHtml((item.roles || []).join(' / ') || tr('brandObservedColor'))}</span>
-          </div>
-        </article>`;
-    }).join('');
-    const typeHtml = data.typography.specs.map((spec) => `
-      <article class="type-card">
-        <span>${escapeHtml(spec.role)}</span>
-        <strong style="font-family:${escapeHtml(spec.stack)};font-weight:${escapeHtml(spec.weight)}">Ag</strong>
-        <small>${escapeHtml(spec.family)} · ${escapeHtml(spec.weight)} · ${escapeHtml(spec.size)}</small>
-      </article>`).join('');
-    const headingsHtml = data.content.headings.length
-      ? data.content.headings.map((h) => `<li>${escapeHtml(h)}</li>`).join('')
-      : `<li>${escapeHtml(tr('brandNoHeading'))}</li>`;
-    const keywordHtml = data.content.keywords.length
-      ? data.content.keywords.map((k) => `<span>${escapeHtml(k)}</span>`).join('')
-      : `<span>${escapeHtml(tr('brandKeywordFallback'))}</span>`;
+    const initial = escapeHtml((content.title || '?').trim().slice(0, 1).toUpperCase());
+
+    const layout = data.layout || { radius: '—', postureRules: [] };
+    const radiusNum = pxValue(layout.radius);
+    const uiRadius = radiusNum != null ? `${Math.max(0, Math.min(16, Math.round(radiusNum)))}px` : '10px';
+
+    // --- Header identity mark ---
+    const headerMark = logo
+      ? `<span class="id-mark" style="background:${escapeHtml(background)}"><img src="${escapeHtml(logo.src)}" alt="" /></span>`
+      : `<span class="id-mark initial">${initial}</span>`;
+
+    // --- Hero band (first representative image) ---
+    const heroHtml = images.length
+      ? `<div class="hero"><img src="${escapeHtml(images[0].src)}" alt="${escapeHtml(content.title)}" loading="lazy" /></div>`
+      : '';
+
+    // --- Logo ---
+    const logoThumbs =
+      logos.length > 1
+        ? `<div class="logo-thumbs">${logos
+            .map(
+              (item, i) =>
+                `<button type="button" class="logo-thumb${i === 0 ? ' active' : ''}" data-src="${escapeHtml(item.src)}" aria-label="${escapeHtml(item.label || 'logo')}"><img src="${escapeHtml(item.src)}" alt="" /></button>`,
+            )
+            .join('')}</div>`
+        : '';
+    const logoBlock = logo
+      ? `<div class="logo-stage" style="background:${escapeHtml(background)}"><img id="od-logo-img" src="${escapeHtml(logo.src)}" alt="${escapeHtml(logo.label || content.title)}" /></div>${logoThumbs}`
+      : `<div class="logo-stage empty"><span class="logo-initial">${initial}</span><span class="logo-empty-note">${escapeHtml(tr('brandNoLogoFound'))}</span></div>`;
+
+    // --- Typography ---
+    const fontTiles = [
+      ['Display', 0],
+      ['Body', 1],
+      ['Mono', 3],
+    ]
+      .map(([label, i]) => ({ label, spec: specs[i] }))
+      .filter((t) => t.spec && t.spec.family)
+      .map(
+        (t) =>
+          `<div class="font-tile"><div class="ag" style="font-family:${escapeHtml(t.spec.stack)}">Ag</div><div class="ft-meta"><div class="ft-name">${escapeHtml(t.spec.family)}</div><div class="ft-role">${escapeHtml(t.label)}</div></div></div>`,
+      )
+      .join('');
+    const fontTilesHtml = fontTiles ? `<div class="fonts">${fontTiles}</div>` : '';
+    const typeRows = [
+      { label: 'Display', i: 0, sample: content.title || 'Aa Bb Cc', size: '32px', weight: 600 },
+      { label: 'Body', i: 1, sample: content.description || 'The quick brown fox jumps over the lazy dog.', size: '16px', weight: 400 },
+      { label: 'Mono', i: 3, sample: 'const system = capture(url)', size: '13px', weight: 400 },
+    ]
+      .filter((r) => specs[r.i] && specs[r.i].family)
+      .map((r) => {
+        const spec = specs[r.i];
+        const w = spec.weight ? ` · ${escapeHtml(String(spec.weight))}` : '';
+        return `<div class="type-row"><div class="type-meta"><span class="type-label">${escapeHtml(r.label)}</span><span class="type-font">${escapeHtml(spec.family)}${w}</span></div><p class="type-sample" style="font-family:${escapeHtml(spec.stack)};font-size:${r.size};font-weight:${r.weight}">${escapeHtml(r.sample)}</p></div>`;
+      })
+      .join('');
+
+    // --- Palette ---
+    const paletteHtml = colors
+      .map(
+        (c) =>
+          `<div class="swatch"><div class="swatch-chip" style="background:${escapeHtml(c.hex)};color:${contrastText(c.hex)}"><span class="hex">${escapeHtml(c.hex)}</span></div><div class="swatch-body"><div class="swatch-name">${escapeHtml(c.name || c.role)}</div><div class="swatch-role">${escapeHtml(c.role || '')}</div>${c.usage ? `<div class="swatch-usage">${escapeHtml(c.usage)}</div>` : ''}</div></div>`,
+      )
+      .join('');
+
+    // --- Voice & tone (all observed copy: keyword chips, the site's own
+    //     description, real page headings as key messages) ---
+    const chips = (content.keywords || [])
+      .slice(0, 8)
+      .map((k) => `<span class="chip">${escapeHtml(k)}</span>`)
+      .join('');
+    const pillars = (content.headings || [])
+      .slice(0, 5)
+      .map((h) => `<li><span class="dash">—</span><span>${escapeHtml(h)}</span></li>`)
+      .join('');
+    const voiceHtml = `<div class="card">${chips ? `<div class="chips">${chips}</div>` : ''}${content.description ? `<p class="tone">${escapeHtml(content.description)}</p>` : ''}${pillars ? `<ul class="pillars">${pillars}</ul>` : ''}</div>`;
+
+    // --- Imagery & layout ---
+    const imageryLine = images.length ? tr('brandImageryStyle', { count: images.length }) : tr('brandImageryStyleNone');
+    const subjects = (content.keywords || []).slice(0, 6).join(', ');
+    const posture = (layout.postureRules || []).map((r) => `<li>${escapeHtml(r)}</li>`).join('');
+    const imageryHtml = `<div class="card imagery"><p>${escapeHtml(imageryLine)}</p>${subjects ? `<p><span class="k">${escapeHtml(tr('brandSubjectsLabel'))}:</span> ${escapeHtml(subjects)}</p>` : ''}<p><span class="k">${escapeHtml(tr('brandRadiusLabel'))}:</span> ${escapeHtml(layout.radius)}</p>${posture ? `<div class="posture"><div class="mini-label">${escapeHtml(tr('brandLayoutPosture'))}</div><ul>${posture}</ul></div>` : ''}</div>`;
+
+    // --- Images gallery (compact, click to preview) ---
+    const gallery = images.length
+      ? `<section class="sec"><div class="sec-head"><h2 class="sec-title">${escapeHtml(tr('brandImages'))}</h2>${images.length > 8 ? `<button type="button" class="view-all" id="od-view-all">${escapeHtml(tr('brandViewAll', { count: images.length }))}</button>` : ''}</div><div class="gallery">${images
+          .map((s, i) => {
+            const cap = s.label || '';
+            return `<button type="button" class="shot" data-idx="${i}" aria-label="${escapeHtml(cap || tr('brandImageLabel', { index: i + 1 }))}"><span class="shot-frame"><img src="${escapeHtml(s.src)}" alt="${escapeHtml(cap)}" loading="lazy" /></span>${cap ? `<span class="shot-cap">${escapeHtml(cap)}</span>` : ''}</button>`;
+          })
+          .join('')}</div></section>`
+      : '';
+
+    // --- Component kit (a complete, on-brand UI kit) ---
+    const kit = `<div class="kit">
+      <div class="kit-group">
+        <div class="kit-label">${escapeHtml(tr('kitButtons'))}</div>
+        <div class="kit-row">
+          <button type="button" class="btn primary">${escapeHtml(tr('kitPrimary'))}</button>
+          <button type="button" class="btn secondary">${escapeHtml(tr('kitSecondary'))}</button>
+          <button type="button" class="btn ghost">${escapeHtml(tr('kitGhost'))}</button>
+          <button type="button" class="btn primary sm">${escapeHtml(tr('kitPrimary'))}</button>
+          <button type="button" class="btn primary" disabled>${escapeHtml(tr('kitDisabled'))}</button>
+        </div>
+      </div>
+      <div class="kit-group">
+        <div class="kit-label">${escapeHtml(tr('kitForms'))}</div>
+        <div class="kit-grid">
+          <label class="field-label">${escapeHtml(tr('kitFieldLabel'))}<input class="input" type="email" placeholder="${escapeHtml(tr('kitFieldPlaceholder'))}" /></label>
+          <label class="field-label">${escapeHtml(tr('kitSelectLabel'))}<select class="input"><option>${escapeHtml(tr('kitRadioA'))}</option><option>${escapeHtml(tr('kitRadioB'))}</option></select></label>
+        </div>
+        <textarea class="input textarea" rows="2" placeholder="${escapeHtml(tr('kitTextareaPlaceholder'))}"></textarea>
+        <div class="kit-row toggles">
+          <label class="check"><input type="checkbox" checked /> ${escapeHtml(tr('kitCheckbox'))}</label>
+          <label class="check"><input type="radio" name="od-kit-r" checked /> ${escapeHtml(tr('kitRadioA'))}</label>
+          <label class="check"><input type="radio" name="od-kit-r" /> ${escapeHtml(tr('kitRadioB'))}</label>
+          <span class="switch on"><span class="knob"></span></span><span class="switch-label">${escapeHtml(tr('kitSwitch'))}</span>
+        </div>
+      </div>
+      <div class="kit-group">
+        <div class="kit-label">${escapeHtml(tr('kitBadges'))}</div>
+        <div class="kit-row">
+          <span class="badge solid">${escapeHtml(tr('kitBadgeNew'))}</span>
+          <span class="badge soft">${escapeHtml(tr('kitBadgeBeta'))}</span>
+          <span class="badge outline">${escapeHtml(tr('kitBadgePro'))}</span>
+          <span class="dot-status"><span class="dot"></span>${escapeHtml(tr('kitTableStatus'))}</span>
+        </div>
+        <div class="tabs"><button type="button" class="tab active">${escapeHtml(tr('kitTabOverview'))}</button><button type="button" class="tab">${escapeHtml(tr('kitTabActivity'))}</button><button type="button" class="tab">${escapeHtml(tr('kitTabSettings'))}</button></div>
+      </div>
+      <div class="kit-group two">
+        <div class="ui-card">
+          <div class="ui-card-title">${escapeHtml(tr('kitCardTitle'))}</div>
+          <p class="ui-card-body">${escapeHtml(tr('kitCardBody'))}</p>
+          <div class="kit-row"><button type="button" class="btn primary sm">${escapeHtml(tr('kitPrimary'))}</button><button type="button" class="btn ghost sm">${escapeHtml(tr('kitSecondary'))}</button></div>
+        </div>
+        <div class="alert"><span class="alert-icon">&#9733;</span><span>${escapeHtml(tr('kitAlert'))}</span></div>
+      </div>
+      <div class="kit-group">
+        <div class="kit-label">${escapeHtml(tr('kitTabs'))}</div>
+        <table class="ui-table"><thead><tr><th>${escapeHtml(tr('kitTableHead1'))}</th><th>${escapeHtml(tr('kitTableHead2'))}</th><th>${escapeHtml(tr('kitTableHead3'))}</th></tr></thead><tbody>
+          <tr><td>Ada Lovelace</td><td>${escapeHtml(tr('kitTabOverview'))}</td><td><span class="badge soft">${escapeHtml(tr('kitTableStatus'))}</span></td></tr>
+          <tr><td>Alan Turing</td><td>${escapeHtml(tr('kitTabActivity'))}</td><td><span class="badge soft">${escapeHtml(tr('kitTableStatus'))}</span></td></tr>
+        </tbody></table>
+        <div class="progress"><span style="width:62%"></span></div>
+      </div>
+    </div>`;
+
     const json = escapeScriptJson(JSON.stringify(data, null, 2));
-    const htmlLocale = I18N?.htmlLang ? I18N.htmlLang(activeLocale) : activeLocale;
-    const dir = I18N?.isRtl && I18N.isRtl(activeLocale) ? 'rtl' : 'ltr';
+    const lbl = escapeScriptJson(
+      JSON.stringify({
+        close: tr('brandClose'),
+        prev: tr('brandPrevImage'),
+        next: tr('brandNextImage'),
+        all: tr('brandAllImages', { count: images.length }),
+      }),
+    );
+    const api = globalThis.OD_CLIPPER_I18N || I18N;
+    const htmlLocale = api && api.htmlLang ? api.htmlLang(activeLocale) : activeLocale;
+    const dir = api && api.isRtl && api.isRtl(activeLocale) ? 'rtl' : 'ltr';
 
     return `<!doctype html>
-<html lang="${escapeHtml(htmlLocale)}" dir="${escapeHtml(dir)}" data-theme="light">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${escapeHtml(data.content.title)} — ${escapeHtml(tr('brandPageTitleSuffix'))}</title>
-    <meta name="od-library-kind" content="design-system" />
-    <style>
-      ${safeCss(fontCss)}
-      :root {
-        color-scheme: light dark;
-        --bg: ${light.background};
-        --surface: ${light.surface};
-        --text: ${light.foreground};
-        --muted: ${light.muted};
-        --border: ${light.border};
-        --accent: ${light.accent};
-        --on-accent: ${contrastText(light.accent)};
-        --font-display: ${data.typography.specs[0]?.stack || 'ui-serif, Georgia, serif'};
-        --font-body: ${data.typography.specs[1]?.stack || 'system-ui, sans-serif'};
-        --font-ui: ${data.typography.specs[2]?.stack || 'system-ui, sans-serif'};
-        --font-mono: ${data.typography.specs[3]?.stack || 'ui-monospace, SFMono-Regular, monospace'};
-      }
-      html[data-theme="dark"] {
-        --bg: ${dark.background};
-        --surface: ${dark.surface};
-        --text: ${dark.foreground};
-        --muted: ${dark.muted};
-        --border: ${dark.border};
-        --accent: ${dark.accent};
-        --on-accent: ${contrastText(dark.accent)};
-      }
-      * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        font-family: var(--font-body);
-        background: var(--bg);
-        color: var(--text);
-        line-height: 1.55;
-      }
-      a { color: inherit; }
-      .shell { width: min(1180px, calc(100% - 40px)); margin: 0 auto; padding: 36px 0 56px; }
-      .hero {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: 28px;
-        align-items: start;
-        padding-bottom: 28px;
-        border-bottom: 1px solid var(--border);
-      }
-      .brand-lockup { display: flex; align-items: center; gap: 16px; min-width: 0; }
-      .brand-mark {
-        width: 72px; height: 72px; display: grid; place-items: center; flex: none;
-        border: 1px solid var(--border); border-radius: 18px; background: var(--surface); overflow: hidden;
-      }
-      .brand-mark img { max-width: 82%; max-height: 82%; object-fit: contain; }
-      .brand-fallback { font: 700 32px/1 var(--font-display); color: var(--accent); }
-      h1 { margin: 0; font: 700 clamp(34px, 6vw, 68px)/1.02 var(--font-display); }
-      .domain { margin: 8px 0 0; color: var(--muted); font: 600 13px/1.4 var(--font-ui); }
-      .description { max-width: 76ch; margin: 20px 0 0; color: var(--muted); font-size: 17px; }
-      .theme-toggle { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); }
-      .theme-toggle button { border: 0; border-radius: 999px; padding: 7px 12px; background: transparent; color: var(--muted); font: 700 12px/1 var(--font-ui); cursor: pointer; }
-      html[data-theme="light"] [data-theme-button="light"],
-      html[data-theme="dark"] [data-theme-button="dark"] { background: var(--accent); color: var(--on-accent); }
-      .section { padding: 30px 0; border-bottom: 1px solid var(--border); }
-      .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; margin-bottom: 18px; }
-      h2 { margin: 0; font: 700 22px/1.2 var(--font-display); }
-      .eyebrow { color: var(--muted); font: 700 11px/1.2 var(--font-ui); text-transform: uppercase; letter-spacing: 0.08em; }
-      .asset-types { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
-      .asset-type, .type-card, .swatch, .kit-card, .asset-card, .identity, .component-preview {
-        border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
-      }
-      .asset-type { padding: 13px; min-height: 92px; }
-      .asset-type strong { display: block; margin-bottom: 5px; font: 700 13px/1.3 var(--font-ui); }
-      .asset-type span { color: var(--muted); font-size: 12px; }
-      .identity { padding: 20px 22px; }
-      .identity p { margin: 0; color: var(--muted); font-size: 16px; }
-      .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
-      .chips span { padding: 4px 9px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); background: color-mix(in srgb, var(--surface) 70%, var(--bg)); font: 600 12px/1.4 var(--font-ui); }
-      .logo-grid, .image-grid, .palette-grid, .type-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
-      .asset-card { overflow: hidden; }
-      .asset-card img { width: 100%; height: 142px; object-fit: contain; display: block; background: color-mix(in srgb, var(--surface) 70%, var(--bg)); }
-      .image-card img { object-fit: cover; }
-      .asset-card figcaption { padding: 10px 12px; color: var(--muted); font: 600 12px/1.35 var(--font-ui); }
-      .empty-card { min-height: 142px; display: grid; place-items: center; border: 1px dashed var(--border); border-radius: 10px; color: var(--accent); font: 800 42px/1 var(--font-display); }
-      .empty-note { color: var(--muted); border: 1px dashed var(--border); border-radius: 10px; padding: 24px; }
-      .swatch { overflow: hidden; }
-      .swatch-color { min-height: 84px; display: flex; align-items: flex-end; padding: 12px; font: 800 13px/1 var(--font-ui); }
-      .swatch-body { padding: 12px; display: flex; flex-direction: column; gap: 3px; }
-      .swatch-body span, .type-card small { color: var(--muted); font-size: 12px; }
-      .type-card { padding: 16px; min-height: 164px; display: flex; flex-direction: column; justify-content: space-between; }
-      .type-card span { color: var(--muted); font: 700 11px/1.2 var(--font-ui); text-transform: uppercase; }
-      .type-card strong { font-size: 62px; line-height: 1; }
-      .component-preview { padding: 22px; display: grid; gap: 16px; }
-      .kit-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-      .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: 0 15px; border-radius: 8px; border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent); font: 700 13px/1 var(--font-ui); }
-      .btn.secondary { background: transparent; color: var(--text); border-color: var(--border); }
-      .field { min-height: 40px; min-width: 220px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font: 500 14px/1 var(--font-ui); }
-      .mini-card { padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); min-width: 240px; }
-      .mini-card strong { display: block; margin-bottom: 4px; }
-      .mini-card span { color: var(--muted); font-size: 13px; }
-      .headings { margin: 0; padding-left: 20px; color: var(--muted); }
-      .headings li + li { margin-top: 5px; }
-      .data-note { color: var(--muted); font-size: 12px; }
-      @media (max-width: 860px) {
-        .shell { width: min(100% - 28px, 1180px); padding-top: 24px; }
-        .hero { grid-template-columns: 1fr; }
-        .asset-types { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      }
-    </style>
-  </head>
-  <body>
-    <main class="shell">
-      <header class="hero">
-        <div>
-          <div class="brand-lockup">
-            <div class="brand-mark">
-              ${logo ? `<img src="${escapeHtml(logo.src)}" alt="${escapeHtml(logo.label || data.content.title)}" />` : `<span class="brand-fallback">${escapeHtml(data.content.title.slice(0, 1).toUpperCase())}</span>`}
-            </div>
-            <div>
-              <p class="eyebrow">${escapeHtml(tr('brandExtracted'))}</p>
-              <h1>${escapeHtml(data.content.title)}</h1>
-              <p class="domain">${escapeHtml(data.content.domain || data.content.url)}</p>
-            </div>
-          </div>
-          <p class="description">${escapeHtml(data.content.description)}</p>
-        </div>
-        <div class="theme-toggle" aria-label="${escapeHtml(tr('brandTheme'))}">
-          <button type="button" data-theme-button="light">${escapeHtml(tr('brandLight'))}</button>
-          <button type="button" data-theme-button="dark">${escapeHtml(tr('brandDark'))}</button>
-        </div>
-      </header>
+<html lang="${escapeHtml(htmlLocale)}" dir="${escapeHtml(dir)}">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${escapeHtml(content.title)} — ${escapeHtml(tr('brandPageTitleSuffix'))}</title>
+<meta name="od-library-kind" content="design-system" />
+<style data-brand-fonts>${safeCss(fontCss)}</style>
+<style>
+  :root {
+    color-scheme: light;
+    --paper: #faf9f5;
+    --surface: #ffffff;
+    --ink: #1a1a18;
+    --ink-mute: #57564f;
+    --ink-faint: #8a887f;
+    --line: #e7e5dc;
+    --line-soft: #efeee7;
+    --accent: ${accent};
+    --accent-ink: ${ink};
+    --on-accent: ${onAccent};
+    --ok: #3d7a4f;
+    --err: #b4453a;
+    --radius: 14px;
+    --ui-radius: ${uiRadius};
+    --font-display: ${fontDisplay};
+    --font-body: ${fontBody};
+    --font-mono: ${fontMono};
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 40px 28px 96px; }
+  a { color: inherit; }
+  .muted { color: var(--ink-faint); font-size: 13px; }
 
-      <section class="section">
-        <div class="section-head"><h2>${escapeHtml(tr('brandAssetMap'))}</h2><span class="eyebrow">${escapeHtml(tr('brandAssetMapSub'))}</span></div>
-        <div class="asset-types">
-          <article class="asset-type"><strong>${escapeHtml(tr('brandLogo'))}</strong><span>${escapeHtml(tr('brandLogoCount', { count: data.assets.logos.length }))}</span></article>
-          <article class="asset-type"><strong>${escapeHtml(tr('brandImages'))}</strong><span>${escapeHtml(tr('brandImageCount', { count: data.assets.images.length }))}</span></article>
-          <article class="asset-type"><strong>${escapeHtml(tr('brandTypography'))}</strong><span>${escapeHtml(tr('brandFontCount', { count: data.typography.families.length }))}</span></article>
-          <article class="asset-type"><strong>${escapeHtml(tr('brandPalette'))}</strong><span>${escapeHtml(tr('brandColorCount', { count: palette.length }))}</span></article>
-          <article class="asset-type"><strong>${escapeHtml(tr('brandVoice'))}</strong><span>${escapeHtml(tr('brandHeadingCount', { count: data.content.headings.length }))}</span></article>
-          <article class="asset-type"><strong>${escapeHtml(tr('brandComponents'))}</strong><span>${escapeHtml(tr('brandComponentSummary'))}</span></article>
-        </div>
-      </section>
+  header.kit-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .kit-id { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .id-mark { width: 52px; height: 52px; flex: none; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 13px; overflow: hidden; }
+  .id-mark img { max-width: 78%; max-height: 78%; object-fit: contain; }
+  .id-mark.initial { font-family: var(--font-display); font-weight: 700; font-size: 24px; background: var(--surface); color: var(--accent-ink); }
+  .kit-id-text { min-width: 0; }
+  .kit-title { font-family: var(--font-display); font-size: 38px; line-height: 1.05; font-weight: 600; letter-spacing: -0.02em; margin: 0; word-break: break-word; }
+  .kit-tagline { margin: 6px 0 0; font-size: 16px; color: var(--ink-mute); max-width: 62ch; }
+  .kit-source { margin-top: 6px; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--ink-faint); text-decoration: none; }
+  .kit-source:hover { color: var(--accent-ink); }
+  .status-pill { display: inline-flex; align-items: center; gap: 7px; border-radius: 999px; padding: 4px 11px 4px 9px; font-size: 12px; font-weight: 500; border: 1px solid var(--line); background: var(--surface); color: var(--ink-mute); white-space: nowrap; }
+  .status-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
 
-      <section class="section">
-        <div class="section-head"><h2>${escapeHtml(tr('brandIdentity'))}</h2><span class="eyebrow">${escapeHtml(data.content.documentTitle || data.content.domain)}</span></div>
-        <div class="identity">
-          <p>${escapeHtml(data.content.description)}</p>
-          <div class="chips">${keywordHtml}</div>
-        </div>
-      </section>
+  .hero { margin-top: 22px; border: 1px solid var(--line-soft); border-radius: var(--radius); overflow: hidden; background: var(--line-soft); aspect-ratio: 16 / 5; box-shadow: 0 1px 2px rgba(0,0,0,.03); }
+  .hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
-      <section class="section">
-        <div class="section-head"><h2>${escapeHtml(tr('brandLogo'))}</h2><span class="eyebrow">${escapeHtml(tr('brandLogoSub'))}</span></div>
-        <div class="logo-grid">${logoHtml}</div>
-      </section>
+  .sec { margin-top: 40px; }
+  .sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+  .sec-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ink-faint); margin: 0 0 12px; }
+  .sec-head .sec-title { margin: 0; }
+  .sec-sub { margin: -4px 0 14px; color: var(--ink-faint); font-size: 13px; }
+  .grid-2, .grid-top { display: grid; gap: 28px; grid-template-columns: 1fr; }
+  @media (min-width: 860px) { .grid-2 { grid-template-columns: 1fr 1fr; } .grid-top { grid-template-columns: 1fr 2fr; } }
+  .card { border: 1px solid var(--line-soft); background: var(--surface); border-radius: var(--radius); padding: 18px; box-shadow: 0 1px 2px rgba(0,0,0,.03); }
 
-      <section class="section">
-        <div class="section-head"><h2>${escapeHtml(tr('brandTypography'))}</h2><span class="eyebrow">${escapeHtml(tr('brandTypographySub'))}</span></div>
-        <div class="type-grid">${typeHtml}</div>
-      </section>
+  /* Logo */
+  .logo-stage { display: flex; min-height: 150px; align-items: center; justify-content: center; border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 24px; }
+  .logo-stage img { max-height: 88px; max-width: 100%; object-fit: contain; }
+  .logo-stage.empty { flex-direction: column; gap: 8px; border-style: dashed; border-color: var(--line); color: var(--ink-faint); }
+  .logo-initial { font-family: var(--font-display); font-weight: 800; font-size: 46px; line-height: 1; color: var(--accent-ink); }
+  .logo-empty-note { font-size: 13px; }
+  .logo-thumbs { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .logo-thumb { width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line-soft); border-radius: 9px; padding: 6px; cursor: pointer; background: var(--surface); }
+  .logo-thumb.active { border-color: var(--accent); }
+  .logo-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
 
-      <section class="section">
-        <div class="section-head"><h2>${escapeHtml(tr('brandPalette'))}</h2><span class="eyebrow">${escapeHtml(tr('brandPaletteSub'))}</span></div>
-        <div class="palette-grid">${paletteHtml}</div>
-      </section>
+  /* Typography */
+  .fonts { display: grid; gap: 12px; grid-template-columns: repeat(2, 1fr); margin-bottom: 14px; }
+  @media (min-width: 560px) { .fonts { grid-template-columns: repeat(3, 1fr); } }
+  .font-tile { border: 1px solid var(--line-soft); border-radius: 12px; background: var(--surface); overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.03); }
+  .font-tile .ag { display: flex; align-items: center; justify-content: center; height: 100px; font-size: 54px; line-height: 1; color: var(--ink); background: var(--line-soft); }
+  .font-tile .ft-meta { padding: 9px 11px 11px; }
+  .font-tile .ft-name { font-size: 13px; font-weight: 600; line-height: 1.2; word-break: break-word; }
+  .font-tile .ft-role { font-size: 11px; color: var(--ink-faint); margin-top: 1px; text-transform: uppercase; letter-spacing: .06em; }
+  .type-row { border: 1px solid var(--line-soft); border-radius: 12px; background: var(--surface); padding: 16px 18px; }
+  .type-row + .type-row { margin-top: 12px; }
+  .type-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; }
+  .type-label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-faint); }
+  .type-font { font-size: 12px; color: var(--ink-mute); text-align: right; word-break: break-word; }
+  .type-sample { margin: 8px 0 0; line-height: 1.15; word-break: break-word; }
 
-      <section class="section">
-        <div class="section-head"><h2>${escapeHtml(tr('brandComponentKit'))}</h2><span class="eyebrow">${escapeHtml(tr('brandComponentKitSub'))}</span></div>
-        <div class="component-preview">
-          <div class="kit-row">
-            <span class="btn">${escapeHtml(tr('brandPrimaryAction'))}</span>
-            <span class="btn secondary">${escapeHtml(tr('brandSecondaryAction'))}</span>
-            <input class="field" value="${escapeHtml(tr('brandFormField'))}" aria-label="${escapeHtml(tr('brandFormFieldSample'))}" />
-          </div>
-          <div class="kit-row">
-            <article class="mini-card"><strong>${escapeHtml(tr('brandSurfaceCard'))}</strong><span>${escapeHtml(tr('brandSurfaceCardText'))}</span></article>
-            <article class="mini-card"><strong>${escapeHtml(tr('brandNavigationItem'))}</strong><span>${escapeHtml(data.content.headings[0] || tr('brandIdentity'))}</span></article>
-          </div>
-        </div>
-      </section>
+  /* Palette */
+  .palette { display: grid; gap: 12px; grid-template-columns: repeat(2, 1fr); }
+  @media (min-width: 560px) { .palette { grid-template-columns: repeat(4, 1fr); } }
+  @media (min-width: 920px) { .palette { grid-template-columns: repeat(8, 1fr); } }
+  .swatch { overflow: hidden; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--surface); box-shadow: 0 1px 2px rgba(0,0,0,.03); }
+  .swatch-chip { height: 84px; display: flex; align-items: flex-end; padding: 8px; }
+  .swatch-chip .hex { font-family: var(--font-mono); font-size: 11px; }
+  .swatch-body { padding: 9px 10px 11px; }
+  .swatch-name { font-size: 13px; font-weight: 500; line-height: 1.2; }
+  .swatch-role { font-size: 11px; color: var(--ink-faint); margin-top: 1px; }
+  .swatch-usage { font-size: 11px; color: var(--ink-mute); margin-top: 5px; line-height: 1.35; }
 
-      <section class="section">
-        <div class="section-head"><h2>${escapeHtml(tr('brandImages'))}</h2><span class="eyebrow">${escapeHtml(tr('brandImagesSub'))}</span></div>
-        <div class="image-grid">${imagesHtml}</div>
-      </section>
+  /* Voice */
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 500; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent-ink); }
+  .tone { margin: 12px 0 0; font-size: 14px; color: var(--ink-mute); line-height: 1.55; }
+  .pillars { margin: 12px 0 0; padding: 0; list-style: none; font-size: 14px; }
+  .pillars li { display: flex; gap: 8px; margin-top: 4px; }
+  .pillars .dash { color: var(--accent-ink); }
 
-      <section class="section">
-        <div class="section-head"><h2>${escapeHtml(tr('brandVoiceContent'))}</h2><span class="eyebrow">${escapeHtml(tr('brandVoiceContentSub'))}</span></div>
-        <ol class="headings">${headingsHtml}</ol>
-      </section>
+  /* Imagery */
+  .imagery p { margin: 0; font-size: 14px; }
+  .imagery p + p { margin-top: 6px; color: var(--ink-mute); }
+  .imagery .k { font-weight: 600; color: var(--ink); }
+  .posture { margin-top: 12px; border-top: 1px solid var(--line-soft); padding-top: 12px; }
+  .mini-label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-faint); }
+  .posture ul { margin: 6px 0 0; padding-left: 18px; font-size: 12px; color: var(--ink-mute); }
+  .posture ul li { margin-top: 2px; }
 
-      <p class="data-note">${tr('brandDataNote')}</p>
-    </main>
-    <script type="application/json" id="od-design-system-data">${json}</script>
-    <script>
-      document.querySelectorAll('[data-theme-button]').forEach(function (button) {
-        button.addEventListener('click', function () {
-          document.documentElement.dataset.theme = button.dataset.themeButton || 'light';
-        });
+  /* Gallery */
+  .view-all { border: 1px solid var(--line); background: var(--surface); color: var(--ink-mute); border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit; transition: border-color .2s cubic-bezier(.23,1,.32,1), color .2s cubic-bezier(.23,1,.32,1); }
+  .view-all:hover { border-color: var(--accent); color: var(--accent-ink); }
+  .gallery { display: grid; gap: 12px; grid-template-columns: repeat(2, 1fr); }
+  @media (min-width: 560px) { .gallery { grid-template-columns: repeat(3, 1fr); } }
+  @media (min-width: 920px) { .gallery { grid-template-columns: repeat(4, 1fr); } }
+  .shot { display: block; text-align: left; padding: 0; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--surface); overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.03); cursor: pointer; font-family: inherit; transition: border-color .14s ease, transform .14s ease; }
+  .shot:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .shot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .shot-frame { display: block; aspect-ratio: 4 / 3; background: var(--line-soft); }
+  .shot-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .shot-cap { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; padding: 8px 10px 10px; font-size: 12px; font-weight: 500; line-height: 1.3; color: var(--ink); }
+
+  /* Component kit */
+  .kit { display: grid; gap: 22px; border: 1px solid var(--line-soft); background: var(--surface); border-radius: var(--radius); padding: 22px; box-shadow: 0 1px 2px rgba(0,0,0,.03); }
+  .kit-group { display: grid; gap: 12px; }
+  .kit-group.two { grid-template-columns: 1fr; }
+  @media (min-width: 640px) { .kit-group.two { grid-template-columns: 1.3fr 1fr; align-items: stretch; gap: 14px; } }
+  .kit-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .1em; color: var(--ink-faint); }
+  .kit-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .kit-grid { display: grid; gap: 12px; grid-template-columns: 1fr; }
+  @media (min-width: 560px) { .kit-grid { grid-template-columns: 1fr 1fr; } }
+  .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: 0 16px; border-radius: var(--ui-radius); border: 1px solid transparent; font: 600 13px/1 var(--font-body); cursor: pointer; }
+  .btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  .btn.secondary { background: var(--surface); color: var(--ink); border-color: var(--line); }
+  .btn.ghost { background: transparent; color: var(--accent-ink); }
+  .btn.sm { min-height: 30px; padding: 0 12px; font-size: 12px; }
+  .btn[disabled] { opacity: .45; cursor: not-allowed; }
+  .field-label { display: grid; gap: 5px; font-size: 12px; font-weight: 600; color: var(--ink-mute); }
+  .input { width: 100%; min-height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--ui-radius); background: var(--surface); color: var(--ink); font: 400 14px/1.4 var(--font-body); }
+  .input:focus { outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 1px; border-color: var(--accent); }
+  .input.textarea { padding: 10px 12px; min-height: 64px; resize: none; line-height: 1.5; }
+  select.input { appearance: none; -webkit-appearance: none; }
+  .toggles { gap: 16px; }
+  .check { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink); cursor: pointer; }
+  .check input { accent-color: var(--accent); width: 15px; height: 15px; }
+  .switch { display: inline-flex; width: 38px; height: 22px; border-radius: 999px; background: var(--line); position: relative; }
+  .switch.on { background: var(--accent); }
+  .switch .knob { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+  .switch.on .knob { left: 18px; }
+  .switch-label { font-size: 13px; color: var(--ink-mute); }
+  .badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600; }
+  .badge.solid { background: var(--accent); color: var(--on-accent); }
+  .badge.soft { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent-ink); }
+  .badge.outline { border: 1px solid var(--line); color: var(--ink-mute); }
+  .dot-status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-mute); }
+  .dot-status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .tabs { display: inline-flex; gap: 2px; border-bottom: 1px solid var(--line-soft); }
+  .tab { border: 0; background: transparent; cursor: pointer; padding: 8px 12px; font: 500 13px/1 var(--font-body); color: var(--ink-mute); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab.active { color: var(--accent-ink); border-bottom-color: var(--accent); font-weight: 600; }
+  .ui-card { border: 1px solid var(--line-soft); border-radius: var(--radius); background: var(--paper); padding: 16px; display: grid; gap: 8px; align-content: start; }
+  .ui-card-title { font-weight: 600; font-size: 14px; }
+  .ui-card-body { margin: 0; font-size: 13px; color: var(--ink-mute); line-height: 1.5; }
+  .alert { display: flex; gap: 10px; align-items: flex-start; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); border-radius: var(--radius); padding: 14px 16px; font-size: 13px; color: var(--ink); }
+  .alert-icon { color: var(--accent-ink); font-size: 14px; line-height: 1.4; }
+  .ui-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .ui-table th, .ui-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line-soft); }
+  .ui-table th { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-faint); font-weight: 600; }
+  .ui-table tbody tr:last-child td { border-bottom: 0; }
+  .progress { height: 8px; border-radius: 999px; background: var(--line-soft); overflow: hidden; }
+  .progress span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+
+  .data-note { margin-top: 40px; color: var(--ink-faint); font-size: 12px; }
+  .data-note code { font-family: var(--font-mono); }
+
+  /* Overlays (lightbox + masonry) */
+  .ov { position: fixed; inset: 0; z-index: 60; display: none; }
+  .ov.open { display: block; }
+  .ov-back { position: absolute; inset: 0; background: rgba(20,19,17,.74); opacity: 0; transition: opacity .14s cubic-bezier(.23,1,.32,1); }
+  .ov.in .ov-back { opacity: 1; transition-duration: .2s; }
+  .ov-panel { position: absolute; opacity: 0; transform: scale(.92); transition: opacity .14s cubic-bezier(.23,1,.32,1), transform .14s cubic-bezier(.23,1,.32,1); }
+  .ov.in .ov-panel { opacity: 1; transform: scale(1); transition-duration: .2s; }
+  .ov-close { position: absolute; top: 14px; right: 16px; z-index: 2; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 999px; background: rgba(255,255,255,.92); color: #1a1a18; font-size: 22px; line-height: 1; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,.22); }
+  #ov-light { z-index: 70; }
+  #ov-light .ov-panel { top: 50%; left: 50%; transform: translate(-50%,-50%) scale(.92); display: flex; flex-direction: column; align-items: center; }
+  #ov-light.in .ov-panel { transform: translate(-50%,-50%) scale(1); }
+  #ov-light img { max-width: 92vw; max-height: 82vh; object-fit: contain; border-radius: 12px; box-shadow: 0 12px 48px rgba(0,0,0,.5); background: #fff; }
+  .light-cap { margin-top: 12px; color: rgba(255,255,255,.92); font-size: 13px; text-align: center; max-width: 80vw; }
+  .light-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border: 0; border-radius: 999px; background: rgba(255,255,255,.88); color: #1a1a18; font-size: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 12px rgba(0,0,0,.28); }
+  .light-prev { left: 3vw; } .light-next { right: 3vw; }
+  #ov-grid .ov-panel { top: 4vh; left: 50%; transform: translate(-50%,0) scale(.96); width: min(980px, 92vw); height: 92vh; background: var(--paper); border-radius: var(--radius); overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 16px 60px rgba(0,0,0,.42); }
+  #ov-grid.in .ov-panel { transform: translate(-50%,0) scale(1); }
+  .grid-bar { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+  .grid-bar h3 { margin: 0; font-family: var(--font-display); font-size: 18px; }
+  .grid-scroll { overflow-y: auto; padding: 16px 20px 28px; }
+  .masonry { columns: 2; column-gap: 12px; }
+  @media (min-width: 560px) { .masonry { columns: 3; } }
+  @media (min-width: 860px) { .masonry { columns: 4; } }
+  .masonry .m-item { break-inside: avoid; margin: 0 0 12px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line-soft); background: var(--surface); cursor: pointer; transition: transform .2s cubic-bezier(.23,1,.32,1); }
+  .masonry .m-item:hover { transform: translateY(-2px); }
+  .masonry .m-item img { width: 100%; display: block; }
+  .icon-x { border: 0; background: transparent; font-size: 22px; line-height: 1; cursor: pointer; color: var(--ink-mute); padding: 4px 9px; border-radius: 8px; }
+  .icon-x:hover { background: var(--line-soft); color: var(--ink); }
+  @media (max-width: 600px) { .wrap { padding: 28px 18px 72px; } .kit-title { font-size: 30px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="kit-head">
+    <div class="kit-id">${headerMark}<div class="kit-id-text"><h1 class="kit-title">${escapeHtml(content.title)}</h1>${content.description ? `<p class="kit-tagline">${escapeHtml(content.description)}</p>` : ''}${content.url ? `<a class="kit-source" href="${escapeHtml(content.url)}" target="_blank" rel="noreferrer noopener">${escapeHtml(content.domain || content.url)} ↗</a>` : ''}</div></div>
+    <span class="status-pill"><span class="dot"></span>${escapeHtml(tr('brandReady'))}</span>
+  </header>
+  ${heroHtml}
+  <div class="sec grid-top">
+    <section><h2 class="sec-title">${escapeHtml(tr('brandLogo'))}</h2>${logoBlock}</section>
+    <section><h2 class="sec-title">${escapeHtml(tr('brandTypography'))}</h2>${fontTilesHtml}${typeRows}</section>
+  </div>
+  <section class="sec"><h2 class="sec-title">${escapeHtml(tr('brandPalette'))}</h2><div class="palette">${paletteHtml}</div></section>
+  <div class="sec grid-2">
+    <section><h2 class="sec-title">${escapeHtml(tr('brandVoiceTone'))}</h2>${voiceHtml}</section>
+    <section><h2 class="sec-title">${escapeHtml(tr('brandImageryLayout'))}</h2>${imageryHtml}</section>
+  </div>
+  ${gallery}
+  <section class="sec"><h2 class="sec-title">${escapeHtml(tr('brandComponentKit'))}</h2><p class="sec-sub">${escapeHtml(tr('brandComponentKitSub'))}</p>${kit}</section>
+  <p class="data-note">${tr('brandDataNote')}</p>
+</div>
+<script type="application/json" id="od-design-system-data">${json}</script>
+<script>
+(function () {
+  var dataEl = document.getElementById('od-design-system-data');
+  var DATA = {};
+  try { DATA = JSON.parse(dataEl && dataEl.textContent ? dataEl.textContent : '{}'); } catch (e) {}
+  var LBL = ${lbl};
+  var SAMPLES = ((DATA.assets && DATA.assets.images) || []).map(function (s) { return { file: s.src, caption: s.label || '' }; });
+
+  var logoImg = document.getElementById('od-logo-img');
+  Array.prototype.forEach.call(document.querySelectorAll('.logo-thumb'), function (b) {
+    b.addEventListener('click', function () {
+      if (logoImg) logoImg.src = b.getAttribute('data-src');
+      Array.prototype.forEach.call(document.querySelectorAll('.logo-thumb'), function (x) { x.classList.remove('active'); });
+      b.classList.add('active');
+    });
+  });
+
+  Array.prototype.forEach.call(document.querySelectorAll('.tabs'), function (group) {
+    Array.prototype.forEach.call(group.querySelectorAll('.tab'), function (tb) {
+      tb.addEventListener('click', function () {
+        Array.prototype.forEach.call(group.querySelectorAll('.tab'), function (x) { x.classList.remove('active'); });
+        tb.classList.add('active');
       });
-    </script>
-  </body>
+    });
+  });
+
+  var stack = [];
+  function mk(id) { var ov = document.createElement('div'); ov.className = 'ov'; ov.id = id; var bk = document.createElement('div'); bk.className = 'ov-back'; ov.appendChild(bk); bk.addEventListener('click', function () { closeOv(ov); }); document.body.appendChild(ov); return ov; }
+  function openOv(ov) { if (stack.indexOf(ov) === -1) stack.push(ov); ov.classList.add('open'); requestAnimationFrame(function () { requestAnimationFrame(function () { ov.classList.add('in'); }); }); }
+  function closeOv(ov) { ov.classList.remove('in'); var i = stack.indexOf(ov); if (i !== -1) stack.splice(i, 1); setTimeout(function () { if (!ov.classList.contains('in')) ov.classList.remove('open'); }, 170); }
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && stack.length) closeOv(stack[stack.length - 1]); });
+
+  var lov = null, limg = null, lcap = null, lidx = 0;
+  function buildL() {
+    if (lov) return;
+    lov = mk('ov-light');
+    var p = document.createElement('div'); p.className = 'ov-panel';
+    limg = document.createElement('img'); lcap = document.createElement('div'); lcap.className = 'light-cap';
+    p.appendChild(limg); p.appendChild(lcap); lov.appendChild(p);
+    var c = document.createElement('button'); c.className = 'ov-close'; c.type = 'button'; c.innerHTML = '&times;'; c.setAttribute('aria-label', LBL.close);
+    c.addEventListener('click', function () { closeOv(lov); }); lov.appendChild(c);
+    if (SAMPLES.length > 1) {
+      var pv = document.createElement('button'); pv.className = 'light-nav light-prev'; pv.type = 'button'; pv.innerHTML = '&#8249;'; pv.setAttribute('aria-label', LBL.prev);
+      pv.addEventListener('click', function (e) { e.stopPropagation(); showL(lidx - 1); });
+      var nx = document.createElement('button'); nx.className = 'light-nav light-next'; nx.type = 'button'; nx.innerHTML = '&#8250;'; nx.setAttribute('aria-label', LBL.next);
+      nx.addEventListener('click', function (e) { e.stopPropagation(); showL(lidx + 1); });
+      lov.appendChild(pv); lov.appendChild(nx);
+    }
+  }
+  function showL(i) { if (!SAMPLES.length) return; buildL(); lidx = (i % SAMPLES.length + SAMPLES.length) % SAMPLES.length; var s = SAMPLES[lidx]; limg.src = s.file; limg.alt = s.caption; lcap.textContent = s.caption; openOv(lov); }
+
+  var gov = null;
+  function buildG() {
+    if (gov) return;
+    gov = mk('ov-grid');
+    var p = document.createElement('div'); p.className = 'ov-panel';
+    var bar = document.createElement('div'); bar.className = 'grid-bar';
+    var h = document.createElement('h3'); h.textContent = LBL.all;
+    var x = document.createElement('button'); x.className = 'icon-x'; x.type = 'button'; x.innerHTML = '&times;'; x.setAttribute('aria-label', LBL.close);
+    x.addEventListener('click', function () { closeOv(gov); });
+    bar.appendChild(h); bar.appendChild(x);
+    var sc = document.createElement('div'); sc.className = 'grid-scroll';
+    var ms = document.createElement('div'); ms.className = 'masonry';
+    SAMPLES.forEach(function (s, i) { var it = document.createElement('div'); it.className = 'm-item'; var im = document.createElement('img'); im.src = s.file; im.alt = s.caption; im.loading = 'lazy'; it.appendChild(im); it.addEventListener('click', function () { showL(i); }); ms.appendChild(it); });
+    sc.appendChild(ms); p.appendChild(bar); p.appendChild(sc); gov.appendChild(p);
+  }
+  function openG() { buildG(); openOv(gov); }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.shot[data-idx]'), function (el) {
+    var i = Number(el.getAttribute('data-idx')) || 0;
+    el.addEventListener('click', function () { showL(i); });
+  });
+  var va = document.getElementById('od-view-all');
+  if (va) va.addEventListener('click', openG);
+})();
+</script>
+</body>
 </html>`;
   }
 
@@ -816,20 +1143,23 @@
     const elements = visibleElements();
     const content = collectContent();
     const palette = collectPalette(elements);
-    const theme = buildTheme(palette);
+    const colors = deriveBrandColors(palette);
     const typography = collectTypography();
     const fontFaces = collectFontFaces(resources);
     const assets = collectImageAssets(elements, resources);
     const components = collectComponents();
+    const layout = deriveLayout(components);
+    const accent = (colors.find((c) => c.role === 'accent') || {}).hex || '#C96442';
     const data = {
-      version: 1,
+      version: 2,
       kind: 'design-system',
       capturedAt: Date.now(),
       content,
-      theme,
+      brand: { name: content.title, tagline: content.description, sourceUrl: content.url, accent, colors },
       palette,
       typography,
       assets,
+      layout,
       components,
     };
     return {
@@ -838,7 +1168,7 @@
       title: tr('brandFileTitle', { title: content.title }),
       url: location.href,
       summary: {
-        colors: palette.length,
+        colors: colors.length,
         logos: assets.logos.length,
         images: assets.images.length,
         fonts: typography.families.length,

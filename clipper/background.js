@@ -374,7 +374,7 @@ async function downloadFigma(opts) {
   return { truncated: cap.truncated, partialImages: cap.partialImages || 0 };
 }
 
-// --- brand-kit capture -----------------------------------------------------
+// --- design-system capture -------------------------------------------------
 //
 // brand-capture.js does not snapshot the page. It extracts brand/product
 // signals and fills a stable HTML template, then the worker inlines the
@@ -397,7 +397,7 @@ async function captureDesignSystem(opts) {
   } finally {
     await sendToTab(tab.id, { type: 'odClipper:restoreAfterCapture' });
   }
-  if (!cap || !cap.html) throw new Error(t('errorBrandKitCaptureFailed'));
+  if (!cap || !cap.html) throw new Error(t('errorDesignSystemCaptureFailed'));
   const { map, skipped } = await buildResourceMap(cap.resources, includeImages);
   return {
     html: inlineHtml(cap.html, map),

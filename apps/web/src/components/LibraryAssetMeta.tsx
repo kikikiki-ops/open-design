@@ -18,7 +18,7 @@ export const SOURCE_LABELS: Record<LibrarySourceKind, string> = {
   clipper: 'Clipper',
   'manual-upload': 'Upload',
   'agent-task': 'Agent',
-  'design-system': 'Brand kit',
+  'design-system': 'Design system',
   generated: 'Generated',
 };
 
@@ -34,7 +34,7 @@ export type BadgeKind = LibraryAssetKind | 'element';
 export const KIND_META: Record<BadgeKind, { label: string; tint: string }> = {
   image: { label: 'Image', tint: '#2563eb' },
   video: { label: 'Video', tint: '#db2777' },
-  'design-system': { label: 'Brand kit', tint: '#16a34a' },
+  'design-system': { label: 'Design system', tint: '#16a34a' },
   html: { label: 'HTML', tint: '#d97706' },
   font: { label: 'Font', tint: '#7c3aed' },
   color: { label: 'Color', tint: '#0d9488' },

@@ -64,7 +64,7 @@ const KIND_FILTERS: Array<{ value: string; label: string }> = [
   { value: '', label: 'All kinds' },
   { value: 'image', label: 'Images' },
   { value: 'element', label: 'Elements' },
-  { value: 'design-system', label: 'Brand kits' },
+  { value: 'design-system', label: 'Design systems' },
   { value: 'video', label: 'Video' },
   { value: 'html', label: 'HTML' },
   { value: 'font', label: 'Fonts' },
@@ -78,7 +78,7 @@ const SOURCE_FILTERS: Array<{ value: string; label: string }> = [
   { value: 'clipper', label: 'Clipper' },
   { value: 'manual-upload', label: 'Upload' },
   { value: 'agent-task', label: 'Agent' },
-  { value: 'design-system', label: 'Brand kit' },
+  { value: 'design-system', label: 'Design system' },
   { value: 'generated', label: 'Generated' },
 ];
 
@@ -1071,7 +1071,7 @@ export function LibrarySection({ active, onOpenProject }: Props) {
         <h1 className="entry-section__title">Library</h1>
         <div className={styles.clipperHint}>
           <p className={styles.headerHint}>
-            Clip any page, brand kit, screenshot, image, or Figma import JSON into your Library —
+            Clip any page, design system, screenshot, image, or Figma import JSON into your Library —
             local-first, one click, no login.
           </p>
           <a

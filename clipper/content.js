@@ -229,7 +229,7 @@
       </a>
       <span class="sep"></span>
       ${btn('page', t('toolbarCapturePage'))}
-      ${btn('system', t('toolbarExtractBrandKit'))}
+      ${btn('system', t('toolbarExtractDesignSystem'))}
       ${btn('figma', t('toolbarDownloadFigma'))}
       ${btn('shot', t('toolbarCaptureScreenshot'))}
       ${btn('region', t('toolbarCaptureRegion'))}
@@ -336,7 +336,7 @@
           toast(res.partialImages ? `${base} (${t('someImagesLeftLinks')})` : base);
         }
       } else if (type === 'captureDesignSystemToLibrary') {
-        toast(res.deduped ? t('brandKitAlreadyInLibrary', { suffix: '' }) : t('savedBrandKitShort'));
+        toast(res.deduped ? t('designSystemAlreadyInLibrary', { suffix: '' }) : t('savedDesignSystemShort'));
       } else if (type === 'downloadFigma') toast(t('figmaDownloaded'));
       else toast(res.deduped ? t('alreadyInLibrary') : t('savedScreenshot'));
     });

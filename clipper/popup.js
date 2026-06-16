@@ -223,13 +223,13 @@ $('figma').addEventListener('click', async () => {
 
 $('system')?.addEventListener('click', async () => {
   setBusy(true);
-  setMsg(t('extractingBrandKit'), 'loading');
+  setMsg(t('extractingDesignSystem'), 'loading');
   const res = await send({ type: 'captureDesignSystemToLibrary', opts: captureOpts() });
   reportCapture(res, (r) => {
     const suffix = r.partialImages
       ? ` (${t('resourcesLeftLinks', { count: r.partialImages })})`
       : '';
-    return r.deduped ? t('brandKitAlreadyInLibrary', { suffix }) : t('brandKitSaved', { suffix });
+    return r.deduped ? t('designSystemAlreadyInLibrary', { suffix }) : t('designSystemSaved', { suffix });
   });
 });
 
