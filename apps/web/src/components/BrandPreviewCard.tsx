@@ -344,7 +344,7 @@ export function BrandPreviewCard({
       // lands ready to generate with the brand instead of in the generic path.
       requestHomeChip('prototype');
       navigate({ kind: 'home', view: 'home' });
-    } catch {
+    } finally {
       setBusy(false);
     }
   }, [meta.designSystemId, busy, onApplyDesignSystem]);
