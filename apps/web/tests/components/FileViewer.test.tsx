@@ -3015,6 +3015,34 @@ describe('FileViewer tweaks toolbar', () => {
     });
   });
 
+  it('pre-warms the hidden srcDoc iframe so the first annotation entry has no flash', async () => {
+    const { container } = render(
+      <FileViewer projectId="project-1" projectKind="prototype" file={htmlPreviewFile()}
+        liveHtml='<html><body><main data-od-id="hero">Prewarm me</main></body></html>'
+      />,
+    );
+
+    const srcDocFrame = container.querySelector('iframe[data-od-render-mode="srcdoc"]') as HTMLIFrameElement;
+    // Initially the hidden srcDoc iframe holds only the lightweight lazy shell.
+    expect(srcDocFrame.getAttribute('data-od-active')).toBe('false');
+    expect(srcDocFrame.srcdoc).toContain('data-od-lazy-srcdoc-transport');
+
+    // After the URL-load preview settles, the srcDoc iframe warms in the
+    // background to the real artifact while staying hidden — so the first Draw/
+    // Edit/Comment entry is an instant visibility swap, not a first-time
+    // materialization flash.
+    await waitFor(() => {
+      const f = container.querySelector('iframe[data-od-render-mode="srcdoc"]') as HTMLIFrameElement;
+      expect(f.srcdoc).toContain('Prewarm me');
+      expect(f.srcdoc).not.toContain('data-od-lazy-srcdoc-transport');
+      expect(f.getAttribute('data-od-active')).toBe('false');
+    }, { timeout: 3000 });
+
+    // The URL-load frame stayed the visible one throughout — no switch/flash.
+    const urlFrame = container.querySelector('iframe[data-od-render-mode="url-load"]') as HTMLIFrameElement;
+    expect(urlFrame.getAttribute('data-od-active')).toBe('true');
+  });
+
   it('preserves URL-loaded preview scroll when opening Draw', async () => {
     vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
       cb(0);

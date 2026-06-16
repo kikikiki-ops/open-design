@@ -5326,6 +5326,7 @@ function HtmlViewer({
     setDrawOverlayOpen(false);
     setBoardMode(false);
     setInspectMode(false);
+    setSrcDocPrewarmed(false);
   }, [projectId, file.name]);
   const activePreviewSrcUrl = (
     previewSrcUrl === effectiveBasePreviewSrcUrl ||
@@ -5386,6 +5387,11 @@ function HtmlViewer({
   const lazySrcDocTransport = useMemo(() => buildLazySrcdocTransport(), []);
   const [srcDocTransportResetKey, setSrcDocTransportResetKey] = useState(0);
   const [srcDocShellReady, setSrcDocShellReady] = useState(false);
+  // Once the visible URL-load preview has settled, warm the hidden srcDoc
+  // iframe in the background so the FIRST entry into Mark/Edit/Comment/Inspect
+  // is an instant visibility swap instead of a first-time materialization
+  // flash. Reset on file/project change so each artifact warms fresh.
+  const [srcDocPrewarmed, setSrcDocPrewarmed] = useState(false);
   const wasUrlLoadPreviewRef = useRef(useUrlLoadPreview);
   const urlPreviewKeepAliveKey = previewIframeKeepAliveKey(projectId, file.name);
   // Reset the shell-ready latch whenever the srcDoc iframe re-mounts. The
@@ -5427,8 +5433,34 @@ function HtmlViewer({
   // a postMessage activation that can race (#2253) and strand the iframe blank
   // (#2361, #2791).
   const captureModeActive = drawOverlayOpen;
-  const useLazySrcDocTransport = !manualEditRequiresSrcDoc && !captureModeActive && useUrlLoadPreview;
+  // `srcDocPrewarmed` flips the hidden srcDoc iframe off the lazy shell and onto
+  // the real artifact while URL-load is still the visible transport, so the
+  // first annotation entry costs nothing. It uses the same reliable direct
+  // mount as the active modes (no #2361/#2791 postMessage race).
+  const useLazySrcDocTransport =
+    !manualEditRequiresSrcDoc && !captureModeActive && useUrlLoadPreview && !srcDocPrewarmed;
   const srcDocTransportContent = useLazySrcDocTransport ? lazySrcDocTransport : srcDoc;
+  // Schedule the background warm-up once URL-load is the active transport and
+  // the real artifact HTML is ready. Deferred to idle so it never competes with
+  // the visible URL-load render; cancelled if the file changes or an annotation
+  // mode opens first (which materializes srcDoc anyway). The trade-off is that
+  // a warmed artifact runs in both iframes — acceptable for the instant-toggle
+  // win on the interactive preview surface.
+  useEffect(() => {
+    if (!useUrlLoadPreview) return;
+    if (srcDocPrewarmed) return;
+    if (!srcDoc) return;
+    const ric = (window as unknown as {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    });
+    if (typeof ric.requestIdleCallback === 'function') {
+      const id = ric.requestIdleCallback(() => setSrcDocPrewarmed(true), { timeout: 2500 });
+      return () => ric.cancelIdleCallback?.(id);
+    }
+    const id = window.setTimeout(() => setSrcDocPrewarmed(true), 1500);
+    return () => window.clearTimeout(id);
+  }, [useUrlLoadPreview, srcDocPrewarmed, srcDoc]);
   // When the srcDoc switch is driven ONLY by Draw/annotation mode — an
   // artifact that would otherwise URL-load — keep the URL-load iframe warm
   // instead of parking it at about:blank. Draw is a quick "mark → screenshot →
