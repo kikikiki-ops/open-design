@@ -146,8 +146,7 @@ test('[P2] captures the home plugin detail surface', async ({ page }) => {
   await home.getByTestId('plugins-home-pill-category-deck').click();
   const card = home.locator('article.plugins-home__card[data-plugin-id="visual-deck-writer"]');
   await expect(card).toBeVisible();
-  await card.hover();
-  await home.getByTestId('plugins-home-details-visual-deck-writer').click({ force: true });
+  await card.click();
   await expect(page.getByRole('dialog', { name: /Deck Writer preview/i })).toBeVisible();
   await expect(page.getByTestId('plugin-details-use-visual-deck-writer')).toBeVisible();
   await expect(page.locator('.ds-modal-stage-iframe-scaler iframe')).toBeVisible();
@@ -163,8 +162,7 @@ test('[P2] captures the plugin detail share menu surface', async ({ page }) => {
   await home.getByTestId('plugins-home-pill-category-deck').click();
   const card = home.locator('article.plugins-home__card[data-plugin-id="visual-deck-writer"]');
   await expect(card).toBeVisible();
-  await card.hover();
-  await home.getByTestId('plugins-home-details-visual-deck-writer').click({ force: true });
+  await card.click();
   await expect(page.getByRole('dialog', { name: /Deck Writer preview/i })).toBeVisible();
   await page.locator('.template-share-trigger').click();
   await expect(page.locator('.template-share-popover[role="menu"]')).toBeVisible();
@@ -202,7 +200,7 @@ test('[P2] captures the home plugin use staged surface', async ({ page }) => {
   await gotoVisualHome(page);
 
   const home = await revealVisualHomeTemplates(page);
-  await home.getByTestId('plugins-home-details-visual-prototype-starter').click({ force: true });
+  await home.locator('article.plugins-home__card[data-plugin-id="visual-prototype-starter"]').click();
   await expect(page.getByRole('dialog', { name: /Prototype Starter details/i })).toBeVisible();
   await page.getByTestId('plugin-details-use-visual-prototype-starter').click();
   await expect(page.getByTestId('home-hero-active-plugin')).toContainText('Prototype Starter');
@@ -221,7 +219,7 @@ test('[P2] captures the home plugin use with query surface', async ({ page }) =>
   await expect(card).toBeVisible();
   // Community gallery tiles carry no inline Use actions — use-with-query
   // lives behind the detail modal's split Use button.
-  await home.getByTestId('plugins-home-details-visual-deck-writer').click({ force: true });
+  await card.click();
   // Deck Writer ships a previewEntry, so its detail surface is the
   // PreviewModal (aria-label "Deck Writer preview"), not the scenario
   // detail's "... details" dialog. Match on the plugin name only.
