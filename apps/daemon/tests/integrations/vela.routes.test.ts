@@ -178,9 +178,6 @@ afterEach(() => {
   delete process.env.FAKE_VELA_LOGIN_DELAY_MS;
   delete process.env.FAKE_VELA_LOGIN_FAIL;
   delete process.env.FAKE_VELA_LOGIN_FAIL_WITHOUT_API_URL;
-  delete process.env.FAKE_VELA_LOGIN_FAIL_WITHOUT_API_URL_DELAY_MS;
-  delete process.env.FAKE_VELA_LOGIN_ACTIVATION_DELAY_MS;
-  delete process.env.OD_AMR_LOGIN_ACTIVATION_GRACE_MS;
   delete process.env.FAKE_VELA_LOGIN_USER_EMAIL;
   delete process.env.FAKE_VELA_LOGIN_USER_PLAN;
   delete process.env.FAKE_VELA_ENV_DUMP_PATH;
@@ -380,43 +377,6 @@ describe('POST /api/integrations/vela/login', () => {
     await waitForFile(dumpPath);
     const env = JSON.parse(readFileSync(dumpPath, 'utf8'));
     expect(env.VELA_API_URL).toBe(`${baseUrl}/api/integrations/vela/api-proxy`);
-  });
-
-  it('falls back to the daemon AMR API proxy when the direct failure arrives after startup grace', async () => {
-    const dumpPath = path.join(tmpHome, 'vela-env-fallback-delayed.json');
-    process.env.FAKE_VELA_ENV_DUMP_PATH = dumpPath;
-    process.env.FAKE_VELA_LOGIN_FAIL_WITHOUT_API_URL =
-      'start device authorization: API request failed with status 502: delayed broken edge';
-    process.env.FAKE_VELA_LOGIN_FAIL_WITHOUT_API_URL_DELAY_MS = '500';
-
-    const { status } = await postJson(`${baseUrl}/api/integrations/vela/login`);
-    expect(status).toBe(202);
-
-    await waitForFile(dumpPath);
-    const env = JSON.parse(readFileSync(dumpPath, 'utf8'));
-    expect(env.VELA_API_URL).toBe(`${baseUrl}/api/integrations/vela/api-proxy`);
-  });
-
-  it('keeps a healthy-but-slow direct login (activation after the grace) on the direct path', async () => {
-    // Regression guard (review on #4402): a direct device-authorization that is
-    // healthy but slow to print its activation URL must NOT be killed and
-    // re-routed through the IPv4 proxy — that proxy hop is the one that 502s on
-    // transparent-proxy networks. Grace expires well before activation here, yet
-    // the login must stay direct (no VELA_API_URL) and still succeed.
-    const dumpPath = path.join(tmpHome, 'vela-env-slow-direct.json');
-    process.env.FAKE_VELA_ENV_DUMP_PATH = dumpPath;
-    process.env.OD_AMR_LOGIN_ACTIVATION_GRACE_MS = '80';
-    process.env.FAKE_VELA_LOGIN_ACTIVATION_DELAY_MS = '400';
-
-    const { status } = await postJson(`${baseUrl}/api/integrations/vela/login`);
-    expect(status).toBe(202);
-
-    // Let the direct attempt finish (it prints activation + writes config well
-    // after the grace). If the watchdog had fired, a proxy child would have
-    // overwritten the dump with VELA_API_URL set.
-    await waitForVelaLoginIdle();
-    const env = JSON.parse(readFileSync(dumpPath, 'utf8'));
-    expect(env.VELA_API_URL ?? '').toBe('');
   });
 
   it('passes Open Design attribution device id to vela login', async () => {

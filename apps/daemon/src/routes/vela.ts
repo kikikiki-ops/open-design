@@ -235,11 +235,7 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
       // fails to start — never when a login is already in flight.
       let spawned;
       try {
-        spawned = await spawnVelaLogin({
-          configuredEnv,
-          attribution: loginAttribution,
-          waitForActivation: true,
-        });
+        spawned = await spawnVelaLogin({ configuredEnv, attribution: loginAttribution });
       } catch (directErr) {
         const directMessage =
           directErr instanceof Error ? directErr.message : String(directErr);
@@ -248,7 +244,6 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
           configuredEnv,
           attribution: loginAttribution,
           defaultApiUrl: velaApiProxyBaseUrl(req, getPublicBaseUrl),
-          waitForActivation: true,
         });
       }
       res.status(202).json(spawned);
