@@ -712,28 +712,190 @@
   }
 
   // --- image multi-select overlay ------------------------------------------
+  // Collect every picture-worthy image on the page, keeping a reference to the
+  // DOM element each one came from so the picker can scroll-to / highlight the
+  // source ("where is this from?"). Two sources, since a picker that only walks
+  // `document.images` silently misses everything painted as a CSS background
+  // (hero banners, section art, avatars): <img> (which already resolves
+  // <picture>/srcset via currentSrc) and computed background-image url()s.
+  const MAX_PICKER_IMAGES = 300;
   function collectImagesInPage() {
     const out = [];
     const seen = new Set();
+    const add = (rawSrc, alt, w, h, el) => {
+      if (out.length >= MAX_PICKER_IMAGES) return;
+      let src = rawSrc;
+      try {
+        src = new URL(rawSrc, location.href).href;
+      } catch {
+        return;
+      }
+      if (!src || seen.has(src) || !/^https?:/i.test(src)) return;
+      seen.add(src);
+      out.push({ src, alt: alt || '', w: w || 0, h: h || 0, el });
+    };
+
     for (const el of document.images) {
       const src = el.currentSrc || el.src;
-      if (!src || seen.has(src) || !/^https?:/i.test(src)) continue;
-      const w = el.naturalWidth || el.width || 0;
-      const h = el.naturalHeight || el.height || 0;
-      if (w < 32 || h < 32) continue;
-      seen.add(src);
-      out.push({ src, alt: el.alt || '', w, h });
+      if (!src) continue;
+      // Prefer decoded natural size; fall back to the laid-out box so lazy
+      // images that haven't decoded yet still pass the size gate and show.
+      let w = el.naturalWidth || 0;
+      let h = el.naturalHeight || 0;
+      if (!w || !h) {
+        const r = el.getBoundingClientRect();
+        w = Math.round(r.width);
+        h = Math.round(r.height);
+      }
+      if (Math.max(w, h) < 32) continue;
+      add(src, el.alt, w, h, el);
     }
-    return out.slice(0, 200);
+
+    // Background images. getComputedStyle is the costly call, so gate on the
+    // (cheaper) box size first and stop once we've hit the cap.
+    const all = document.body ? document.body.getElementsByTagName('*') : [];
+    for (let i = 0; i < all.length && out.length < MAX_PICKER_IMAGES; i += 1) {
+      const el = all[i];
+      if (el.id && el.id.startsWith('od-clipper-')) continue;
+      const r = el.getBoundingClientRect();
+      if (Math.max(r.width, r.height) < 64) continue; // skip sprite/icon chrome
+      const bg = getComputedStyle(el).backgroundImage;
+      if (!bg || bg === 'none' || bg.indexOf('url(') === -1) continue;
+      const m = /url\(\s*['"]?([^'")]+)['"]?\s*\)/i.exec(bg);
+      if (m) add(m[1], el.getAttribute('aria-label') || '', Math.round(r.width), Math.round(r.height), el);
+    }
+
+    return out;
   }
 
   let imagePickerHost = null;
+  let imagePickerIO = null; // defers thumbnail decode to visible cells
+  let locateCleanup = null; // tears down an in-progress "find on page" highlight
+
+  function clearLocate() {
+    if (locateCleanup) {
+      locateCleanup();
+      locateCleanup = null;
+    }
+  }
 
   function closeImagePicker() {
+    clearLocate();
+    if (imagePickerIO) {
+      imagePickerIO.disconnect();
+      imagePickerIO = null;
+    }
     if (imagePickerHost) {
       imagePickerHost.remove();
       imagePickerHost = null;
     }
+  }
+
+  // Draw a page's already-decoded <img> into a small canvas for use as the grid
+  // thumbnail. The browser holds the source bitmap once (it's on the page);
+  // this keeps only a ~116px copy instead of a second full-res decode per cell —
+  // the difference between ~24K and ~2M pixels for a 1920px hero image. Drawing
+  // a cross-origin image taints the canvas, but we only ever *display* it (never
+  // read pixels back), so that's fine.
+  function drawThumbCanvas(srcEl, w, h) {
+    try {
+      const maxSide = 116 * Math.min(2, window.devicePixelRatio || 1);
+      const scale = Math.min(1, maxSide / Math.max(w, h));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(w * scale));
+      canvas.height = Math.max(1, Math.round(h * scale));
+      canvas.getContext('2d').drawImage(srcEl, 0, 0, canvas.width, canvas.height);
+      return canvas;
+    } catch {
+      return null; // tainted-source draw failure → caller falls back to <img>
+    }
+  }
+
+  // Materialize one cell's thumbnail: a canvas drawn from the source <img> when
+  // it's decoded, else a lazily-loaded <img>. Called by the IntersectionObserver
+  // only when the cell nears the viewport, so opening the picker never decodes
+  // hundreds of images up front.
+  function renderCellThumb(cell) {
+    if (!cell || cell.__odRendered) return;
+    cell.__odRendered = true;
+    const item = cell.__odItem;
+    if (!item) return;
+    const ph = cell.querySelector('.ph');
+    const el = item.el;
+    let node = null;
+    if (el && el.tagName === 'IMG' && el.complete && el.naturalWidth > 0) {
+      node = drawThumbCanvas(el, el.naturalWidth, el.naturalHeight);
+    }
+    if (!node) {
+      node = document.createElement('img');
+      node.decoding = 'async';
+      node.loading = 'lazy';
+      node.referrerPolicy = 'no-referrer';
+      node.addEventListener('error', () => node.remove(), { once: true });
+      node.src = item.src;
+    }
+    node.className = 'thumb';
+    if (ph) ph.replaceWith(node);
+    else cell.insertBefore(node, cell.querySelector('.dim'));
+  }
+
+  // "Find on page": dim the picker, smooth-scroll the source element into view,
+  // and track it with a pulsing spotlight ring through the scroll (rAF re-reads
+  // the rect each frame so it stays glued to the element). Restores the picker
+  // after a beat. Lets the user see exactly where a thumbnail came from.
+  function locateImage(el) {
+    if (!el || !el.isConnected) {
+      toast('That image’s source is no longer on the page');
+      return;
+    }
+    clearLocate();
+    if (imagePickerHost) {
+      imagePickerHost.style.transition = 'opacity 140ms cubic-bezier(0.23,1,0.32,1)';
+      imagePickerHost.style.opacity = '0';
+      imagePickerHost.style.pointerEvents = 'none';
+    }
+    const host = document.createElement('div');
+    host.id = 'od-clipper-locate';
+    host.style.cssText =
+      'position:fixed;inset:0;z-index:2147483645;pointer-events:none;margin:0;padding:0;border:0;background:transparent;';
+    const sh = host.attachShadow({ mode: 'open' });
+    setHTML(
+      sh,
+      `<style>
+        .ring {
+          position: fixed; box-sizing: border-box; border: 2px solid #c96442; border-radius: 6px;
+          box-shadow: 0 0 0 3px rgba(201,100,66,0.4), 0 0 0 100vmax rgba(13,12,10,0.45);
+          animation: od-loc-pulse 1.1s ease-out infinite;
+        }
+        @keyframes od-loc-pulse {
+          0%, 100% { box-shadow: 0 0 0 3px rgba(201,100,66,0.55), 0 0 0 100vmax rgba(13,12,10,0.45); }
+          50% { box-shadow: 0 0 0 8px rgba(201,100,66,0.12), 0 0 0 100vmax rgba(13,12,10,0.45); }
+        }
+      </style><div class="ring" id="ring"></div>`,
+    );
+    document.documentElement.appendChild(host);
+    const ring = sh.getElementById('ring');
+    el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+    let raf = 0;
+    const sync = () => {
+      const r = el.getBoundingClientRect();
+      ring.style.left = `${r.left}px`;
+      ring.style.top = `${r.top}px`;
+      ring.style.width = `${r.width}px`;
+      ring.style.height = `${r.height}px`;
+      raf = requestAnimationFrame(sync);
+    };
+    sync();
+    const timer = setTimeout(() => clearLocate(), 1800);
+    locateCleanup = () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(timer);
+      host.remove();
+      if (imagePickerHost) {
+        imagePickerHost.style.opacity = '1';
+        imagePickerHost.style.pointerEvents = '';
+      }
+    };
   }
 
   function pickImages() {
@@ -799,14 +961,35 @@
           overflow: hidden; cursor: pointer; background: #f4f5f7;
           transition: outline-color 120ms cubic-bezier(0.23,1,0.32,1), border-color 120ms cubic-bezier(0.23,1,0.32,1);
           outline: 2px solid transparent; outline-offset: -2px;
+          /* Skip layout + paint for off-screen cells. The fixed 116px track means
+             the intrinsic size matches the real size, so this never shifts the
+             scroll. Complements the IntersectionObserver that defers thumbnail
+             decode — content-visibility saves render work, the observer saves
+             network/decode work. */
+          content-visibility: auto; contain-intrinsic-size: 116px 116px;
         }
         .cell:hover { border-color: #c9d0da; }
         .cell:has(input:checked) { outline-color: #c96442; border-color: #c96442; }
-        .cell img { width: 100%; height: 100%; object-fit: contain; display: block; }
-        .cell input { position: absolute; top: 8px; left: 8px; width: 18px; height: 18px; margin: 0; accent-color: #c96442; }
+        .cell .thumb { width: 100%; height: 100%; object-fit: contain; display: block; }
+        .ph {
+          position: absolute; inset: 0;
+          background: linear-gradient(100deg, #eef0f3 30%, #f7f8fa 50%, #eef0f3 70%) #eef0f3;
+          background-size: 200% 100%; animation: od-shimmer 1.1s linear infinite;
+        }
+        @keyframes od-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+        .cell input { position: absolute; top: 8px; left: 8px; width: 18px; height: 18px; margin: 0; accent-color: #c96442; z-index: 2; }
+        .loc {
+          all: unset; position: absolute; top: 6px; right: 6px; z-index: 2;
+          width: 22px; height: 22px; display: grid; place-items: center; cursor: pointer;
+          border-radius: 6px; color: #fff; background: rgba(13,12,10,0.5);
+          opacity: 0; transition: opacity 120ms cubic-bezier(0.23,1,0.32,1), background 120ms cubic-bezier(0.23,1,0.32,1);
+        }
+        .cell:hover .loc, .loc:focus-visible { opacity: 1; }
+        .loc:hover { background: #c96442; }
+        .loc svg { width: 13px; height: 13px; display: block; }
         .dim {
           position: absolute; bottom: 0; left: 0; right: 0; padding: 3px 6px;
-          font-size: 10px; color: #fff; background: rgba(13,12,10,0.55);
+          font-size: 10px; color: #fff; background: rgba(13,12,10,0.55); pointer-events: none;
         }
         .foot { display: flex; justify-content: flex-end; padding: 12px 16px; border-top: 1px solid #edf0f4; }
         .save {
@@ -831,6 +1014,9 @@
           .cell:hover { border-color: #46433c; }
           .cell:has(input:checked) { outline-color: #d97a56; border-color: #d97a56; }
           .cell input { accent-color: #d97a56; }
+          .ph { background: linear-gradient(100deg, #2a2825 30%, #332f2c 50%, #2a2825 70%) #2a2825; background-size: 200% 100%; }
+          .loc { background: rgba(0,0,0,0.55); }
+          .loc:hover { background: #d97a56; }
           .foot { border-top-color: #2a2825; }
           .save { background: #d97a56; }
           .save:hover { background: #e8896a; }

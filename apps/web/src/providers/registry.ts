@@ -2350,6 +2350,23 @@ export async function fetchLibraryAssets(query: LibraryAssetQuery = {}): Promise
 }
 
 /**
+ * Fetch a single library asset by id (`GET /api/library/assets/:id`). Returns
+ * null when the asset is gone or the request fails. Powers the Library grid's
+ * incremental SSE merge — on an `ingest` event we hydrate just the one asset
+ * instead of refetching the whole list.
+ */
+export async function fetchLibraryAsset(id: string): Promise<LibraryAsset | null> {
+  try {
+    const resp = await fetch(`/api/library/assets/${encodeURIComponent(id)}`);
+    if (!resp.ok) return null;
+    const json = (await resp.json()) as { asset?: LibraryAsset };
+    return json.asset ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Copy a library asset into a project's design files (default `library/`
  * subdir) and record a provenance back-link so the registry knows the asset
  * was consumed. Powers "Select from library" in the composer and Design Files.
