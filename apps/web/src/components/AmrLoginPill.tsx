@@ -385,6 +385,7 @@ export function AmrLoginPill({
     pollRef.current = window.setInterval(() => {
       void tick();
     }, AMR_LOGIN_POLL_INTERVAL_MS);
+    void tick();
   }, [analytics.track, refresh, stopPolling, t]);
 
   useEffect(() => {

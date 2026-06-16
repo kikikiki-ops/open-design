@@ -511,6 +511,43 @@ describe('AmrLoginPill', () => {
     expect(await screen.findByText('Signing in…')).toBeTruthy();
   });
 
+  it('clears the local signing-in state as soon as status reports the login is complete', async () => {
+    let loginPosted = false;
+    const fetchMock = vi.fn(async (input, init) => {
+      const url = typeof input === 'string' ? input : (input as URL).toString();
+      if (url.endsWith('/api/integrations/vela/status')) {
+        return jsonResponse({
+          body: loginPosted
+            ? {
+                loggedIn: true,
+                profile: 'prod',
+                configPath: '/x',
+                user: { id: 'u', email: 'leaf@example.com', plan: 'free' },
+              }
+            : { loggedIn: false, profile: 'prod', user: null, configPath: '/x' },
+        });
+      }
+      if (
+        url.endsWith('/api/integrations/vela/login') &&
+        init?.method === 'POST'
+      ) {
+        loginPosted = true;
+        return jsonResponse({ status: 202, body: { pid: 4242 } });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    renderPill();
+    fireEvent.click(await screen.findByRole('button', { name: 'Sign in' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Sign out' })).toBeTruthy();
+    });
+    expect(screen.getByText('leaf@example.com')).toBeTruthy();
+    expect(screen.queryByText('Signing in…')).toBeNull();
+  });
+
   it('does not reuse stale activation details when a new login starts after a canceled attempt', async () => {
     const fetchMock = vi.fn(async (input, init) => {
       const url = typeof input === 'string' ? input : (input as URL).toString();
