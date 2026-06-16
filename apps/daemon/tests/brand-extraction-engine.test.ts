@@ -116,7 +116,7 @@ describe('agent-driven brand extraction engine', () => {
     const project = getProject(db, result.projectId);
     expect(project).toBeTruthy();
     expect(project?.metadata?.kind).toBe('brand');
-    expect(project?.pendingPrompt ?? '').toContain('BRAND EXTRACTION');
+    expect(project?.pendingPrompt ?? '').toContain('DESIGN SYSTEM ENRICHMENT');
     expect(project?.pendingPrompt ?? '').toContain(`od brand preview ${result.id}`);
 
     // brand.html is seeded as the active tab; the site stays as a secondary
@@ -721,5 +721,117 @@ describe('agent-driven brand extraction engine', () => {
     expect(html).toContain('"status":"ready"');
     expect(html).toContain('<div class="gallery">');
     expect(html).toContain('imagery/cover-0.jpg');
+  });
+
+  it('startBrandExtraction finalizes a usable design system programmatically before returning', async () => {
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+
+    // Stub the network harvest: write a real logo into the brand dir and return
+    // measured material, exactly as the live prefetch would, but offline.
+    const stubPrefetch = async (_url: string, brandDir: string) => {
+      const logosDir = path.join(brandDir, 'logos');
+      mkdirSync(logosDir, { recursive: true });
+      writeFileSync(
+        path.join(logosDir, 'header.svg'),
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 40"><rect width="120" height="40" /></svg>',
+        'utf8',
+      );
+      return {
+        url: 'https://acme.com/',
+        finalUrl: 'https://acme.com/',
+        siteName: 'Acme',
+        title: 'Acme — we make things',
+        description: 'Acme makes excellent things for everyone.',
+        colors: [
+          { hex: '#ffffff', count: 50 },
+          { hex: '#1a1a18', count: 30 },
+          { hex: '#d97757', count: 18 },
+        ],
+        fonts: [{ family: 'Inter', count: 22 }],
+        fontFaceFamilies: [],
+        googleFontsUrls: [],
+        fontFiles: [],
+        logos: [
+          { file: 'header.svg', sourceUrl: 'https://acme.com/', kind: 'inline-svg' as const, bytes: 120 },
+        ],
+        headings: ['We make things'],
+        paragraphs: ['Acme makes excellent things for everyone.'],
+        navLabels: [],
+        extraPages: [],
+        screenshot: null,
+        thin: false,
+        blocked: false,
+        materialMd: '',
+      };
+    };
+
+    const result = await startBrandExtraction({
+      url: 'acme.com',
+      brandsRoot,
+      projectsRoot,
+      skillsRoot: SKILLS_ROOT,
+      db,
+      // Switch on the programmatic-first path; keep the safety-net fallbacks
+      // offline so the test never touches the network.
+      userDesignSystemsRoot,
+      prefetch: stubPrefetch,
+      logoFallback: NO_LOGO_FALLBACK,
+      imageryFallback: NO_IMAGERY_FALLBACK,
+    });
+
+    // The design system is registered + ready the moment startBrandExtraction
+    // returns — no agent run required (the instant "aha").
+    const detail = readBrandDetail(brandsRoot, result.id);
+    expect(detail?.meta.status).toBe('ready');
+    expect(detail?.meta.designSystemId?.startsWith('user:')).toBe(true);
+    expect(detail?.brand?.name).toBe('Acme');
+    expect(detail?.brand?.tagline).toBe('We make things');
+    expect(detail?.brand?.logo.primary).toBe('logos/header.svg');
+
+    // The backing project's design system page renders ready, with the six
+    // artifacts built, so it is immediately applyable.
+    const projectDir = path.join(projectsRoot, result.projectId);
+    const html = readFileSync(path.join(projectDir, 'brand.html'), 'utf8');
+    expect(html).toContain('"status":"ready"');
+    expect(existsSync(path.join(projectDir, 'system', 'artifacts', 'landing.html'))).toBe(true);
+
+    // Exactly one reusable design system was registered for the brand.
+    const systems = await listDesignSystems(userDesignSystemsRoot, {
+      idPrefix: 'user:',
+      source: 'user',
+      isEditable: true,
+      defaultStatus: 'draft',
+    });
+    expect(systems.filter((s) => s.title === 'Acme')).toHaveLength(1);
+
+    // The agent prompt is still seeded so the async AI enrichment pass can run.
+    const project = getProject(db, result.projectId);
+    expect(project?.pendingPrompt ?? '').toContain('DESIGN SYSTEM ENRICHMENT');
+    expect(project?.designSystemId).toBe(detail?.meta.designSystemId);
+  });
+
+  it('startBrandExtraction stays in extracting when the programmatic harvest fails', async () => {
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+
+    // Prefetch returns null (fully blocked / unreachable origin) → no design
+    // system is built and the agent takes over from the scaffold.
+    const result = await startBrandExtraction({
+      url: 'acme.com',
+      brandsRoot,
+      projectsRoot,
+      skillsRoot: SKILLS_ROOT,
+      db,
+      userDesignSystemsRoot,
+      prefetch: async () => null,
+      logoFallback: NO_LOGO_FALLBACK,
+      imageryFallback: NO_IMAGERY_FALLBACK,
+    });
+
+    const detail = readBrandDetail(brandsRoot, result.id);
+    expect(detail?.meta.status).toBe('extracting');
+    expect(detail?.meta.designSystemId).toBeUndefined();
+
+    const html = readFileSync(path.join(projectsRoot, result.projectId, 'brand.html'), 'utf8');
+    expect(html).toContain('"status":"extracting"');
   });
 });

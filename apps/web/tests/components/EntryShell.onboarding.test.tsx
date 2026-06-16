@@ -632,7 +632,7 @@ describe('EntryShell onboarding Open Design AMR runtime', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /^Continue$/i }));
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Extract your brand kit' })).toBeTruthy();
+      expect(screen.getByRole('heading', { name: 'Extract your design system' })).toBeTruthy();
     });
     fireEvent.click(screen.getByRole('button', { name: /Finish setup/i }));
 
@@ -738,7 +738,7 @@ describe('EntryShell onboarding Open Design AMR runtime', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /^Continue$/i }));
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Extract your brand kit' })).toBeTruthy();
+      expect(screen.getByRole('heading', { name: 'Extract your design system' })).toBeTruthy();
     });
     fireEvent.click(screen.getByRole('button', { name: /Finish setup/i }));
 
@@ -783,7 +783,7 @@ describe('EntryShell onboarding Open Design AMR runtime', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /^Continue$/i }));
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Extract your brand kit' })).toBeTruthy();
+      expect(screen.getByRole('heading', { name: 'Extract your design system' })).toBeTruthy();
     });
     fireEvent.click(screen.getByRole('button', { name: /Finish setup/i }));
 
@@ -875,7 +875,7 @@ describe('EntryShell onboarding Open Design AMR runtime', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /^Continue$/i }));
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Extract your brand kit' })).toBeTruthy();
+      expect(screen.getByRole('heading', { name: 'Extract your design system' })).toBeTruthy();
     });
     fireEvent.click(screen.getByRole('button', { name: /Finish setup/i }));
 
@@ -920,7 +920,7 @@ describe('EntryShell onboarding Open Design AMR runtime', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /^Continue$/i }));
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Extract your brand kit' })).toBeTruthy();
+      expect(screen.getByRole('heading', { name: 'Extract your design system' })).toBeTruthy();
     });
     fireEvent.click(screen.getByRole('button', { name: /Finish setup/i }));
 
@@ -985,7 +985,7 @@ describe('EntryShell onboarding Open Design AMR runtime', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /^Continue$/i }));
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Extract your brand kit' })).toBeTruthy();
+      expect(screen.getByRole('heading', { name: 'Extract your design system' })).toBeTruthy();
     });
     fireEvent.click(screen.getByRole('button', { name: /Finish setup/i }));
 

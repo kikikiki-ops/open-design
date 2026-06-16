@@ -48,6 +48,8 @@ import { brandGuideMd, brandToDesignMd } from './design-md.js';
 import { reflowBrandToMemory } from './memory.js';
 import { brandSystemDir, rebuildSystem } from './system.js';
 import { extractJsonBlock, validateBrand } from './validate.js';
+import { brandFromMaterial } from './provisional.js';
+import { prefetchBrand, type PrefetchResult } from './prefetch.js';
 import { BRAND_KIT_FILE, writeBrandKitPreview } from './kit-render.js';
 import { selfHostGoogleFonts } from './fonts.js';
 import { adoptExistingLogos, ensureLogoFallback, type LogoFallbackFn, type LogoSlot } from './logo-fallback.js';
@@ -101,6 +103,18 @@ export interface StartBrandExtractionOptions {
    *  real network calls). Defaults to the live cover/hero-image fallback so the
    *  first paint already shows representative images. */
   imageryFallback?: ImageryFallbackFn;
+  /** `<dataDir>/design-systems` — registry root. Required to run the
+   *  programmatic-first extraction (which registers a `user:<id>` design system
+   *  synchronously). When omitted, no programmatic finalize runs and the brand
+   *  stays `extracting` for the agent to drive (the legacy behavior tests use). */
+  userDesignSystemsRoot?: string;
+  /** Runtime data dir so the programmatically-built design system is sedimented
+   *  into memory. Optional. */
+  dataDir?: string;
+  /** Override the deterministic site harvester used by the programmatic-first
+   *  extraction (tests inject a stub to stay offline). Defaults to the live
+   *  network prefetch. */
+  prefetch?: PrefetchFn;
 }
 
 export interface StartBrandExtractionResult {
@@ -179,7 +193,7 @@ export async function startBrandExtraction(
     brandId: id,
     brandSourceUrl: url,
   };
-  const name = `${host} Brand Kit`;
+  const name = `${host} Design System`;
   const pendingPrompt = brandExtractionPrompt({ url, brandId: id, host });
   insertProject(db, {
     id: projectId,
@@ -202,38 +216,39 @@ export async function startBrandExtraction(
     updatedAt: now,
   });
 
-  // Seed the brand-kit page immediately so the user sees a real, on-brand
+  // Seed the design-system page immediately so the user sees a real, on-brand
   // scaffold the moment the project opens — not just a scrolling chat. It
-  // starts as skeletons + "Extracting…" and fills in as the agent writes
-  // brand.json and re-runs `od brand preview`.
+  // starts as skeletons + "Extracting…" and is replaced by the programmatic
+  // first paint (below) or filled in by the agent's `od brand preview` passes.
   //
-  // Best-effort deterministic harvest of the parts the page would otherwise
-  // show as all-skeleton for the first few seconds (the "feels stuck" symptom):
-  //   - logo: the site's icon assets (so the page is never "No logo found");
-  //   - palette + typography: derived from the site's CSS (so colors + fonts
-  //     paint on first render, before the agent measures anything);
-  //   - imagery: the site's cover/hero images (so the Images gallery is seeded).
-  // All three run in parallel and are bounded + failure-tolerant (offline /
-  // blocked → that piece stays empty, the prior behavior), so the first paint
-  // is fast and the agent then progressively enriches each module.
+  // When programmatic-first extraction is going to run (the common path —
+  // `userDesignSystemsRoot` is wired by the route), skip the legacy seed
+  // harvest entirely: the synchronous programmatic finalize re-fetches the
+  // same material and produces a complete, ready page anyway, so a second
+  // network harvest here would only add latency. Otherwise (legacy / tests),
+  // run the bounded parallel seed harvest so the first paint already shows a
+  // real logo / palette / fonts / cover imagery before the agent measures.
+  const runProgrammatic = Boolean(opts.userDesignSystemsRoot);
   const seedBrand: Record<string, unknown> = { name: host, sourceUrl: url, colors: [], typography: {} };
-  try {
-    const projectDir = resolveProjectDir(projectsRoot, projectId, metadata);
-    const logo = { primary: null as string | null, alternates: [] as string[], notes: '' };
-    const seedSlot: SeedSlot = {};
-    const imagery: ImagerySlot = { samples: [] };
-    const noChange = () => ({ changed: false });
-    const [logoRes] = await Promise.all([
-      logoFallback(url, path.join(projectDir, 'logos'), logo).catch(noChange),
-      seedFallback(url, seedSlot).catch(noChange),
-      imageryFallback(url, path.join(projectDir, 'imagery'), imagery).catch(noChange),
-    ]);
-    if (logoRes.changed) seedBrand.logo = logo;
-    if (seedSlot.colors && seedSlot.colors.length) seedBrand.colors = seedSlot.colors;
-    if (seedSlot.typography) seedBrand.typography = seedSlot.typography;
-    if (imagery.samples && imagery.samples.length) seedBrand.imagery = { samples: imagery.samples };
-  } catch {
-    // Best-effort only — never block project creation on the seed harvest.
+  if (!runProgrammatic) {
+    try {
+      const projectDir = resolveProjectDir(projectsRoot, projectId, metadata);
+      const logo = { primary: null as string | null, alternates: [] as string[], notes: '' };
+      const seedSlot: SeedSlot = {};
+      const imagery: ImagerySlot = { samples: [] };
+      const noChange = () => ({ changed: false });
+      const [logoRes] = await Promise.all([
+        logoFallback(url, path.join(projectDir, 'logos'), logo).catch(noChange),
+        seedFallback(url, seedSlot).catch(noChange),
+        imageryFallback(url, path.join(projectDir, 'imagery'), imagery).catch(noChange),
+      ]);
+      if (logoRes.changed) seedBrand.logo = logo;
+      if (seedSlot.colors && seedSlot.colors.length) seedBrand.colors = seedSlot.colors;
+      if (seedSlot.typography) seedBrand.typography = seedSlot.typography;
+      if (imagery.samples && imagery.samples.length) seedBrand.imagery = { samples: imagery.samples };
+    } catch {
+      // Best-effort only — never block project creation on the seed harvest.
+    }
   }
   await writeBrandKitPreview({
     skillsRoot,
@@ -254,7 +269,58 @@ export async function startBrandExtraction(
     browserTabs: [{ id: BRAND_BROWSER_TAB_ID, label: 'Browser', url, title: host }],
   });
 
+  // Programmatic-first: synchronously harvest + synthesize + finalize a usable
+  // design system before returning, so the caller navigates into a project whose
+  // design system is ALREADY registered and applyable (the instant "aha"). The
+  // agent's auto-sent prompt then runs as the async AI enrichment pass. Bounded
+  // and best-effort: a slow / blocked site (or any failure) leaves the brand
+  // `extracting` and the agent drives the extraction from the scaffold instead.
+  if (runProgrammatic && opts.userDesignSystemsRoot) {
+    const programmaticOptions: RunProgrammaticExtractionOptions = {
+      id,
+      meta,
+      projectId,
+      brandsRoot,
+      userDesignSystemsRoot: opts.userDesignSystemsRoot,
+      projectsRoot,
+      skillsRoot,
+      db,
+      logoFallback,
+      imageryFallback,
+    };
+    if (opts.dataDir) programmaticOptions.dataDir = opts.dataDir;
+    if (opts.prefetch) programmaticOptions.prefetch = opts.prefetch;
+    try {
+      await withTimeout(runProgrammaticExtraction(programmaticOptions), PROGRAMMATIC_EXTRACT_TIMEOUT_MS);
+    } catch (err) {
+      console.warn(`[brand] programmatic extraction failed for ${id} — falling back to agent`, err);
+    }
+  }
+
   return { id, projectId, conversationId, sourceUrl: url };
+}
+
+/** Upper bound on the synchronous programmatic-first extraction so a slow or
+ *  hanging origin can never block the start response indefinitely; on timeout
+ *  the brand simply stays `extracting` for the agent to finish. */
+const PROGRAMMATIC_EXTRACT_TIMEOUT_MS = 45_000;
+
+/** Resolve `p`, or reject once `ms` elapses. The underlying work keeps running
+ *  (and may still mark the brand ready) — we only stop awaiting it. */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`timed out after ${ms}ms`)), ms);
+    p.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
 }
 
 export interface FinalizeBrandOptions {
@@ -292,15 +358,7 @@ export interface FinalizeBrandOptions {
 export async function finalizeBrand(
   opts: FinalizeBrandOptions,
 ): Promise<BrandFinalizeResponse> {
-  const {
-    id,
-    brandsRoot,
-    userDesignSystemsRoot,
-    projectsRoot,
-    db,
-    logoFallback = ensureLogoFallback,
-    imageryFallback = ensureImageryFallback,
-  } = opts;
+  const { id, brandsRoot, projectsRoot } = opts;
   const meta = readMeta(brandsRoot, id);
   if (!meta) throw new Error(`brand not found: ${id}`);
   const projectId = opts.projectId ?? meta.projectId ?? brandProjectId(id);
@@ -308,7 +366,7 @@ export async function finalizeBrand(
   const brandJsonRaw = await readProjectTextOrNull(projectsRoot, projectId, 'brand.json');
   if (brandJsonRaw === null) {
     throw new Error(
-      'brand.json not found in the extraction project — the agent has not written the brand kit yet.',
+      'brand.json not found in the extraction project — the agent has not written the design system yet.',
     );
   }
   let parsed: unknown;
@@ -326,15 +384,55 @@ export async function finalizeBrand(
     throw new Error(`brand.json failed validation: ${errorMessage(err)}`);
   }
 
-  // Pull the agent's brand.json + downloaded assets into the brand workspace so
-  // the deterministic builder and the design system see them.
-  writeBrand(brandsRoot, id, brand);
-  const guideMd =
-    (await readProjectTextOrNull(projectsRoot, projectId, 'BRAND.md')) ?? brandGuideMd(brand);
-  writeBrandGuide(brandsRoot, id, guideMd);
+  // Pull the agent's downloaded assets into the brand workspace so the
+  // deterministic builder and the design system see them.
   copyProjectDirToBrand(projectsRoot, projectId, brandsRoot, id, 'logos');
   copyProjectDirToBrand(projectsRoot, projectId, brandsRoot, id, 'fonts');
   copyProjectDirToBrand(projectsRoot, projectId, brandsRoot, id, 'imagery');
+
+  const guideMd =
+    (await readProjectTextOrNull(projectsRoot, projectId, 'BRAND.md')) ?? brandGuideMd(brand);
+
+  return finalizeBrandCore({ ...opts, id, projectId, meta, brand, guideMd });
+}
+
+interface FinalizeBrandCoreOptions extends FinalizeBrandOptions {
+  /** Backing project to sync the finalized design system into. */
+  projectId: string;
+  /** Lifecycle record (already loaded by the caller). */
+  meta: BrandMeta;
+  /** The validated design system to register — already in memory, so this is
+   *  shared by both the programmatic-first path (brandFromMaterial) and the
+   *  agent enrichment path (brand.json from the project). */
+  brand: Brand;
+  /** Prose guide markdown to persist alongside the design system. */
+  guideMd: string;
+}
+
+/**
+ * Shared finalize body: persist the design system, run the deterministic logo /
+ * imagery / font safety nets over the brand workspace, build the token system +
+ * artifacts, register the reusable `user:<id>` design system, sync everything
+ * into the backing project, and mark the brand `ready`. Assumes the caller has
+ * already populated the brand workspace assets (logos / fonts / imagery).
+ */
+async function finalizeBrandCore(opts: FinalizeBrandCoreOptions): Promise<BrandFinalizeResponse> {
+  const {
+    id,
+    brandsRoot,
+    userDesignSystemsRoot,
+    projectsRoot,
+    db,
+    meta,
+    projectId,
+    brand,
+    guideMd,
+    logoFallback = ensureLogoFallback,
+    imageryFallback = ensureImageryFallback,
+  } = opts;
+
+  writeBrand(brandsRoot, id, brand);
+  writeBrandGuide(brandsRoot, id, guideMd);
 
   // Deterministic logo safety net: if the agent saved no logo and left
   // `logo.primary` empty, fetch the site's icon assets server-side so the kit
@@ -434,7 +532,7 @@ export async function finalizeBrand(
   const existing = getProject(db, projectId);
   if (existing) {
     updateProject(db, projectId, {
-      name: `${brand.name || meta.sourceUrl} Brand Kit`,
+      name: `${brand.name || meta.sourceUrl} Design System`,
       skillId: existing.skillId ?? null,
       designSystemId,
       pendingPrompt: existing.pendingPrompt ?? null,
@@ -464,6 +562,52 @@ export async function finalizeBrand(
   }
 
   return { id, brand, designSystemId, projectId, files: systemBuild.files };
+}
+
+/** Deterministic harvester that downloads a site's brand material into the
+ *  brand workspace. Injectable so tests run offline. */
+export type PrefetchFn = (url: string, brandDir: string) => Promise<PrefetchResult | null>;
+
+export interface RunProgrammaticExtractionOptions {
+  id: string;
+  meta: BrandMeta;
+  projectId: string;
+  brandsRoot: string;
+  userDesignSystemsRoot: string;
+  projectsRoot: string;
+  skillsRoot: string;
+  db: Parameters<typeof insertProject>[0];
+  dataDir?: string;
+  /** Deterministic material harvester; defaults to the live network prefetch. */
+  prefetch?: PrefetchFn;
+  logoFallback?: LogoFallbackFn;
+  imageryFallback?: ImageryFallbackFn;
+}
+
+/**
+ * Programmatic-first extraction: harvest the site deterministically (logo,
+ * palette, typography, copy, cover imagery, source URL), synthesize a valid
+ * design system with `brandFromMaterial` (NO LLM), and finalize it immediately
+ * so the user lands on a usable, applyable design system within seconds — the
+ * "aha". The async AI enrichment pass then refines it to full fidelity and
+ * re-finalizes in place (reusing the same `user:<id>` design system).
+ *
+ * Best-effort: a fully blocked / unreachable origin (prefetch returns null)
+ * yields `null` and the brand stays `extracting`, so the AI pass can take over.
+ */
+export async function runProgrammaticExtraction(
+  opts: RunProgrammaticExtractionOptions,
+): Promise<BrandFinalizeResponse | null> {
+  const { id, meta, brandsRoot, prefetch = prefetchBrand } = opts;
+  const brandDir = resolveBrandFile(brandsRoot, id, []);
+  if (!brandDir) return null;
+
+  const material = await prefetch(meta.sourceUrl, brandDir);
+  if (!material) return null;
+
+  const brand = brandFromMaterial(material, meta.sourceUrl);
+  const guideMd = brandGuideMd(brand);
+  return finalizeBrandCore({ ...opts, brand, guideMd });
 }
 
 export interface RenderBrandPreviewOptions {
@@ -548,18 +692,18 @@ export async function renderBrandPreviewIntoProject(
   return { id, projectId, file: BRAND_KIT_FILE, rendered };
 }
 
-/** The first prompt the extraction agent auto-runs. Self-sufficient (does not
+/** The first prompt the enrichment agent auto-runs. Self-sufficient (does not
  *  rely on the brand-extract skill auto-loading) but names it so a runtime that
  *  surfaces skills can pull in the longer methodology + craft guides. */
 function brandExtractionPrompt(input: { url: string; brandId: string; host: string }): string {
   return [
-    `This is a live BRAND EXTRACTION task for ${input.host}.`,
+    `This is a DESIGN SYSTEM ENRICHMENT task for ${input.host}.`,
     `Source URL: ${input.url}`,
     `Brand id: ${input.brandId}`,
     '',
-    'A live brand-kit page (`brand.html`) is ALREADY open as the active tab. The daemon has pre-seeded it with a deterministic first paint — a harvested logo, an approximate palette, font families, and a few cover images — so it is NOT all-skeleton. Your job is to REPLACE that seed with measured truth and fill in every remaining module, progressively, so the user watches it complete piece by piece. The target site is also open in a secondary in-app Browser tab. Use the `brand-extract` skill and the `agent-browser` tool to drive and observe the site. Do not guess — measure.',
+    'A usable design system has ALREADY been extracted programmatically and registered — the daemon harvested the site deterministically (logo, palette, typography, a one-line description, cover imagery, source URL) and the design-system page (`brand.html`) is open as the active tab, already in the `ready` state and applyable everywhere RIGHT NOW. Your job is to ENRICH that provisional design system into the full, precise version: re-measure anything the deterministic pass got approximately, add what it could not infer (voice & tone, imagery direction, layout posture, accent-secondary), and replace any weak guesses with measured truth. The target site is also open in a secondary in-app Browser tab. Use the `brand-extract` skill and the `agent-browser` tool to drive and observe the site. Do not guess — measure.',
     '',
-    'Work the branding-agent chain, optimizing for FAST first paint and PROGRESSIVE fill-in (never batch everything to the end):',
+    'Work the branding-agent chain, optimizing for PROGRESSIVE fill-in (never batch everything to the end). The page is already populated from the programmatic pass — refine it module by module so the user watches it sharpen:',
     '',
     '1. MEASURE — drive the site with agent-browser. Snapshot it, then harvest the real design language: frequency-ranked color literals (background / surface / foreground / muted / border / accent / accent-secondary), the @font-face + font-family declarations, and representative headings + copy for voice.',
     '   - LOGO (extract MULTIPLE candidates): save every logo you can find as a file under `logos/` — the inline header/nav SVG (write the literal `<svg>…</svg>` markup verbatim to `logos/header.svg`, do NOT just reference it), any `<img>` logo, the `apple-touch-icon`, the `favicon`, and the `og:image`. Set `logo.primary` to the best vector/transparent lockup and list the rest in `logo.alternates` (the kit page shows them as switchable thumbnails). NEVER leave `logo.primary` empty when the site has any mark — fetch the asset URLs directly and save real files. (The daemon also auto-fetches a favicon/og:image fallback so the page is never logo-less, but that is a safety net, not a substitute for the real wordmark.)',
@@ -570,9 +714,9 @@ function brandExtractionPrompt(input: { url: string; brandId: string; host: stri
     '2. SYNTHESIZE INCREMENTALLY — write `brand.json` AS SOON AS you have the name, a couple of colors, and a logo candidate (do not wait for everything), then run `od brand preview ' + input.brandId + '` and tell the user it is filling in. It must parse as JSON and use exactly the seven color roles (background, surface, foreground, muted, border, accent, accent-secondary), each with `hex` (#rrggbb), `oklch`, `name`, `usage`; plus `name`, `tagline`, `description`, `sourceUrl`, `logo` ({ primary, alternates, notes } with `logos/<file>` paths), `typography` ({ display, body, mono? } each { family, fallbacks[], weights[], googleFontsUrl? }), `voice`, `imagery` (incl. `samples` — the `imagery/<file>` images you saved), and `layout`. Never invent colors from memory — pick them from what you measured.',
     '   - PREVIEW AFTER EACH FIELD GROUP, do not batch to the end. The kit fills in live, so after you measure and add each group — (a) colors, (b) typography/fonts, (c) logo candidates, (d) cover/hero imagery samples, (e) voice & tone, (f) imagery/layout posture — update `brand.json` and re-run `od brand preview ' + input.brandId + '`. Partial data renders the filled modules and keeps skeletons for the rest, which is exactly the progressive "filling in" the user should watch. Also write `BRAND.md`, a prose brand guide an autonomous design agent can follow.',
     '',
-    '3. BUILD & REGISTER — when `brand.json` is complete, run `od brand finalize ' + input.brandId + '` (add `--json` for machine output). That validates it, derives the light/dark/compact design tokens and the six brand-system artifacts (landing, deck, poster, email, newsletter, form), registers the reusable design system, and lights up the Brand Assets tiles on the kit page. Fix `brand.json` and re-run if it reports a validation error.',
+    '3. REBUILD & RE-REGISTER — when `brand.json` is enriched, run `od brand finalize ' + input.brandId + '` (add `--json` for machine output). That re-validates it, re-derives the light/dark/compact design tokens and the six design-system artifacts (landing, deck, poster, email, newsletter, form), and UPDATES the already-registered design system in place (same id — never a duplicate), so every template that already uses it picks up the sharper result. Fix `brand.json` and re-run if it reports a validation error.',
     '',
-    'Finish by pointing the user at the completed brand.html (logo, palette, typography, voice) and the Brand Assets they can now preview, and confirm the brand was registered.',
+    'Finish by pointing the user at the enriched brand.html (logo, palette, typography, voice) and the design-system assets they can now preview, and confirm the design system was updated.',
   ].join('\n');
 }
 

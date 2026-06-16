@@ -84,6 +84,12 @@ export function registerBrandRoutes(app: Application, deps: BrandRoutesDeps): vo
         projectsRoot,
         skillsRoot,
         db,
+        // Passing the registry root + data dir switches on the programmatic-first
+        // extraction: the daemon harvests + synthesizes + finalizes a usable
+        // design system synchronously, so the caller lands on a ready, applyable
+        // design system immediately and the agent run only enriches it.
+        userDesignSystemsRoot,
+        dataDir,
       };
       if (randomId) startOptions.randomId = randomId;
       const result = await startBrandExtraction(startOptions);

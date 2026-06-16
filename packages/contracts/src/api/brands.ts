@@ -140,13 +140,17 @@ export interface BrandCreateRequest {
 }
 
 /**
- * POST /api/brands response. Extraction is no longer an in-place deterministic
- * pipeline: the daemon reserves a brand record, spins up a backing `brand`
- * project with the target site open in an in-app browser tab, and seeds a
- * pending prompt that drives an agent through the full extraction chain
- * (measure → synthesize → build the design system). The web/CLI caller
- * navigates into the project and auto-sends the first prompt so the agent runs
- * the extraction live — with a human in the loop for anti-bot walls.
+ * POST /api/brands response. Extraction is two-phase:
+ *   1. PROGRAMMATIC-FIRST (synchronous): the daemon harvests the site
+ *      deterministically (logo, palette, typography, one-line description,
+ *      cover imagery, source URL), synthesizes a valid design system with NO
+ *      LLM, and finalizes + registers it before responding — so the caller
+ *      lands on a usable, applyable design system within seconds (the "aha").
+ *   2. ASYNC AI ENRICHMENT: the backing `brand` project carries a seeded prompt
+ *      the caller auto-sends; the agent re-measures precisely and re-finalizes
+ *      in place (same `user:<id>` design system), updating every artifact.
+ * A fully blocked / unreachable origin skips phase 1 and stays `extracting`
+ * for the agent to drive — with a human in the loop for anti-bot walls.
  */
 export interface BrandExtractStartResponse {
   /** The reserved brand id (status starts as `extracting`). */
