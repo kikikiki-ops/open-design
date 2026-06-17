@@ -24,6 +24,7 @@ import {
   imageSize,
   type ImagerySlot,
 } from '../src/brands/imagery-fallback.js';
+import { isChallengePage } from '../src/brands/prefetch.js';
 
 // Real repo skills root so the bundled brand-kit template resolves.
 const SKILLS_ROOT = path.resolve(
@@ -833,6 +834,79 @@ describe('agent-driven brand extraction engine', () => {
 
     const html = readFileSync(path.join(projectsRoot, result.projectId, 'brand.html'), 'utf8');
     expect(html).toContain('"status":"extracting"');
+  });
+
+  it('does not finalize blocked or thin programmatic harvests as ready', async () => {
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+
+    for (const [host, flags] of [
+      ['blocked.example', { blocked: true, thin: true }],
+      ['thin.example', { blocked: false, thin: true }],
+    ] as const) {
+      const result = await startBrandExtraction({
+        url: host,
+        brandsRoot,
+        projectsRoot,
+        skillsRoot: SKILLS_ROOT,
+        db,
+        userDesignSystemsRoot,
+        prefetch: async () => ({
+          url: `https://${host}/`,
+          finalUrl: `https://${host}/`,
+          siteName: 'Fallback',
+          title: '',
+          description: '',
+          colors: [
+            { hex: '#ffffff', count: 50, extreme: true },
+            { hex: '#111111', count: 30, extreme: true },
+          ],
+          fonts: [],
+          fontFaceFamilies: [],
+          googleFontsUrls: [],
+          fontFiles: [],
+          logos: [],
+          headings: [],
+          paragraphs: [],
+          navLabels: [],
+          extraPages: [],
+          screenshot: null,
+          materialMd: '',
+          ...flags,
+        }),
+        logoFallback: NO_LOGO_FALLBACK,
+        imageryFallback: NO_IMAGERY_FALLBACK,
+      });
+
+      const detail = readBrandDetail(brandsRoot, result.id);
+      expect(detail?.meta.status).toBe('extracting');
+      expect(detail?.meta.designSystemId).toBeUndefined();
+      const html = readFileSync(path.join(projectsRoot, result.projectId, 'brand.html'), 'utf8');
+      expect(html).toContain('"status":"extracting"');
+    }
+
+    const systems = await listDesignSystems(userDesignSystemsRoot, {
+      idPrefix: 'user:',
+      source: 'user',
+      isEditable: true,
+      defaultStatus: 'draft',
+    });
+    expect(systems).toHaveLength(0);
+  });
+
+  it('classifies EO_Bot_Ssid verification pages as anti-bot challenges', () => {
+    expect(isChallengePage(`
+      <!doctype html>
+      <html>
+        <head><title>旺旺集团</title></head>
+        <body>
+          <script>
+            document.cookie = "EO_Bot_Ssid=abc123";
+            window.__tst_status = "verify";
+            location.reload();
+          </script>
+        </body>
+      </html>
+    `)).toBe(true);
   });
 
   it('returns fast without blocking on a slow programmatic harvest, then finalizes in the background', async () => {

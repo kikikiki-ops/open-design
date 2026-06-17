@@ -633,8 +633,8 @@ export interface RunProgrammaticExtractionOptions {
  * "aha". The async AI enrichment pass then refines it to full fidelity and
  * re-finalizes in place (reusing the same `user:<id>` design system).
  *
- * Best-effort: a fully blocked / unreachable origin (prefetch returns null)
- * yields `null` and the brand stays `extracting`, so the AI pass can take over.
+ * Best-effort: a blocked, too-thin, or unreachable origin yields `null` and
+ * the brand stays `extracting`, so the AI pass can take over.
  */
 export async function runProgrammaticExtraction(
   opts: RunProgrammaticExtractionOptions,
@@ -645,6 +645,7 @@ export async function runProgrammaticExtraction(
 
   const material = await prefetch(meta.sourceUrl, brandDir);
   if (!material) return null;
+  if (material.blocked || material.thin) return null;
 
   const brand = brandFromMaterial(material, meta.sourceUrl);
   const guideMd = brandGuideMd(brand);
