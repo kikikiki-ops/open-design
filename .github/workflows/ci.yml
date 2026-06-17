@@ -495,6 +495,8 @@ jobs:
         run: pnpm -C e2e exec tsx scripts/playwright.ts clean
 
       - name: Run UI shell smoke
+        env:
+          OD_PLAYWRIGHT_WORKERS: "4"
         run: pnpm -C e2e exec tsx scripts/playwright.ts run-ui-group smoke
 
       - name: Upload Playwright debug artifact
@@ -544,6 +546,8 @@ jobs:
         run: pnpm -C e2e exec tsx scripts/playwright.ts clean
 
       - name: Run UI P0 domain
+        env:
+          OD_PLAYWRIGHT_WORKERS: "4"
         run: pnpm -C e2e exec tsx scripts/playwright.ts run-ui-group ${{ matrix.shard }}
 
       - name: Upload Playwright debug artifact
