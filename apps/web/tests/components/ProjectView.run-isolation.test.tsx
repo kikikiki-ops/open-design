@@ -687,6 +687,26 @@ describe('ProjectView conversation run isolation', () => {
     });
   });
 
+  it('seeds a fresh conversation from the active conversation when messages are loaded', async () => {
+    conversationAMessages = [
+      { id: 'user-a', role: 'user', content: 'Keep the editorial grid and muted palette.', createdAt: 1 },
+      runningAssistant,
+    ];
+
+    renderProjectView();
+
+    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
+
+    fireEvent.click(screen.getByTestId('new-conversation'));
+
+    await waitFor(() => expect(createConversation).toHaveBeenCalledTimes(1));
+    expect(createConversation).toHaveBeenCalledWith(
+      'project-1',
+      undefined,
+      { seedFromConversationId: 'conv-a' },
+    );
+  });
+
   it('notifies when a detached active run is terminal after returning to its conversation', async () => {
     renderProjectView();
 

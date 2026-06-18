@@ -2186,6 +2186,19 @@ export function __forTestScanRunEventsForRetrySideEffects(events) {
   return scanRunEventsForRetrySideEffects(events);
 }
 
+function runHasResumableWorkBoundary(sideEffects) {
+  return !!(
+    sideEffects?.userVisibleOutputSeen ||
+    sideEffects?.toolCallSeen ||
+    sideEffects?.artifactWriteSeen ||
+    sideEffects?.liveArtifactSeen
+  );
+}
+
+export function __forTestRunHasResumableWorkBoundary(sideEffects) {
+  return runHasResumableWorkBoundary(sideEffects);
+}
+
 function retryFinalResultForRunStatus(status, retryAttemptCount) {
   const result = runResultFromStatus(status);
   if ((retryAttemptCount ?? 0) <= 0) {
@@ -7990,27 +8003,15 @@ export async function startServer({
       // id is the one we actually drove this attempt with: the resumed id when
       // continuing, otherwise the freshly minted id we passed via --session-id.
       //
-      // Gate on a real *committed* boundary this attempt, not merely on bytes
-      // having reached the UI. A completed tool_use / artifact / live-artifact
-      // corresponds to a block the agent has committed to its session (Claude
-      // commits a tool_use block before running the tool), so `--resume` has
-      // something concrete to pick up. We deliberately EXCLUDE
-      // `userVisibleOutputSeen`: it flips true on the first streamed text
-      // delta, but a single-turn drop can stream a few tokens with
-      // `output_tokens == 0` and never commit a text block — resuming that
-      // continues from the prior user turn (nothing to pick up), which is
-      // exactly the "resume something with nothing to continue" case this
-      // feature is meant to avoid. A text-only turn that is cut therefore stays
-      // a from-scratch restart (auto-retry above or a manual Retry).
-      // NOTE: `userVisibleOutputSeen` cannot by itself distinguish "half a text
-      // block, zero commit" from "a committed text block then more streaming";
-      // until the stream exposes a committed-text signal, tool/artifact blocks
-      // are the only reliable resume boundary.
-      const committedWorkSeen = !!(
-        sideEffects.toolCallSeen ||
-        sideEffects.artifactWriteSeen ||
-        sideEffects.liveArtifactSeen
-      );
+      // Gate on a boundary the user can reasonably continue from. Tool-use /
+      // artifact / live-artifact blocks are strong committed-session markers,
+      // but text-only generations are also the common "page stopped halfway"
+      // failure mode users hit on large prototypes. If the run produced
+      // visible text before the transient drop, prefer a resumable follow-up
+      // over forcing a from-scratch retry path: the next turn explicitly asks
+      // the runtime to continue its existing session and inspect current files
+      // before making changes.
+      const committedWorkSeen = runHasResumableWorkBoundary(sideEffects);
       const liveSessionId = agentResumeCtx.isResuming
         ? agentResumeCtx.resumeSessionId
         : agentResumeCtx.newSessionId;

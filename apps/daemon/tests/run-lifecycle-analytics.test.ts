@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  __forTestRunHasResumableWorkBoundary,
   __forTestRetryFinalResultForRunStatus,
   __forTestRunRetryEventsForAnalytics,
   __forTestResolveRunProjectKindForAnalytics,
@@ -183,6 +184,21 @@ describe('run retry analytics helpers', () => {
       toolCallSeen: true,
       liveArtifactSeen: true,
     });
+  });
+
+  it('treats visible output as a resumable work boundary', () => {
+    expect(__forTestRunHasResumableWorkBoundary({
+      userVisibleOutputSeen: true,
+      toolCallSeen: false,
+      artifactWriteSeen: false,
+      liveArtifactSeen: false,
+    })).toBe(true);
+    expect(__forTestRunHasResumableWorkBoundary({
+      userVisibleOutputSeen: false,
+      toolCallSeen: false,
+      artifactWriteSeen: false,
+      liveArtifactSeen: false,
+    })).toBe(false);
   });
 
   it('derives retry final result from terminal status and attempt count', () => {
