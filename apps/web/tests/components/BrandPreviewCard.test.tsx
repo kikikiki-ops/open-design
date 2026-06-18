@@ -210,4 +210,40 @@ describe('BrandPreviewCard', () => {
     });
     expect(onBeforeMutation).not.toHaveBeenCalled();
   });
+
+  it('keeps the parent detail selected when deleting a brand returns an HTTP failure', async () => {
+    const onBeforeMutation = vi.fn();
+    const onChanged = vi.fn();
+    vi.stubGlobal('confirm', vi.fn(() => true));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input).startsWith('/api/brands/') && init?.method === 'DELETE') {
+          return { ok: false, json: async () => ({}) };
+        }
+        return { ok: true, json: async () => ({}) };
+      }),
+    );
+
+    render(
+      <I18nProvider initial="en">
+        <BrandPreviewCard
+          summary={rampBrand}
+          variant="panel"
+          onBeforeMutation={onBeforeMutation}
+          onChanged={onChanged}
+        />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId('brand-preview-delete'));
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/brands/brand-ramp', { method: 'DELETE' });
+      expect((screen.getByTestId('brand-preview-delete') as HTMLButtonElement).disabled).toBe(false);
+    });
+    expect(onBeforeMutation).not.toHaveBeenCalled();
+    expect(onChanged).not.toHaveBeenCalled();
+    expect(window.location.pathname).toBe('/brands/brand-ramp');
+  });
 });

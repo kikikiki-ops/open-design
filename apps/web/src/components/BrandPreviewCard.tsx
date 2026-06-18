@@ -382,7 +382,8 @@ export function BrandPreviewCard({
     if (!ok) return;
     setBusy(true);
     try {
-      await fetch(`/api/brands/${encodeURIComponent(meta.id)}`, { method: 'DELETE' });
+      const resp = await fetch(`/api/brands/${encodeURIComponent(meta.id)}`, { method: 'DELETE' });
+      if (!resp.ok) throw new Error('Brand delete failed');
       // Drop the now-stale `/brands/:id` selection before refreshing the list.
       onBeforeMutation?.();
       navigate({ kind: 'home', view: 'brands' }, { replace: true });
