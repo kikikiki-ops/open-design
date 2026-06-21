@@ -182,6 +182,26 @@ describe('listSkills', () => {
     expect(skill.body).toContain('pkill -f -- "--user-data-dir=${CHROME_USER_DATA_DIR}"');
   });
 
+  it('keeps html-ppt PNG export off the user system Chrome path', async () => {
+    const skills = await listSkills(designTemplatesRoot);
+    const skill = skills.find((entry: { id: string }) => entry.id === 'html-ppt');
+    const renderScript = readFileSync(
+      path.join(designTemplatesRoot, 'html-ppt', 'scripts', 'render.sh'),
+      'utf8',
+    );
+
+    if (!skill) throw new Error('html-ppt skill not found');
+    expect(skill.body).toContain("Playwright's managed Chromium");
+    expect(skill.body).toContain('If the managed renderer fails once');
+    expect(skill.body).not.toContain('/Applications/Google Chrome.app');
+    expect(renderScript).toContain('playwright@${PLAYWRIGHT_VERSION}');
+    expect(renderScript).toContain('not retrying and not falling back to system Google Chrome');
+    expect(renderScript).not.toContain('/Applications/Google Chrome.app');
+    expect(renderScript).not.toContain('--headless');
+    expect(renderScript).not.toContain('--screenshot');
+    expect(renderScript).not.toContain('--remote-debugging-port');
+  });
+
   it('includes the DCF valuation, X research, and Last30Days research skills', async () => {
     const skills = await listSkills(designTemplatesRoot);
     const byId = new Map(
