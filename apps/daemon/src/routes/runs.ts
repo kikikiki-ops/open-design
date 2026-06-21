@@ -1,9 +1,16 @@
 import type { Express, Request, Response } from 'express';
+import type Database from 'better-sqlite3';
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import {
   defaultScenarioPluginIdForProjectMetadata,
   RUN_RESULT_PACKAGE_SCHEMA,
+  type AppliedPluginSnapshot,
+  type ArtifactManifest,
+  type ChatRunStatus,
+  type ChatRunStatusResponse,
+  type ProjectMetadata as ContractProjectMetadata,
+  type RunResultPackageResponse,
 } from '@open-design/contracts';
 import {
   agentIdToTracking,
@@ -11,8 +18,11 @@ import {
   modelIdForTracking,
   sessionModeToTracking,
 } from '@open-design/contracts/analytics';
+import type { OdNativeEvent } from '@open-design/agui-adapter';
 import { newInsertId, readAnalyticsContext } from '../analytics.js';
+import type { AnalyticsContext } from '../analytics.js';
 import { agentCliEnvForAgent, readAppConfig } from '../app-config.js';
+import type { ConnectorService } from '../connectors/service.js';
 import { getProject, listConversations, upsertMessage } from '../db.js';
 import { readVelaLoginStatus } from '../integrations/vela.js';
 import {
@@ -39,18 +49,25 @@ import {
   runtimeTypeForRunAnalytics,
   scanRunEventsForUsageAnalytics,
   summarizeRunTimingAnalytics,
+  type RunEventForAnalyticsObservability,
+  type RunTelemetryTimestamps,
 } from '../run-analytics-observability.js';
 import {
   diffRunArtifacts,
   snapshotProjectArtifacts,
+  type RunArtifactBaseline,
 } from '../run-artifact-fs.js';
+import type { RunEventForDiagnostics } from '../run-diagnostics.js';
 import { summarizeRunDiagnosticsForAnalytics } from '../run-diagnostics.js';
+import type { RunEventForFailureClassification } from '../run-failure-classification.js';
 import { classifyRunFailure } from '../run-failure-classification.js';
 import { deriveRunErrorCode, runResultFromStatus } from '../run-result.js';
+import type { RunStatusForAnalytics } from '../run-result.js';
 import {
   parseRunToolBundleForRequest,
   validateRunToolBundleForAgent,
 } from '../run-tool-bundle.js';
+import type { DetectedAgent, RuntimeAgentDef } from '../runtimes/types.js';
 import {
   countDesignSystemPreviewModules,
   countNewArtifacts,
@@ -59,61 +76,281 @@ import {
   runAskedUserQuestion,
 } from '../runtimes/run-artifacts.js';
 
+type SqliteDb = Database.Database;
+type JsonRecord = Record<string, unknown>;
+type ApiRequest = Request<Record<string, string>, unknown, JsonRecord>;
+type ApiResponse = Response<unknown>;
+type ProjectMetadata = (Partial<ContractProjectMetadata> & JsonRecord) | null | undefined;
+type AgentCliEnv = Parameters<typeof agentCliEnvForAgent>[0];
+type RunDeliveryTarget = 'managed-project' | 'external-project' | 'none';
+
+interface ProjectRecord {
+  id: string;
+  name: string;
+  metadata?: ProjectMetadata;
+  appliedPluginSnapshotId?: string | null;
+}
+
+interface ConversationRecord {
+  id: string;
+  createdAt?: number;
+}
+
+interface RunEventRecord
+  extends RunEventForAnalyticsObservability,
+    RunEventForDiagnostics,
+    RunEventForFailureClassification {
+  id: number;
+  event: string;
+  data: unknown;
+  timestamp?: number;
+}
+
+interface SseClient {
+  send(event: string, data: unknown, id?: number): void;
+  end(): void;
+  cleanup?(): void;
+}
+
+interface ChatRun {
+  id: string;
+  projectId: string | null;
+  conversationId: string | null;
+  assistantMessageId: string | null;
+  agentId: string | null;
+  model?: string | null;
+  status: ChatRunStatus;
+  createdAt: number;
+  updatedAt: number;
+  cancelRequested?: boolean;
+  exitCode?: number | null;
+  signal?: string | null;
+  error?: string | null;
+  errorCode?: string | null;
+  projectMetadata?: ProjectMetadata;
+  appliedPluginSnapshotId?: string | null;
+  pluginId?: string | null;
+  clientType?: 'desktop' | 'web';
+  events: RunEventRecord[];
+  clients: Set<SseClient>;
+  analyticsContext?: AnalyticsContext;
+  analyticsTelemetry?: RunTelemetryTimestamps;
+  retryAttemptCount?: number;
+  retryFinalResult?: string;
+  retrySuppressedReason?: string;
+}
+
+interface RunCreateMeta extends JsonRecord {
+  projectId?: string;
+  conversationId?: string;
+  assistantMessageId?: string;
+  agentId?: string;
+  pluginId?: string;
+  appliedPluginSnapshotId?: string;
+  message?: string;
+  currentPrompt?: string;
+  projectMetadata?: ProjectMetadata;
+}
+
+interface RunListFilters {
+  projectId?: unknown;
+  conversationId?: unknown;
+  status?: unknown;
+}
+
+interface ChatRunService {
+  create(meta: RunCreateMeta): ChatRun;
+  get(id: string): ChatRun | null;
+  list(filters: RunListFilters): ChatRun[];
+  statusBody(run: ChatRun): ChatRunStatusResponse;
+  stream(run: ChatRun, req: Request, res: Response): void;
+  start(run: ChatRun, starter: () => Promise<unknown>): ChatRun;
+  wait(run: ChatRun): Promise<ChatRunStatusResponse>;
+  cancel(run: ChatRun): Promise<ChatRunStatusResponse>;
+  isTerminal(status: ChatRunStatus): boolean;
+  emit?(run: ChatRun, event: string, data: unknown): RunEventRecord;
+}
+
+interface AnalyticsService {
+  capture(input: {
+    eventName: string;
+    context: AnalyticsContext;
+    appVersion: string;
+    properties: Record<string, unknown>;
+    insertId: string;
+  }): void;
+}
+
+interface RunRoutesDesignService {
+  runs: ChatRunService;
+  analytics: AnalyticsService;
+  getAppVersion(): string;
+}
+
+interface ProjectFileEntry {
+  name: string;
+  artifactKind?: string | null;
+  artifactManifest?: ArtifactManifest | JsonRecord | null;
+}
+
+interface RunRetryAnalyticsEvent {
+  event: string;
+  data: Record<string, unknown>;
+}
+
+interface RunArtifactBaselines {
+  take(runId: string): RunArtifactBaseline | undefined;
+}
+
+interface SseResponse {
+  send(event: string, data: unknown, id?: number): void;
+  end(): void;
+  cleanup?(): void;
+}
+
+interface RunCreatedFallbackInput {
+  analyticsContext: AnalyticsContext | null;
+  run: ChatRun;
+  status: string;
+}
+
+interface RunProjectKindInput {
+  hintProjectKind: string | null;
+  projectMetadata?: ProjectMetadata;
+}
+
 export interface RegisterRunRoutesDeps {
-  db: any;
-  design: any;
+  db: SqliteDb;
+  design: RunRoutesDesignService;
   http: {
-    createSseResponse: (...args: any[]) => any;
-    sendApiError: (...args: any[]) => any;
+    createSseResponse: (res: Response) => SseResponse;
+    sendApiError: (
+      res: Response,
+      status: number,
+      code: string,
+      message: string,
+    ) => Response<unknown> | void;
   };
   paths: {
     PROJECTS_DIR: string;
     RUNTIME_DATA_DIR: string;
   };
   agents: {
-    detectAgents: (...args: any[]) => Promise<any[]>;
-    getAgentDef: (...args: any[]) => any;
+    detectAgents: (agentCliEnv?: Record<string, unknown>) => Promise<DetectedAgent[]>;
+    getAgentDef: (agentId: string) => RuntimeAgentDef | null | undefined;
   };
   chat: {
-    startChatRun: (meta: any, run: any) => any;
+    startChatRun: (meta: RunCreateMeta, run: ChatRun) => Promise<unknown>;
   };
   lifecycle: {
     isDaemonShuttingDown: () => boolean;
   };
   plugins: {
-    connectorService: any;
-    detectSkillPluginCandidateOnRunSuccess: (...args: any[]) => void;
-    firePipelineForRun: (...args: any[]) => void;
-    loadPluginRegistryView: () => Promise<any>;
+    connectorService: ConnectorService;
+    detectSkillPluginCandidateOnRunSuccess: (
+      db: SqliteDb,
+      runs: ChatRunService,
+      run: ChatRun,
+      input: JsonRecord,
+      projectRoot: string,
+    ) => void;
+    firePipelineForRun: (args: {
+      run: ChatRun;
+      snapshot: AppliedPluginSnapshot;
+      runs: ChatRunService;
+      db: SqliteDb;
+    }) => void;
+    loadPluginRegistryView: () => Promise<Parameters<typeof resolvePluginSnapshot>[0]['registry']>;
     renderPluginBriefTemplate: (template: string, inputs?: Record<string, unknown>) => string;
   };
   telemetry: {
-    reportRunCompletionTelemetryFallback: (...args: any[]) => void;
-    resolveRunProjectKindForAnalytics: (...args: any[]) => string;
-    runArtifactBaselines: any;
-    runRetryEventsForAnalytics: (...args: any[]) => any[];
+    reportRunCompletionTelemetryFallback: (input: RunCreatedFallbackInput) => void;
+    resolveRunProjectKindForAnalytics: (input: RunProjectKindInput) => string;
+    runArtifactBaselines: RunArtifactBaselines;
+    runRetryEventsForAnalytics: (events: RunEventRecord[]) => RunRetryAnalyticsEvent[];
   };
   messages: {
-    pinAssistantMessageOnRunCreate: (...args: any[]) => void;
-    reconcileAssistantMessageOnRunEnd: (...args: any[]) => void;
+    pinAssistantMessageOnRunCreate: (db: SqliteDb, run: ChatRun) => void;
+    reconcileAssistantMessageOnRunEnd: (
+      db: SqliteDb,
+      runs: ChatRunService,
+      run: ChatRun,
+    ) => void;
   };
 }
 
-type ApiRequest = Request<any, any, any, any>;
-type ApiResponse = Response<any>;
-type ProjectMetadata = Record<string, any> | null | undefined;
-type RunStatus = {
+type TerminalRunStatus = RunStatusForAnalytics & {
   status: string;
   error?: string | null;
   errorCode?: string | null;
   exitCode?: number | null;
   signal?: string | null;
 };
-type AguiEventRecord = {
-  id: number;
-  event: string;
-  data?: Record<string, unknown> | null;
-};
+
+const AGUI_NATIVE_EVENT_KINDS: ReadonlySet<OdNativeEvent['kind']> = new Set([
+  'message_chunk',
+  'tool_call',
+  'state_update',
+  'end',
+  'run_started',
+  'pipeline_stage_started',
+  'pipeline_stage_completed',
+  'genui_surface_request',
+  'genui_surface_response',
+  'genui_surface_timeout',
+  'genui_state_synced',
+]);
+
+function toJsonRecord(value: unknown): JsonRecord {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as JsonRecord
+    : {};
+}
+
+function toProjectRecord(value: unknown): ProjectRecord | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as JsonRecord;
+  return typeof record.id === 'string'
+    ? value as ProjectRecord
+    : null;
+}
+
+function toConversationRecords(value: unknown): ConversationRecord[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is ConversationRecord =>
+        Boolean(item && typeof item === 'object' && typeof (item as JsonRecord).id === 'string'),
+      )
+    : [];
+}
+
+function toProjectFiles(value: unknown): ProjectFileEntry[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is ProjectFileEntry =>
+        Boolean(item && typeof item === 'object' && typeof (item as JsonRecord).name === 'string'),
+      )
+    : [];
+}
+
+function toScenarioProjectMetadata(
+  metadata: ProjectMetadata,
+): Pick<ContractProjectMetadata, 'kind' | 'intent'> | null {
+  if (!metadata || typeof metadata.kind !== 'string') return null;
+  return {
+    kind: metadata.kind as ContractProjectMetadata['kind'],
+    ...(metadata.intent === 'live-artifact' ? { intent: metadata.intent } : {}),
+  };
+}
+
+function routeParamId(req: ApiRequest): string | null {
+  return typeof req.params.id === 'string' && req.params.id.length > 0
+    ? req.params.id
+    : null;
+}
+
+function toOdNativeEvent(record: RunEventRecord): OdNativeEvent | null {
+  if (!AGUI_NATIVE_EVENT_KINDS.has(record.event as OdNativeEvent['kind'])) return null;
+  return { kind: record.event, ...toJsonRecord(record.data) } as OdNativeEvent;
+}
 
 export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
   const { db, design } = ctx;
@@ -142,7 +379,7 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
   function runToolBundleDeliveryTargetForProject(
     projectId: unknown,
     metadata: ProjectMetadata,
-  ): 'managed-project' | 'external-project' | 'none' {
+  ): RunDeliveryTarget {
     if (typeof projectId !== 'string' || !projectId || !isSafeId(projectId)) {
       return 'none';
     }
@@ -160,7 +397,7 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
     if (ctx.lifecycle.isDaemonShuttingDown()) {
       return sendApiError(res, 503, 'UPSTREAM_UNAVAILABLE', 'daemon is shutting down');
     }
-    const requestBody = req.body && typeof req.body === 'object' ? req.body : {};
+    const requestBody = toJsonRecord(req.body);
     const mediaExecution = parseMediaExecutionPolicyInput(requestBody.mediaExecution);
     if (!mediaExecution.ok) {
       return sendApiError(res, 400, 'BAD_REQUEST', mediaExecution.message);
@@ -171,7 +408,7 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
     }
     let resolvedSnapshot = null;
     if (typeof requestBody.projectId === 'string' && requestBody.projectId) {
-      let registryView;
+      let registryView: Parameters<typeof resolvePluginSnapshot>[0]['registry'];
       try {
         registryView = await loadPluginRegistryView();
       } catch (err) {
@@ -179,14 +416,16 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
       }
       const explicitPlugin =
         requestBody.pluginId || requestBody.appliedPluginSnapshotId;
-      let runResolveBody = requestBody;
+      let runResolveBody: JsonRecord = requestBody;
       if (!explicitPlugin) {
-        const projectRow = getProject(db, requestBody.projectId);
+        const projectRow = toProjectRecord(getProject(db, requestBody.projectId));
         const hasPin =
           typeof projectRow?.appliedPluginSnapshotId === 'string'
           && projectRow.appliedPluginSnapshotId.length > 0;
         if (!hasPin) {
-          const fallbackPluginId = defaultScenarioPluginIdForProjectMetadata(projectRow?.metadata);
+          const fallbackPluginId = defaultScenarioPluginIdForProjectMetadata(
+            toScenarioProjectMetadata(projectRow?.metadata),
+          );
           if (fallbackPluginId && getInstalledPlugin(db, fallbackPluginId)) {
             runResolveBody = { ...requestBody, pluginId: fallbackPluginId };
           }
@@ -214,7 +453,7 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
         resolvedSnapshot = resolved;
       }
     }
-    const meta = {
+    const meta: RunCreateMeta = {
       ...requestBody,
       mediaExecution: mediaExecution.policy,
       toolBundle: toolBundle.bundle,
@@ -230,10 +469,10 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
         if (renderedQuery.length > 0) meta.message = renderedQuery;
       }
     }
-    let runProject = null;
+    let runProject: ProjectRecord | null = null;
     if (typeof meta.projectId === 'string' && meta.projectId) {
       try {
-        runProject = getProject(db, meta.projectId);
+        runProject = toProjectRecord(getProject(db, meta.projectId));
         assertSandboxProjectRootAvailable(runProject?.metadata);
       } catch (err) {
         if (err instanceof SandboxImportedProjectError) {
@@ -248,14 +487,16 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
         const cfgAgent = typeof appCfg.agentId === 'string' && appCfg.agentId
           ? appCfg.agentId
           : null;
-        const agents = await detectAgents(appCfg.agentCliEnv ?? {}).catch((): any[] => []);
+        const agents = await detectAgents(
+          toJsonRecord(appCfg.agentCliEnv),
+        ).catch((): DetectedAgent[] => []);
         const cfgAgentAvailable = cfgAgent
           ? agents.some((agent) => agent.id === cfgAgent && agent.available)
           : false;
         if (cfgAgent && cfgAgentAvailable) {
           meta.agentId = cfgAgent;
         } else {
-          const firstAvailable = agents.find((a: any) => a.available)?.id ?? null;
+          const firstAvailable = agents.find((agent) => agent.available)?.id ?? null;
           if (firstAvailable) meta.agentId = firstAvailable;
         }
       } catch (err) {
@@ -284,8 +525,8 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
       (typeof meta.conversationId !== 'string' || !meta.conversationId)
     ) {
       try {
-        const convs = listConversations(db, meta.projectId);
-        const defaultConv = Array.isArray(convs) && convs.length > 0
+        const convs = toConversationRecords(listConversations(db, meta.projectId));
+        const defaultConv = convs.length > 0
           ? [...convs].sort((a, b) => {
               const aCreated = Number(a?.createdAt);
               const bCreated = Number(b?.createdAt);
@@ -362,9 +603,9 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
     reconcileAssistantMessageOnRunEnd(db, design.runs, run);
     if (run.projectId && run.conversationId) {
       try {
-        const project = getProject(db, run.projectId);
+        const project = toProjectRecord(getProject(db, run.projectId));
         const projectRoot = resolveProjectDir(PROJECTS_DIR, run.projectId, project?.metadata);
-        detectSkillPluginCandidateOnRunSuccess(db, design.runs, run, req.body || {}, projectRoot);
+        detectSkillPluginCandidateOnRunSuccess(db, design.runs, run, requestBody, projectRoot);
       } catch (err) {
         console.warn('[plugins] skill candidate hook setup failed', err);
       }
@@ -383,20 +624,18 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
       });
     }).catch(() => {});
     if (analyticsContext) {
-      const reqBody = (req.body || {}) as Record<string, unknown>;
+      const reqBody = requestBody;
       const runInsertId = newInsertId();
       const appCfgForAnalytics = await readAppConfig(RUNTIME_DATA_DIR).catch(
         () => ({} as Record<string, unknown>),
       );
       const detectedAgentsForAnalytics = await detectAgents(
-        (appCfgForAnalytics as { agentCliEnv?: Record<string, unknown> }).agentCliEnv ?? {},
+        toJsonRecord((appCfgForAnalytics as { agentCliEnv?: unknown }).agentCliEnv),
       ).catch((): Array<{ id: string; available: boolean }> => []);
       const velaStatusForAnalytics = (() => {
         try {
           const configuredAmrEnv = agentCliEnvForAgent(
-            (appCfgForAnalytics as {
-              agentCliEnv?: Parameters<typeof agentCliEnvForAgent>[0];
-            }).agentCliEnv,
+            (appCfgForAnalytics as { agentCliEnv?: AgentCliEnv }).agentCliEnv,
             'amr',
           );
           return readVelaLoginStatus(process.env, configuredAmrEnv);
@@ -447,7 +686,9 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
           : {}),
       };
       const requestProjectId = typeof reqBody.projectId === 'string' ? reqBody.projectId : null;
-      const runProjectForAnalytics = requestProjectId ? getProject(db, requestProjectId) : null;
+      const runProjectForAnalytics = requestProjectId
+        ? toProjectRecord(getProject(db, requestProjectId))
+        : null;
       const runProjectKind = resolveRunProjectKindForAnalytics({
         hintProjectKind,
         projectMetadata: runProjectForAnalytics?.metadata,
@@ -565,7 +806,7 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
         properties: baseProps,
         insertId: runInsertId,
       });
-      design.runs.wait(run).then(async (status: RunStatus) => {
+      design.runs.wait(run).then(async (status: TerminalRunStatus) => {
         const appCfgAtFinish = await readAppConfig(RUNTIME_DATA_DIR).catch(
           () => ({} as Record<string, unknown>),
         );
@@ -592,7 +833,7 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
           runCreatedAt: run.createdAt,
           runUpdatedAt: run.updatedAt,
           analyticsCapturedAt,
-          telemetry: run.analyticsTelemetry,
+        ...(run.analyticsTelemetry ? { telemetry: run.analyticsTelemetry } : {}),
           events: run.events,
         });
         const toolStreamArtifactCount = (): number => countNewArtifacts(run.events);
@@ -739,11 +980,13 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
   });
 
   app.get('/api/runs/:id/result-package', async (req: ApiRequest, res: ApiResponse) => {
-    const run = design.runs.get(req.params.id);
+    const runId = routeParamId(req);
+    if (!runId) return sendApiError(res, 400, 'BAD_REQUEST', 'run id missing');
+    const run = design.runs.get(runId);
     if (!run) return sendApiError(res, 404, 'NOT_FOUND', 'run not found');
     const status = design.runs.statusBody(run);
-    const project = run.projectId ? getProject(db, run.projectId) : null;
-    let files: any[] = [];
+    const project = run.projectId ? toProjectRecord(getProject(db, run.projectId)) : null;
+    let files: ProjectFileEntry[] = [];
     if (project) {
       const packageMetadata = run.projectMetadata ?? null;
       try {
@@ -754,7 +997,7 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
             throw new Error('workspace root is not a directory');
           }
         }
-        files = await listFiles(PROJECTS_DIR, project.id, { metadata: packageMetadata });
+        files = toProjectFiles(await listFiles(PROJECTS_DIR, project.id, { metadata: packageMetadata }));
       } catch (err) {
         return sendApiError(
           res,
@@ -765,7 +1008,9 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
       }
     }
     const artifacts = files
-      .filter((file) => file?.artifactManifest && typeof file.artifactManifest === 'object')
+      .filter((file): file is ProjectFileEntry & { artifactManifest: ArtifactManifest } =>
+        Boolean(file.artifactManifest && typeof file.artifactManifest === 'object'),
+      )
       .map((file) => ({
         file: file.name,
         kind: typeof file.artifactManifest.kind === 'string'
@@ -782,7 +1027,7 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
           : null,
         manifest: file.artifactManifest,
       }));
-    res.json({
+    const body: RunResultPackageResponse = {
       schema: RUN_RESULT_PACKAGE_SCHEMA,
       run: {
         id: status.id,
@@ -793,15 +1038,20 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
         agentId: status.agentId,
         createdAt: status.createdAt,
         updatedAt: status.updatedAt,
-        cancelRequested: status.cancelRequested,
-        exitCode: status.exitCode,
-        signal: status.signal,
-        error: status.error,
-        errorCode: status.errorCode,
+        ...(status.cancelRequested !== undefined
+          ? { cancelRequested: status.cancelRequested }
+          : {}),
+        ...(status.exitCode !== undefined ? { exitCode: status.exitCode } : {}),
+        ...(status.signal !== undefined ? { signal: status.signal } : {}),
+        ...(status.error !== undefined ? { error: status.error } : {}),
+        ...(status.errorCode !== undefined ? { errorCode: status.errorCode } : {}),
       },
-      workspace: status.workspace,
+      workspace: status.workspace ?? {
+        storage: { kind: 'od-owned', baseDir: null },
+        provenance: null,
+      },
       events: {
-        logPath: status.eventsLogPath,
+        logPath: status.eventsLogPath ?? null,
       },
       project: project
         ? {
@@ -811,35 +1061,44 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
           }
         : null,
       artifacts,
-    });
+    };
+    res.json(body);
   });
 
   app.get('/api/runs/:id', (req: ApiRequest, res: ApiResponse) => {
-    const run = design.runs.get(req.params.id);
+    const runId = routeParamId(req);
+    if (!runId) return sendApiError(res, 400, 'BAD_REQUEST', 'run id missing');
+    const run = design.runs.get(runId);
     if (!run) return sendApiError(res, 404, 'NOT_FOUND', 'run not found');
     res.json(design.runs.statusBody(run));
   });
 
   app.get('/api/runs/:id/events', (req: ApiRequest, res: ApiResponse) => {
-    const run = design.runs.get(req.params.id);
+    const runId = routeParamId(req);
+    if (!runId) return sendApiError(res, 400, 'BAD_REQUEST', 'run id missing');
+    const run = design.runs.get(runId);
     if (!run) return sendApiError(res, 404, 'NOT_FOUND', 'run not found');
     design.runs.stream(run, req, res);
   });
 
   app.get('/api/runs/:id/agui', async (req: ApiRequest, res: ApiResponse) => {
-    const run = design.runs.get(req.params.id);
+    const runId = routeParamId(req);
+    if (!runId) return sendApiError(res, 400, 'BAD_REQUEST', 'run id missing');
+    const run = design.runs.get(runId);
     if (!run) return sendApiError(res, 404, 'NOT_FOUND', 'run not found');
     const { encodeOdEventForAgui } = await import('@open-design/agui-adapter');
     const sse = createSseResponse(res);
     const lastEventId = Number(req.get('Last-Event-ID') || req.query.after || 0);
-    const emitMapped = (record: AguiEventRecord) => {
+    const emitMapped = (record: RunEventRecord) => {
+      const nativeEvent = toOdNativeEvent(record);
+      if (!nativeEvent) return;
       const mapped = encodeOdEventForAgui(
-        { kind: record.event, ...(record.data ?? {}) } as any,
+        nativeEvent,
         { runId: run.id, seq: record.id, now: Date.now() },
       );
       if (mapped) sse.send(mapped.kind, mapped, record.id);
     };
-    for (const record of run.events as AguiEventRecord[]) {
+    for (const record of run.events) {
       if (!Number.isFinite(lastEventId) || record.id > lastEventId) emitMapped(record);
     }
     if (design.runs.isTerminal(run.status)) {
@@ -847,11 +1106,18 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
       return;
     }
     const adapterClient = {
-      send: (event: string, data: Record<string, unknown> | null | undefined, id: number) => {
-        const mapped = encodeOdEventForAgui(
-          { kind: event, ...(data ?? {}) } as any,
-          { runId: run.id, seq: id, now: Date.now() },
-        );
+      send: (event: string, data: unknown, id?: number) => {
+        const nativeEvent = toOdNativeEvent({
+          id: id ?? 0,
+          event,
+          data,
+          timestamp: Date.now(),
+        });
+        if (!nativeEvent) return;
+        const ctx = id === undefined
+          ? { runId: run.id, now: Date.now() }
+          : { runId: run.id, seq: id, now: Date.now() };
+        const mapped = encodeOdEventForAgui(nativeEvent, ctx);
         if (mapped) sse.send(mapped.kind, mapped, id);
       },
       end:     () => sse.end(),
@@ -865,7 +1131,9 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
   });
 
   app.post('/api/runs/:id/cancel', async (req: ApiRequest, res: ApiResponse) => {
-    const run = design.runs.get(req.params.id);
+    const runId = routeParamId(req);
+    if (!runId) return sendApiError(res, 400, 'BAD_REQUEST', 'run id missing');
+    const run = design.runs.get(runId);
     if (!run) return sendApiError(res, 404, 'NOT_FOUND', 'run not found');
     const status = await design.runs.cancel(run);
     const body = { ok: true, run: status };
@@ -876,7 +1144,7 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
     if (ctx.lifecycle.isDaemonShuttingDown()) {
       return sendApiError(res, 503, 'UPSTREAM_UNAVAILABLE', 'daemon is shutting down');
     }
-    const requestBody = req.body && typeof req.body === 'object' ? req.body : {};
+    const requestBody = toJsonRecord(req.body);
     const mediaExecution = parseMediaExecutionPolicyInput(requestBody.mediaExecution);
     if (!mediaExecution.ok) {
       return sendApiError(res, 400, 'BAD_REQUEST', mediaExecution.message);
@@ -885,10 +1153,10 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
     if (!toolBundle.ok) {
       return sendApiError(res, 400, 'BAD_REQUEST', toolBundle.message);
     }
-    let chatProject = null;
+    let chatProject: ProjectRecord | null = null;
     if (typeof requestBody.projectId === 'string' && requestBody.projectId) {
       try {
-        chatProject = getProject(db, requestBody.projectId);
+        chatProject = toProjectRecord(getProject(db, requestBody.projectId));
         assertSandboxProjectRootAvailable(chatProject?.metadata);
       } catch (err) {
         if (err instanceof SandboxImportedProjectError) {
