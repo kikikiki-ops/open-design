@@ -9,6 +9,7 @@ import type { ToolPackConfig } from "../src/config.js";
 import { ensureWorkspaceBuildArtifacts } from "../src/workspace-build.js";
 
 const PACKAGE_DIRS = [
+  "packages/release",
   "packages/components",
   "packages/contracts",
   "packages/registry-protocol",
@@ -28,6 +29,8 @@ const PACKAGE_DIRS = [
 ] as const;
 
 const OUTPUT_FILES = [
+  "packages/release/dist/index.mjs",
+  "packages/release/dist/index.d.ts",
   "packages/components/dist/index.mjs",
   "packages/components/dist/index.d.ts",
   "packages/contracts/dist/index.mjs",

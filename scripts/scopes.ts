@@ -184,6 +184,7 @@ function applyChangedFile(file: string, target: ScopeOutputs): void {
   if (
     startsWithAny(file, [
       "apps/daemon/",
+      "packages/release/",
       "packages/contracts/",
       "packages/platform/",
       "packages/sidecar/",
@@ -196,6 +197,7 @@ function applyChangedFile(file: string, target: ScopeOutputs): void {
   if (
     startsWithAny(file, [
       "apps/web/",
+      "packages/release/",
       "packages/components/",
       "packages/contracts/",
       "packages/host/",
@@ -221,6 +223,7 @@ function applyChangedFile(file: string, target: ScopeOutputs): void {
       "tools/pack/",
       "apps/packaged/",
       "apps/desktop/",
+      "packages/release/",
       "packages/components/",
       "packages/host/",
       "packages/platform/",
@@ -277,6 +280,7 @@ function isUiP0RelevantFile(file: string): boolean {
     startsWithAny(file, [
       "apps/web/",
       "apps/daemon/",
+      "packages/release/",
       "packages/components/",
       "packages/contracts/",
       "packages/host/",
@@ -347,6 +351,7 @@ function isNixRelevantFile(file: string): boolean {
   return (
     startsWithAny(file, [
       "nix/",
+      "packages/release/",
     ]) ||
     [
       "package.json",
