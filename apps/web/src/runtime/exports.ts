@@ -1185,6 +1185,13 @@ const DECK_PRINT_CSS = `
     transform: none !important;
     position: relative !important;
     overflow: hidden !important;
+    /* Decks commonly show one slide at a time via opacity; without this the
+       inactive slides print as blank pages. Force every slide visible (and
+       freeze entrance animations) so each becomes a real page. */
+    opacity: 1 !important;
+    visibility: visible !important;
+    animation: none !important;
+    transition: none !important;
   }
   .slide:last-child, [data-screen-label]:last-child { page-break-after: auto; break-after: auto; }
   .deck-counter, .deck-hint, .deck-nav,

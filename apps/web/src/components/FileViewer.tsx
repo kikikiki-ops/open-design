@@ -7684,6 +7684,17 @@ function HtmlViewer({
     imageExportSnapshotDataUrlRef.current = null;
     await waitForAnimationFrame();
     await waitForAnimationFrame();
+    // Capture the clean preview BEFORE the modal opens. The snapshot uses the
+    // host compositor (capturePage of the preview region), so if the modal is
+    // already shown it overlays the slide and leaks into the exported image.
+    // prepareImageExportBlob() reuses this cached snapshot, so opening the
+    // modal afterwards never re-captures over the overlay.
+    try {
+      const cleanSnap = await captureExportImageSnapshot();
+      if (cleanSnap) imageExportSnapshotDataUrlRef.current = cleanSnap.dataUrl;
+    } catch (err) {
+      console.warn('[exportAsImage] pre-modal snapshot failed:', err);
+    }
     setImageExportModalOpen(true);
     void prepareImageExportBlob(imageExportFormat);
   };
