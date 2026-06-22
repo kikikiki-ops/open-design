@@ -1982,6 +1982,23 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
     return false;
   }
 
+  // RFC 9110 §13.1.5: a Range request with If-Range may only be served as 206
+  // when the If-Range validator still matches the current representation; if it
+  // doesn't (the file changed), the range must be ignored and the full current
+  // file returned, so a resumed download can't splice stale + fresh bytes.
+  function ifRangeAllowsPartial(req: any, etag: string, mtimeMs: number): boolean {
+    const ifRange = req.headers['if-range'];
+    if (typeof ifRange !== 'string' || ifRange.length === 0) return true; // no If-Range → honor Range
+    const value = ifRange.trim();
+    if (value.startsWith('"') || value.startsWith('W/')) {
+      return value === etag;
+    }
+    // Date form: honor the range only if the file has NOT changed since (its
+    // current Last-Modified is at/before the If-Range date).
+    const since = Date.parse(value);
+    return Number.isFinite(since) && Math.floor(mtimeMs / 1000) * 1000 <= since;
+  }
+
   async function sendProjectFile(
     req: any,
     res: Response,
@@ -2010,9 +2027,10 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
     const willSubstitute =
       !isStreamed && !!transformFile && /^text\/html(?:;|$)/i.test(meta.mime);
 
+    let currentEtag: string | null = null;
     if (revalidate && !willSubstitute) {
-      const etag = setRawRevalidationHeaders(res, meta);
-      if (rawRequestIsFresh(req, etag, meta.mtime)) {
+      currentEtag = setRawRevalidationHeaders(res, meta);
+      if (rawRequestIsFresh(req, currentEtag, meta.mtime)) {
         return res.status(304).end();
       }
     }
@@ -2026,7 +2044,12 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
         return res.status(200).end();
       }
 
-      const range = parseByteRange(req.headers.range, meta.size);
+      // Honor Range only when If-Range still matches the current file — otherwise
+      // a resumed download after a rewrite would splice stale + fresh bytes.
+      const range =
+        currentEtag === null || ifRangeAllowsPartial(req, currentEtag, meta.mtime)
+          ? parseByteRange(req.headers.range, meta.size)
+          : null;
 
       if (range === 'unsatisfiable') {
         res.setHeader('Content-Range', `bytes */${meta.size}`);

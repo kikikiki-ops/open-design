@@ -144,6 +144,29 @@ describe('GET /api/projects/:id/raw/* cache revalidation', () => {
     expect(await after.text()).toContain('v2');
   });
 
+  it('honors Range with a matching If-Range (206) but serves full 200 when If-Range is stale', async () => {
+    const dir = path.join(projectsRoot, projectId);
+    await writeFile(path.join(dir, 'resume.mp4'), Buffer.alloc(512, 0x42));
+    const head = await fetch(rawUrl('resume.mp4'));
+    const etag = head.headers.get('etag')!;
+    expect(etag).toBeTruthy();
+
+    // Matching If-Range → partial 206.
+    const ok206 = await fetch(rawUrl('resume.mp4'), {
+      headers: { Range: 'bytes=0-99', 'If-Range': etag },
+    });
+    expect(ok206.status).toBe(206);
+
+    // Rewrite the file (ETag changes), then resume with the STALE If-Range: must
+    // return the full current file (200), not splice stale + fresh bytes (206).
+    await writeFile(path.join(dir, 'resume.mp4'), Buffer.alloc(700, 0x43));
+    const full200 = await fetch(rawUrl('resume.mp4'), {
+      headers: { Range: 'bytes=0-99', 'If-Range': etag },
+    });
+    expect(full200.status).toBe(200);
+    expect(Number(full200.headers.get('content-length'))).toBe(700);
+  });
+
   it('revalidates the streamed media path too (304 on matching ETag)', async () => {
     const first = await fetch(rawUrl('clip.mp4'));
     expect(first.status).toBe(200);

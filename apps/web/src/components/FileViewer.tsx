@@ -7808,6 +7808,10 @@ function HtmlViewer({
   }, [captureExportImageSnapshot, t]);
 
   const openImageExportModal = async () => {
+    // Don't reopen while an export is still running: reopening resets the shared
+    // request/result bookkeeping refs, which would mis-attribute or drop the
+    // in-flight export's analytics result.
+    if (imageExportInFlightRef.current) return;
     flushSync(() => {
       setDownloadMenuOpen(false);
     });
