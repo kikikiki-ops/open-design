@@ -303,7 +303,7 @@ describe('EntryShell settings menu', () => {
     expect(screen.getByText('Appearance')).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: /Join Discord/i })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: /1.2k online/i })).toBeTruthy();
-    expect(screen.getByRole('menuitem', { name: /Follow @nexudotio on X/i })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: /Follow @OpenDesignHQ on X/i })).toBeTruthy();
 
     fireEvent.click(screen.getByTestId('entry-settings-open-details'));
 
