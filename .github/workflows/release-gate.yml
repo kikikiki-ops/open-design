@@ -32,6 +32,12 @@ jobs:
           BR: ${{ inputs.release_branch }}
         run: |
           set -euo pipefail
+          # Fail closed: the branch must actually exist. A mistyped or not-yet-cut branch makes
+          # `gh pr list` return an empty list, which would otherwise look like "clean / safe".
+          if ! gh api "repos/$REPO/git/ref/heads/$BR" >/dev/null 2>&1; then
+            echo "::error::Release branch '$BR' does not exist — failing closed (refusing to pass the gate)."
+            exit 1
+          fi
           echo "Checking $BR for un-landed backports (open PRs)…"
           open=$(gh pr list --repo "$REPO" --base "$BR" --state open \
                   --json number,title,isDraft \

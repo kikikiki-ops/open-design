@@ -41,44 +41,62 @@ jobs:
 
       - name: Compute next version
         id: ver
+        env:
+          # Never interpolate the raw input into the shell; pass via env and validate.
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          if [ -n "${{ inputs.version }}" ]; then
-            V="${{ inputs.version }}"
+          if [ -n "$INPUT_VERSION" ]; then
+            # Strict x.y.z, digits only — rejects shell metacharacters, newlines, etc.
+            if ! printf '%s' "$INPUT_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+              echo "::error::Invalid version '$INPUT_VERSION' (expected x.y.z, digits only)"
+              exit 1
+            fi
+            V="$INPUT_VERSION"
           else
             latest=$(git ls-remote --heads origin 'release/v*' \
               | sed -E 's#.*/release/v##' \
+              | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
               | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
             major=${latest%%.*}; rest=${latest#*.}; minor=${rest%%.*}
             V="${major}.$((minor+1)).0"
           fi
+          # V is now guaranteed to match ^[0-9]+\.[0-9]+\.[0-9]+$
           echo "version=$V"          >> "$GITHUB_OUTPUT"
           echo "branch=release/v$V"  >> "$GITHUB_OUTPUT"
           echo "Cutting v$V (branch release/v$V)"
 
       - name: Bail out if the branch already exists
+        env:
+          BRANCH: ${{ steps.ver.outputs.branch }}
         run: |
-          if git ls-remote --exit-code --heads origin "${{ steps.ver.outputs.branch }}" >/dev/null 2>&1; then
-            echo "::error::${{ steps.ver.outputs.branch }} already exists, skipping"
+          set -euo pipefail
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            echo "::error::$BRANCH already exists, skipping"
             exit 1
           fi
 
       - name: Create branch + bump version + push
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          BRANCH: ${{ steps.ver.outputs.branch }}
         run: |
           set -euo pipefail
           git config user.name  'open-design-release-bot[bot]'
           git config user.email 'open-design-release-bot[bot]@users.noreply.github.com'
-          git switch -c "${{ steps.ver.outputs.branch }}"
-          ( cd apps/packaged && npm pkg set version="${{ steps.ver.outputs.version }}" )
-          git commit -am "chore(release): v${{ steps.ver.outputs.version }}"
-          git push origin "${{ steps.ver.outputs.branch }}"   # App token push -> triggers notify-release-feishu (nightly + Feishu)
+          git switch -c "$BRANCH"
+          ( cd apps/packaged && npm pkg set version="$VERSION" )
+          git commit -am "chore(release): v$VERSION"
+          git push origin "$BRANCH"   # App token push -> triggers notify-release-feishu (nightly + Feishu)
 
       - name: Create backport label
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
-          gh label create "backport release/v${{ steps.ver.outputs.version }}" \
+          set -euo pipefail
+          gh label create "backport release/v$VERSION" \
             --repo nexu-io/open-design \
             --color 0E8A16 \
-            --description "Backport this fix to release/v${{ steps.ver.outputs.version }}" \
+            --description "Backport this fix to release/v$VERSION" \
             --force
