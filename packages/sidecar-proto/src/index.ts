@@ -257,6 +257,9 @@ export type DesktopRenderSlidesInput = {
   // (lossless source, for image export). Deck slides are always PNG. Default png.
   pageImageFormat?: "png" | "jpeg";
   scale?: number;
+  // Deck only: render every slide and stitch them top-to-bottom into a single
+  // tall image (used by image export of a deck). Ignored for ordinary pages.
+  stitch?: boolean;
 };
 
 // `mode` reports what the renderer found: `deck` = one PNG per 1920x1080 slide;
@@ -673,7 +676,7 @@ function normalizeDesktopExportPdfInput(input: unknown): DesktopExportPdfInput {
 
 function normalizeDesktopRenderSlidesInput(input: unknown): DesktopRenderSlidesInput {
   const value = assertObject(input, "desktop render slides input");
-  assertKnownKeys(value, ["baseHref", "html", "index", "pageImageFormat", "scale"], "desktop render slides input");
+  assertKnownKeys(value, ["baseHref", "html", "index", "pageImageFormat", "scale", "stitch"], "desktop render slides input");
   if (value.scale != null && (typeof value.scale !== "number" || !Number.isFinite(value.scale) || value.scale <= 0)) {
     throw new Error("desktop render slides scale must be a positive number");
   }
@@ -683,12 +686,16 @@ function normalizeDesktopRenderSlidesInput(input: unknown): DesktopRenderSlidesI
   if (value.pageImageFormat != null && value.pageImageFormat !== "png" && value.pageImageFormat !== "jpeg") {
     throw new Error("desktop render slides pageImageFormat must be 'png' or 'jpeg'");
   }
+  if (value.stitch != null && typeof value.stitch !== "boolean") {
+    throw new Error("desktop render slides stitch must be a boolean");
+  }
   return {
     ...(value.baseHref == null ? {} : { baseHref: normalizeNonEmptyString(value.baseHref, "desktop render slides baseHref") }),
     html: normalizeNonEmptyString(value.html, "desktop render slides html"),
     ...(value.index == null ? {} : { index: value.index }),
     ...(value.pageImageFormat == null ? {} : { pageImageFormat: value.pageImageFormat }),
     ...(value.scale == null ? {} : { scale: value.scale }),
+    ...(value.stitch == null ? {} : { stitch: value.stitch }),
   };
 }
 

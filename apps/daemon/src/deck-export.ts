@@ -20,6 +20,7 @@ export interface BuildDeckRenderInputOptions {
   projectId: string;
   projectsRoot: string;
   scale?: number;
+  stitch?: boolean;
   title?: string;
 }
 
@@ -49,6 +50,7 @@ export async function buildDeckRenderInput(
       ...(options.index == null ? {} : { index: options.index }),
       ...(options.pageImageFormat == null ? {} : { pageImageFormat: options.pageImageFormat }),
       ...(options.scale == null ? {} : { scale: options.scale }),
+      ...(options.stitch == null ? {} : { stitch: options.stitch }),
     },
   };
 }

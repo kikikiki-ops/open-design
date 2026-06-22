@@ -75,24 +75,23 @@ export async function renderDeckSlides(
       return await capturePage(window, input.pageImageFormat === "jpeg");
     }
 
-    // Deck: pin the 1920x1080 stage, then render every slide (or just the one
-    // requested by image export).
+    // Deck: pin the 1920x1080 stage.
     await window.webContents.executeJavaScript(`(${pinDeckStage.toString()})()`, true);
+
+    // Image export of a deck wants every slide stitched top-to-bottom into one
+    // tall image (the "whole deck as one picture").
+    if (input.stitch) {
+      return await stitchDeckSlides(window, count, input.pageImageFormat === "jpeg");
+    }
+
+    // Otherwise render every slide (or just the one requested by image export).
     const indices =
       input.index != null && input.index >= 0 && input.index < count ? [input.index] : range(count);
     const slides: string[] = [];
     let width = SLIDE_W;
     let height = SLIDE_H;
     for (const i of indices) {
-      await window.webContents.executeJavaScript(
-        `(${showSlide.toString()})(${JSON.stringify(SLIDE_SELECTOR)}, ${i})`,
-        true,
-      );
-      // Let the style change + layout settle for two frames before capture.
-      await window.webContents.executeJavaScript(
-        "new Promise(function(r){requestAnimationFrame(function(){requestAnimationFrame(function(){r(true)})})})",
-        true,
-      );
+      await showDeckSlide(window, i);
       // Clip to the exact 16:9 slide rect (DIP) so the PNG aspect is always
       // correct even if the window content rounds differently.
       const image = await window.webContents.capturePage({ x: 0, y: 0, width: SLIDE_W, height: SLIDE_H });
@@ -107,6 +106,61 @@ export async function renderDeckSlides(
   } finally {
     if (!window.isDestroyed()) window.destroy();
   }
+}
+
+// Shows exactly slide `i` and lets the style change settle for two frames.
+async function showDeckSlide(window: BrowserWindow, i: number): Promise<void> {
+  await window.webContents.executeJavaScript(
+    `(${showSlide.toString()})(${JSON.stringify(SLIDE_SELECTOR)}, ${i})`,
+    true,
+  );
+  await window.webContents.executeJavaScript(
+    "new Promise(function(r){requestAnimationFrame(function(){requestAnimationFrame(function(){r(true)})})})",
+    true,
+  );
+}
+
+// Captures every deck slide and stacks them top-to-bottom into one tall image
+// (deck image export). Stitches BGRA with a native memcpy per slide and encodes
+// once natively, like the scroll-segment path. Caps total height so a very long
+// deck can't exceed the bitmap limit / RAM.
+const DECK_STITCH_MAX_H = 30000;
+async function stitchDeckSlides(
+  window: BrowserWindow,
+  count: number,
+  jpeg: boolean,
+): Promise<DesktopRenderSlidesResult> {
+  let W = 0;
+  let slideHpx = 0;
+  let bgra: Buffer | null = null;
+  let maxSlides = count;
+  let placed = 0;
+  for (let i = 0; i < count; i++) {
+    await showDeckSlide(window, i);
+    const image = await window.webContents.capturePage({ x: 0, y: 0, width: SLIDE_W, height: SLIDE_H });
+    const bmp = image.toBitmap(); // BGRA, full-width rows
+    const size = image.getSize();
+    if (!bgra) {
+      W = size.width;
+      slideHpx = size.height;
+      maxSlides = Math.max(1, Math.min(count, Math.floor(DECK_STITCH_MAX_H / slideHpx)));
+      bgra = Buffer.alloc(W * slideHpx * maxSlides * 4);
+    }
+    if (placed >= maxSlides) break;
+    bmp.copy(bgra, placed * slideHpx * W * 4, 0, Math.min(bmp.length, slideHpx * W * 4));
+    placed++;
+  }
+  const H = slideHpx * placed;
+  const img = nativeImage.createFromBitmap(bgra ?? Buffer.alloc(4), { width: W || 1, height: H || 1 });
+  const bytes = jpeg ? img.toJPEG(82) : img.toPNG();
+  const mime = jpeg ? "image/jpeg" : "image/png";
+  return {
+    ok: true,
+    slides: [`data:${mime};base64,${bytes.toString("base64")}`],
+    width: W,
+    height: H,
+    mode: "deck",
+  };
 }
 
 // Ordinary (non-deck) page: capture the WHOLE document as one long image at a
@@ -136,6 +190,12 @@ async function capturePage(window: BrowserWindow, jpeg: boolean): Promise<Deskto
   // (responsive layouts) renders the way a desktop visitor sees it.
   window.setContentSize(PAGE_W, PAGE_VIEW_H);
   await nextFrames(window);
+
+  // Pre-pass: freeze animations and scroll the whole page once so reveal-on-
+  // scroll content (IntersectionObserver / AOS / lazy images) is triggered and
+  // settles. This lets the clean one-shot captureBeyondViewport succeed for most
+  // animated pages instead of coming back blank and falling to scroll-segment.
+  await preparePageForCapture(window);
 
   const maxTexture = await queryMaxTextureSize(window);
   // The window's device-pixel-ratio already scales the capture (2 on retina),
@@ -216,6 +276,29 @@ async function capturePage(window: BrowserWindow, jpeg: boolean): Promise<Deskto
     Math.min(Number.isFinite(measured) ? measured : PAGE_VIEW_H, Math.floor(ramMaxOutH / dpr)),
   );
   return await scrollSegmentStitch(window, totalLogical, jpeg);
+}
+
+// Freezes animations/transitions and scroll-prewarms the page so reveal-on-
+// scroll content (IntersectionObserver, AOS, `loading=lazy`) is triggered and
+// holds before capture — the standard technique full-page screenshot services
+// use. Does NOT fix JS that recomputes transforms from scrollY every frame
+// (continuous parallax): those have no single correct frame and still fall to
+// scroll-segment via the blank-below-fold check.
+async function preparePageForCapture(window: BrowserWindow): Promise<void> {
+  try {
+    await window.webContents.executeJavaScript(
+      `(function(){try{var s=document.createElement('style');s.setAttribute('data-od-capture','1');s.textContent='*,*::before,*::after{animation-duration:0s!important;animation-delay:0s!important;transition-duration:0s!important;transition-delay:0s!important;scroll-behavior:auto!important}';(document.head||document.documentElement).appendChild(s);}catch(e){}})()`,
+      true,
+    );
+    await window.webContents.executeJavaScript(
+      `(async function(){var vh=window.innerHeight||1000;var H=function(){return Math.max(document.documentElement.scrollHeight, document.body?document.body.scrollHeight:0)};for(var y=0;y<H();y+=vh){window.scrollTo(0,y);await new Promise(function(r){requestAnimationFrame(function(){requestAnimationFrame(r)})});await new Promise(function(r){setTimeout(r,120)});}window.scrollTo(0,0);await new Promise(function(r){setTimeout(r,200)});return true;})()`,
+      true,
+    );
+    // Wait for any fonts / images / CSS bg images that loaded during the prewarm.
+    await waitForPrintableContent(window);
+  } catch {
+    // Best-effort — capture proceeds even if the pre-pass fails.
+  }
 }
 
 // Window device-pixel-ratio (2 on retina). capturePage / captureScreenshot both

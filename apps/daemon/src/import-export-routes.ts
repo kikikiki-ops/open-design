@@ -447,9 +447,15 @@ export function registerProjectExportRoutes(app: Express, ctx: RegisterProjectEx
       };
       if (typeof title === 'string') renderOptions.title = title;
       if (typeof scale === 'number' && Number.isFinite(scale)) renderOptions.scale = scale;
-      // Only image export targets a single slide (the one the user is viewing).
-      if (format === 'image' && typeof index === 'number' && Number.isInteger(index) && index >= 0) {
-        renderOptions.index = index;
+      // Image export = "the whole artifact as one picture": a deck becomes all
+      // slides stitched into one tall image; an ordinary page is its full-page
+      // capture. (A specific slide index is still honored if explicitly given.)
+      if (format === 'image') {
+        if (typeof index === 'number' && Number.isInteger(index) && index >= 0) {
+          renderOptions.index = index;
+        } else {
+          renderOptions.stitch = true;
+        }
       }
       // Full pages render as JPEG for PDF (small files); image export keeps PNG
       // (lossless source the client re-encodes to the user's chosen format).

@@ -7545,16 +7545,12 @@ function HtmlViewer({
     // in the browser screenshot flow (DesignBrowserPanel).
     await waitForAnimationFrame();
     await waitForAnimationFrame();
-    // Prefer the daemon's off-screen render (desktop only): it produces a
-    // fixed-size, viewport-independent PNG — a deck slide at 1920x1080 or an
-    // ordinary page at natural size — and, rendering the artifact alone in a
-    // hidden window, can never capture Open Design's own UI (the format modal).
+    // Prefer the daemon's off-screen render (desktop only): viewport-independent
+    // and, rendering the artifact alone in a hidden window, it can never capture
+    // Open Design's own UI. A deck becomes all slides stitched into one tall
+    // image; an ordinary page becomes its full-page capture.
     if (isOpenDesignHostAvailable() && projectId && file.name) {
-      const rendered = await exportProjectImageDataUrl({
-        projectId,
-        fileName: file.name,
-        ...(effectiveDeck ? { index: slideState?.active ?? 0 } : {}),
-      });
+      const rendered = await exportProjectImageDataUrl({ projectId, fileName: file.name });
       if (rendered) return rendered;
     }
 
