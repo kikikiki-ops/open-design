@@ -2155,6 +2155,7 @@ export const ar: Dict = {
   'fileViewer.exportJsx': 'تصدير كـ JSX',
   'fileViewer.exportReactHtml': 'تصدير المعاينة كـ HTML',
   'fileViewer.exportStarted': 'بدأ التصدير',
+  'fileViewer.exportFailed': "فشل التصدير",
   'fileViewer.saveAsTemplate': 'حفظ كقالب...',
   'fileViewer.savingTemplate': 'جاري حفظ القالب...',
   'fileViewer.savedTemplate': 'تم الحفظ باسم "{name}"',

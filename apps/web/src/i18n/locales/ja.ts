@@ -2155,6 +2155,7 @@ export const ja: Dict = {
   'fileViewer.exportJsx': 'JSX としてエクスポート',
   'fileViewer.exportReactHtml': 'プレビューを HTML としてエクスポート',
   'fileViewer.exportStarted': 'エクスポートを開始しました',
+  'fileViewer.exportFailed': "エクスポートに失敗しました",
   'fileViewer.saveAsTemplate': 'テンプレートとして保存…',
   'fileViewer.savingTemplate': 'テンプレートを保存中…',
   'fileViewer.savedTemplate': '"{name}" として保存しました',

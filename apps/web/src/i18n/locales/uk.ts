@@ -2155,6 +2155,7 @@ export const uk: Dict = {
   'fileViewer.exportJsx': 'Експортувати як JSX',
   'fileViewer.exportReactHtml': 'Експортувати попередній перегляд як HTML',
   'fileViewer.exportStarted': 'Експорт розпочато',
+  'fileViewer.exportFailed': "Не вдалося експортувати",
   'fileViewer.saveAsTemplate': 'Зберегти як шаблон…',
   'fileViewer.savingTemplate': 'Збереження шаблону…',
   'fileViewer.savedTemplate': 'Збережено як "{name}"',

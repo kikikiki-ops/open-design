@@ -946,7 +946,7 @@ interface Props {
   liveHtml?: string;
   filesRefreshKey?: number;
   isDeck?: boolean;
-  onExportAsPptx?: ((fileName: string) => void) | undefined;
+  onExportAsPptx?: ((fileName: string) => void | Promise<void>) | undefined;
   streaming?: boolean;
   commentQueueOnSend?: boolean;
   commentSendDisabled?: boolean;
@@ -4443,7 +4443,7 @@ function HtmlViewer({
   liveHtml?: string;
   filesRefreshKey?: number;
   isDeck: boolean;
-  onExportAsPptx?: ((fileName: string) => void) | undefined;
+  onExportAsPptx?: ((fileName: string) => void | Promise<void>) | undefined;
   streaming: boolean;
   commentQueueOnSend?: boolean;
   commentSendDisabled?: boolean;
@@ -4515,30 +4515,34 @@ function HtmlViewer({
       );
     };
     const toastFormats = new Set(['pdf', 'pptx', 'zip', 'html', 'image', 'markdown']);
+    const showToast = toastFormats.has(format);
+    // Show the loading toast IMMEDIATELY (before the work runs) so a multi-second
+    // screenshot export doesn't look frozen. Cleared on success, replaced with an
+    // error toast on failure. (For an instant sync export, React batches the
+    // loading→clear so no toast flashes.)
+    if (showToast) setExportToast({ message: t('fileViewer.exportStarted'), tone: 'loading' });
+    const onOk = (result: unknown) => {
+      if (result === 'cancelled') {
+        finish('cancelled');
+        if (showToast) setExportToast(null);
+        return;
+      }
+      finish('success');
+      if (showToast) setExportToast(null);
+    };
+    const onErr = (err: unknown) => {
+      finish('failed', err instanceof Error ? err.name : 'UNKNOWN');
+      if (showToast) setExportToast({ message: t('fileViewer.exportFailed'), tone: 'error' });
+    };
     try {
       const out = fn();
       if (out && typeof (out as Promise<unknown>).then === 'function') {
-        (out as Promise<unknown>).then(
-          (result) => {
-            if (result === 'cancelled') {
-              finish('cancelled');
-              return;
-            }
-            finish('success');
-            if (toastFormats.has(format)) setExportToast({ message: t('fileViewer.exportStarted'), tone: 'default' });
-          },
-          (err) => finish('failed', err instanceof Error ? err.name : 'UNKNOWN'),
-        );
+        (out as Promise<unknown>).then(onOk, onErr);
       } else {
-        if (out === 'cancelled') {
-          finish('cancelled');
-          return;
-        }
-        finish('success');
-        if (toastFormats.has(format)) setExportToast({ message: t('fileViewer.exportStarted'), tone: 'default' });
+        onOk(out);
       }
     } catch (err) {
-      finish('failed', err instanceof Error ? err.name : 'UNKNOWN');
+      onErr(err);
     }
   };
   // P0 helpers — keep the artifact_id + artifact_kind derivation in one place
@@ -8767,9 +8771,9 @@ function HtmlViewer({
                       }
                       onClick={() => {
                         setDownloadMenuOpen(false);
-                        fireShareExport('pptx', () => {
-                          if (onExportAsPptx) onExportAsPptx(file.name);
-                        });
+                        // Return the promise so the loading toast lasts until the
+                        // real export finishes (not just until it's kicked off).
+                        fireShareExport('pptx', () => onExportAsPptx?.(file.name));
                       }}
                     >
                       <span className="share-menu-icon"><RemixIcon name="file-ppt-line" size={15} /></span>
@@ -9054,7 +9058,7 @@ function HtmlViewer({
                       message={exportToast.message}
                       tone={exportToast.tone}
                       role={exportToast.tone === 'error' ? 'alert' : 'status'}
-                      ttlMs={exportToast.tone === 'loading' ? 8000 : 2200}
+                      ttlMs={exportToast.tone === 'loading' ? 60000 : 2200}
                       placement="top"
                       onDismiss={() => setExportToast(null)}
                     />,

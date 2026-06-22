@@ -2155,6 +2155,7 @@ export const pl: Dict = {
   'fileViewer.exportJsx': 'Eksportuj jako JSX',
   'fileViewer.exportReactHtml': 'Eksportuj podgląd jako HTML',
   'fileViewer.exportStarted': 'Rozpoczęto eksport',
+  'fileViewer.exportFailed': "Eksport nie powiódł się",
   'fileViewer.saveAsTemplate': 'Zapisz jako szablon…',
   'fileViewer.savingTemplate': 'Zapisywanie szablonu…',
   'fileViewer.savedTemplate': 'Zapisano jako „{name}”',

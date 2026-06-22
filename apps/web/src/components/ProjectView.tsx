@@ -5109,10 +5109,10 @@ export function ProjectView({
       // Programmatic, deterministic export: the daemon renders each deck slide
       // to a pixel-perfect PNG and assembles a screenshot-based .pptx. Replaces
       // the old path that sent a prompt asking the agent to run python-pptx.
-      void exportProjectAsPptx({ projectId: project.id, fileName }).then((res) => {
-        if (!res.ok) {
-          setError(res.error || 'PPTX export failed');
-        }
+      // Returns the promise (and rejects on failure) so the caller's loading /
+      // error toast reflects the real export, not just kickoff.
+      return exportProjectAsPptx({ projectId: project.id, fileName }).then((res) => {
+        if (!res.ok) throw new Error(res.error || 'PPTX export failed');
       });
     },
     [project.id],

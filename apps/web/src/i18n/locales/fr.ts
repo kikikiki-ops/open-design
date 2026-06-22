@@ -2155,6 +2155,7 @@ export const fr: Dict = {
   'fileViewer.exportJsx': 'Exporter en JSX',
   'fileViewer.exportReactHtml': 'Exporter l\'aperçu en HTML',
   'fileViewer.exportStarted': 'Export démarré',
+  'fileViewer.exportFailed': "Échec de l'export",
   'fileViewer.saveAsTemplate': 'Enregistrer comme modèle…',
   'fileViewer.savingTemplate': 'Enregistrement du modèle…',
   'fileViewer.savedTemplate': 'Enregistré comme « {name} »',
