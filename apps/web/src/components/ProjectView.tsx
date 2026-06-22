@@ -2258,7 +2258,7 @@ export function ProjectView({
 
   const persistConversationMessage = useCallback(
     (conversationId: string, message: ChatMessage, options?: SaveMessageOptions) => {
-      void saveMessage(project.id, conversationId, message, options).then((saved) => {
+      void Promise.resolve(saveMessage(project.id, conversationId, message, options)).then((saved) => {
         if (!saved) return;
         const cached = serverMessagesByConversationRef.current.get(conversationId);
         if (!cached) return;
