@@ -84,10 +84,34 @@ export async function renderDeckSlides(
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event) => event.preventDefault());
 
+  // Coarse per-phase timing so a slow export can be diagnosed from the desktop
+  // log (load/fonts vs. render/encode) instead of guesswork. One line per export.
+  const t0 = Date.now();
+  let tLoad = t0;
+  let tAssets = t0;
+  let tPrepare = t0;
+  const finish = (result: DesktopRenderSlidesResult): DesktopRenderSlidesResult => {
+    const end = Date.now();
+    // eslint-disable-next-line no-console
+    console.info("[od-export] render", {
+      mode: result.mode,
+      slides: (result.slideFiles ?? result.slides ?? []).length,
+      out: result.slideFiles ? "file" : "dataurl",
+      loadMs: tLoad - t0,
+      assetsMs: tAssets - tLoad,
+      prepareMs: tPrepare - tAssets,
+      renderMs: end - tPrepare,
+      totalMs: end - t0,
+    });
+    return result;
+  };
+
   try {
     const doc = injectBaseHref(input.html, input.baseHref);
     await window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(doc)}`);
+    tLoad = Date.now();
     await waitForPrintableContent(window);
+    tAssets = Date.now();
 
     // Force the exact content surface so the capture viewport is a true
     // 1920x1080 regardless of the host display size.
@@ -102,12 +126,13 @@ export async function renderDeckSlides(
       `(${prepareDeck.toString()})(${JSON.stringify(SLIDE_SELECTOR)}, ${JSON.stringify(HIDE_CHROME_SELECTOR)})`,
       true,
     )) as number;
+    tPrepare = Date.now();
 
     // No `.slide` sections — this is an ordinary page (e.g. a website), not a
     // deck. Capture the whole document at its natural size instead of forcing a
     // 1920x1080 slide. This is what image export of a non-deck artifact wants.
     if (!Number.isInteger(count) || count < 1) {
-      return await capturePage(window, input.pageImageFormat === "jpeg", input.outputDir);
+      return finish(await capturePage(window, input.pageImageFormat === "jpeg", input.outputDir));
     }
 
     // Deck: pin the 1920x1080 stage.
@@ -116,7 +141,7 @@ export async function renderDeckSlides(
     // Image export of a deck wants every slide stitched top-to-bottom into one
     // tall image (the "whole deck as one picture").
     if (input.stitch) {
-      return await stitchDeckSlides(window, count, input.pageImageFormat === "jpeg", input.outputDir);
+      return finish(await stitchDeckSlides(window, count, input.pageImageFormat === "jpeg", input.outputDir));
     }
 
     // Otherwise render every slide (or just the one requested by image export).
@@ -136,7 +161,7 @@ export async function renderDeckSlides(
       height = size.height;
       images.push({ buffer: jpeg ? image.toJPEG(82) : image.toPNG(), jpeg });
     }
-    return { ok: true, ...(await emitImages(images, input.outputDir)), width, height, mode: "deck" };
+    return finish({ ok: true, ...(await emitImages(images, input.outputDir)), width, height, mode: "deck" });
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   } finally {

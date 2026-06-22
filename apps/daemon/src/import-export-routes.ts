@@ -469,9 +469,11 @@ export function registerProjectExportRoutes(app: Express, ctx: RegisterProjectEx
       // Full pages render as JPEG for PDF (small files); image export keeps PNG
       // (lossless source the client re-encodes to the user's chosen format).
       if (format === 'pdf') renderOptions.pageImageFormat = 'jpeg';
+      const tStart = Date.now();
       const { input, title: resolvedTitle, defaultFilename } =
         await buildDeckRenderInput(renderOptions);
       const rendered = await desktopSlideRenderer(input);
+      const tRendered = Date.now();
       const hasFiles = Array.isArray(rendered.slideFiles) && rendered.slideFiles.length > 0;
       const hasDataUrls = Array.isArray(rendered.slides) && rendered.slides.length > 0;
       if (!rendered.ok || (!hasFiles && !hasDataUrls)) {
@@ -497,6 +499,7 @@ export function registerProjectExportRoutes(app: Express, ctx: RegisterProjectEx
       const images = hasFiles
         ? await readSlideFiles(rendered.slideFiles as string[])
         : decodeSlideDataUrls(rendered.slides as string[]);
+      const tRead = Date.now();
       let buffer: Buffer;
       let contentType: string;
       let ext: string;
@@ -515,6 +518,20 @@ export function registerProjectExportRoutes(app: Express, ctx: RegisterProjectEx
         contentType = first.jpeg ? 'image/jpeg' : 'image/png';
         ext = first.jpeg ? 'jpg' : 'png';
       }
+      // One-line export timing: renderer (desktop capture+encode+IPC) vs read
+      // (file handoff / base64 decode) vs assemble (pptx/pdf build). Pair with
+      // the desktop `[od-export] render` line for the full picture.
+      // eslint-disable-next-line no-console
+      console.info('[od-export] assemble', {
+        format,
+        via: hasFiles ? 'file' : 'dataurl',
+        slides: images.length,
+        bytes: buffer.length,
+        rendererMs: tRendered - tStart,
+        readMs: tRead - tRendered,
+        assembleMs: Date.now() - tRead,
+        totalMs: Date.now() - tStart,
+      });
       const filename = `${defaultFilename}.${ext}`;
       const asciiFallback =
         filename.replace(/[^\x20-\x7e]/g, '_').replace(/"/g, '_') || `deck.${ext}`;
