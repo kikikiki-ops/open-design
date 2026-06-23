@@ -1188,12 +1188,20 @@ export function getAgentSessionRecord(
 }
 
 // Conversation cursor for the resume identity guard: the id of the latest
-// assistant message in the conversation, EXCLUDING the current run's in-flight
-// placeholder (`excludeMessageId`). At resolve time the session is in sync iff
-// this equals the assistant message the session last produced — otherwise
-// another agent completed a turn in between, or the session's own last message
-// was edited/removed, and the session is behind. Returns null when there is no
-// prior assistant turn.
+// SUCCESSFULLY COMPLETED assistant message in the conversation, EXCLUDING the
+// current run's in-flight placeholder (`excludeMessageId`). At resolve time the
+// session is in sync iff this equals the assistant message the session last
+// produced — otherwise another agent completed a turn in between, or the
+// session's own last message was edited/removed, and the session is behind.
+// Returns null when there is no prior completed assistant turn.
+//
+// The `run_status = 'succeeded'` filter is load-bearing: a run stamps its
+// assistant message with the terminal status on finish (server.ts), so an
+// intervening agent run that FAILED or was CANCELED leaves a placeholder that
+// produced no completed turn. Counting it as advancement would force a needless
+// cold reseed (silently disabling this PR's resume perf path) even though the
+// stored session is still the latest completed turn. In-flight placeholders have
+// a null run_status and are likewise excluded.
 export function latestCompletedAssistantMessageId(
   db: SqliteDb,
   conversationId: string,
@@ -1203,6 +1211,7 @@ export function latestCompletedAssistantMessageId(
     .prepare(
       `SELECT id FROM messages
         WHERE conversation_id = ? AND role = 'assistant' AND id != ?
+          AND run_status = 'succeeded'
         ORDER BY position DESC LIMIT 1`,
     )
     .get(conversationId, excludeMessageId) as DbRow | undefined;

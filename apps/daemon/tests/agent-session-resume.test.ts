@@ -46,8 +46,17 @@ describe('resolveAgentResumeContext', () => {
     return db;
   }
 
-  function seedMessage(db: ReturnType<typeof seed>, id: string, role: 'user' | 'assistant') {
-    upsertMessage(db, 'conv-1', { id, role, content: `${role} ${id}` });
+  // A completed turn stamps its assistant message run_status='succeeded' at
+  // finish (server.ts). The resume cursor only counts succeeded assistant turns,
+  // so completed turns default to 'succeeded'; pass runStatus=null for an
+  // in-flight placeholder (the current run's own not-yet-finished message).
+  function seedMessage(
+    db: ReturnType<typeof seed>,
+    id: string,
+    role: 'user' | 'assistant',
+    runStatus: string | null = role === 'assistant' ? 'succeeded' : null,
+  ) {
+    upsertMessage(db, 'conv-1', { id, role, content: `${role} ${id}`, runStatus });
   }
 
   // A session row whose identity (model/cwd/last assistant id) matches what the
@@ -92,7 +101,7 @@ describe('resolveAgentResumeContext', () => {
     storeInSyncSession(db);
     // The next turn's user message + assistant placeholder are already inserted.
     seedMessage(db, 'user-2', 'user');
-    seedMessage(db, 'asst-2', 'assistant');
+    seedMessage(db, 'asst-2', 'assistant', null); // in-flight placeholder
     const ctx = resolveAgentResumeContext(db, {
       conversationId: 'conv-1',
       agentId: 'claude',
@@ -143,7 +152,7 @@ describe('resolveAgentResumeContext', () => {
     seedMessage(db, 'asst-other', 'assistant');
     // This agent comes back; its placeholder is asst-3.
     seedMessage(db, 'user-3', 'user');
-    seedMessage(db, 'asst-3', 'assistant');
+    seedMessage(db, 'asst-3', 'assistant', null); // in-flight placeholder
     const ctx = resolveAgentResumeContext(db, {
       conversationId: 'conv-1', agentId: 'claude', currentAssistantMessageId: 'asst-3',
     });
@@ -242,7 +251,7 @@ describe('persistCapturedAgentSession', () => {
   // disabling pi's existing follow-up-session path (reported by @nettee).
   it('persists the resume identity so a successful pi turn still resumes next turn', () => {
     const db = seed();
-    upsertMessage(db, 'conv-1', { id: 'asst-1', role: 'assistant', content: 'pi reply' });
+    upsertMessage(db, 'conv-1', { id: 'asst-1', role: 'assistant', content: 'pi reply', runStatus: 'succeeded' });
 
     const result = persistCapturedAgentSession(db, {
       conversationId: 'conv-1',
