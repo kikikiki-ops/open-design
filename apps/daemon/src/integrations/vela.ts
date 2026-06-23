@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
@@ -249,6 +250,15 @@ export interface VelaCredentialRevision {
   userId: string;
   userEmail: string;
   configMtimeMs: number | null;
+  /**
+   * Non-secret fingerprint of the configured AMR env credentials
+   * (`VELA_RUNTIME_KEY` / `VELA_LINK_URL`, which can come from `agentCliEnv.amr`
+   * in app-config, not just process env). Env-backed sessions report
+   * `user: null`, so without this an account switch that only rewrites the
+   * Settings-backed env (leaving `~/.amr/config.json` untouched) would reuse the
+   * previous account's cached plan/balance. Empty for non-env auth.
+   */
+  credentialFingerprint: string;
 }
 
 interface VelaProfileShape {
@@ -382,6 +392,7 @@ export function velaLiveAccountCacheKey(
     revision.loggedIn ? '1' : '0',
     revision.userId,
     revision.configMtimeMs ?? '',
+    revision.credentialFingerprint,
   ].join('|');
 }
 
@@ -452,6 +463,16 @@ export function readVelaCredentialRevision(
   const hasEnvCredentials =
     (mergedEnv.VELA_RUNTIME_KEY?.trim() ?? '').length > 0 &&
     (mergedEnv.VELA_LINK_URL?.trim() ?? '').length > 0;
+  // One-way hash (never the raw key) so the cache key distinguishes env-backed
+  // accounts whose only difference is the configured runtime credential.
+  const credentialFingerprint = hasEnvCredentials
+    ? createHash('sha256')
+        .update(
+          `${mergedEnv.VELA_RUNTIME_KEY ?? ''}\n${mergedEnv.VELA_LINK_URL ?? ''}`,
+        )
+        .digest('hex')
+        .slice(0, 16)
+    : '';
   return {
     authSource: hasEnvCredentials ? 'env' : status.loggedIn ? 'file' : 'none',
     profile: status.profile,
@@ -466,6 +487,7 @@ export function readVelaCredentialRevision(
     configMtimeMs: existsSync(status.configPath)
       ? statSync(status.configPath).mtimeMs
       : null,
+    credentialFingerprint,
   };
 }
 

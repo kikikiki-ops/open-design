@@ -495,6 +495,7 @@ describe('velaLiveAccountCacheKey + clearAllVelaLiveAccounts', () => {
     userId: 'u1',
     userEmail: 'a@b.c',
     configMtimeMs: 100,
+    credentialFingerprint: '',
     ...over,
   });
 
@@ -521,6 +522,25 @@ describe('velaLiveAccountCacheKey + clearAllVelaLiveAccounts', () => {
         rev({ authSource: 'env', userId: '', userEmail: '', configMtimeMs: mtime }),
       );
     expect(env(100)).not.toBe(env(200));
+  });
+
+  it('invalidates an env-backed key when the configured AMR credential changes', () => {
+    // Settings-backed VELA_RUNTIME_KEY can switch accounts without touching
+    // ~/.amr/config.json (same configMtimeMs, user:null), so the credential
+    // fingerprint is the only thing distinguishing account A from account B.
+    const base = {
+      authSource: 'env' as const,
+      userId: '',
+      userEmail: '',
+      configMtimeMs: 100,
+    };
+    const keyA = velaLiveAccountCacheKey(
+      rev({ ...base, credentialFingerprint: 'aaaaaaaaaaaaaaaa' }),
+    );
+    const keyB = velaLiveAccountCacheKey(
+      rev({ ...base, credentialFingerprint: 'bbbbbbbbbbbbbbbb' }),
+    );
+    expect(keyA).not.toBe(keyB);
   });
 
   it('never serves the previous account billing data after a switch', () => {

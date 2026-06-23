@@ -420,6 +420,53 @@ describe('GET /api/integrations/vela/status', () => {
     expect(body.account?.balanceUsd).toBe('0.00');
   });
 
+  it('does not leak cached billing when the Settings-backed env credential switches accounts', async () => {
+    // Account A and B share ~/.amr/config.json (untouched) and differ only by
+    // the agentCliEnv.amr VELA_RUNTIME_KEY. The credential fingerprint must keep
+    // their live-account caches separate so B never inherits A's plan/balance.
+    clearAllVelaLiveAccounts();
+    const dataDir = process.env.OD_DATA_DIR as string;
+    const setAmrEnv = async (extra: Record<string, string | undefined>) => {
+      const cfg = await readAppConfig(dataDir);
+      const amr: Record<string, string> = {
+        ...((cfg.agentCliEnv?.amr as Record<string, string>) ?? {}),
+      };
+      for (const [k, v] of Object.entries(extra)) {
+        if (v === undefined) delete amr[k];
+        else amr[k] = v;
+      }
+      await writeAppConfig(dataDir, {
+        ...cfg,
+        agentCliEnv: { ...(cfg.agentCliEnv ?? {}), amr },
+      });
+    };
+    seedLogin('local', {
+      user: { id: 'cfg', email: 'cfg@example.com', plan: undefined },
+    });
+    try {
+      await setAmrEnv({
+        VELA_RUNTIME_KEY: 'rt-account-A',
+        VELA_LINK_URL: 'http://link.invalid',
+      });
+      process.env.FAKE_VELA_BILLING_TIER = 'plus';
+      const a = await getJson<{ account?: { plan?: string } }>(
+        `${baseUrl}/api/integrations/vela/status`,
+      );
+      expect(a.body.account?.plan).toBe('plus');
+
+      // Switch the Settings env credential to account B WITHOUT touching the
+      // config file, and change what billing returns for the new account.
+      await setAmrEnv({ VELA_RUNTIME_KEY: 'rt-account-B' });
+      process.env.FAKE_VELA_BILLING_TIER = 'max';
+      const b = await getJson<{ account?: { plan?: string } }>(
+        `${baseUrl}/api/integrations/vela/status`,
+      );
+      expect(b.body.account?.plan).toBe('max');
+    } finally {
+      await setAmrEnv({ VELA_RUNTIME_KEY: undefined, VELA_LINK_URL: undefined });
+    }
+  });
+
   it('never leaks the runtimeKey or controlKey in the status payload', async () => {
     seedLogin('local', {
       runtimeKey: 'rt-very-secret-do-not-leak',
