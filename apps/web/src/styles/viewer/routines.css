@@ -2630,6 +2630,16 @@
   line-height: 1.2;
   color: var(--text);
 }
+/* The borderless search field sits inside a framed popover row, so it does
+   not need the global `input:focus` blue selected-halo (box-shadow) from
+   primitives.css — suppress it here (higher specificity wins) so focusing the
+   field stays chromeless. */
+.project-ds-picker-search input:focus,
+.project-ds-picker-search input:focus-visible {
+  outline: none;
+  border-color: transparent;
+  box-shadow: none;
+}
 /* Inline Clear / Create actions sit flush against the search field so the
    popover header reads as one row (search + reset + create new system). */
 .project-ds-picker-action {

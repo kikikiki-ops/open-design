@@ -9,7 +9,6 @@
 
 import {
   forwardRef,
-  useCallback,
   useEffect,
   useImperativeHandle,
   useMemo,
@@ -45,6 +44,7 @@ import {
   type HomeHeroChip,
 } from './home-hero/chips';
 import { ScenarioArt } from './home-hero/ScenarioArt';
+import { useEdgeAutoScroll, EdgeScrollZones } from './home-hero/EdgeAutoScroll';
 import {
   isSubChipParent,
   subChipsForChip,
@@ -1754,6 +1754,9 @@ function PluginPromptPresets({
   pulseFirstPreset?: boolean;
 }) {
   const { t } = useI18n();
+  // Same edge hover/click auto-scroll as the scenario rail, so this row is
+  // reachable without a trackpad when it overflows.
+  const edgeScroll = useEdgeAutoScroll(plugins.length);
   return (
     <div
       className="home-hero__prompt-examples home-hero__plugin-presets-wrap"
@@ -1762,20 +1765,27 @@ function PluginPromptPresets({
       <div className="home-hero__prompt-examples-title">
         {t('homeHero.promptExamples')}
       </div>
-      <div className="home-hero__plugin-presets" role="list">
-        {plugins.map((record, index) => (
-          <PluginPromptPresetCard
-            key={record.id}
-            chipId={chipId}
-            locale={locale}
-            record={record}
-            active={activePluginId === record.id}
-            pending={pendingPluginId === record.id}
-            disabled={pendingPluginId !== null}
-            pulse={pulseFirstPreset && index === 0}
-            onPick={onPick}
-          />
-        ))}
+      <div className="home-hero__rail-scroller">
+        <div
+          ref={edgeScroll.scrollRef}
+          className="home-hero__plugin-presets"
+          role="list"
+        >
+          {plugins.map((record, index) => (
+            <PluginPromptPresetCard
+              key={record.id}
+              chipId={chipId}
+              locale={locale}
+              record={record}
+              active={activePluginId === record.id}
+              pending={pendingPluginId === record.id}
+              disabled={pendingPluginId !== null}
+              pulse={pulseFirstPreset && index === 0}
+              onPick={onPick}
+            />
+          ))}
+        </div>
+        <EdgeScrollZones {...edgeScroll} />
       </div>
     </div>
   );
@@ -2682,81 +2692,10 @@ function RailGroup({
   );
   const isTabs = variant === 'tabs';
 
-  // Edge auto-scroll for the horizontal scenario rail: hovering the left/right
-  // overflow zone nudges the rail along, so users without a trackpad (or
-  // horizontal mouse-wheel) can still reach off-screen cards. Each zone only
-  // turns interactive when there is content to scroll toward in that direction.
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const rafRef = useRef<number | null>(null);
-  const [edges, setEdges] = useState<{ left: boolean; right: boolean }>({
-    left: false,
-    right: false,
-  });
-
-  const stopAutoScroll = useCallback(() => {
-    if (rafRef.current != null) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
-  }, []);
-
-  const startAutoScroll = useCallback(
-    (direction: 1 | -1) => {
-      stopAutoScroll();
-      const step = () => {
-        const el = scrollRef.current;
-        if (!el) return;
-        const maxScroll = el.scrollWidth - el.clientWidth;
-        el.scrollLeft += direction * 9;
-        const reachedEnd =
-          direction < 0 ? el.scrollLeft <= 0 : el.scrollLeft >= maxScroll;
-        if (reachedEnd) {
-          stopAutoScroll();
-          return;
-        }
-        rafRef.current = requestAnimationFrame(step);
-      };
-      rafRef.current = requestAnimationFrame(step);
-    },
-    [stopAutoScroll],
-  );
-
-  // Click on an edge jumps a couple of cards, for users who prefer a discrete
-  // nudge over the hover-hold auto-scroll.
-  const nudge = useCallback((direction: 1 | -1) => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollBy({ left: direction * 332, behavior: 'smooth' });
-  }, []);
-
-  useEffect(() => {
-    if (!isTabs) return;
-    const el = scrollRef.current;
-    if (!el) return;
-    const updateEdges = () => {
-      const maxScroll = el.scrollWidth - el.clientWidth;
-      setEdges({
-        left: el.scrollLeft > 1,
-        right: el.scrollLeft < maxScroll - 1,
-      });
-    };
-    updateEdges();
-    el.addEventListener('scroll', updateEdges, { passive: true });
-    // ResizeObserver is absent in the jsdom test environment; the scroll
-    // listener already keeps edges fresh, so observing is a best-effort extra.
-    const observer =
-      typeof ResizeObserver !== 'undefined'
-        ? new ResizeObserver(updateEdges)
-        : null;
-    observer?.observe(el);
-    return () => {
-      el.removeEventListener('scroll', updateEdges);
-      observer?.disconnect();
-    };
-  }, [isTabs, chips.length]);
-
-  // Cancel any in-flight scroll when the rail unmounts.
-  useEffect(() => stopAutoScroll, [stopAutoScroll]);
+  // Edge auto-scroll so the overflowing scenario rail stays reachable without a
+  // trackpad (see EdgeAutoScroll). Only the tabs variant scrolls; for the
+  // legacy rail variant scrollRef stays unattached and the hook is inert.
+  const edgeScroll = useEdgeAutoScroll(chips.length);
 
   const cards = chips.map((chip) => {
     const isActive = activeChipId === chip.id;
@@ -2833,7 +2772,7 @@ function RailGroup({
     return (
       <div className="home-hero__scenario-cards-wrap">
         <div
-          ref={scrollRef}
+          ref={edgeScroll.scrollRef}
           className={`home-hero__type-tabs home-hero__type-tabs--${group} home-hero__scenario-cards`}
           data-testid="home-hero-type-tabs"
           data-rail-group={group}
@@ -2843,28 +2782,7 @@ function RailGroup({
           {cards}
           {children}
         </div>
-        <div
-          className="home-hero__rail-edge home-hero__rail-edge--left"
-          data-active={edges.left ? 'true' : undefined}
-          aria-hidden
-          onPointerEnter={() => startAutoScroll(-1)}
-          onPointerLeave={stopAutoScroll}
-          onPointerDown={stopAutoScroll}
-          onClick={() => nudge(-1)}
-        >
-          <Icon name="chevron-left" size={18} className="home-hero__rail-edge-icon" />
-        </div>
-        <div
-          className="home-hero__rail-edge home-hero__rail-edge--right"
-          data-active={edges.right ? 'true' : undefined}
-          aria-hidden
-          onPointerEnter={() => startAutoScroll(1)}
-          onPointerLeave={stopAutoScroll}
-          onPointerDown={stopAutoScroll}
-          onClick={() => nudge(1)}
-        >
-          <Icon name="chevron-right" size={18} className="home-hero__rail-edge-icon" />
-        </div>
+        <EdgeScrollZones {...edgeScroll} />
       </div>
     );
   }

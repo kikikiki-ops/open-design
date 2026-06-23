@@ -904,6 +904,9 @@ export interface Dict {
   'homeHero.title': string;
   'homeHero.startWithTemplate': string;
   'homeHero.startBlankProject': string;
+  'homeHero.templatePicker.label': string;
+  'homeHero.templatePicker.searchPlaceholder': string;
+  'homeHero.templatePicker.projectTypes': string;
   'homeHero.templatesScrollHint': string;
   'homeHero.templatesCollapse': string;
   'homeHero.subtitlePrefix': string;

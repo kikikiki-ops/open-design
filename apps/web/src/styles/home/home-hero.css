@@ -2132,26 +2132,29 @@
   max-width: min(880px, 100%);
 }
 
+/* Positioning context so the edge auto-scroll zones anchor to just the
+   scrolling presets row (not the title above it). */
+.home-hero__rail-scroller {
+  position: relative;
+}
+
 .home-hero__plugin-presets {
   display: flex;
   gap: 10px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
-  scroll-snap-type: x proximity;
   padding: 1px 2px 8px;
   scrollbar-width: thin;
 }
 
 /* Each preset is wrapped in a positioning cell so the "Open as project"
    overlay can sit over the thumbnail without nesting a button inside the
-   card button. The flex sizing + scroll snap live on the cell; the card
-   button fills it. */
+   card button. The flex sizing lives on the cell; the card button fills it. */
 .home-hero__plugin-preset-cell {
   position: relative;
   flex: 0 0 248px;
   min-width: 0;
   display: flex;
-  scroll-snap-align: start;
 }
 
 .home-hero__plugin-preset {
