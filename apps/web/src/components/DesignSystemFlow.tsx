@@ -900,6 +900,23 @@ export function DesignSystemCreationFlow({
       // `projects` list yet — hydrate it so onCreated can prepend it before
       // navigating into the live extraction.
       const project = (await getProject(result.projectId).catch(() => undefined)) ?? undefined;
+      let projectForCreated = project;
+      if (project && hasProjectStagingSources(state)) {
+        await prepareCreatedDesignSystemProject({
+          project,
+          state,
+          composioConfigured,
+          githubConnector,
+          onProjectPrepared: (preparedProject) => {
+            projectForCreated = preparedProject;
+            onProjectPrepared?.(preparedProject);
+          },
+          onSystemsRefresh,
+          analyticsTrack: analytics.track,
+          ingestEntryFrom,
+          designSystemId: result.designSystemId ?? project.designSystemId ?? `user:${result.id}`,
+        });
+      }
       if (result.designSystemId && result.status === 'ready') {
         try {
           await onSystemsRefresh?.();
@@ -909,7 +926,7 @@ export function DesignSystemCreationFlow({
       } else {
         void onSystemsRefresh?.();
       }
-      onCreated(result.projectId, project);
+      onCreated(result.projectId, projectForCreated);
       emitCreateResult('success', result.designSystemId, undefined, result.projectId);
       onGenerateSettled?.(snapshot, { result: 'success' });
     } catch (err) {
@@ -4569,6 +4586,21 @@ function hasCreationSource(state: SetupState): boolean {
     || state.designMd.trim().length > 0
     || state.company.trim().length > 0
     || state.notes.trim().length > 0
+    || state.codeFolders.length > 0
+    || state.codeFiles.length > 0
+    || state.codeFileObjects.length > 0
+    || state.figFiles.length > 0
+    || state.figFileObjects.length > 0
+    || state.assetFiles.length > 0
+    || state.assetFileObjects.length > 0
+  );
+}
+
+function hasProjectStagingSources(state: SetupState): boolean {
+  return (
+    sourceUrlsFromState(state).length > 1
+    || githubUrlsFromState(state).length > 0
+    || figmaUrlsFromState(state).length > 0
     || state.codeFolders.length > 0
     || state.codeFiles.length > 0
     || state.codeFileObjects.length > 0

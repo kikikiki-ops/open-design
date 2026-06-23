@@ -37,6 +37,7 @@ import { Icon, type IconName } from './Icon';
 import styles from './BrandPreviewCard.module.css';
 
 const IMAGE_CAP = 8;
+const DESIGN_KIT_PREVIEW_SANDBOX = 'allow-scripts allow-popups';
 
 // ── Logo with fallback chain ────────────────────────────────────────
 // Brand stage (`/api/brands/:id/logo`) when a brandId is known, else an explicit
@@ -545,7 +546,7 @@ export function DesignKitView({
               <iframe
                 className={styles.coverFrame}
                 title={`${kit.name} preview`}
-                sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+                sandbox={DESIGN_KIT_PREVIEW_SANDBOX}
                 srcDoc={buildSrcdoc(kit.showcaseHtml)}
                 tabIndex={-1}
               />
@@ -992,7 +993,7 @@ export function DesignKitView({
                   className={styles.dsFrame}
                   src={dsKitUrl}
                   loading="lazy"
-                  sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+                  sandbox={DESIGN_KIT_PREVIEW_SANDBOX}
                   title={t('brandDetail.designSystem')}
                 />
               </div>
@@ -1039,7 +1040,7 @@ export function DesignKitView({
                         loading="lazy"
                         tabIndex={-1}
                         aria-hidden="true"
-                        sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+                        sandbox={DESIGN_KIT_PREVIEW_SANDBOX}
                         title={a.label}
                       />
                     </div>
@@ -1102,7 +1103,7 @@ export function DesignKitView({
               className={styles.assetModalFrame}
               src={assetPreview.url}
               title={assetPreview.label}
-              sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+              sandbox={DESIGN_KIT_PREVIEW_SANDBOX}
             />
           </div>
         </div>
@@ -1131,7 +1132,7 @@ export function DesignKitView({
             <iframe
               className={styles.assetModalFrame}
               title={`${kit.name} preview`}
-              sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
+              sandbox={DESIGN_KIT_PREVIEW_SANDBOX}
               srcDoc={buildSrcdoc(kit.showcaseHtml)}
             />
           </div>

@@ -166,6 +166,64 @@ function continueToGeneration() {
   fireEvent.click(screen.getByRole('button', { name: /^(continue to generation|generate)$/i }));
 }
 
+function confirmExtraction() {
+  fireEvent.click(screen.getByRole('button', { name: /extract design system/i }));
+}
+
+function addSourceUrl(value: string) {
+  const input = screen.getByPlaceholderText('https://github.com/org/repo') as HTMLInputElement;
+  fireEvent.change(input, { target: { value } });
+  const addButton = input.closest('.ds-resource-inline')?.querySelector('button') as HTMLButtonElement | null;
+  fireEvent.click(addButton!);
+}
+
+function mockBrandExtractProject(project: Project) {
+  mocks.getProject.mockResolvedValue(project);
+  const designSystemId = project.designSystemId ?? `user:${project.id}`;
+  const fetchMock = vi.fn(async (input: unknown) => {
+    if (typeof input === 'string' && input.startsWith('/api/brands')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          id: designSystemId.replace(/^user:/, ''),
+          projectId: project.id,
+          conversationId: `conv-${project.id}`,
+          sourceUrl: 'designmd://source-material',
+          status: 'ready',
+          designSystemId,
+          brandName: project.name,
+        }),
+      } as unknown as Response;
+    }
+    if (typeof input === 'string' && input.includes('/figma/import')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          snapshotDir: 'figma',
+          files: ['figma/tree.json', 'figma/tokens.json', 'figma/DESIGN-context.md'],
+          inventory: {
+            name: 'Product Design',
+            pages: 1,
+            frames: 2,
+            components: ['Primary Button', 'Dashboard Card'],
+            colors: ['#FF6A3D'],
+            fonts: ['Inter'],
+            imageCount: 0,
+          },
+          contextPath: 'figma/DESIGN-context.md',
+          suggestedPrompt: 'Use the locally parsed Figma summaries.',
+          label: 'product-design.fig',
+        }),
+      } as unknown as Response;
+    }
+    return { ok: true, status: 200, json: async () => ({}) } as unknown as Response;
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+}
+
 describe('design system package audit helpers', () => {
   it('summarizes passing audits and builds repair prompts for findings', () => {
     expect(summarizeDesignSystemPackageAudit({
@@ -262,9 +320,8 @@ describe('DesignSystemCreationFlow', () => {
   // manifest → prepare) with a two-phase brand extraction: submitting a website
   // POSTs /api/brands, which synchronously registers a usable user:<id> design
   // system and stands up a backing project the brand-extract skill enriches.
-  // The legacy-pipeline + source-material specs below are skipped pending the
-  // Stage 2 cleanup that removes the in-project DS review editor and rewires the
-  // Advanced sources (GitHub / .fig / local code) and image-only extraction.
+  // Source-material specs below exercise the current handoff by staging files
+  // into the backing brand project after kickoff and before navigation.
   it('extracts a design system from a website via POST /api/brands and opens the backing project', async () => {
     const project: Project = {
       id: 'brand-acme-com',
@@ -1146,7 +1203,7 @@ describe('DesignSystemCreationFlow', () => {
     expect(onSystemsRefresh).toHaveBeenCalled();
   });
 
-  it.skip('links a local code folder into the design-system project so the agent can read it', async () => {
+  it('links a local code folder into the design-system project so the agent can read it', async () => {
     const system: DesignSystemDetail = {
       id: 'user:folder-design-system',
       title: 'Folder Design System',
@@ -1174,8 +1231,7 @@ describe('DesignSystemCreationFlow', () => {
         sourceFileName: system.id,
       },
     };
-    mocks.createDesignSystemDraft.mockResolvedValue(system);
-    mocks.ensureDesignSystemWorkspace.mockResolvedValue({ project, files: [] });
+    mockBrandExtractProject(project);
     mocks.patchProject.mockResolvedValue({ ...project, pendingPrompt: 'Create this project as a design system.' });
     mocks.openFolderDialog.mockResolvedValue('/Users/qingyu/work/comfyui');
 
@@ -1195,7 +1251,7 @@ describe('DesignSystemCreationFlow', () => {
     expect(screen.queryByTestId('ds-source-upload-loading')).toBeNull();
 
     continueToGeneration();
-    continueToGeneration();
+    confirmExtraction();
 
     await waitFor(() => expect(mocks.patchProject).toHaveBeenCalled());
     expect(mocks.patchProject).toHaveBeenCalledWith(
@@ -1230,7 +1286,7 @@ describe('DesignSystemCreationFlow', () => {
     );
   });
 
-  it.skip('copies browser-selected local code folder files into the design-system project context', async () => {
+  it('copies browser-selected local code folder files into the design-system project context', async () => {
     const system: DesignSystemDetail = {
       id: 'user:snapshot-design-system',
       title: 'Snapshot Design System',
@@ -1258,8 +1314,7 @@ describe('DesignSystemCreationFlow', () => {
         sourceFileName: system.id,
       },
     };
-    mocks.createDesignSystemDraft.mockResolvedValue(system);
-    mocks.ensureDesignSystemWorkspace.mockResolvedValue({ project, files: [] });
+    mockBrandExtractProject(project);
     mocks.patchProject.mockResolvedValue({ ...project, pendingPrompt: 'Create this project as a design system.' });
     const onCreated = vi.fn();
 
@@ -1281,7 +1336,7 @@ describe('DesignSystemCreationFlow', () => {
     expect(screen.queryByTestId('ds-source-upload-loading')).toBeNull();
 
     continueToGeneration();
-    continueToGeneration();
+    confirmExtraction();
 
     await waitFor(() => expect(mocks.uploadProjectFile).toHaveBeenCalled());
     expect(mocks.uploadProjectFile).toHaveBeenCalledWith(
@@ -1301,7 +1356,7 @@ describe('DesignSystemCreationFlow', () => {
       expect.stringContaining('context/local-code/comfyui/src/tokens.css'),
     );
     expect(window.sessionStorage.getItem(`od:auto-send-first:${project.id}`)).toBe('1');
-    expect(onCreated).toHaveBeenCalledWith(project.id, project);
+    expect(onCreated).toHaveBeenCalledWith(project.id, expect.objectContaining({ id: project.id }));
   });
 
   it('shows global loading as soon as a large file-picker selection returns', async () => {
@@ -1464,7 +1519,7 @@ describe('DesignSystemCreationFlow', () => {
     await waitFor(() => expect(screen.queryByTestId('ds-source-upload-loading')).toBeNull());
   });
 
-  it.skip('recursively reads a dragged local code folder into the design-system project context', async () => {
+  it('recursively reads a dragged local code folder into the design-system project context', async () => {
     const system: DesignSystemDetail = {
       id: 'user:dragged-folder-design-system',
       title: 'Dragged Folder Design System',
@@ -1492,8 +1547,7 @@ describe('DesignSystemCreationFlow', () => {
         sourceFileName: system.id,
       },
     };
-    mocks.createDesignSystemDraft.mockResolvedValue(system);
-    mocks.ensureDesignSystemWorkspace.mockResolvedValue({ project, files: [] });
+    mockBrandExtractProject(project);
     mocks.patchProject.mockResolvedValue({ ...project, pendingPrompt: 'Create this project as a design system.' });
 
     const { container } = render(
@@ -1557,7 +1611,7 @@ describe('DesignSystemCreationFlow', () => {
     await waitFor(() => expect(screen.getByText('2 local code files selected')).toBeTruthy());
 
     continueToGeneration();
-    continueToGeneration();
+    confirmExtraction();
 
     await waitFor(() => expect(mocks.uploadProjectFile).toHaveBeenCalledTimes(2));
     expect(mocks.uploadProjectFile).toHaveBeenCalledWith(
@@ -1577,7 +1631,7 @@ describe('DesignSystemCreationFlow', () => {
     );
   });
 
-  it.skip('parses .fig files locally into project context summaries without uploading the source file', async () => {
+  it('parses .fig files locally into project context summaries without uploading the source file', async () => {
     const system: DesignSystemDetail = {
       id: 'user:figma-design-system',
       title: 'Figma Design System',
@@ -1605,8 +1659,7 @@ describe('DesignSystemCreationFlow', () => {
         sourceFileName: system.id,
       },
     };
-    mocks.createDesignSystemDraft.mockResolvedValue(system);
-    mocks.ensureDesignSystemWorkspace.mockResolvedValue({ project, files: [] });
+    const fetchMock = mockBrandExtractProject(project);
     mocks.patchProject.mockResolvedValue({ ...project, pendingPrompt: 'Create this project as a design system.' });
 
     render(
@@ -1630,33 +1683,27 @@ describe('DesignSystemCreationFlow', () => {
     expect(screen.getByText('product-design.fig')).toBeTruthy();
 
     continueToGeneration();
-    continueToGeneration();
+    confirmExtraction();
 
-    await waitFor(() => expect(mocks.writeProjectTextFile).toHaveBeenCalledWith(
-      project.id,
-      'context/figma/product-design.md',
-      expect.stringContaining('Primary Button'),
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      `/api/projects/${encodeURIComponent(project.id)}/figma/import`,
+      expect.objectContaining({ method: 'POST' }),
     ));
     expect(mocks.writeProjectTextFile).toHaveBeenCalledWith(
       project.id,
-      'context/figma/product-design.md',
-      expect.stringContaining('#FF6A3D'),
-    );
-    expect(mocks.writeProjectTextFile).toHaveBeenCalledWith(
-      project.id,
       'context/source-context.md',
-      expect.stringContaining('context/figma/product-design.md'),
+      expect.stringContaining('figma/DESIGN-context.md'),
     );
     expect(mocks.patchProject).toHaveBeenCalledWith(
       project.id,
       expect.objectContaining({
-        pendingPrompt: expect.stringContaining('Use the locally parsed Figma summaries'),
+        pendingPrompt: expect.stringContaining('Each .fig was decoded into a real design snapshot'),
       }),
     );
     expect(mocks.uploadProjectFile).not.toHaveBeenCalled();
   });
 
-  it.skip('uploads brand assets into the design-system project context', async () => {
+  it('uploads brand assets into the design-system project context', async () => {
     const system: DesignSystemDetail = {
       id: 'user:asset-design-system',
       title: 'Asset Design System',
@@ -1684,8 +1731,7 @@ describe('DesignSystemCreationFlow', () => {
         sourceFileName: system.id,
       },
     };
-    mocks.createDesignSystemDraft.mockResolvedValue(system);
-    mocks.ensureDesignSystemWorkspace.mockResolvedValue({ project, files: [] });
+    mockBrandExtractProject(project);
     mocks.patchProject.mockResolvedValue({ ...project, pendingPrompt: 'Create this project as a design system.' });
 
     render(
@@ -1709,7 +1755,7 @@ describe('DesignSystemCreationFlow', () => {
     expect(screen.queryByTestId('ds-source-upload-loading')).toBeNull();
 
     continueToGeneration();
-    continueToGeneration();
+    confirmExtraction();
 
     await waitFor(() => expect(mocks.uploadProjectFile).toHaveBeenCalledTimes(2));
     expect(mocks.uploadProjectFile).toHaveBeenCalledWith(project.id, logoFile, 'assets/logo.svg');
@@ -1894,7 +1940,7 @@ describe('DesignSystemCreationFlow', () => {
       />,
     );
 
-    const input = screen.getByPlaceholderText('https://example.com or https://github.com/owner/repo') as HTMLInputElement;
+    const input = screen.getByPlaceholderText('https://github.com/org/repo') as HTMLInputElement;
     expect(input.disabled).toBe(false);
     expect(screen.getByText('GitHub access: Auto')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Show access methods' })).toBeTruthy();
@@ -2107,7 +2153,7 @@ describe('DesignSystemCreationFlow', () => {
     }
   });
 
-  it.skip('records connected GitHub repository sources in the project source manifest', async () => {
+  it('records connected GitHub repository sources in the project source manifest', async () => {
     const availableConnector: ConnectorDetail = {
       id: 'github',
       name: 'GitHub',
@@ -2147,8 +2193,7 @@ describe('DesignSystemCreationFlow', () => {
     mocks.fetchConnectorStatuses.mockResolvedValue({
       github: { status: 'connected', accountLabel: 'qiongyu1999' },
     });
-    mocks.createDesignSystemDraft.mockResolvedValue(system);
-    mocks.ensureDesignSystemWorkspace.mockResolvedValue({ project, files: [] });
+    mockBrandExtractProject(project);
     mocks.patchProject.mockResolvedValue({ ...project, pendingPrompt: 'Create this project as a design system.' });
     const config = {
       composio: { apiKeyConfigured: true, apiKeyTail: 'uQEg' },
@@ -2167,11 +2212,9 @@ describe('DesignSystemCreationFlow', () => {
     fireEvent.change(screen.getByPlaceholderText(/Mission Impastabowl/i), {
       target: { value: 'GitHub: product workspace' },
     });
-    const input = screen.getByPlaceholderText('https://example.com or https://github.com/owner/repo') as HTMLInputElement;
-    fireEvent.change(input, { target: { value: 'https://github.com/nexu-io/open-design' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    addSourceUrl('https://github.com/nexu-io/open-design');
     continueToGeneration();
-    continueToGeneration();
+    confirmExtraction();
 
     await waitFor(() => expect(mocks.writeProjectTextFile).toHaveBeenCalled());
     expect(mocks.writeProjectTextFile).toHaveBeenCalledWith(
@@ -2272,7 +2315,7 @@ describe('DesignSystemCreationFlow', () => {
     );
   });
 
-  it.skip('does not leak Composio connected-account ids into the project source manifest', async () => {
+  it('does not leak Composio connected-account ids into the project source manifest', async () => {
     const system: DesignSystemDetail = {
       id: 'user:github-internal-account-design-system',
       title: 'GitHub Internal Account Design System',
@@ -2303,8 +2346,7 @@ describe('DesignSystemCreationFlow', () => {
     mocks.fetchConnectorStatuses.mockResolvedValue({
       github: { status: 'connected', accountLabel: 'ca_6U6mv_8IzMVR' },
     });
-    mocks.createDesignSystemDraft.mockResolvedValue(system);
-    mocks.ensureDesignSystemWorkspace.mockResolvedValue({ project, files: [] });
+    mockBrandExtractProject(project);
     mocks.patchProject.mockResolvedValue({ ...project, pendingPrompt: 'Create this project as a design system.' });
     const config = {
       composio: { apiKeyConfigured: true, apiKeyTail: 'uQEg' },
@@ -2323,11 +2365,9 @@ describe('DesignSystemCreationFlow', () => {
     fireEvent.change(screen.getByPlaceholderText(/Mission Impastabowl/i), {
       target: { value: 'GitHub: product workspace' },
     });
-    const input = screen.getByPlaceholderText('https://example.com or https://github.com/owner/repo') as HTMLInputElement;
-    fireEvent.change(input, { target: { value: 'https://github.com/nexu-io/open-design' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    addSourceUrl('https://github.com/nexu-io/open-design');
     continueToGeneration();
-    continueToGeneration();
+    confirmExtraction();
 
     await waitFor(() => expect(mocks.writeProjectTextFile).toHaveBeenCalled());
     const sourceManifestCall = mocks.writeProjectTextFile.mock.calls.find(
