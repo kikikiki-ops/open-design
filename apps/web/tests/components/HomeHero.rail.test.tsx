@@ -154,6 +154,47 @@ describe('HomeHero intent rail', () => {
     expect(onClearActiveChip).toHaveBeenCalledTimes(1);
   });
 
+  it('clears the template pill to None even after a hovered rail card was picked', () => {
+    // The rail owns the hover-preview and unmounts the instant a template
+    // becomes active, so its mouseleave never fires — the preview must not
+    // outlive the committed selection or Clear leaves a stale pill (issue: the
+    // pill stayed "Slide deck" after Clear).
+    const baseProps = {
+      prompt: '',
+      onPromptChange: () => undefined,
+      onSubmit: () => undefined,
+      activePluginTitle: null,
+      activeChipId: null,
+      onClearActivePlugin: () => undefined,
+      pluginOptions: [],
+      pluginsLoading: false,
+      pendingPluginId: null,
+      pendingChipId: null,
+      onPickPlugin: vi.fn(),
+      onPickExamplePlugin: vi.fn(),
+      onPickChip: vi.fn(),
+      onClearActiveChip: vi.fn(),
+      contextItemCount: 0,
+      error: null,
+    } as React.ComponentProps<typeof HomeHero>;
+
+    const { rerender } = render(<HomeHero {...baseProps} activeChipId={null} />);
+
+    // Hover the Slide deck card → the footer pill previews it.
+    fireEvent.mouseEnter(screen.getByTestId('home-hero-rail-deck'));
+    expect(screen.getByTestId('home-hero-template-trigger').textContent).toContain('Slide deck');
+
+    // Pick commits the chip; the rail unmounts without firing mouseleave.
+    rerender(<HomeHero {...baseProps} activeChipId="deck" />);
+    expect(screen.getByTestId('home-hero-template-trigger').textContent).toContain('Slide deck');
+
+    // Clear nulls the active chip — the pill must fall back to None.
+    rerender(<HomeHero {...baseProps} activeChipId={null} />);
+    const trigger = screen.getByTestId('home-hero-template-trigger');
+    expect(trigger.textContent).toContain('None');
+    expect(trigger.textContent).not.toContain('Slide deck');
+  });
+
   it('uses the active creation chip as the only clear control for a chip-bound plugin', () => {
     const activePlugin = makePlugin('example-image-a', 'image', 'Product image');
     renderHero({

@@ -322,6 +322,73 @@ describe('DesignSystemCreationFlow', () => {
     expect(mocks.ensureDesignSystemWorkspace).not.toHaveBeenCalled();
   });
 
+  it('creates from pasted DESIGN.md without requiring a website', async () => {
+    const project: Project = {
+      id: 'brand-heritage',
+      name: 'Heritage Design System',
+      skillId: 'brand-extract',
+      designSystemId: 'user:heritage',
+      createdAt: 1,
+      updatedAt: 1,
+      metadata: { kind: 'brand', importedFrom: 'brand-extraction' },
+    };
+    mocks.getProject.mockResolvedValue(project);
+    const fetchMock = vi.fn(async (input: unknown, _init?: unknown) => {
+      if (typeof input === 'string' && input.startsWith('/api/brands')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            id: 'heritage',
+            projectId: project.id,
+            conversationId: 'conv-heritage',
+            sourceUrl: 'designmd://heritage',
+            status: 'ready',
+            designSystemId: 'user:heritage',
+            brandName: 'Heritage',
+          }),
+        } as unknown as Response;
+      }
+      return { ok: true, status: 200, json: async () => ({}) } as unknown as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const onCreated = vi.fn();
+
+    render(<DesignSystemCreationFlow onBack={() => {}} onCreated={onCreated} />);
+
+    fireEvent.change(screen.getByPlaceholderText(/Mission Impastabowl/i), {
+      target: { value: 'A newsroom product with a precise editorial voice.' },
+    });
+    fireEvent.change(screen.getByPlaceholderText(/name: Heritage/i), {
+      target: {
+        value: [
+          '---',
+          'name: Heritage',
+          'colors:',
+          '  primary: "#1A1C1E"',
+          '  tertiary: "#B8422E"',
+          '---',
+          '',
+          '## Overview',
+          'Editorial design system.',
+        ].join('\n'),
+      },
+    });
+    expect(
+      (screen.getByRole('button', { name: /continue to generation/i }) as HTMLButtonElement).disabled,
+    ).toBe(false);
+    continueToGeneration();
+    fireEvent.click(screen.getByRole('button', { name: /extract design system/i }));
+
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith(project.id, project));
+    const requestInit = fetchMock.mock.calls.find(([url]) => url === '/api/brands')?.[1] as unknown as { body: string };
+    expect(JSON.parse(requestInit.body)).toMatchObject({
+      description: 'A newsroom product with a precise editorial voice.',
+      designMd: expect.stringContaining('name: Heritage'),
+    });
+    expect(JSON.parse(requestInit.body)).not.toHaveProperty('url');
+  });
+
   it('requires a website before extracting and surfaces a kickoff failure', async () => {
     const onCreated = vi.fn();
     render(<DesignSystemCreationFlow onBack={() => {}} onCreated={onCreated} />);

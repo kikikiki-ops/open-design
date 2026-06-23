@@ -3799,6 +3799,16 @@ function sortChatAttachmentsForDisplay(attachments: ChatAttachment[]): ChatAttac
     .map((entry) => entry.attachment);
 }
 
+function isDesignSystemNextStepProject(metadata: ProjectMetadata | undefined): boolean {
+  if (!metadata) return false;
+  return (
+    metadata.kind === 'brand' ||
+    metadata.importedFrom === 'design-system' ||
+    metadata.importedFrom === 'brand-extraction' ||
+    Boolean(metadata.brandDesignSystemId)
+  );
+}
+
 function relTime(ts: number, t: TranslateFn): string {
   const diff = Date.now() - ts;
   const min = 60_000;

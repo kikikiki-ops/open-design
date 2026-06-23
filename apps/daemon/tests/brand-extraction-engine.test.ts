@@ -89,6 +89,37 @@ const VALID_BRAND = {
   },
 };
 
+const DESIGN_MD_INPUT = `---
+name: Heritage
+colors:
+  primary: "#1A1C1E"
+  secondary: "#6C7278"
+  tertiary: "#B8422E"
+  neutral: "#F7F5F2"
+typography:
+  h1:
+    fontFamily: Public Sans
+    fontSize: 3rem
+  body-md:
+    fontFamily: Public Sans
+    fontSize: 1rem
+rounded:
+  sm: 4px
+  md: 8px
+components:
+  button-primary:
+    backgroundColor: "{colors.tertiary}"
+---
+
+# Heritage
+
+## Overview
+Architectural Minimalism meets Journalistic Gravitas.
+
+## Colors
+- **Tertiary (#B8422E):** Boston Clay for interaction.
+`;
+
 describe('agent-driven brand extraction engine', () => {
   let tempDir: string;
   let brandsRoot: string;
@@ -836,6 +867,44 @@ describe('agent-driven brand extraction engine', () => {
     const project = getProject(db, result.projectId);
     expect(project?.pendingPrompt ?? '').toContain('DESIGN SYSTEM ENRICHMENT');
     expect(project?.designSystemId).toBe(detail?.meta.designSystemId);
+  });
+
+  it('startBrandExtraction registers directly from a pasted DESIGN.md without a website', async () => {
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+
+    const result = await startOfflineBrandExtraction({
+      designMd: DESIGN_MD_INPUT,
+      description: 'A custom newsroom system for sharp editorial tools.',
+      brandsRoot,
+      projectsRoot,
+      skillsRoot: SKILLS_ROOT,
+      db,
+      userDesignSystemsRoot,
+      prefetch: async () => {
+        throw new Error('website prefetch should not run for DESIGN.md-only input');
+      },
+      logoFallback: NO_LOGO_FALLBACK,
+      imageryFallback: NO_IMAGERY_FALLBACK,
+    });
+
+    const detail = readBrandDetail(brandsRoot, result.id);
+    expect(detail?.meta.status).toBe('ready');
+    expect(detail?.meta.sourceUrl).toBe('designmd://heritage');
+    expect(detail?.meta.designSystemId?.startsWith('user:')).toBe(true);
+    expect(detail?.brand?.name).toBe('Heritage');
+    expect(detail?.brand?.description).toContain('custom newsroom');
+    expect(detail?.brand?.colors.find((color) => color.role === 'accent')?.hex).toBe('#b8422e');
+    expect(detail?.brand?.typography.display.family).toBe('Public Sans');
+    expect(result.status).toBe('ready');
+    expect(result.designSystemId).toBe(detail?.meta.designSystemId);
+
+    const projectDir = path.join(projectsRoot, result.projectId);
+    expect(readFileSync(path.join(projectDir, 'context', 'input-DESIGN.md'), 'utf8')).toContain('name: Heritage');
+    expect(existsSync(path.join(projectDir, 'system', 'scripts', 'apply-design-tokens.mjs'))).toBe(true);
+    const project = getProject(db, result.projectId);
+    expect(project?.pendingPrompt ?? '').toContain('context/input-DESIGN.md');
+    expect(project?.designSystemId).toBe(detail?.meta.designSystemId);
+    expect(listTabs(db, result.projectId).browserTabs ?? []).toHaveLength(0);
   });
 
   it('startBrandExtraction stays in extracting when the programmatic harvest fails', async () => {

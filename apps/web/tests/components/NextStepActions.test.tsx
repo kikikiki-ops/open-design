@@ -88,6 +88,19 @@ describe('NextStepActions', () => {
     expect(h.onToolboxAction).toHaveBeenCalledWith('visual-polish');
   });
 
+  it('uses design-system-specific primary rows for design-system projects', () => {
+    const onPromptAction = vi.fn();
+    renderActions({ variant: 'design-system', onPromptAction });
+
+    expect(screen.queryByText(AUTO_MATCH_TITLE)).toBeNull();
+    expect(screen.queryByText(VISUAL_POLISH_TITLE)).toBeNull();
+    expect(screen.getByText('AI refine design system')).toBeTruthy();
+    expect(screen.getByText('Audit tokens & kit')).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('next-step-design-system-action-design-system-ai-refine'));
+    expect(onPromptAction).toHaveBeenCalledWith(expect.stringContaining('refine this design system in place'));
+  });
+
   it('reveals the matched @skill in the featured-row hover detail', () => {
     renderActions();
     fireEvent.mouseEnter(screen.getByTestId('next-step-toolbox-action-auto-match'));
