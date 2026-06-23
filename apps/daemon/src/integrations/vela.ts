@@ -458,10 +458,14 @@ export function readVelaCredentialRevision(
     loggedIn: status.loggedIn,
     userId: status.user?.id ?? '',
     userEmail: status.user?.email ?? '',
-    configMtimeMs:
-      hasEnvCredentials || !existsSync(status.configPath)
-        ? null
-        : statSync(status.configPath).mtimeMs,
+    // Include the config mtime even for env-backed auth: the live billing
+    // summary is fetched with the config profile's controlKey, so a config
+    // rewrite (account switch) must invalidate the cached plan/balance — even
+    // when VELA_RUNTIME_KEY is the active runtime credential. Otherwise an
+    // env-backed session keeps serving the previous account's plan/balance.
+    configMtimeMs: existsSync(status.configPath)
+      ? statSync(status.configPath).mtimeMs
+      : null,
   };
 }
 

@@ -510,6 +510,19 @@ describe('velaLiveAccountCacheKey + clearAllVelaLiveAccounts', () => {
     expect(signedInKey).not.toBe(otherUserKey);
   });
 
+  it('invalidates an env-backed key when the config account changes', () => {
+    // Env-backed auth (VELA_RUNTIME_KEY) has userId='' (user:null), so the
+    // config mtime is the ONLY signal that the underlying billing account
+    // changed — it must be part of the key or a switch leaks the prior
+    // account's plan/balance. readVelaCredentialRevision now keeps configMtimeMs
+    // for env auth so these differ.
+    const env = (mtime: number) =>
+      velaLiveAccountCacheKey(
+        rev({ authSource: 'env', userId: '', userEmail: '', configMtimeMs: mtime }),
+      );
+    expect(env(100)).not.toBe(env(200));
+  });
+
   it('never serves the previous account billing data after a switch', () => {
     clearAllVelaLiveAccounts();
     const oldKey = velaLiveAccountCacheKey(rev({ userId: 'u1' }));
