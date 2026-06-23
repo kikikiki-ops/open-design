@@ -69,6 +69,25 @@ describe('legacy self-built design system token backfill', () => {
     expect(assets.tokensCss).toBeUndefined();
   });
 
+  // Regression: readProjectManifest returns null for a present-but-invalid
+  // manifest too. The backfill must only treat genuinely manifest-less packages
+  // as legacy self-built; a corrupt manifest should surface, not be silently
+  // reclassified and backfilled with synthesized tokens.
+  it('does not backfill a user package whose manifest.json is present but invalid', async () => {
+    const created = await createUserDesignSystem(root, {
+      title: 'Broken Manifest',
+      summary: 'Dense product UI.',
+      category: 'Custom',
+    });
+    const dir = path.join(root, created.id.slice('user:'.length));
+    await rm(path.join(dir, 'tokens.css'), { force: true });
+    await writeFile(path.join(dir, 'manifest.json'), '{ not valid json', 'utf8');
+
+    const assets = await readDesignSystemAssets(root, created.id);
+
+    expect(assets.tokensCss).toBeUndefined();
+  });
+
   // Regression for the resolveDesignSystemAssets cache: the synthesized
   // tokensCss is derived from DESIGN.md and gated on metadata.json, so those
   // files must participate in the cache fingerprint. Otherwise the daemon keeps

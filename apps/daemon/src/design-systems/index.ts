@@ -674,7 +674,7 @@ async function designSystemAssetsRootFingerprint(
   // must enter the cache fingerprint — otherwise editing swatches or flipping to
   // agent-managed would keep serving stale synthesized tokens. Mirrors the
   // eligibility check in deriveLegacyUserTokensCss.
-  if (manifest === null && id.startsWith('user:')) {
+  if (manifest === null && id.startsWith('user:') && (await manifestJsonAbsent(brandRoot))) {
     candidates.add('DESIGN.md');
     candidates.add('metadata.json');
   }
@@ -2759,6 +2759,14 @@ function paletteToSourceTokens(palette: GeneratedPalette): SourceDesignToken[] {
 // a migration run over the data dir, derive the token contract on read from the
 // package's DESIGN.md palette. Scoped to user packages with no manifest;
 // imported/manifest packages and built-in DESIGN.md-only brands are untouched.
+// readProjectManifest() returns null both when manifest.json is absent and when
+// it exists but is malformed / schema-invalid. The legacy backfill must only
+// fire for genuinely manifest-less packages; a corrupt manifest should surface,
+// not be silently reclassified as legacy self-built and backfilled.
+async function manifestJsonAbsent(brandRoot: string): Promise<boolean> {
+  return (await readFileOptional(path.join(brandRoot, 'manifest.json'))) === undefined;
+}
+
 async function deriveLegacyUserTokensCss(
   root: string,
   dirId: string,
@@ -2766,6 +2774,7 @@ async function deriveLegacyUserTokensCss(
   hasManifest: boolean,
 ): Promise<string | undefined> {
   if (hasManifest || !id.startsWith('user:')) return undefined;
+  if (!(await manifestJsonAbsent(path.join(root, dirId)))) return undefined;
   // Agent-managed packages intentionally skip writeGeneratedDesignSystemFiles:
   // they stay DESIGN.md-only until the agent writes review artifacts itself.
   // Synthesizing a token contract for them would mask that missing step and
