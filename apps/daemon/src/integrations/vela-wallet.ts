@@ -9,6 +9,7 @@ import {
 } from './vela.js';
 
 const DEFAULT_AMR_WALLET_CACHE_TTL_MS = 8_000;
+const DEFAULT_AMR_WALLET_FETCH_TIMEOUT_MS = 8_000;
 const DEFAULT_AMR_API_URL = 'https://amr-api.open-design.ai';
 
 type FetchLike = typeof fetch;
@@ -16,6 +17,7 @@ type FetchLike = typeof fetch;
 interface VelaWalletReaderOptions {
   fetch?: FetchLike;
   now?: () => Date;
+  timeoutMs?: number;
   ttlMs?: number;
 }
 
@@ -97,6 +99,13 @@ function withCacheSource(snapshot: AmrWalletSnapshot, stale: boolean): AmrWallet
   };
 }
 
+function readPositiveInteger(value: string | undefined, fallback: number): number {
+  if (!value) return fallback;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.floor(parsed);
+}
+
 export function createVelaWalletSnapshotReader(options: VelaWalletReaderOptions = {}) {
   const fetchImpl = options.fetch ?? fetch;
   const now = options.now ?? (() => new Date());
@@ -110,16 +119,20 @@ export function createVelaWalletSnapshotReader(options: VelaWalletReaderOptions 
       apiUrl: string;
       controlKey: string;
       profile: string;
+      timeoutMs: number;
       user: AmrWalletSnapshot['user'];
     },
   ): Promise<AmrWalletSnapshot> {
     const fetchedAt = now().toISOString();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), input.timeoutMs);
     try {
       const url = new URL('/api/v1/wallet/balance', input.apiUrl || DEFAULT_AMR_API_URL);
       const response = await fetchImpl(url, {
         headers: {
           authorization: `Bearer ${input.controlKey}`,
         },
+        signal: controller.signal,
       });
       if (response.status === 401 || response.status === 403) {
         cache.delete(key);
@@ -191,6 +204,8 @@ export function createVelaWalletSnapshotReader(options: VelaWalletReaderOptions 
         profile: input.profile,
         user: input.user,
       });
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
@@ -236,10 +251,14 @@ export function createVelaWalletSnapshotReader(options: VelaWalletReaderOptions 
     }
     const current = inflight.get(key);
     if (current) return current;
+    const timeoutMs =
+      options.timeoutMs ??
+      readPositiveInteger(env.OD_AMR_WALLET_FETCH_TIMEOUT_MS, DEFAULT_AMR_WALLET_FETCH_TIMEOUT_MS);
     const promise = fetchSnapshot(key, {
       apiUrl: context.apiUrl,
       controlKey: context.controlKey,
       profile: context.profile,
+      timeoutMs,
       user,
     }).finally(() => {
       inflight.delete(key);
