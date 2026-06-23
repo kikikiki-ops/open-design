@@ -182,6 +182,15 @@ export interface VelaLoginStatus {
   loginInFlight: boolean;
   profile: string;
   user: VelaUser | null;
+  /**
+   * Live billing projection (plan tier + wallet balance) for the signed-in
+   * account. Kept SEPARATE from `user` so env-backed sessions (where `user` is
+   * null) can surface plan/balance without fabricating a blank identity, and so
+   * `user.id === null` keeps meaning "no account identity available" for
+   * analytics and other callers. Absent until the live summary resolves;
+   * absent means unknown / hidden.
+   */
+  account?: VelaLiveAccount;
   configPath: string;
   /**
    * Device-authorization URL parsed from `vela login` stdout, surfaced so the
@@ -395,6 +404,9 @@ export function setVelaLiveAccount(
   account: VelaLiveAccount,
 ): void {
   liveAccountCache.set(cacheKey, account);
+  // Stamp the fetch time so the warm-path TTL gate doesn't immediately trigger
+  // a redundant refresh right after a (blocking) cold fetch populated the cache.
+  liveAccountFetchedAt.set(cacheKey, Date.now());
 }
 
 /** Clear the refresh throttle so a failed fetch can retry on the next poll. */
@@ -412,21 +424,19 @@ export function clearAllVelaLiveAccounts(): void {
 }
 
 /**
- * Merge a fetched live account (plan tier + wallet balance) onto a login
- * status. Populates `status.user` even for env-backed sessions where
- * {@link readVelaLoginStatus} returns `user: null` — otherwise the live billing
- * data would be silently dropped and the account UI would render as if no data
- * existed. No-op when signed out or when there is no account to apply.
+ * Attach a fetched live account (plan tier + wallet balance) to a login status
+ * on the dedicated {@link VelaLoginStatus.account} field. Deliberately does NOT
+ * touch `status.user`: env-backed sessions keep `user: null` (no fabricated
+ * blank identity), and the billing projection rides on its own field so every
+ * surface can read plan/balance uniformly. No-op when signed out or when there
+ * is no account to apply.
  */
 export function applyVelaLiveAccount(
   status: VelaLoginStatus,
   account: VelaLiveAccount | null,
 ): void {
   if (!status.loggedIn || !account) return;
-  const user: VelaUser = status.user ?? { id: '', email: '' };
-  if (account.plan) user.plan = account.plan;
-  user.balanceUsd = account.balanceUsd ?? null;
-  status.user = user;
+  status.account = account;
 }
 
 export function readVelaCredentialRevision(

@@ -771,11 +771,23 @@ export function canUpgradeVelaPlan(plan?: string | null): boolean {
   return normalized !== VELA_TOP_PLAN_TIER;
 }
 
+/**
+ * Live billing projection (plan tier + wallet balance) for the signed-in
+ * account, surfaced on its OWN field rather than on {@link VelaUser} so
+ * env-backed sessions (where `user` is null) can show plan/balance without a
+ * fabricated identity. Absent means unknown → hide the fields.
+ */
+export interface VelaLiveAccount {
+  plan?: string;
+  balanceUsd?: string | null;
+}
+
 export interface VelaLoginStatus {
   loggedIn: boolean;
   loginInFlight?: boolean;
   profile: string;
   user: VelaUser | null;
+  account?: VelaLiveAccount;
   configPath: string;
   // Device-authorization details parsed from `vela login` output while a login
   // is in flight, so the UI can offer a manual sign-in link when the browser

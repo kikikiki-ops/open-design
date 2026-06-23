@@ -3622,15 +3622,15 @@ export function SettingsDialog({
                               : null;
                           const amrCardBalanceLabel =
                             isAmrAgent && active && amrCardStatus?.loggedIn
-                              ? formatVelaBalanceUsd(amrCardStatus.user?.balanceUsd)
+                              ? formatVelaBalanceUsd(amrCardStatus.account?.balanceUsd)
                               : null;
                           const amrCardPlanLabel =
                             isAmrAgent && active && amrCardStatus?.loggedIn
-                              ? amrCardStatus.user?.plan?.trim() || null
+                              ? amrCardStatus.account?.plan?.trim() || null
                               : null;
                           const amrCardCanUpgrade =
                             isAmrAgent && active && amrCardStatus?.loggedIn
-                              ? canUpgradeVelaPlan(amrCardStatus.user?.plan)
+                              ? canUpgradeVelaPlan(amrCardStatus.account?.plan)
                               : false;
                           const amrRevealPendingCancelAction =
                             isAmrAgent &&

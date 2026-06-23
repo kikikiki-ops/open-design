@@ -431,12 +431,13 @@ export function InlineModelSwitcher({
   // distinguished from signed-out (which keeps the sign-in CTA) by `amrLoggedIn`,
   // never by plan presence.
   const amrPlanLabel = amrLoggedIn
-    ? amrStatus?.user?.plan?.trim() || null
+    ? amrStatus?.account?.plan?.trim() || null
     : null;
   const amrBalanceLabel = amrLoggedIn
-    ? formatVelaBalanceUsd(amrStatus?.user?.balanceUsd)
+    ? formatVelaBalanceUsd(amrStatus?.account?.balanceUsd)
     : null;
-  const amrCanUpgrade = amrLoggedIn && canUpgradeVelaPlan(amrStatus?.user?.plan);
+  const amrCanUpgrade =
+    amrLoggedIn && canUpgradeVelaPlan(amrStatus?.account?.plan);
   const amrActionLabel = amrLoginPending
     ? t('settings.amrSigningIn')
     : amrLoggedIn

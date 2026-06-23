@@ -185,13 +185,14 @@ export function AvatarMenu({
       cancelled = true;
     };
   }, [open, amrAvailable]);
-  const amrPlanDisplay =
-    amrAccount?.loggedIn && amrAccount.user?.plan?.trim()
-      ? amrAccount.user.plan.trim().charAt(0).toUpperCase() +
-        amrAccount.user.plan.trim().slice(1)
-      : null;
+  const amrPlanTrimmed = amrAccount?.loggedIn
+    ? amrAccount.account?.plan?.trim() || ''
+    : '';
+  const amrPlanDisplay = amrPlanTrimmed
+    ? amrPlanTrimmed.charAt(0).toUpperCase() + amrPlanTrimmed.slice(1)
+    : null;
   const amrBalanceLabel = amrAccount?.loggedIn
-    ? formatVelaBalanceUsd(amrAccount.user?.balanceUsd)
+    ? formatVelaBalanceUsd(amrAccount.account?.balanceUsd)
     : null;
   // Compact "$204.35 · Max" shown inline on the Open Design agent row; null when
   // no live data so the row simply omits it (no static placeholder).
@@ -200,7 +201,7 @@ export function AvatarMenu({
       ? [amrBalanceLabel, amrPlanDisplay].filter(Boolean).join(' · ')
       : null;
   const amrCanUpgrade =
-    !!amrAccount?.loggedIn && canUpgradeVelaPlan(amrAccount.user?.plan);
+    !!amrAccount?.loggedIn && canUpgradeVelaPlan(amrAccount.account?.plan);
   const amrPlansUrl = amrPlansUrlForProfile(amrProfile);
   const handleAmrUpgradeClick = (event: ReactMouseEvent<HTMLAnchorElement>) => {
     const attribution = recordAmrEntry(analytics.track, 'avatar_amr_upgrade', new Date(), {

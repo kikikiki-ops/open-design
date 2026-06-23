@@ -393,11 +393,13 @@ describe('GET /api/integrations/vela/status', () => {
     });
     const { body } = await getJson<{
       loggedIn: boolean;
-      user: { email?: string; plan?: string; balanceUsd?: string | null } | null;
+      user: { email?: string } | null;
+      account?: { plan?: string; balanceUsd?: string | null };
     }>(`${baseUrl}/api/integrations/vela/status`);
     expect(body.loggedIn).toBe(true);
-    expect(body.user?.plan).toBe('plus');
-    expect(body.user?.balanceUsd).toBe('247.51');
+    // Env-/config-identity stays on `user`; live billing rides on `account`.
+    expect(body.account?.plan).toBe('plus');
+    expect(body.account?.balanceUsd).toBe('247.51');
   });
 
   it('never leaks the runtimeKey or controlKey in the status payload', async () => {

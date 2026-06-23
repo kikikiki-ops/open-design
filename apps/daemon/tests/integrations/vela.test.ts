@@ -457,38 +457,31 @@ describe('applyVelaLiveAccount', () => {
     configPath: '/tmp/x',
   });
 
-  it('populates plan + balance on env-backed sessions where user is null', () => {
+  it('surfaces plan + balance on a separate field without fabricating a user', () => {
     // VELA_RUNTIME_KEY / VELA_LINK_URL auth → readVelaLoginStatus returns
-    // loggedIn:true, user:null; the live billing data must still surface.
+    // loggedIn:true, user:null; the live billing data rides on `account` so the
+    // null identity (and the analytics `user.id` signal) is preserved.
     const status = signedIn(null);
     applyVelaLiveAccount(status, { plan: 'max', balanceUsd: '204.35' });
-    expect(status.user).toEqual({
-      id: '',
-      email: '',
-      plan: 'max',
-      balanceUsd: '204.35',
-    });
+    expect(status.user).toBeNull();
+    expect(status.account).toEqual({ plan: 'max', balanceUsd: '204.35' });
   });
 
-  it('merges onto an existing config-backed user', () => {
+  it('leaves an existing config-backed user identity untouched', () => {
     const status = signedIn({ id: 'u1', email: 'a@b.c', plan: 'free' });
     applyVelaLiveAccount(status, { plan: 'plus', balanceUsd: '10.00' });
-    expect(status.user).toMatchObject({
-      id: 'u1',
-      email: 'a@b.c',
-      plan: 'plus',
-      balanceUsd: '10.00',
-    });
+    expect(status.user).toEqual({ id: 'u1', email: 'a@b.c', plan: 'free' });
+    expect(status.account).toEqual({ plan: 'plus', balanceUsd: '10.00' });
   });
 
   it('is a no-op when signed out or when there is no account', () => {
     const out: VelaLoginStatus = { ...signedIn(null), loggedIn: false };
     applyVelaLiveAccount(out, { plan: 'max', balanceUsd: '1' });
-    expect(out.user).toBeNull();
+    expect(out.account).toBeUndefined();
 
     const noAccount = signedIn(null);
     applyVelaLiveAccount(noAccount, null);
-    expect(noAccount.user).toBeNull();
+    expect(noAccount.account).toBeUndefined();
   });
 });
 
