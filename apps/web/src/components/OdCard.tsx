@@ -11,7 +11,7 @@
 //
 // The parser + payload types live in '@open-design/contracts' (od-card.ts) so
 // web and daemon share one source of truth. This file only renders.
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type {
   OdCard,
   OdCardTaskBrief,
@@ -25,6 +25,61 @@ import { Button } from '@open-design/components';
 import { Icon, type IconName } from './Icon';
 import { useT } from '../i18n';
 import styles from './OdCard.module.css';
+
+const RULE_PROPOSAL_DECISION_PREFIX = 'od:rule-proposal-decision:';
+
+type RuleProposalDecision =
+  | { status: 'idle' }
+  | { status: 'saved'; name: string }
+  | { status: 'discarded' };
+
+function hashRuleProposalKey(input: string): string {
+  let hash = 5381;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = (hash * 33) ^ input.charCodeAt(i);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function ruleProposalStorageKey(card: OdCardRuleProposal): string {
+  return `${RULE_PROPOSAL_DECISION_PREFIX}${hashRuleProposalKey(
+    JSON.stringify([
+      card.name,
+      card.description ?? '',
+      card.assertion,
+      card.check,
+      card.rationale ?? '',
+    ]),
+  )}`;
+}
+
+function readRuleProposalDecision(key: string): RuleProposalDecision {
+  if (typeof window === 'undefined') return { status: 'idle' };
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return { status: 'idle' };
+    const parsed = JSON.parse(raw) as Partial<RuleProposalDecision> | null;
+    if (parsed?.status === 'discarded') return { status: 'discarded' };
+    if (parsed?.status === 'saved') {
+      return {
+        status: 'saved',
+        name: typeof parsed.name === 'string' && parsed.name.trim() ? parsed.name : '',
+      };
+    }
+  } catch {
+    // Storage can be unavailable in hardened contexts; fall back to per-mount state.
+  }
+  return { status: 'idle' };
+}
+
+function writeRuleProposalDecision(key: string, decision: Exclude<RuleProposalDecision, { status: 'idle' }>) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(decision));
+  } catch {
+    // Best effort only: keeping the in-memory state still lets the current mount update.
+  }
+}
 
 export function OdCardView({ card }: { card: OdCard }) {
   switch (card.kind) {
@@ -196,26 +251,29 @@ function VerifyScorecardCard({ card }: { card: OdCardVerifyScorecard }) {
 // same fields inline editable before saving; "Discard" dismisses locally.
 function RuleProposalCard({ card }: { card: OdCardRuleProposal }) {
   const t = useT();
+  const storageKey = useMemo(() => ruleProposalStorageKey(card), [card]);
+  const [decision, setDecision] = useState<RuleProposalDecision>(() =>
+    readRuleProposalDecision(storageKey),
+  );
   const [name, setName] = useState(card.name);
   const [description, setDescription] = useState(card.description ?? '');
   const [assertion, setAssertion] = useState(card.assertion);
   const [check, setCheck] = useState(card.check);
   const [rationale, setRationale] = useState(card.rationale ?? '');
   const [editing, setEditing] = useState(false);
-  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error' | 'discarded'>(
-    'idle',
-  );
+  const [status, setStatus] = useState<'idle' | 'saving' | 'error'>('idle');
 
-  if (status === 'discarded') return null;
+  if (decision.status === 'discarded') return null;
 
-  if (status === 'saved') {
+  if (decision.status === 'saved') {
+    const savedName = decision.name || name;
     return (
       <div className={`${styles.card} ${styles.ruleSaved}`} data-od-card="rule-proposal">
         <span className={styles.ruleSavedIcon} aria-hidden>
           <Icon name="check" size={14} />
         </span>
         <span className={styles.ruleSavedLabel}>
-          {t('artifact.odCardRuleSaved', { name })}
+          {t('artifact.odCardRuleSaved', { name: savedName })}
         </span>
       </div>
     );
@@ -250,7 +308,10 @@ function RuleProposalCard({ card }: { card: OdCardRuleProposal }) {
         setStatus('error');
         return;
       }
-      setStatus('saved');
+      const savedDecision = { status: 'saved', name: name.trim() } as const;
+      writeRuleProposalDecision(storageKey, savedDecision);
+      setDecision(savedDecision);
+      setStatus('idle');
     } catch {
       setStatus('error');
     }
@@ -359,7 +420,11 @@ function RuleProposalCard({ card }: { card: OdCardRuleProposal }) {
           variant="ghost"
           className={styles.ruleAction}
           disabled={status === 'saving'}
-          onClick={() => setStatus('discarded')}
+          onClick={() => {
+            const discardedDecision = { status: 'discarded' } as const;
+            writeRuleProposalDecision(storageKey, discardedDecision);
+            setDecision(discardedDecision);
+          }}
         >
           {t('artifact.odCardRuleDiscard')}
         </Button>
