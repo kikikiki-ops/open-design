@@ -32,6 +32,7 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
+          ref: main            # always cut from main HEAD, even on a manual dispatch from another branch
           fetch-depth: 0
           token: ${{ steps.app.outputs.token }}
 
