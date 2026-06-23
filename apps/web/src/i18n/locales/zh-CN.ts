@@ -3204,6 +3204,7 @@ export const zhCN: Dict = {
   'dsManager.editWithAgent': '用 Agent 编辑',
   'dsManager.downloadTitle': '下载品牌(.zip + SKILLS.md)',
   'dsManager.downloadAria': '下载 {title} 为 .zip',
+  'dsManager.downloadFailed': '无法下载该设计系统,请重试。',
   'dsManager.makeDefault': '设为新对话默认',
   'dsManager.statusPublished': '已发布',
   'dsManager.statusDraft': '草稿',

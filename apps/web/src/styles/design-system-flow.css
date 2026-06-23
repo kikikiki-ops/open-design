@@ -91,6 +91,22 @@
 .ds-setup-topbar .ghost {
   justify-self: start;
 }
+.ds-setup-topbar-left {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.ds-setup-hero-toggle {
+  min-height: 34px;
+  color: var(--text-muted);
+}
+.ds-setup-hero-toggle:hover,
+.ds-setup-hero-toggle:focus-visible {
+  color: var(--text-strong);
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+}
 .ds-setup-mark {
   display: inline-grid;
   place-items: center;
@@ -121,49 +137,17 @@
   top: 84px;
   align-self: start;
 }
-.ds-setup-hero-frame {
-  position: relative;
-}
-.ds-setup-hero-collapse {
-  position: absolute;
-  top: 0;
-  right: 0;
-  z-index: 2;
-  color: var(--text-muted);
-  background: color-mix(in srgb, var(--bg-panel) 88%, transparent);
-  backdrop-filter: blur(6px);
-  box-shadow: var(--shadow-xs);
-}
-.ds-setup-hero-collapse:hover,
-.ds-setup-hero-collapse:focus-visible,
-.ds-setup-hero-restore:hover,
-.ds-setup-hero-restore:focus-visible {
-  color: var(--text-strong);
-  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
-}
-.ds-setup-shell--hero-collapsed .ds-setup-form {
+.ds-setup-shell.ds-setup-shell--hero-collapsed:not(.ds-setup-shell--embedded) .ds-setup-form {
   width: auto;
   max-width: none;
-  margin: 0 40px 0 120px;
+  margin: 0 40px;
   display: block;
+  grid-template-columns: none;
+  gap: 0;
 }
-.ds-setup-shell--hero-collapsed .ds-setup-form-col {
+.ds-setup-shell.ds-setup-shell--hero-collapsed:not(.ds-setup-shell--embedded) .ds-setup-form-col {
   width: 100%;
-}
-.ds-setup-hero-restore {
-  position: fixed;
-  top: 84px;
-  left: 28px;
-  z-index: 18;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 34px;
-  padding: 0 10px;
-  color: var(--text-muted);
-  background: color-mix(in srgb, var(--bg-panel) 92%, transparent);
-  backdrop-filter: blur(8px);
-  box-shadow: var(--shadow-sm);
+  max-width: none;
 }
 .ds-setup-form-col {
   min-width: 0;
@@ -176,15 +160,20 @@
   .ds-setup-hero-col {
     position: static;
   }
-  .ds-setup-shell--hero-collapsed .ds-setup-form {
+  .ds-setup-shell.ds-setup-shell--hero-collapsed:not(.ds-setup-shell--embedded) .ds-setup-form {
     width: min(720px, calc(100vw - 40px));
     margin: 0 auto;
+    display: block;
+    grid-template-columns: none;
   }
-  .ds-setup-hero-restore {
-    position: sticky;
-    top: 76px;
-    left: 20px;
-    margin: 12px 0 -8px 20px;
+  .ds-setup-topbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .ds-setup-mark {
+    display: none;
+  }
+  .ds-setup-hero-toggle span {
+    display: none;
   }
 }
 .ds-setup-shell--embedded .ds-setup-form {
@@ -1028,6 +1017,50 @@ a.ds-source-link-open:focus-visible {
 }
 .ds-hidden-input {
   display: none;
+}
+
+.ds-project-extraction-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-panel);
+  color: var(--text);
+}
+
+.ds-project-extraction-status svg {
+  flex: 0 0 auto;
+}
+
+.ds-project-extraction-status span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ds-project-extraction-status strong {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.ds-project-extraction-status small {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.ds-project-extraction-status.is-running {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+  background: color-mix(in srgb, var(--accent) 5%, var(--bg-panel));
+}
+
+.ds-project-extraction-status.is-complete {
+  border-color: color-mix(in srgb, var(--green, #3d7a4f) 28%, var(--border));
+  background: color-mix(in srgb, var(--green, #3d7a4f) 5%, var(--bg-panel));
 }
 .ds-local-code-list {
   grid-column: 1 / -1;

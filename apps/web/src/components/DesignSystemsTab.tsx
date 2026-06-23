@@ -23,10 +23,18 @@ import {
   deleteDesignSystemDraft,
   fetchDesignSystem,
   fetchDesignSystemShowcase,
+  fetchProjectFileText,
+  startDesignSystemTokenContractRebuildJob,
   updateDesignSystemDraft,
   writeProjectTextFile,
 } from '../providers/registry';
+import { downloadDesignSystemArchive } from '../runtime/exports';
 import { useDesignKit } from '../runtime/design-kit';
+import {
+  deleteBrandImage,
+  deleteBrandLogo,
+  updateBrandColor,
+} from '../runtime/kit-edit';
 import { useKitModuleUpload } from '../runtime/kit-upload';
 import { DesignKitView } from './DesignKitView';
 import { hostnameOf } from './BrandPreviewCard';
@@ -904,27 +912,46 @@ function DesignSystemDetail({
   // the full detail. The kit view derives every module from brand.json (when a
   // backing project carries one) or the parsed DESIGN.md (presets).
   const [detail, setDetail] = useState<DesignSystemDetail | null>(null);
-  const [editBody, setEditBody] = useState('');
-  const [savingBody, setSavingBody] = useState(false);
+  const [designMdBody, setDesignMdBody] = useState('');
+  const [savingDesignMd, setSavingDesignMd] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadFailed, setDownloadFailed] = useState(false);
+  const initialDesignMdRef = useRef<string | null>(null);
+  const initialBrandJsonRef = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setDetail(null);
-    setEditBody('');
+    setDesignMdBody('');
+    setDownloadFailed(false);
+    initialDesignMdRef.current = null;
+    initialBrandJsonRef.current = null;
     void fetchDesignSystem(system.id).then((d) => {
       if (cancelled) return;
       setDetail(d);
-      setEditBody(d?.body ?? '');
+      const body = d?.body ?? '';
+      setDesignMdBody(body);
+      initialDesignMdRef.current = body;
     });
     return () => {
       cancelled = true;
     };
   }, [system.id]);
 
-  const sourceUrl = system.provenance?.sourceUrls?.[0];
   const host = designSystemLogoHost(system) || undefined;
   const projectId = detail?.projectId ?? system.projectId;
+
+  useEffect(() => {
+    if (!projectId) return;
+    let cancelled = false;
+    void fetchProjectFileText(projectId, 'brand.json', { cache: 'no-store' }).then((text) => {
+      if (!cancelled && initialBrandJsonRef.current === null) initialBrandJsonRef.current = text;
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
 
   const { uploading, uploadModule } = useKitModuleUpload({
     projectId,
@@ -938,7 +965,7 @@ function DesignSystemDetail({
     designSystemId: system.id,
     title: system.title,
     projectId,
-    body: detail?.body,
+    body: designMdBody || detail?.body,
     packageInfo: detail?.packageInfo,
     swatches: system.swatches,
     showcaseHtml: showcaseHtml ?? null,
@@ -947,16 +974,79 @@ function DesignSystemDetail({
     reloadKey,
   });
 
-  async function saveDesignMd() {
-    setSavingBody(true);
+  async function handleDownload() {
+    if (downloading) return;
+    setDownloading(true);
+    setDownloadFailed(false);
     try {
-      await updateDesignSystemDraft(system.id, { body: editBody });
-      if (projectId) await writeProjectTextFile(projectId, 'DESIGN.md', editBody);
+      const ok = await downloadDesignSystemArchive({
+        designSystemId: system.id,
+        fallbackTitle: system.title,
+      });
+      setDownloadFailed(!ok);
+    } finally {
+      setDownloading(false);
+    }
+  }
+
+  async function saveDesignMd(nextBody: string) {
+    if (!isUser) return;
+    setSavingDesignMd(true);
+    try {
+      const updated = await updateDesignSystemDraft(system.id, { body: nextBody });
+      if (projectId) await writeProjectTextFile(projectId, 'DESIGN.md', nextBody);
+      setDesignMdBody(nextBody);
+      if (updated) setDetail((current) => current ? { ...current, body: nextBody } : updated);
       setReloadKey((k) => k + 1);
       await onSystemsRefresh?.();
     } finally {
-      setSavingBody(false);
+      setSavingDesignMd(false);
     }
+  }
+
+  async function refreshKit() {
+    await startDesignSystemTokenContractRebuildJob(system.id, { force: true });
+    setReloadKey((k) => k + 1);
+    await onSystemsRefresh?.();
+  }
+
+  async function resetKitEdits() {
+    if (!isUser) return;
+    const originalMd = initialDesignMdRef.current ?? designMdBody;
+    await updateDesignSystemDraft(system.id, { body: originalMd });
+    if (projectId) {
+      await writeProjectTextFile(projectId, 'DESIGN.md', originalMd);
+      if (initialBrandJsonRef.current !== null) {
+        await writeProjectTextFile(projectId, 'brand.json', initialBrandJsonRef.current);
+      }
+    }
+    setDesignMdBody(originalMd);
+    setReloadKey((k) => k + 1);
+    await onSystemsRefresh?.();
+  }
+
+  async function changeKitColor(index: number, hex: string) {
+    if (!projectId) return;
+    const ok = await updateBrandColor(projectId, index, hex);
+    if (!ok) return;
+    setReloadKey((k) => k + 1);
+    await onSystemsRefresh?.();
+  }
+
+  async function removeKitLogo(index: number) {
+    if (!projectId) return;
+    const ok = await deleteBrandLogo(projectId, index);
+    if (!ok) return;
+    setReloadKey((k) => k + 1);
+    await onSystemsRefresh?.();
+  }
+
+  async function removeKitImage(index: number) {
+    if (!projectId) return;
+    const ok = await deleteBrandImage(projectId, index);
+    if (!ok) return;
+    setReloadKey((k) => k + 1);
+    await onSystemsRefresh?.();
   }
 
   const badgeSlot = isDefault ? (
@@ -973,14 +1063,51 @@ function DesignSystemDetail({
           disabled={busy}
           title={t('dsManager.openSystemAria', { title: system.title })}
         >
-          <Icon name="external-link" />
-          {t('dsManager.openSystem')}
+          <Icon name="sparkles" />
+          {t('dsManager.editWithAgent')}
+        </Button>
+      ) : null}
+      {isUser ? (
+        <Button
+          variant="ghost"
+          className={styles.actionButton}
+          onClick={() => void refreshKit()}
+          disabled={busy}
+          title="Refresh generated design-system assets"
+        >
+          <Icon name="refresh" />
+          Refresh
+        </Button>
+      ) : null}
+      {isUser ? (
+        <Button
+          size="icon"
+          className={styles.downloadBtn}
+          data-testid={`design-system-download-${system.id}`}
+          aria-label={t('dsManager.downloadAria', { title: system.title })}
+          title={t('dsManager.downloadTitle')}
+          onClick={() => void handleDownload()}
+          disabled={busy || downloading}
+        >
+          <Icon name={downloading ? 'spinner' : 'download'} />
+        </Button>
+      ) : null}
+      {isUser ? (
+        <Button
+          size="icon"
+          className={styles.downloadBtn}
+          aria-label="Reset design-system edits"
+          title="Reset this session's DESIGN.md and brand.json edits"
+          onClick={() => void resetKitEdits()}
+          disabled={busy}
+        >
+          <Icon name="reload" />
         </Button>
       ) : null}
       {canBeDefault && !isDefault ? (
         <Button
-          variant="primary"
-          className={`${styles.actionButton} ${styles.defaultButton}`}
+          variant="ghost"
+          className={styles.defaultButton}
           data-testid={`design-system-select-${system.id}`}
           onClick={() => onMakeDefault(system)}
           disabled={busy}
@@ -989,17 +1116,6 @@ function DesignSystemDetail({
           {t('dsManager.makeDefault')}
         </Button>
       ) : null}
-      <Button
-        variant="ghost"
-        className={styles.actionButton}
-        data-testid={`design-system-preview-${system.id}`}
-        onClick={() => onPreviewFull(system)}
-        disabled={busy}
-        title={t('ds.previewTitle')}
-      >
-        <Icon name="external-link" />
-        {t('ds.preview')}
-      </Button>
       {isUser ? (
         <button
           type="button"
@@ -1033,19 +1149,31 @@ function DesignSystemDetail({
           kit={kit}
           badgeSlot={badgeSlot}
           actionsSlot={actionsSlot}
+          noticeSlot={
+            downloadFailed ? (
+              <div className={styles.missingProjectNotice}>{t('dsManager.downloadFailed')}</div>
+            ) : null
+          }
           onPreviewCover={() => onPreviewFull(system)}
-          editor={
+          designMd={
             isUser
               ? {
-                  body: editBody,
-                  onChange: setEditBody,
+                  body: designMdBody,
                   onSave: saveDesignMd,
-                  saving: savingBody,
+                  saving: savingDesignMd,
                   canEdit: true,
                 }
-              : undefined
+              : detail?.body
+                ? { body: detail.body, canEdit: false }
+                : undefined
           }
           onUploadModule={uploadModule}
+          onColorChange={projectId ? (index, hex) => void changeKitColor(index, hex) : undefined}
+          onDeleteLogo={projectId ? (index) => void removeKitLogo(index) : undefined}
+          onDeleteImage={projectId ? (index) => void removeKitImage(index) : undefined}
+          onRefresh={isUser ? () => void refreshKit() : undefined}
+          onDownload={isUser ? () => void handleDownload() : undefined}
+          onReset={isUser ? () => void resetKitEdits() : undefined}
           uploading={uploading}
           dataTestId={`design-kit-view-${system.id}`}
         />

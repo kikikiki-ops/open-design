@@ -962,16 +962,28 @@ export function DesignSystemCreationFlow({
       ) : null}
       {embedded ? null : (
         <header className="ds-setup-topbar">
-          <Button
-            variant="ghost"
-            onClick={() => {
-              emitCreateFormClick('back');
-              onBack();
-            }}
-          >
-            <Icon name="arrow-left" />
-            Back
-          </Button>
+          <div className="ds-setup-topbar-left">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                emitCreateFormClick('back');
+                onBack();
+              }}
+            >
+              <Icon name="arrow-left" />
+              Back
+            </Button>
+            <Button
+              variant="ghost"
+              className="ds-setup-hero-toggle"
+              aria-label={heroCollapsed ? 'Show design system guide' : 'Hide design system guide'}
+              title={heroCollapsed ? 'Show guide' : 'Hide guide'}
+              onClick={() => setHeroCollapsed((collapsed) => !collapsed)}
+            >
+              <Icon name={heroCollapsed ? 'chevron-right' : 'chevron-left'} />
+              <span>Guide</span>
+            </Button>
+          </div>
           <span className="ds-setup-mark">
             <Icon name="blocks" />
           </span>
@@ -992,18 +1004,6 @@ export function DesignSystemCreationFlow({
           </Button>
         </header>
       )}
-      {!embedded && heroCollapsed ? (
-        <Button
-          variant="ghost"
-          className="ds-setup-hero-restore"
-          aria-label="Show design system guide"
-          title="Show design system guide"
-          onClick={() => setHeroCollapsed(false)}
-        >
-          <Icon name="chevron-right" />
-          <span>Guide</span>
-        </Button>
-      ) : null}
 
       <main className="ds-setup-form">
         {embedded ? (
@@ -1013,19 +1013,7 @@ export function DesignSystemCreationFlow({
           </>
         ) : heroCollapsed ? null : (
           <aside className="ds-setup-hero-col">
-            <div className="ds-setup-hero-frame">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="ds-setup-hero-collapse"
-                aria-label="Collapse design system guide"
-                title="Collapse guide"
-                onClick={() => setHeroCollapsed(true)}
-              >
-                <Icon name="chevron-left" />
-              </Button>
-              <DesignSystemCreateHero stacked />
-            </div>
+            <DesignSystemCreateHero stacked />
           </aside>
         )}
 

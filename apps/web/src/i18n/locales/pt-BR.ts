@@ -3203,6 +3203,7 @@ export const ptBR: Dict = {
   'dsManager.editWithAgent': 'Edit with agent',
   'dsManager.downloadTitle': 'Download brand (.zip + SKILLS.md)',
   'dsManager.downloadAria': 'Download {title} as a .zip',
+  'dsManager.downloadFailed': 'Could not download the design system. Please try again.',
   'dsManager.makeDefault': 'Tornar padrão',
   'dsManager.statusPublished': 'Publicado',
   'dsManager.statusDraft': 'Rascunho',

@@ -29,12 +29,21 @@ import {
   createProjectFolder,
   deleteProjectFolder,
   renameProjectFile,
+  importLocalDesignSystem,
+  startDesignSystemTokenContractRebuildJob,
   updateDesignSystemDraft,
   type UploadProjectFilesResult,
   uploadProjectFiles,
   writeProjectTextFile,
 } from '../providers/registry';
+import { downloadDesignSystemArchive } from '../runtime/exports';
 import { deriveFileOps, type FileOpEntry } from '../runtime/file-ops';
+import {
+  deleteBrandImage,
+  deleteBrandLogo,
+  readDesignMd,
+  updateBrandColor,
+} from '../runtime/kit-edit';
 import { latestTodosFromEvents, type TodoItem } from '../runtime/todos';
 import { deliverableSlideNavForActiveFile, isSlideNavDeliverableNow } from '../runtime/slide-nav';
 import { buildSrcdoc } from '../runtime/srcdoc';
@@ -2442,16 +2451,24 @@ function DesignSystemProjectPanel({
     setReviewDecisions(next);
   }, [designSystemReview]);
 
-  // brand.html-style kit for this design system. brand.json drives the modules
-  // when the backing project carries one; otherwise the parsed DESIGN.md does.
-  // DESIGN.md is the one editable module (Visualize / Edit / Source).
-  const [editBody, setEditBody] = useState('');
-  const [savingBody, setSavingBody] = useState(false);
+  // brand.html-style kit for this design system. brand.json keeps rich assets,
+  // while DESIGN.md is the editable text/token contract rendered on top.
+  const [designMdBody, setDesignMdBody] = useState('');
+  const [savingDesignMd, setSavingDesignMd] = useState(false);
+  const [kitActionBusy, setKitActionBusy] = useState<string | null>(null);
   const [kitReloadKey, setKitReloadKey] = useState(0);
+  const initialDesignMdRef = useRef<string | null>(null);
+  const initialBrandJsonRef = useRef<string | null>(null);
   useEffect(() => {
     let cancelled = false;
-    void fetchProjectFileText(projectId, 'DESIGN.md', { cache: 'no-store' }).then((text) => {
-      if (!cancelled) setEditBody(text ?? '');
+    void Promise.all([
+      readDesignMd(projectId),
+      fetchProjectFileText(projectId, 'brand.json', { cache: 'no-store' }),
+    ]).then(([designMd, brandJson]) => {
+      if (cancelled) return;
+      setDesignMdBody(designMd);
+      if (initialDesignMdRef.current === null) initialDesignMdRef.current = designMd;
+      if (initialBrandJsonRef.current === null) initialBrandJsonRef.current = brandJson;
     });
     return () => {
       cancelled = true;
@@ -2472,20 +2489,101 @@ function DesignSystemProjectPanel({
     title: system.title,
     projectId,
     swatches: system.swatches,
+    body: designMdBody,
     editable: true,
     host: kitHost,
     reloadKey: kitReloadKey,
   });
-  async function saveDesignMd() {
-    setSavingBody(true);
+  async function saveDesignMd(nextBody: string) {
+    setSavingDesignMd(true);
     try {
-      await updateDesignSystemDraft(system.id, { body: editBody });
-      await writeProjectTextFile(projectId, 'DESIGN.md', editBody);
+      await updateDesignSystemDraft(system.id, { body: nextBody });
+      await writeProjectTextFile(projectId, 'DESIGN.md', nextBody);
+      setDesignMdBody(nextBody);
       setKitReloadKey((k) => k + 1);
       await onDesignSystemsRefresh?.();
     } finally {
-      setSavingBody(false);
+      setSavingDesignMd(false);
     }
+  }
+
+  async function refreshKit() {
+    if (kitActionBusy) return;
+    setKitActionBusy('refresh');
+    try {
+      await startDesignSystemTokenContractRebuildJob(system.id, { force: true });
+      setKitReloadKey((k) => k + 1);
+      await onDesignSystemsRefresh?.();
+    } finally {
+      setKitActionBusy(null);
+    }
+  }
+
+  async function downloadKit() {
+    if (kitActionBusy) return;
+    setKitActionBusy('download');
+    try {
+      await downloadDesignSystemArchive({ designSystemId: system.id, fallbackTitle: system.title });
+    } finally {
+      setKitActionBusy(null);
+    }
+  }
+
+  async function importDesignSystemFolder() {
+    if (kitActionBusy) return;
+    const baseDir = window.prompt('Paste an absolute local folder path for a design-system package.');
+    if (!baseDir?.trim()) return;
+    setKitActionBusy('import');
+    try {
+      const result = await importLocalDesignSystem({ baseDir: baseDir.trim(), importMode: 'hybrid' });
+      if ('error' in result) {
+        window.alert(result.error.message);
+        return;
+      }
+      await onDesignSystemsRefresh?.();
+    } finally {
+      setKitActionBusy(null);
+    }
+  }
+
+  async function resetKitEdits() {
+    if (kitActionBusy) return;
+    setKitActionBusy('reset');
+    try {
+      const originalMd = initialDesignMdRef.current ?? designMdBody;
+      const originalBrand = initialBrandJsonRef.current;
+      await updateDesignSystemDraft(system.id, { body: originalMd });
+      await writeProjectTextFile(projectId, 'DESIGN.md', originalMd);
+      if (originalBrand !== null) {
+        await writeProjectTextFile(projectId, 'brand.json', originalBrand);
+      }
+      setDesignMdBody(originalMd);
+      setKitReloadKey((k) => k + 1);
+      await onDesignSystemsRefresh?.();
+    } finally {
+      setKitActionBusy(null);
+    }
+  }
+
+  async function changeKitColor(index: number, hex: string) {
+    const ok = await updateBrandColor(projectId, index, hex);
+    if (!ok) return;
+    setKitReloadKey((k) => k + 1);
+    await onDesignSystemsRefresh?.();
+  }
+
+  async function removeKitLogo(index: number) {
+    const ok = await deleteBrandLogo(projectId, index);
+    if (!ok) return;
+    setKitReloadKey((k) => k + 1);
+    await onDesignSystemsRefresh?.();
+  }
+
+  async function removeKitImage(index: number) {
+    const ok = await deleteBrandImage(projectId, index);
+    if (!ok) return;
+    setKitReloadKey((k) => k + 1);
+    await onDesignSystemsRefresh?.();
   }
 
   const allFileNames = files.map((file) => file.name);
@@ -2873,6 +2971,46 @@ function DesignSystemProjectPanel({
   // here — the kit is the single, on-brand view of the system.
   const actionsSlot = (
     <>
+      <button
+        type="button"
+        className="ghost compact"
+        disabled={Boolean(kitActionBusy)}
+        onClick={() => void refreshKit()}
+        title="Refresh generated design-system assets"
+      >
+        <Icon name="refresh" size={13} />
+        Refresh
+      </button>
+      <button
+        type="button"
+        className="ghost compact"
+        disabled={Boolean(kitActionBusy)}
+        onClick={() => void downloadKit()}
+        title="Download design-system ZIP"
+      >
+        <Icon name="download" size={13} />
+        Download
+      </button>
+      <button
+        type="button"
+        className="ghost compact"
+        disabled={Boolean(kitActionBusy)}
+        onClick={() => void importDesignSystemFolder()}
+        title="Import a local design-system folder"
+      >
+        <Icon name="import" size={13} />
+        Import
+      </button>
+      <button
+        type="button"
+        className="ghost compact"
+        disabled={Boolean(kitActionBusy)}
+        onClick={() => void resetKitEdits()}
+        title="Reset this session's DESIGN.md and brand.json edits"
+      >
+        <Icon name="reload" size={13} />
+        Reset
+      </button>
       <span
         className="ds-project-publish-trigger"
         title={
@@ -2910,6 +3048,22 @@ function DesignSystemProjectPanel({
 
   const topSlot = (
     <>
+      <div
+        className={`ds-project-extraction-status ${streaming ? 'is-running' : 'is-complete'}`}
+        role="status"
+        data-testid="design-system-extraction-status"
+      >
+        <Icon name={streaming ? 'sparkles' : 'check'} size={15} />
+        <span>
+          <strong>{streaming ? 'Extracting design system' : 'Extraction complete'}</strong>
+          <small>
+            {streaming
+              ? 'Open Design is updating this system in place.'
+              : 'All extracted modules are shown below; empty sections are intentionally blank.'}
+          </small>
+        </span>
+      </div>
+
       <div className="ds-project-publish-card ds-project-publish-card--review">
         <p>
           {published
@@ -2991,14 +3145,21 @@ function DesignSystemProjectPanel({
           kit={kit}
           actionsSlot={actionsSlot}
           topSlot={topSlot}
-          editor={{
-            body: editBody,
-            onChange: setEditBody,
+          designMd={{
+            body: designMdBody,
             onSave: saveDesignMd,
-            saving: savingBody,
+            onOpenFile: () => onOpenFile('DESIGN.md'),
+            saving: savingDesignMd,
             canEdit: true,
           }}
           onUploadModule={kitUploadModule}
+          onColorChange={(index, hex) => void changeKitColor(index, hex)}
+          onDeleteLogo={(index) => void removeKitLogo(index)}
+          onDeleteImage={(index) => void removeKitImage(index)}
+          onRefresh={() => void refreshKit()}
+          onDownload={() => void downloadKit()}
+          onImport={() => void importDesignSystemFolder()}
+          onReset={() => void resetKitEdits()}
           uploading={kitUploading}
           dataTestId="design-system-project-kit"
         />
@@ -3975,7 +4136,7 @@ function DesignSystemInlinePreview({
         title={file.name}
         src={srcDocReady && srcDoc ? undefined : url}
         srcDoc={srcDoc ?? undefined}
-        sandbox="allow-scripts allow-downloads"
+        sandbox="allow-scripts allow-downloads allow-popups allow-popups-to-escape-sandbox"
       />
     );
   }

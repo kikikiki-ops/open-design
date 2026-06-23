@@ -3203,6 +3203,7 @@ export const pl: Dict = {
   'dsManager.editWithAgent': 'Edit with agent',
   'dsManager.downloadTitle': 'Download brand (.zip + SKILLS.md)',
   'dsManager.downloadAria': 'Download {title} as a .zip',
+  'dsManager.downloadFailed': 'Could not download the design system. Please try again.',
   'dsManager.makeDefault': 'Ustaw jako domyślny',
   'dsManager.statusPublished': 'Opublikowany',
   'dsManager.statusDraft': 'Wersja robocza',

@@ -1643,6 +1643,7 @@ export interface Dict {
   'dsManager.editWithAgent': string;
   'dsManager.downloadTitle': string;
   'dsManager.downloadAria': string;
+  'dsManager.downloadFailed': string;
   'dsManager.makeDefault': string;
   'dsManager.statusPublished': string;
   'dsManager.statusDraft': string;

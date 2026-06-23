@@ -172,6 +172,39 @@ function hasLayout(layout: KitLayout | undefined): boolean {
   );
 }
 
+function hasTypography(typography: DesignKit['typography']): boolean {
+  return Boolean(typography.display || typography.body || typography.mono);
+}
+
+function mergeBrandKitWithDesignMd(
+  kit: DesignKit,
+  designMd: string,
+  opts: ParsedKitOptions,
+): DesignKit {
+  if (!designMd.trim()) return kit;
+  const parsed = parseDesignMd(designMd);
+  const mdKit = parsedToKit(parsed, opts);
+  const typography = hasTypography(mdKit.typography) ? mdKit.typography : kit.typography;
+  const mdImagery = mdKit.imagery
+    ? {
+        ...mdKit.imagery,
+        samples: kit.imagery?.samples ?? [],
+      }
+    : undefined;
+  return {
+    ...kit,
+    name: parsed.name.trim() || kit.name,
+    tagline: parsed.tagline.trim() || kit.tagline,
+    description: parsed.description.trim() || kit.description,
+    colors: mdKit.colors.length > 0 ? mdKit.colors : kit.colors,
+    typography,
+    fonts: fontList(typography),
+    voice: mdKit.voice ?? kit.voice,
+    imagery: mdImagery && hasImagery(mdImagery) ? mdImagery : kit.imagery,
+    layout: mdKit.layout ?? kit.layout,
+  };
+}
+
 // ── adapters ───────────────────────────────────────────────────────────────
 
 interface BrandKitOptions {
@@ -471,7 +504,17 @@ export function useDesignKit(source: DesignKitSource): { kit: DesignKit | null; 
       if (cancelled) return;
       const brand = tryParseBrand(rawBrand);
       if (brand) {
-        setKit(brandToKit(brand, { designSystemId, projectId, editable, host, showcaseHtml }));
+        const brandKit = brandToKit(brand, { designSystemId, projectId, editable, host, showcaseHtml });
+        setKit(mergeBrandKitWithDesignMd(brandKit, rawDesignMd ?? '', {
+          designSystemId,
+          projectId,
+          editable,
+          title,
+          host,
+          swatches,
+          packageInfo,
+          showcaseHtml,
+        }));
       } else {
         setKit(fromDesignMd(rawDesignMd ?? ''));
       }

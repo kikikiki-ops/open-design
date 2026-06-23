@@ -8,11 +8,20 @@
 // identical regardless of whether the data came from brand.json or a parsed
 // DESIGN.md.
 //
-// DESIGN.md is the one editable module: pass an `editor` and the view exposes a
-// Visualize / Edit / Source toggle. Empty modules expose an upload affordance
-// when `kit.canUpload` and an `onUploadModule` handler are provided.
+// DESIGN.md stays the editable text contract, but this view exposes it through
+// direct module actions instead of a separate Visualize / Edit / Source block.
+// Empty modules expose upload affordances when the backing kit is writable.
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+  type MouseEvent,
+  type ReactNode,
+} from 'react';
 import { Button, Textarea } from '@open-design/components';
 import { useT } from '../i18n';
 import { openExternalUrl, projectRawUrl } from '../providers/registry';
@@ -24,7 +33,7 @@ import {
   type KitFont,
 } from '../runtime/design-kit';
 import type { KitUploadModule } from '../runtime/kit-upload';
-import { DesignSpecView } from './DesignSpecView';
+import { Icon, type IconName } from './Icon';
 import styles from './BrandPreviewCard.module.css';
 
 const IMAGE_CAP = 8;
@@ -182,12 +191,12 @@ interface BrandTokenSubset {
   borderRadius?: number;
 }
 
-export interface KitEditor {
+export interface KitDesignMdActions {
   body: string;
-  onChange: (value: string) => void;
-  onSave: () => void | Promise<void>;
-  saving: boolean;
-  canEdit: boolean;
+  onSave?: (value: string) => void | Promise<void>;
+  onOpenFile?: () => void;
+  saving?: boolean;
+  canEdit?: boolean;
 }
 
 export interface DesignKitViewProps {
@@ -208,14 +217,18 @@ export interface DesignKitViewProps {
    * route the hover button to its richer "Preview full system" modal.
    */
   onPreviewCover?: () => void;
-  /** When provided, exposes a Visualize / Edit / Source toggle for DESIGN.md. */
-  editor?: KitEditor;
+  designMd?: KitDesignMdActions;
   onUploadModule?: (module: KitUploadModule, file: File) => void;
+  onColorChange?: (index: number, hex: string) => void;
+  onDeleteLogo?: (index: number) => void;
+  onDeleteImage?: (index: number) => void;
+  onRefresh?: () => void;
+  onDownload?: () => void;
+  onImport?: () => void;
+  onReset?: () => void;
   uploading?: KitUploadModule | null;
   dataTestId?: string;
 }
-
-type KitMode = 'visualize' | 'edit' | 'source';
 
 export function DesignKitView({
   kit,
@@ -225,14 +238,20 @@ export function DesignKitView({
   noticeSlot,
   topSlot,
   onPreviewCover,
-  editor,
+  designMd,
   onUploadModule,
+  onColorChange,
+  onDeleteLogo,
+  onDeleteImage,
+  onRefresh,
+  onDownload,
+  onImport,
+  onReset,
   uploading,
   dataTestId = 'design-kit-view',
 }: DesignKitViewProps) {
   const t = useT();
   const compact = variant === 'compact';
-  const [mode, setMode] = useState<KitMode>('visualize');
   const [coverPreviewOpen, setCoverPreviewOpen] = useState(false);
   const [tokens, setTokens] = useState<BrandTokenSubset | null>(null);
   const [dsTheme, setDsTheme] = useState<'light' | 'dark'>('light');
@@ -240,8 +259,12 @@ export function DesignKitView({
   const [imagesExpanded, setImagesExpanded] = useState(false);
   const [lightbox, setLightbox] = useState<{ src: string; caption: string } | null>(null);
   const [assetPreview, setAssetPreview] = useState<{ url: string; label: string } | null>(null);
+  const [designMdOpen, setDesignMdOpen] = useState(false);
+  const [designMdDraft, setDesignMdDraft] = useState('');
   const logoInputRef = useRef<HTMLInputElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const fontInputRef = useRef<HTMLInputElement | null>(null);
+  const designMdInputRef = useRef<HTMLInputElement | null>(null);
 
   useBrandFonts(kit.projectId, kit.fonts);
 
@@ -260,17 +283,18 @@ export function DesignKitView({
   }, [kit.designSystemId, kit.brandId]);
 
   useEffect(() => {
-    if (!lightbox && !assetPreview && !coverPreviewOpen) return undefined;
+    if (!lightbox && !assetPreview && !coverPreviewOpen && !designMdOpen) return undefined;
     function onKeyDown(event: globalThis.KeyboardEvent) {
       if (event.key !== 'Escape') return;
       event.preventDefault();
       setLightbox(null);
       setAssetPreview(null);
       setCoverPreviewOpen(false);
+      setDesignMdOpen(false);
     }
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [assetPreview, coverPreviewOpen, lightbox]);
+  }, [assetPreview, coverPreviewOpen, designMdOpen, lightbox]);
 
   // Engine token chips, when the system dir exists.
   useEffect(() => {
@@ -318,16 +342,141 @@ export function DesignKitView({
   const samples = imagery?.samples ?? [];
   const dsKitUrl = dsTheme === 'dark' ? kit.system?.kitDarkUrl ?? kit.system?.kitUrl : kit.system?.kitUrl;
   const canUpload = Boolean(kit.canUpload && onUploadModule);
+  const canEditDesignMd = Boolean(designMd?.canEdit !== false && designMd?.onSave);
 
-  function handleFile(module: KitUploadModule, event: React.ChangeEvent<HTMLInputElement>) {
+  function handleFile(module: KitUploadModule, event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (file && onUploadModule) onUploadModule(module, file);
   }
 
-  function openInBrowser(event: React.MouseEvent<HTMLAnchorElement>, url: string) {
+  function openInBrowser(event: MouseEvent<HTMLAnchorElement>, url: string) {
     event.preventDefault();
     void openExternalUrl(url);
+  }
+
+  function handleModuleDragOver(event: DragEvent<HTMLElement>) {
+    if (!canUpload) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  }
+
+  function handleModuleDrop(module: KitUploadModule, event: DragEvent<HTMLElement>) {
+    if (!canUpload || !onUploadModule) return;
+    event.preventDefault();
+    const file = Array.from(event.dataTransfer.files).find((f) =>
+      module === 'font'
+        ? /\.(otf|ttf|woff2?)$/i.test(f.name)
+        : f.type.startsWith('image/') || /\.svg$/i.test(f.name),
+    );
+    if (file) onUploadModule(module, file);
+  }
+
+  async function pasteImage(module: Exclude<KitUploadModule, 'font'>) {
+    if (!canUpload || !onUploadModule || !navigator.clipboard?.read) return;
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const imageType = item.types.find((type) => type.startsWith('image/'));
+        if (!imageType) continue;
+        const blob = await item.getType(imageType);
+        const ext = imageType.split('/')[1]?.replace('jpeg', 'jpg') || 'png';
+        onUploadModule(module, new File([blob], `clipboard-${module}-${Date.now()}.${ext}`, { type: imageType }));
+        return;
+      }
+    } catch {
+      // Clipboard image reads are browser-permission dependent.
+    }
+  }
+
+  function openDesignMdEditor() {
+    if (!designMd) return;
+    setDesignMdDraft(designMd.body);
+    setDesignMdOpen(true);
+  }
+
+  async function copyDesignMd() {
+    if (!designMd?.body || !navigator.clipboard?.writeText) return;
+    try {
+      await navigator.clipboard.writeText(designMd.body);
+    } catch {
+      // Clipboard write failures are non-fatal.
+    }
+  }
+
+  async function saveDesignMdDraft() {
+    if (!designMd?.onSave) return;
+    await designMd.onSave(designMdDraft);
+    setDesignMdOpen(false);
+  }
+
+  async function handleDesignMdUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    const text = await file.text();
+    setDesignMdDraft(text);
+    setDesignMdOpen(true);
+  }
+
+  function moduleActions(actions: ReactNode) {
+    return actions ? <div className={styles.moduleActions}>{actions}</div> : null;
+  }
+
+  function moduleActionButton(
+    label: string,
+    icon: IconName,
+    onClick: () => void,
+    disabled = false,
+  ) {
+    return (
+      <button
+        type="button"
+        className={styles.moduleAction}
+        onClick={onClick}
+        disabled={disabled}
+        title={label}
+        aria-label={label}
+      >
+        <Icon name={icon} size={13} />
+        <span>{label}</span>
+      </button>
+    );
+  }
+
+  function designMdActionButtons() {
+    if (!designMd) return null;
+    return (
+      <>
+        {moduleActionButton('Copy DESIGN.md', 'copy', () => void copyDesignMd(), !designMd.body)}
+        {canEditDesignMd
+          ? moduleActionButton('Edit DESIGN.md', 'edit', openDesignMdEditor, Boolean(designMd.saving))
+          : designMd.onOpenFile
+            ? moduleActionButton('Open DESIGN.md', 'file-text', designMd.onOpenFile)
+            : null}
+        {canEditDesignMd
+          ? moduleActionButton('Upload MD', 'upload', () => designMdInputRef.current?.click(), Boolean(designMd.saving))
+          : null}
+      </>
+    );
+  }
+
+  function uploadAction(module: KitUploadModule) {
+    if (!canUpload) return null;
+    const label =
+      uploading === module
+        ? t('ds.uploading')
+        : module === 'logo'
+          ? t('ds.uploadLogo')
+          : module === 'font'
+            ? 'Upload font'
+            : t('ds.uploadImage');
+    return moduleActionButton(
+      label,
+      'upload',
+      () => (module === 'logo' ? logoInputRef : module === 'font' ? fontInputRef : imageInputRef).current?.click(),
+      Boolean(uploading),
+    );
   }
 
   function emptyModule(hint: string, module?: KitUploadModule) {
@@ -339,12 +488,14 @@ export function DesignKitView({
             type="button"
             className={styles.uploadBtn}
             disabled={uploading === module}
-            onClick={() => (module === 'logo' ? logoInputRef : imageInputRef).current?.click()}
+            onClick={() => (module === 'logo' ? logoInputRef : module === 'font' ? fontInputRef : imageInputRef).current?.click()}
           >
             {uploading === module
               ? t('ds.uploading')
               : module === 'logo'
                 ? t('ds.uploadLogo')
+                : module === 'font'
+                  ? 'Upload font'
                 : t('ds.uploadImage')}
           </button>
         ) : null}
@@ -372,6 +523,20 @@ export function DesignKitView({
         hidden
         onChange={(e) => handleFile('image', e)}
       />
+      <input
+        ref={fontInputRef}
+        type="file"
+        accept=".otf,.ttf,.woff,.woff2"
+        hidden
+        onChange={(e) => handleFile('font', e)}
+      />
+      <input
+        ref={designMdInputRef}
+        type="file"
+        accept=".md,.markdown,text/markdown,text/plain"
+        hidden
+        onChange={(e) => void handleDesignMdUpload(e)}
+      />
 
       <div className={styles.cover}>
         {kit.showcaseHtml ? (
@@ -380,7 +545,7 @@ export function DesignKitView({
               <iframe
                 className={styles.coverFrame}
                 title={`${kit.name} preview`}
-                sandbox="allow-scripts"
+                sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
                 srcDoc={buildSrcdoc(kit.showcaseHtml)}
                 tabIndex={-1}
               />
@@ -458,56 +623,36 @@ export function DesignKitView({
       {noticeSlot}
       {topSlot}
 
-      {editor && editor.canEdit ? (
-        <div className={styles.modeToggle} role="tablist" aria-label={t('ds.kitVisualize')}>
-          {(['visualize', 'edit', 'source'] as KitMode[]).map((m) => (
-            <button
-              key={m}
-              type="button"
-              role="tab"
-              aria-selected={mode === m}
-              className={`${styles.modeToggleBtn} ${mode === m ? styles.modeToggleBtnActive : ''}`}
-              onClick={() => setMode(m)}
-            >
-              {m === 'visualize' ? t('ds.kitVisualize') : m === 'edit' ? t('ds.kitEdit') : t('ds.kitSource')}
-            </button>
-          ))}
-        </div>
-      ) : null}
-
-      {editor && mode === 'edit' ? (
-        <div className={styles.editor}>
-          <Textarea
-            className={styles.editorTextarea}
-            value={editor.body}
-            onChange={(e) => editor.onChange(e.target.value)}
-            rows={20}
-            spellCheck={false}
-            aria-label="DESIGN.md"
-          />
-          <div className={styles.editorBar}>
-            <span className={styles.editorHint}>DESIGN.md</span>
-            <Button variant="primary" disabled={editor.saving} onClick={() => void editor.onSave()}>
-              {editor.saving ? t('ds.saving') : t('ds.saveDesignMd')}
-            </Button>
-          </div>
-        </div>
-      ) : editor && mode === 'source' ? (
-        <div className={styles.sourceWrap}>
-          <DesignSpecView source={editor.body} loading={false} loadingLabel="" />
-        </div>
-      ) : (
-        <>
+      <>
           {kit.description ? (
             <section className={styles.section} aria-label={t('brandDetail.identity')}>
-              <h3 className={styles.sectionTitle}>{t('brandDetail.identity')}</h3>
+              <div className={styles.dsHead}>
+                <h3 className={styles.sectionTitle}>{t('brandDetail.identity')}</h3>
+                {moduleActions(designMdActionButtons())}
+              </div>
               <p className={styles.description}>{kit.description}</p>
             </section>
           ) : null}
 
           {!compact ? (
-            <section className={styles.section} aria-label={t('brandDetail.logo')}>
-              <h3 className={styles.sectionTitle}>{t('brandDetail.logo')}</h3>
+            <section
+              className={styles.section}
+              aria-label={t('brandDetail.logo')}
+              onDragOver={handleModuleDragOver}
+              onDrop={(event) => handleModuleDrop('logo', event)}
+            >
+              <div className={styles.dsHead}>
+                <h3 className={styles.sectionTitle}>{t('brandDetail.logo')}</h3>
+                {moduleActions(
+                  <>
+                    {uploadAction('logo')}
+                    {canUpload ? moduleActionButton('Paste image', 'copy', () => void pasteImage('logo'), Boolean(uploading)) : null}
+                    {activeLogoSrc && onDeleteLogo
+                      ? moduleActionButton('Delete', 'trash', () => onDeleteLogo(activeLogo), Boolean(uploading))
+                      : null}
+                  </>,
+                )}
+              </div>
               {activeLogoSrc ? (
                 <>
                   <button
@@ -542,8 +687,21 @@ export function DesignKitView({
           ) : null}
 
           {fonts.length > 0 ? (
-            <section className={styles.section} aria-label={t('brandDetail.typography')}>
-              <h3 className={styles.sectionTitle}>{t('brandDetail.typography')}</h3>
+            <section
+              className={styles.section}
+              aria-label={t('brandDetail.typography')}
+              onDragOver={handleModuleDragOver}
+              onDrop={(event) => handleModuleDrop('font', event)}
+            >
+              <div className={styles.dsHead}>
+                <h3 className={styles.sectionTitle}>{t('brandDetail.typography')}</h3>
+                {moduleActions(
+                  <>
+                    {uploadAction('font')}
+                    {designMdActionButtons()}
+                  </>,
+                )}
+              </div>
               <div className={styles.fontTiles}>
                 {fonts.map(({ font, label }) => (
                   <div key={`tile-${label}-${font.family}`} className={styles.fontTile}>
@@ -578,15 +736,40 @@ export function DesignKitView({
                 </div>
               )}
             </section>
+          ) : !compact && canUpload ? (
+            <section
+              className={styles.section}
+              aria-label={t('brandDetail.typography')}
+              onDragOver={handleModuleDragOver}
+              onDrop={(event) => handleModuleDrop('font', event)}
+            >
+              <div className={styles.dsHead}>
+                <h3 className={styles.sectionTitle}>{t('brandDetail.typography')}</h3>
+                {moduleActions(uploadAction('font'))}
+              </div>
+              {emptyModule('No fonts captured.', 'font')}
+            </section>
           ) : null}
 
           {colors.length > 0 ? (
             <section className={styles.section} aria-label={t('brandDetail.palette')}>
-              <h3 className={styles.sectionTitle}>{t('brandDetail.palette')}</h3>
+              <div className={styles.dsHead}>
+                <h3 className={styles.sectionTitle}>{t('brandDetail.palette')}</h3>
+                {moduleActions(designMdActionButtons())}
+              </div>
               <div className={styles.paletteGrid}>
                 {colors.map((c, i) => (
                   <div key={`${c.role}-${c.hex}-${i}`} className={styles.swatch}>
                     <span className={styles.swatchChip} style={{ background: c.hex }}>
+                      {onColorChange ? (
+                        <input
+                          className={styles.swatchPicker}
+                          type="color"
+                          value={normalizeColorInput(c.hex)}
+                          aria-label={`Edit ${c.name || c.role || 'color'}`}
+                          onChange={(event) => onColorChange(i, event.target.value)}
+                        />
+                      ) : null}
                       <span
                         className={styles.swatchHex}
                         style={{ color: isLightHex(c.hex) ? 'rgba(0,0,0,.65)' : 'rgba(255,255,255,.9)' }}
@@ -607,7 +790,10 @@ export function DesignKitView({
 
           {!compact && voice ? (
             <section className={styles.section} aria-label={t('brandDetail.voiceTone')}>
-              <h3 className={styles.sectionTitle}>{t('brandDetail.voiceTone')}</h3>
+              <div className={styles.dsHead}>
+                <h3 className={styles.sectionTitle}>{t('brandDetail.voiceTone')}</h3>
+                {moduleActions(designMdActionButtons())}
+              </div>
               {voice.adjectives.length > 0 ? (
                 <div className={styles.pills}>
                   {voice.adjectives.map((adj, i) => (
@@ -646,7 +832,10 @@ export function DesignKitView({
 
           {!compact && (imagery || layout) ? (
             <section className={styles.section} aria-label={t('brandDetail.imageryLayout')}>
-              <h3 className={styles.sectionTitle}>{t('brandDetail.imageryLayout')}</h3>
+              <div className={styles.dsHead}>
+                <h3 className={styles.sectionTitle}>{t('brandDetail.imageryLayout')}</h3>
+                {moduleActions(designMdActionButtons())}
+              </div>
               {imagery?.style ? <p className={styles.description}>{imagery.style}</p> : null}
               {(imagery?.subjects.length ?? 0) > 0 ? (
                 <p className={styles.imageryLine}>
@@ -680,24 +869,36 @@ export function DesignKitView({
           ) : null}
 
           {!compact && (samples.length > 0 || canUpload) ? (
-            <section className={styles.section} aria-label={t('brandDetail.images')}>
+            <section
+              className={styles.section}
+              aria-label={t('brandDetail.images')}
+              onDragOver={handleModuleDragOver}
+              onDrop={(event) => handleModuleDrop('image', event)}
+            >
               <div className={styles.dsHead}>
                 <h3 className={styles.sectionTitle}>{t('brandDetail.images')}</h3>
-                {samples.length > IMAGE_CAP ? (
-                  <button
-                    type="button"
-                    className={styles.sectionAction}
-                    onClick={() => setImagesExpanded((v) => !v)}
-                  >
-                    {imagesExpanded
-                      ? t('brandDetail.viewLess')
-                      : t('brandDetail.viewMore').replace('{count}', String(samples.length))}
-                  </button>
-                ) : null}
+                {moduleActions(
+                  <>
+                    {uploadAction('image')}
+                    {canUpload ? moduleActionButton('Paste image', 'copy', () => void pasteImage('image'), Boolean(uploading)) : null}
+                    {samples.length > IMAGE_CAP ? (
+                      <button
+                        type="button"
+                        className={styles.sectionAction}
+                        onClick={() => setImagesExpanded((v) => !v)}
+                      >
+                        {imagesExpanded
+                          ? t('brandDetail.viewLess')
+                          : t('brandDetail.viewMore').replace('{count}', String(samples.length))}
+                      </button>
+                    ) : null}
+                  </>,
+                )}
               </div>
               {samples.length > 0 ? (
                 <div className={styles.gallery}>
                   {(imagesExpanded ? samples : samples.slice(0, IMAGE_CAP)).map((s, i) => {
+                    const sampleIndex = imagesExpanded ? i : i;
                     const cap = s.caption || s.kind || kit.name;
                     return (
                       <figure key={`${s.url}-${i}`} className={styles.shot}>
@@ -709,6 +910,17 @@ export function DesignKitView({
                         >
                           <img src={s.url} alt={cap} loading="lazy" />
                         </button>
+                        {onDeleteImage ? (
+                          <button
+                            type="button"
+                            className={styles.shotDelete}
+                            onClick={() => onDeleteImage(sampleIndex)}
+                            aria-label={`Delete ${cap}`}
+                            title="Delete"
+                          >
+                            <Icon name="trash" size={13} />
+                          </button>
+                        ) : null}
                         {s.caption || s.kind ? (
                           <figcaption className={styles.shotMeta}>
                             <span className={styles.shotCap}>{s.caption || s.kind}</span>
@@ -729,18 +941,27 @@ export function DesignKitView({
             <section className={styles.section} aria-label={t('brandDetail.designSystem')}>
               <div className={styles.dsHead}>
                 <h3 className={styles.sectionTitle}>{t('brandDetail.designSystem')}</h3>
-                {kit.system.indexUrl ? (
-                  <a
-                    className={styles.dsOpen}
-                    href={kit.system.indexUrl}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    onClick={(event) => openInBrowser(event, kit.system!.indexUrl!)}
-                  >
-                    {t('brandDetail.openFullSystem')}
-                    <ExternalGlyph />
-                  </a>
-                ) : null}
+                {moduleActions(
+                  <>
+                    {designMdActionButtons()}
+                    {onRefresh ? moduleActionButton('Refresh', 'refresh', onRefresh) : null}
+                    {onDownload ? moduleActionButton('Download', 'download', onDownload) : null}
+                    {onImport ? moduleActionButton('Import folder', 'import', onImport) : null}
+                    {onReset ? moduleActionButton('Reset', 'reload', onReset) : null}
+                    {kit.system.indexUrl ? (
+                      <a
+                        className={styles.dsOpen}
+                        href={kit.system.indexUrl}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        onClick={(event) => openInBrowser(event, kit.system!.indexUrl!)}
+                      >
+                        {t('brandDetail.openFullSystem')}
+                        <ExternalGlyph />
+                      </a>
+                    ) : null}
+                  </>,
+                )}
               </div>
               <div className={styles.dsFrameWrap}>
                 <div className={styles.dsBar}>
@@ -771,7 +992,7 @@ export function DesignKitView({
                   className={styles.dsFrame}
                   src={dsKitUrl}
                   loading="lazy"
-                  sandbox=""
+                  sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
                   title={t('brandDetail.designSystem')}
                 />
               </div>
@@ -818,7 +1039,7 @@ export function DesignKitView({
                         loading="lazy"
                         tabIndex={-1}
                         aria-hidden="true"
-                        sandbox=""
+                        sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
                         title={a.label}
                       />
                     </div>
@@ -831,7 +1052,6 @@ export function DesignKitView({
             </section>
           ) : null}
         </>
-      )}
 
       {lightbox ? (
         <div
@@ -882,7 +1102,7 @@ export function DesignKitView({
               className={styles.assetModalFrame}
               src={assetPreview.url}
               title={assetPreview.label}
-              sandbox=""
+              sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
             />
           </div>
         </div>
@@ -917,8 +1137,54 @@ export function DesignKitView({
           </div>
         </div>
       ) : null}
+
+      {designMdOpen && designMd ? (
+        <div
+          className={styles.assetModal}
+          role="dialog"
+          aria-modal="true"
+          aria-label="DESIGN.md"
+          onClick={() => setDesignMdOpen(false)}
+        >
+          <div className={`${styles.assetModalPanel} ${styles.designMdModalPanel}`} onClick={(event) => event.stopPropagation()}>
+            <div className={styles.assetModalHeader}>
+              <h3>DESIGN.md</h3>
+              <button
+                type="button"
+                className={styles.assetModalClose}
+                onClick={() => setDesignMdOpen(false)}
+                aria-label={t('newBrand.close')}
+              >
+                <CloseGlyph />
+              </button>
+            </div>
+            <Textarea
+              className={styles.designMdTextarea}
+              value={designMdDraft}
+              onChange={(event) => setDesignMdDraft(event.target.value)}
+              rows={20}
+              spellCheck={false}
+              aria-label="DESIGN.md"
+            />
+            <div className={styles.designMdModalBar}>
+              <span>Editing this Markdown updates the rendered kit modules.</span>
+              <Button variant="primary" disabled={Boolean(designMd.saving)} onClick={() => void saveDesignMdDraft()}>
+                {designMd.saving ? t('ds.saving') : t('ds.saveDesignMd')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
+}
+
+function normalizeColorInput(hex: string): string {
+  if (/^#[0-9a-fA-F]{6}$/.test(hex)) return hex;
+  if (/^#[0-9a-fA-F]{3}$/.test(hex)) {
+    return `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`;
+  }
+  return '#000000';
 }
 
 function TokenChip({ label, hex }: { label: string; hex: string }) {

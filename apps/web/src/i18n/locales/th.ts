@@ -3203,6 +3203,7 @@ export const th: Dict = {
   'dsManager.editWithAgent': 'Edit with agent',
   'dsManager.downloadTitle': 'Download brand (.zip + SKILLS.md)',
   'dsManager.downloadAria': 'Download {title} as a .zip',
+  'dsManager.downloadFailed': 'Could not download the design system. Please try again.',
   'dsManager.makeDefault': 'ตั้งเป็นค่าเริ่มต้น',
   'dsManager.statusPublished': 'เผยแพร่แล้ว',
   'dsManager.statusDraft': 'ฉบับร่าง',

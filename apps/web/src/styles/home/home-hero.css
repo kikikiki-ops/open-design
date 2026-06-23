@@ -2738,7 +2738,17 @@
 .home-hero__footer-option--select[data-field-name='template'] {
   max-width: 220px;
 }
+.home-hero__footer-option--select[data-field-name='template'].has-selection {
+  max-width: 250px;
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+  background: color-mix(in srgb, var(--accent-tint) 58%, var(--bg-panel));
+  color: var(--accent);
+  box-shadow:
+    var(--shadow-xs),
+    0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent);
+}
 .home-hero__template-trigger {
+  flex: 1 1 auto;
   max-width: 188px;
 }
 /* Small "Template" caption inside the trigger so the field is self-labeling
@@ -2766,6 +2776,37 @@
 .home-hero__template-trigger-thumb .home-hero__scenario-art-svg {
   width: 24px;
   height: auto;
+}
+.home-hero__template-option.has-selection .home-hero__template-kicker {
+  color: color-mix(in srgb, var(--accent) 52%, var(--text-faint));
+}
+.home-hero__template-option.has-selection .home-hero__footer-select-label {
+  color: var(--text-strong);
+  font-weight: 650;
+}
+.home-hero__template-reset {
+  appearance: none;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: -2px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: color-mix(in srgb, var(--accent) 72%, var(--text-muted));
+  cursor: pointer;
+  transition:
+    background-color 120ms var(--ease-out),
+    color 120ms var(--ease-out);
+}
+.home-hero__template-reset:hover,
+.home-hero__template-reset:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
 }
 .home-hero__template-menu {
   position: absolute;

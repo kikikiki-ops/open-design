@@ -3203,6 +3203,7 @@ export const ja: Dict = {
   'dsManager.editWithAgent': 'Edit with agent',
   'dsManager.downloadTitle': 'Download brand (.zip + SKILLS.md)',
   'dsManager.downloadAria': 'Download {title} as a .zip',
+  'dsManager.downloadFailed': 'Could not download the design system. Please try again.',
   'dsManager.makeDefault': 'デフォルトに設定',
   'dsManager.statusPublished': '公開済み',
   'dsManager.statusDraft': '下書き',

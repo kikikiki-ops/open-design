@@ -14,7 +14,7 @@ import {
   writeProjectTextFile,
 } from '../providers/registry';
 
-export type KitUploadModule = 'logo' | 'image';
+export type KitUploadModule = 'logo' | 'image' | 'font';
 
 export interface KitModuleUpload {
   uploading: KitUploadModule | null;
@@ -33,7 +33,7 @@ export function useKitModuleUpload(opts: {
       if (!projectId || uploading) return;
       setUploading(module);
       try {
-        const dir = module === 'logo' ? 'logos' : 'imagery';
+        const dir = module === 'logo' ? 'logos' : module === 'font' ? 'fonts' : 'imagery';
         const safe =
           file.name.replace(/[^\w.\-]+/g, '-').replace(/^-+|-+$/g, '') || `${module}-asset`;
         const path = `${dir}/${safe}`;
@@ -54,7 +54,7 @@ export function useKitModuleUpload(opts: {
                 brand.logo.alternates = [prev, ...brand.logo.alternates];
               }
               brand.logo.primary = path;
-            } else {
+            } else if (module === 'image') {
               brand.imagery = brand.imagery ?? {
                 style: '',
                 subjects: [],
@@ -64,11 +64,37 @@ export function useKitModuleUpload(opts: {
               };
               brand.imagery.samples = brand.imagery.samples ?? [];
               brand.imagery.samples.push({ file: path, kind: 'upload' });
+            } else {
+              const family = safe
+                .replace(/\.(otf|ttf|woff2?)$/i, '')
+                .replace(/[-_]+/g, ' ')
+                .trim() || 'Uploaded font';
+              const spec = { family, fallbacks: ['system-ui', 'sans-serif'], weights: [400] };
+              brand.typography = brand.typography ?? {};
+              if (!brand.typography.display) brand.typography.display = spec;
+              if (!brand.typography.body) brand.typography.body = spec;
             }
             await writeProjectTextFile(projectId, 'brand.json', JSON.stringify(brand, null, 2));
           } catch {
             // Malformed brand.json — leave the uploaded file in place.
           }
+        }
+        if (module === 'font') {
+          const manifestRaw = await fetchProjectFileText(projectId, 'fonts/manifest.json', { cache: 'no-store' });
+          const manifest = parseFontManifest(manifestRaw);
+          const family = safe
+            .replace(/\.(otf|ttf|woff2?)$/i, '')
+            .replace(/[-_]+/g, ' ')
+            .trim() || 'Uploaded font';
+          manifest.files = manifest.files.filter((entry) => entry.file !== safe);
+          manifest.files.push({
+            family,
+            weight: '400',
+            style: 'normal',
+            file: safe,
+            format: fontFormat(safe),
+          });
+          await writeProjectTextFile(projectId, 'fonts/manifest.json', JSON.stringify(manifest, null, 2));
         }
         onUploaded?.();
       } finally {
@@ -79,4 +105,32 @@ export function useKitModuleUpload(opts: {
   );
 
   return { uploading, uploadModule };
+}
+
+interface FontManifest {
+  files: {
+    family: string;
+    weight: string;
+    style: string;
+    file: string;
+    format: string;
+  }[];
+}
+
+function parseFontManifest(raw: string | null): FontManifest {
+  if (!raw) return { files: [] };
+  try {
+    const parsed = JSON.parse(raw) as Partial<FontManifest>;
+    return { files: Array.isArray(parsed.files) ? parsed.files : [] };
+  } catch {
+    return { files: [] };
+  }
+}
+
+function fontFormat(fileName: string): string {
+  const lower = fileName.toLowerCase();
+  if (lower.endsWith('.woff2')) return 'woff2';
+  if (lower.endsWith('.woff')) return 'woff';
+  if (lower.endsWith('.otf')) return 'opentype';
+  return 'truetype';
 }

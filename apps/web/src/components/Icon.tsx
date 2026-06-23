@@ -488,10 +488,10 @@ export function Icon({ name, size = 14, strokeWidth = 1.6, ...rest }: Props) {
       );
     case 'more-horizontal':
       return (
-        <svg {...common}>
-          <circle cx="5" cy="12" r="1.4" />
-          <circle cx="12" cy="12" r="1.4" />
-          <circle cx="19" cy="12" r="1.4" />
+        <svg {...common} fill="currentColor" stroke="none">
+          <circle cx="5.5" cy="12" r="1.75" />
+          <circle cx="12" cy="12" r="1.75" />
+          <circle cx="18.5" cy="12" r="1.75" />
         </svg>
       );
     case 'orbit':

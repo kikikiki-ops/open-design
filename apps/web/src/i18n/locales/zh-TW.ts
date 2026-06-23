@@ -3204,6 +3204,7 @@ export const zhTW: Dict = {
   'dsManager.editWithAgent': '用 Agent 編輯',
   'dsManager.downloadTitle': '下載品牌(.zip + SKILLS.md)',
   'dsManager.downloadAria': '下載 {title} 為 .zip',
+  'dsManager.downloadFailed': '無法下載該設計系統,請重試。',
   'dsManager.makeDefault': '設為新對話預設',
   'dsManager.statusPublished': '已發佈',
   'dsManager.statusDraft': '草稿',

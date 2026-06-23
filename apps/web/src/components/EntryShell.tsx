@@ -859,6 +859,8 @@ export function EntryShell({
                 onSubmit={handlePluginLoopSubmit}
                 onOpenProject={onOpenProject}
                 onViewAllProjects={() => changeView('projects')}
+                onDeleteProject={onDeleteProject}
+                onRenameProject={onRenameProject}
                 onBrowseRegistry={() => changeView('plugins')}
                 onOpenIntegrations={() => openIntegrationTab('connectors')}
                 onOpenMcp={() => openIntegrationTab('mcp')}

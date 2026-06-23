@@ -95,12 +95,13 @@ export function TemplatePicker({
     : null;
   const shown = previewChip ?? active;
   const isPreviewing = Boolean(previewChip) && previewChip !== active;
+  const hasSelection = Boolean(active);
   const valueLabel = shown ? labelFor(shown.id) : t('common.none');
 
   return (
     <div
       ref={wrapRef}
-      className={`home-hero__footer-option home-hero__footer-option--select home-hero__template-option${open ? ' is-open' : ''}`}
+      className={`home-hero__footer-option home-hero__footer-option--select home-hero__template-option${open ? ' is-open' : ''}${hasSelection ? ' has-selection' : ''}`}
       data-field-name="template"
       data-testid="home-hero-template-picker"
     >
@@ -134,6 +135,24 @@ export function TemplatePicker({
         </span>
         <Icon name="chevron-down" size={12} aria-hidden />
       </button>
+      {hasSelection ? (
+        <button
+          type="button"
+          className="home-hero__template-reset od-tooltip"
+          data-testid="home-hero-template-reset"
+          aria-label={t('common.clear')}
+          title={t('common.clear')}
+          data-tooltip={t('common.clear')}
+          onClick={(event) => {
+            event.stopPropagation();
+            setOpen(false);
+            setQuery('');
+            onClear();
+          }}
+        >
+          <Icon name="close" size={9} />
+        </button>
+      ) : null}
       {open ? (
         <div
           className="home-hero__template-menu"
