@@ -12,6 +12,18 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Detect persistent Playwright cache
+      id: persistent-playwright-cache
+      shell: bash
+      run: |
+        if [ -n "${PLAYWRIGHT_BROWSERS_PATH:-}" ]; then
+          mkdir -p "$PLAYWRIGHT_BROWSERS_PATH"
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+          echo "path=$PLAYWRIGHT_BROWSERS_PATH" >> "$GITHUB_OUTPUT"
+        else
+          echo "enabled=false" >> "$GITHUB_OUTPUT"
+        fi
+
     - name: Resolve Playwright version
       id: playwright-version
       shell: bash
@@ -24,6 +36,7 @@ runs:
         echo "version=$version" >> "$GITHUB_OUTPUT"
 
     - name: Cache Playwright browser binaries
+      if: ${{ steps.persistent-playwright-cache.outputs.enabled != 'true' }}
       uses: actions/cache@v5.0.5
       with:
         path: ~/.cache/ms-playwright

@@ -14,6 +14,23 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Detect persistent pnpm store
+      id: persistent-pnpm-store
+      shell: bash
+      run: |
+        if [ -n "${OPEN_DESIGN_CI_CACHE:-}" ]; then
+          store_dir="$OPEN_DESIGN_CI_CACHE/pnpm-store"
+          mkdir -p "$store_dir"
+          {
+            echo "NPM_CONFIG_STORE_DIR=$store_dir"
+            echo "npm_config_store_dir=$store_dir"
+          } >> "$GITHUB_ENV"
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+          echo "path=$store_dir" >> "$GITHUB_OUTPUT"
+        else
+          echo "enabled=false" >> "$GITHUB_OUTPUT"
+        fi
+
     - name: Setup pnpm
       uses: pnpm/action-setup@v6.0.8
       with:
@@ -31,6 +48,7 @@ runs:
       run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
 
     - name: Cache pnpm store
+      if: ${{ steps.persistent-pnpm-store.outputs.enabled != 'true' }}
       uses: actions/cache@v5.0.5
       with:
         path: ${{ steps.pnpm-store.outputs.path }}

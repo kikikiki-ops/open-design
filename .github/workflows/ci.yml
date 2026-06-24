@@ -224,6 +224,26 @@ jobs:
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
 
+      - name: Setup Playwright
+        uses: ./.github/actions/setup-playwright
+        with:
+          package-json-path: e2e/package.json
+          install-command: pnpm -C e2e exec playwright install --with-deps chromium
+
+      - name: Show persistent cache paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "pnpm_store=$(pnpm store path --silent)"
+          echo "OPEN_DESIGN_CI_CACHE=${OPEN_DESIGN_CI_CACHE:-}"
+          echo "PLAYWRIGHT_BROWSERS_PATH=${PLAYWRIGHT_BROWSERS_PATH:-}"
+          if [ -n "${OPEN_DESIGN_CI_CACHE:-}" ]; then
+            du -sh "$OPEN_DESIGN_CI_CACHE/pnpm-store" || true
+          fi
+          if [ -n "${PLAYWRIGHT_BROWSERS_PATH:-}" ]; then
+            du -sh "$PLAYWRIGHT_BROWSERS_PATH" || true
+          fi
+
       - name: Prebuild web sidecar declarations
         run: pnpm --filter @open-design/web build:sidecar
 
