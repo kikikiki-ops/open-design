@@ -895,6 +895,32 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
           reqBody.model,
           userQueryTokens,
         );
+        // Whether this run is a non-first turn in its conversation — i.e. a
+        // prior completed assistant turn exists (excluding this run's own
+        // placeholder). The session-reuse cache win only applies to follow-up
+        // turns, so slicing `first_call_cache_hit_ratio` by this flag is the
+        // baseline-vs-optimized comparison. Mirrors server.ts hasPriorAssistantTurn.
+        const isFollowupTurn = run.conversationId
+          ? Boolean(
+              db
+                .prepare(
+                  `SELECT 1 FROM messages
+                     WHERE conversation_id = ?
+                       AND role = 'assistant'
+                       AND COALESCE(content, '') <> ''
+                       AND id <> COALESCE(?, '')
+                     LIMIT 1`,
+                )
+                .get(run.conversationId, run.assistantMessageId ?? ''),
+            )
+          : false;
+        // codex reports a single cumulative `turn.completed` usage, so the
+        // first stream usage event is the whole-session aggregate, not the
+        // turn's opening call — its per-call first-call number must come from
+        // the rollout `last_token_usage` (follow-up). Every other coding agent
+        // (claude / opencode / codebuddy / pi) reports per-call usage, so the
+        // first stream usage event IS the opening call.
+        const firstCallUsageReliable = run.agentId !== 'codex';
         const analyticsCapturedAt = Date.now();
         const timingAnalytics = summarizeRunTimingAnalytics({
           runCreatedAt: run.createdAt,
@@ -1036,6 +1062,28 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
             ...(usageAnalytics.cache_hit_ratio !== undefined
               ? { cache_hit_ratio: usageAnalytics.cache_hit_ratio }
               : {}),
+            // The first-call fields come from the FIRST stream usage event,
+            // which is the turn's opening model call ONLY for agents that report
+            // per-call usage (claude / opencode / codebuddy / pi). codex reports
+            // a single cumulative `turn.completed` usage, so its first stream
+            // event is NOT the first call — gate it out here; codex's per-call
+            // first-call number must come from the rollout `last_token_usage`
+            // (tracked as a follow-up), not these stream fields.
+            ...(firstCallUsageReliable && usageAnalytics.first_call_input_tokens !== undefined
+              ? { first_call_input_tokens: usageAnalytics.first_call_input_tokens }
+              : {}),
+            ...(firstCallUsageReliable &&
+            usageAnalytics.first_call_cache_read_input_tokens !== undefined
+              ? {
+                  first_call_cache_read_input_tokens:
+                    usageAnalytics.first_call_cache_read_input_tokens,
+                }
+              : {}),
+            ...(firstCallUsageReliable &&
+            usageAnalytics.first_call_cache_hit_ratio !== undefined
+              ? { first_call_cache_hit_ratio: usageAnalytics.first_call_cache_hit_ratio }
+              : {}),
+            is_followup_turn: isFollowupTurn,
             cache_token_source: usageAnalytics.cache_token_source,
             token_count_source: usageAnalytics.token_count_source,
           },

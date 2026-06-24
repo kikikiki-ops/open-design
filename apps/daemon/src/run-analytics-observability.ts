@@ -84,6 +84,17 @@ export interface RunUsageAnalytics {
   uncached_input_tokens?: number;
   estimated_context_tokens?: number;
   cache_hit_ratio?: number;
+  // The turn's FIRST model call (forward scan), as opposed to the fields above
+  // which reflect the LAST usage event (reverse scan). The first call is the
+  // session-reuse signal: for per-call-usage agents (claude / opencode /
+  // codebuddy / pi) it is the turn's opening request, whose cached input shows
+  // whether the resumed session's prior context was reused. The last/aggregate
+  // call is saturated by within-turn prefix caching and masks the resume win.
+  // (codex emits only a cumulative `turn.completed` usage, so its first-call
+  // number is sourced from the rollout separately, not from these stream fields.)
+  first_call_input_tokens?: number;
+  first_call_cache_read_input_tokens?: number;
+  first_call_cache_hit_ratio?: number;
   cache_token_source: 'anthropic' | 'openai' | 'unavailable';
   token_count_source: 'provider_usage' | 'estimated' | 'unknown';
   agent_reported_model: string | null;
@@ -265,6 +276,53 @@ export function scanRunEventsForUsageAnalytics(
     if (haveUsageTokens && (!needAgentModel || agentReportedModel)) break;
   }
 
+  // Forward scan for the turn's FIRST model-call usage (the reverse loop above
+  // captured the LAST). For per-call-usage agents this isolates the resume
+  // signal from within-turn prefix caching; see the type docs.
+  let firstCallInputTokens: number | undefined;
+  let firstCallCacheReadInputTokens: number | undefined;
+  let firstCallCacheTokenSource: 'anthropic' | 'openai' | undefined;
+  for (let i = 0; i < events.length; i += 1) {
+    const ev = events[i];
+    const data = ev?.data as
+      | { type?: string; usage?: Record<string, unknown> | null; modelUsage?: Record<string, unknown> | null }
+      | null
+      | undefined;
+    if (ev?.event !== 'agent' || data?.type !== 'usage') continue;
+    const usage = data.usage && typeof data.usage === 'object'
+      ? data.usage
+      : data.modelUsage && typeof data.modelUsage === 'object'
+        ? data.modelUsage
+        : null;
+    if (!usage) continue;
+    firstCallInputTokens = firstNumber(usage, ['input_tokens', 'prompt_tokens']);
+    const anthRead = firstNumber(usage, ['cache_read_input_tokens']);
+    const normRead = firstNumber(usage, ['cached_input_tokens', 'cache_read_tokens', 'cached_read_tokens']);
+    const oaiRead = readNestedNumber(usage, ['prompt_tokens_details', 'cached_tokens']);
+    firstCallCacheReadInputTokens = anthRead ?? normRead ?? oaiRead;
+    firstCallCacheTokenSource = anthRead !== undefined
+      ? 'anthropic'
+      : (normRead ?? oaiRead) !== undefined
+        ? 'openai'
+        : undefined;
+    break;
+  }
+  // Anthropic reports input_tokens as the UNCACHED portion (cache_read is
+  // separate), so the effective input is their sum; OpenAI folds cached into
+  // input_tokens. Mirrors the last-call effective computation below.
+  const firstCallInputEffective =
+    firstCallInputTokens !== undefined
+      ? firstCallCacheTokenSource === 'anthropic'
+        ? firstCallInputTokens + (firstCallCacheReadInputTokens ?? 0)
+        : firstCallInputTokens
+      : undefined;
+  const firstCallCacheHitRatio =
+    firstCallInputEffective !== undefined &&
+    firstCallInputEffective > 0 &&
+    firstCallCacheReadInputTokens !== undefined
+      ? firstCallCacheReadInputTokens / firstCallInputEffective
+      : undefined;
+
   const inputTokensEffective =
     inputTokens !== undefined
       ? cacheTokenSource === 'anthropic'
@@ -316,6 +374,18 @@ export function scanRunEventsForUsageAnalytics(
       ? { estimated_context_tokens: estimatedContextTokens }
       : {}),
     ...(cacheHitRatio !== undefined ? { cache_hit_ratio: cacheHitRatio } : {}),
+    // The first-call group is only meaningful when we have a real opening-call
+    // input total; gate cache_read on that so cache-only alias payloads don't
+    // emit a dangling first_call_cache_read with no input to ratio against.
+    ...(firstCallInputTokens !== undefined
+      ? { first_call_input_tokens: firstCallInputTokens }
+      : {}),
+    ...(firstCallInputTokens !== undefined && firstCallCacheReadInputTokens !== undefined
+      ? { first_call_cache_read_input_tokens: firstCallCacheReadInputTokens }
+      : {}),
+    ...(firstCallCacheHitRatio !== undefined
+      ? { first_call_cache_hit_ratio: firstCallCacheHitRatio }
+      : {}),
     cache_token_source: cacheTokenSource,
     token_count_source: haveUsageTokens ? 'provider_usage' : 'unknown',
     agent_reported_model: agentReportedModel,
