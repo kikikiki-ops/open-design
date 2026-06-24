@@ -1119,6 +1119,7 @@ export interface SettingsPopoverClickProps {
     | 'language_select'
     | 'appearance'
     | 'share_channel'
+    | 'workspace_teams'
     | 'join_discord'
     | 'follow_x'
     | 'open_settings';
