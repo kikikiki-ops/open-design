@@ -20,6 +20,12 @@ const autofixWorkflowPath = join(workspaceRoot, ".github", "workflows", "autofix
 const reportWorkflowPath = join(workspaceRoot, ".github", "workflows", "report.atom.yml");
 const dockerImageWorkflowPath = join(workspaceRoot, ".github", "workflows", "docker-image.yml");
 const backportAutomergeWorkflowPath = join(workspaceRoot, ".github", "workflows", "backport-automerge.yml");
+const bakePreviewsAutomergeWorkflowPath = join(
+  workspaceRoot,
+  ".github",
+  "workflows",
+  "bake-plugin-previews-automerge.yml",
+);
 const handoffScriptPath = join(workspaceRoot, ".github", "scripts", "handoff.py");
 const releaseBetaWorkflowPath = join(workspaceRoot, ".github", "workflows", "release-beta.yml");
 const releaseBetaSelfHostedWorkflowPath = join(workspaceRoot, ".github", "workflows", "release-beta-s.yml");
@@ -258,6 +264,63 @@ describe("packaged smoke workflow", () => {
     // The Feishu failure path carries the same identity gates, so a fork / non-bot backport-*
     // PR can't spam the release group.
     const feishuStep = sectionBetween(workflow, "Notify Feishu on failed backport CI", "FEISHU_WEBHOOK");
+    expect(feishuStep).toContain("steps.pr.outputs.author == 'app/open-design-release-bot'");
+    expect(feishuStep).toContain("steps.pr.outputs.cross == 'false'");
+  });
+
+  it("[P2] gates the plugin-preview manifest auto-merge as a trusted workflow_run consumer", async () => {
+    const workflow = await readFile(bakePreviewsAutomergeWorkflowPath, "utf8");
+
+    // Triggered only by ci completing, and only for a pull_request run on the rolling
+    // chore/plugin-previews branch — never a push / manual dispatch, so a non-PR run can't reach
+    // the App-token or merge steps.
+    expect(workflow).toContain("workflows: [ci]");
+    expect(workflow).toContain("github.event.workflow_run.event == 'pull_request'");
+    expect(workflow).toContain("github.event.workflow_run.head_branch == 'chore/plugin-previews'");
+
+    // It mints the privileged release App token, hence the identity + SHA gates below.
+    expect(workflow).toContain("actions/create-github-app-token");
+    expect(workflow).toContain("secrets.RELEASE_BOT_APP_ID");
+
+    // Only a non-draft, same-repo PR authored by the release bot, targeting main, is merged.
+    expect(workflow).toContain("steps.pr.outputs.author == 'app/open-design-release-bot'");
+    expect(workflow).toContain("steps.pr.outputs.cross == 'false'");
+    expect(workflow).toContain("steps.pr.outputs.draft == 'false'");
+    expect(workflow).toContain('select(.base.ref == "main")');
+
+    // A human commit pushed onto the rolling branch is unreviewed, so auto-approve/merge require
+    // pristine == 'true': every commit's git committer email is the bake bot's (the bot email maps
+    // to no GitHub user, so .committer.login is null — check the raw email instead). Paginated
+    // across all commits; any non-bot one fails the count.
+    expect(workflow).toContain("steps.pr.outputs.pristine == 'true'");
+    expect(workflow).toContain('.[].commit.committer.email // "none"');
+    expect(workflow).toContain("--paginate");
+    expect(workflow).toContain("grep -Fvxc 'bot@open-design.ai'");
+
+    // The PR is resolved from the run's authoritative workflow_run.pull_requests association
+    // (filtered to the main base at exactly the run's SHA), not a branch-name guess, and the merge
+    // is bound to that same SHA (no post-green commit merged untested). main has a merge queue, so
+    // the merge is GitHub-native --auto (enqueue), not a direct squash.
+    expect(workflow).toContain("github.event.workflow_run.pull_requests");
+    expect(workflow).toContain("select(.head.sha == $sha)");
+    expect(workflow).toContain("steps.pr.outputs.head_oid == github.event.workflow_run.head_sha");
+    expect(workflow).toContain("--match-head-commit");
+    expect(workflow).toContain("--squash");
+    expect(workflow).toContain("--auto");
+
+    // To satisfy main's one-approval rule, the bot's own clean manifest PR is auto-approved by
+    // github-actions[bot] (pull-requests: write) — a different identity than the App author.
+    expect(workflow).toContain("pull-requests: write");
+    expect(workflow).toContain("gh pr review");
+    expect(workflow).toContain("--approve");
+    const approveStep = sectionBetween(workflow, "Approve the clean manifest PR", "gh pr review");
+    expect(approveStep).toContain("steps.pr.outputs.author == 'app/open-design-release-bot'");
+    expect(approveStep).toContain("steps.pr.outputs.pristine == 'true'");
+    expect(approveStep).toContain("github.token");
+
+    // The Feishu failure path carries the same identity gates, so a fork / non-bot PR can't spam
+    // the release group.
+    const feishuStep = sectionBetween(workflow, "Notify Feishu on failed manifest CI", "FEISHU_WEBHOOK");
     expect(feishuStep).toContain("steps.pr.outputs.author == 'app/open-design-release-bot'");
     expect(feishuStep).toContain("steps.pr.outputs.cross == 'false'");
   });
