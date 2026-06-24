@@ -18,6 +18,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   assertValidRuntimeDefInactivityTimeoutMs,
+  resolveAcpStageTimeoutMs,
   resolveChatRunInactivityTimeoutMs,
 } from '../../src/server.js';
 import { amrAgentDef } from '../../src/runtimes/defs/amr.js';
@@ -136,6 +137,40 @@ describe('resolveChatRunInactivityTimeoutMs', () => {
     // wins when both are valid.
     process.env[ENV_KEY] = '15000';
     expect(resolveChatRunInactivityTimeoutMs(THIRTY_MINUTES_MS)).toBe(15_000);
+  });
+});
+
+describe('resolveAcpStageTimeoutMs', () => {
+  const originalEnv = process.env.OD_ACP_STAGE_TIMEOUT_MS;
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env.OD_ACP_STAGE_TIMEOUT_MS;
+    } else {
+      process.env.OD_ACP_STAGE_TIMEOUT_MS = originalEnv;
+    }
+  });
+
+  it('leaves the ACP session default untouched when no env override or def hint is set', () => {
+    delete process.env.OD_ACP_STAGE_TIMEOUT_MS;
+    expect(resolveAcpStageTimeoutMs()).toBeUndefined();
+  });
+
+  it('uses the runtime inactivity hint when the ACP env override is unset', () => {
+    delete process.env.OD_ACP_STAGE_TIMEOUT_MS;
+    expect(resolveAcpStageTimeoutMs(THIRTY_MINUTES_MS)).toBe(THIRTY_MINUTES_MS);
+  });
+
+  it('lets the ACP env override take precedence over the runtime inactivity hint', () => {
+    process.env.OD_ACP_STAGE_TIMEOUT_MS = '900000';
+    expect(resolveAcpStageTimeoutMs(THIRTY_MINUTES_MS)).toBe(900_000);
+  });
+
+  it('throws on an invalid runtime inactivity hint so ACP and chat watchdog config cannot drift silently', () => {
+    delete process.env.OD_ACP_STAGE_TIMEOUT_MS;
+    expect(() => resolveAcpStageTimeoutMs(Number.NaN)).toThrow(
+      /RuntimeAgentDef\.inactivityTimeoutMs/,
+    );
   });
 });
 
