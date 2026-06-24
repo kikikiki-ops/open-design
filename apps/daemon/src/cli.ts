@@ -5879,6 +5879,13 @@ Options:
     console.error('--deck and --page are mutually exclusive');
     process.exit(2);
   }
+  // PPTX is deck-only (the daemon forces deck mode for /export/pptx — a page has
+  // no slide model), so `--page` can never take effect there. Reject it with a
+  // clear contract error instead of silently ignoring the flag.
+  if (format === 'pptx' && flags.page) {
+    console.error('--page is not valid for pptx (PPTX is deck-only); use `od export pdf --page` for a single-page raster PDF');
+    process.exit(2);
+  }
   // Explicit page/deck signal so the CLI hits the route with the same semantics
   // as the UI (which sends the artifact's effectiveDeck). PPTX is deck-only and
   // the daemon forces deck there; for PDF, forward the caller's choice. When

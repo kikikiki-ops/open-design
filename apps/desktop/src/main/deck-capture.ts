@@ -521,16 +521,7 @@ async function capturePage(
   // instead" — they already chose PDF.
   if (totalLogical * dpr > ramMaxOutH) {
     if (jpeg) {
-      if (cdpError) {
-        return {
-          ok: false,
-          error: `couldn't render this long page to PDF: ${cdpError instanceof Error ? cdpError.message : String(cdpError)}`,
-        };
-      }
-      return {
-        ok: false,
-        error: `couldn't render this long page to PDF — the renderer is busy, please retry`,
-      };
+      return { ok: false, error: tooTallPdfErrorMessage(cdpError) };
     }
     return {
       ok: false,
@@ -586,6 +577,20 @@ async function paginateTallPage(
 // (logical px), each capped to the largest chunk that fits the device texture /
 // RAM budget (`maxChunkDevH`). Exported for tests. The last chunk is the
 // remainder; total always sums back to `docLogicalH`.
+// Error message for a too-tall page on the PDF path that couldn't be paginated.
+// When the debugger attached but a CDP command later failed (`cdpError`), surface
+// the real Chromium/GPU error so it's actionable; only when the attach itself
+// failed (cdpError null/undefined) is the retryable "renderer is busy" message
+// correct. Either way it must not tell the user to "export as PDF" (they did).
+// Exported for tests.
+export function tooTallPdfErrorMessage(cdpError: unknown): string {
+  if (cdpError) {
+    const detail = cdpError instanceof Error ? cdpError.message : String(cdpError);
+    return `couldn't render this long page to PDF: ${detail}`;
+  }
+  return `couldn't render this long page to PDF — the renderer is busy, please retry`;
+}
+
 export function tallPageChunkHeights(docLogicalH: number, maxChunkDevH: number, dpr: number): number[] {
   const pageLogicalH = Math.max(1, Math.floor(Math.max(1, maxChunkDevH) / Math.max(1, dpr)));
   const total = Math.max(1, Math.ceil(docLogicalH));

@@ -5,7 +5,29 @@ import {
   scrollStitchRowOffset,
   shouldCaptureAsDeck,
   tallPageChunkHeights,
+  tooTallPdfErrorMessage,
 } from '../../src/main/deck-capture.js';
+
+// A too-tall page on the PDF path that can't paginate must distinguish a failed
+// debugger attach (retryable "busy") from a CDP command that failed after a
+// successful attach (surface the real, actionable error).
+describe('tooTallPdfErrorMessage', () => {
+  test('no cdpError (attach failed) → retryable busy message', () => {
+    const msg = tooTallPdfErrorMessage(null);
+    expect(msg).toContain('renderer is busy, please retry');
+    expect(msg).not.toMatch(/export as PDF/i);
+  });
+
+  test('cdpError present (attached, later CDP command failed) → surfaces the real error', () => {
+    const msg = tooTallPdfErrorMessage(new Error('Target.captureScreenshot failed: GPU'));
+    expect(msg).toContain('Target.captureScreenshot failed: GPU');
+    expect(msg).not.toContain('renderer is busy');
+  });
+
+  test('non-Error cdpError is stringified', () => {
+    expect(tooTallPdfErrorMessage('boom')).toContain('boom');
+  });
+});
 
 // A non-deck page taller than one image is paginated into a multi-page raster
 // PDF; tallPageChunkHeights computes the per-page chunk heights (logical px).
