@@ -207,6 +207,7 @@ interface DesignBrowserPanelProps {
   initialIconUrl?: string;
   initialTitle?: string;
   initialUrl?: string;
+  navigateRequest?: { url: string; nonce: number };
   projectId: string;
   resolvedDir?: string | null;
   onOpenFile: (name: string) => void;
@@ -698,6 +699,7 @@ export function DesignBrowserPanel({
   initialIconUrl,
   initialTitle,
   initialUrl,
+  navigateRequest,
   projectId,
   resolvedDir,
   onOpenFile,
@@ -975,6 +977,11 @@ export function DesignBrowserPanel({
     }
     if (nextUrl !== EMPTY_URL) loadWebviewUrl(nextUrl);
   }, [commitHistory, loadWebviewUrl, recordNavigation]);
+
+  useEffect(() => {
+    if (!navigateRequest) return;
+    navigateTo(navigateRequest.url);
+  }, [navigateRequest, navigateTo]);
 
   const syncFromFallbackFrame = useCallback((frame: HTMLIFrameElement | null) => {
     if (!frame || loadUrl === EMPTY_URL) return;

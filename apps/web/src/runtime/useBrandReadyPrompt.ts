@@ -105,7 +105,7 @@ export interface UseBrandReadyPrompt {
  * Watch a project's metadata; when it is a brand-extraction project whose brand
  * has reached `ready`, expose a one-shot ready prompt. While it is still
  * extracting, also expose a one-shot browser-assist signal when an anti-bot wall
- * is detected or extraction stalls past ~60s. No-op for every other project.
+ * is detected or extraction stalls past the timeout. No-op for every other project.
  */
 export function useBrandReadyPrompt(
   metadata: ProjectMetadata | null | undefined,
@@ -145,23 +145,32 @@ export function useBrandReadyPrompt(
         return; // terminal — stop polling
       }
 
-      // Offer the browser-assisted fallback once, when an anti-bot wall is hit
-      // or extraction stalls past the timeout. A blocked/network terminal can
-      // surface as `failed` once the synthetic programmatic row is reconciled,
-      // but the user still needs the Browser tab recovery path.
+      // Offer the browser-assisted fallback once for real browser-only cases:
+      // explicit anti-bot metadata, recognisable challenge/captcha failures, or
+      // a still-running extraction that has crossed the stall timeout. Do not
+      // treat every failed source URL as browser-assist recoverable; ordinary
+      // thin/offline failures should keep the regular retry/agent next steps.
       const blocked = summary?.meta.blocked === true;
       const stoppedByUser = /stopped by the user|you stopped/i.test(summary?.meta.error ?? '');
-      const failedWithRecoverableSource =
+      const antiBotFailureText = [
+        summary?.meta.blockedReason,
+        summary?.meta.error,
+      ].filter(Boolean).join(' ');
+      const failedWithAntiBotSignal =
         status === 'failed' &&
         !stoppedByUser &&
-        /^https?:\/\//i.test(summary?.meta.sourceUrl ?? '');
+        /cloudflare|captcha|challenge|turnstile|anti[- ]?bot|bot check|access denied|verify/i.test(
+          antiBotFailureText,
+        );
       const stalled = status === 'extracting' && Date.now() - startedAt >= ASSIST_TIMEOUT_MS;
-      if ((blocked || failedWithRecoverableSource || stalled) && !assistAlreadyShown(brandId)) {
+      if ((blocked || failedWithAntiBotSignal || stalled) && !assistAlreadyShown(brandId)) {
         markAssistShown(brandId);
         setBrowserAssist({
           brandId,
           sourceUrl: summary?.meta.sourceUrl ?? '',
-          reason: summary?.meta.blockedReason ?? (blocked ? 'Cloudflare' : summary?.meta.error ?? 'network'),
+          reason:
+            summary?.meta.blockedReason ??
+            (blocked || failedWithAntiBotSignal ? 'Cloudflare' : 'timeout'),
         });
       }
       if (status === 'failed') return; // terminal after surfacing recovery.

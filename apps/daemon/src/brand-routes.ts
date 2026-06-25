@@ -224,6 +224,7 @@ export function registerBrandRoutes(app: Application, deps: BrandRoutesDeps): vo
           brandsRoot,
           skillsRoot,
           projectsRoot,
+          previewStatus: 'draft',
           ...(detail.meta.projectId ? { projectId: detail.meta.projectId } : {}),
           ...(detail.meta.locale ? { locale: detail.meta.locale } : {}),
         }).catch((err) => {

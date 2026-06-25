@@ -527,9 +527,9 @@ function BrandBrowserAssistCard({
     setStatus('working');
     setErrorMsg(null);
     try {
-      // The handler reports `{ ok: true }` only once the brand actually
-      // finalized; anything else (a desktop-only refusal, a thin harvest, a
-      // missing handler) keeps the button so the user can retry.
+      // `{ ok: true, action: "opened" }` means the Browser tab was focused and
+      // the user should clear verification before using the Continue next step.
+      // Plain `{ ok: true }` is kept for older handlers that completed extraction.
       const result = await onConfirm(card);
       if (!result || result.ok !== true) {
         setStatus('error');

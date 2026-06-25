@@ -150,6 +150,7 @@ vi.mock('../../src/components/FileWorkspace', () => ({
   DESIGN_SYSTEM_TAB: '__design_system__',
   FileWorkspace: (props: {
     openRequest?: { name: string } | null;
+    browserOpenRequest?: { tabId?: string; url: string; nonce: number } | null;
     onBrandExtractionStopRequest?: () => void;
     designSystemEditable?: boolean;
     filesRefreshKey?: number;
@@ -166,6 +167,13 @@ vi.mock('../../src/components/Loading', () => ({
 vi.mock('../../src/components/ChatPane', () => ({
   ChatPane: (props: {
     initialDraft?: string;
+    onBrandBrowserAssistConfirm?: (card: {
+      kind: 'brand-browser-assist';
+      brandId: string;
+      browserTabId?: string;
+      url?: string;
+      reason?: string;
+    }) => Promise<{ ok: boolean; action?: 'opened' | 'confirmed'; message?: string } | void>;
     onContinueBrandExtraction?: () => void;
     continueBrandExtractionBusy?: boolean;
   }) => {
@@ -439,7 +447,44 @@ describe('ProjectView pending prompt seeding', () => {
     await waitFor(() => {
       expect(
         fileWorkspaceSpy.mock.calls.some(([props]) =>
-          props.openRequest?.name === '__design_system__' && props.designSystemEditable === false,
+          props.openRequest?.name === 'brand.html',
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it('opens the browser assist tab from the assist card action without extracting yet', async () => {
+    renderProjectView(
+      {
+        ...project('brand-open'),
+        metadata: {
+          kind: 'brand',
+          importedFrom: 'brand-extraction',
+          brandId: 'brand-open',
+          brandSourceUrl: 'https://economist.com/',
+          brandDesignSystemId: 'user:brand-open',
+        },
+      },
+    );
+
+    await waitFor(() => {
+      expect(chatPaneSpy.mock.calls.at(-1)?.[0].onBrandBrowserAssistConfirm).toBeTypeOf('function');
+    });
+    const result = await chatPaneSpy.mock.calls.at(-1)?.[0].onBrandBrowserAssistConfirm?.({
+      kind: 'brand-browser-assist',
+      brandId: 'brand-open',
+      browserTabId: '__browser__:1',
+      url: 'https://economist.com/',
+      reason: 'Cloudflare',
+    });
+
+    expect(result).toEqual({ ok: true, action: 'opened' });
+    expect(mockedExtractBrandFromHtml).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(
+        fileWorkspaceSpy.mock.calls.some(([props]) =>
+          props.browserOpenRequest?.tabId === '__browser__:1' &&
+          props.browserOpenRequest.url === 'https://economist.com/',
         ),
       ).toBe(true);
     });
@@ -487,6 +532,13 @@ describe('ProjectView pending prompt seeding', () => {
     expect(mockedContinueBrandExtraction).not.toHaveBeenCalled();
     await waitFor(() => expect(onDesignSystemsRefresh).toHaveBeenCalled());
     await waitFor(() => expect(onProjectsRefresh).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(
+        fileWorkspaceSpy.mock.calls.some(([props]) =>
+          props.openRequest?.name === 'brand.html',
+        ),
+      ).toBe(true);
+    });
   });
 
   it('does not duplicate a persisted browser-assist card already in the conversation', async () => {

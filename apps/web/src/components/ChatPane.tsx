@@ -509,8 +509,8 @@ interface Props {
   onOpenQuestions?: (request?: QuestionFormOpenRequest) => void;
   onContinueRemainingTasks?: (assistantMessage: ChatMessage, todos: TodoItem[]) => void;
   onAssistantFeedback?: (assistantMessage: ChatMessage, change: ChatMessageFeedbackChange) => void;
-  // Client-side confirm for a brand-browser-assist od-card: read the unblocked
-  // browser DOM and re-extract the brand. Routed through the stable callbacks ref.
+  // Client-side action for a brand-browser-assist od-card: open/focus the
+  // Browser tab. Routed through the stable callbacks ref.
   onBrandBrowserAssistConfirm?: BrandBrowserAssistConfirm;
   // "Next step" affordance handlers forwarded to the last assistant message.
   // The featured design-toolbox rows are driven directly off the composer ref
@@ -568,6 +568,10 @@ interface Props {
   // it does based on connector status (open Connectors, or prefill the composer
   // with the import instruction).
   onConnectRepo?: () => void;
+  // True once the deterministic brand extraction actually reached ready. Until
+  // then the next-step card must stay on continue/recover actions even if the
+  // latest assistant row is terminal.
+  brandExtractionComplete?: boolean;
   // True for a programmatically-extracted brand project whose AI enrichment
   // never ran. The next-step card uses this to offer AI Optimize after the
   // extraction completion message.
@@ -804,6 +808,7 @@ export function ChatPane({
   connectRepoNeeded,
   githubConnected,
   onConnectRepo,
+  brandExtractionComplete = false,
   brandEnrichmentEligible,
   onContinueBrandEnrichment,
   brandEnrichmentBusy,
@@ -949,7 +954,9 @@ export function ChatPane({
   }, []);
   const nextStepVariant: NextStepActionsVariant = isDesignSystemNextStepProject(projectMetadata)
     ? isBrandExtractionNextStepProject(projectMetadata)
-      ? 'brand-extraction'
+      ? brandExtractionComplete
+        ? 'brand-extraction'
+        : 'brand-extraction-incomplete'
       : 'design-system'
     : 'default';
   // The `@skill` shown in each featured row's hover detail — matched the same

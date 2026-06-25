@@ -216,7 +216,7 @@ import {
 import { buildRepoImportPrompt, designSystemNeedsRepoConnect } from './design-system-github-evidence';
 import { isDesignSystemProject, resolveProjectDesignSystemId } from './design-system-project';
 import { collectReferencedJsxNames } from '../runtime/jsx-module-refs';
-import { DESIGN_SYSTEM_TAB, FileWorkspace } from './FileWorkspace';
+import { DESIGN_SYSTEM_TAB, FileWorkspace, type BrowserOpenRequest } from './FileWorkspace';
 import {
   type PluginFolderAgentAction,
 } from './design-files/pluginFolderActions';
@@ -457,6 +457,14 @@ function designSystemFeedbackAttachments(
       kind: file.kind === 'image' ? 'image' : 'file',
       size: file.size,
     }));
+}
+
+function brandExtractionPreviewFileName(projectFiles: readonly ProjectFile[]): string {
+  return (
+    projectFiles.find((file) => file.name === 'brand.html')?.name ??
+    projectFiles.find((file) => file.name.endsWith('/brand.html'))?.name ??
+    'brand.html'
+  );
 }
 
 function chatAttachmentsFromPreviewCommentImages(
@@ -1234,6 +1242,7 @@ export function ProjectView({
   // include a nonce so re-clicking the same name after the user closed the
   // tab still focuses it.
   const [openRequest, setOpenRequest] = useState<{ name: string; nonce: number } | null>(null);
+  const [browserOpenRequest, setBrowserOpenRequest] = useState<BrowserOpenRequest | null>(null);
   // Like `openRequest`, but additionally asks the preview workspace to open the
   // file's Share/Export menu. Drives the "Share" next-step action: it reuses the
   // existing export/deploy surface rather than introducing a new share backend.
@@ -2601,22 +2610,21 @@ export function ProjectView({
     [project.id, t],
   );
 
-  // Client-side handler for the brand-browser-assist od-card's Confirm button:
-  // read the now-unblocked page DOM out of the in-app browser webview and re-run
-  // extraction against it. Desktop-only — the web-only <iframe> fallback can't
-  // read cross-origin guest DOM, so it returns a graceful refusal instead.
+  // Client-side handler for the brand-browser-assist od-card's button: open or
+  // focus the bound Browser tab on the blocked site. The user clears the wall
+  // there, then the regular Continue extraction next-step reads the live DOM.
   const handleBrandBrowserAssistConfirm = useCallback<BrandBrowserAssistConfirm>(
     async (card): Promise<BrandBrowserAssistResult> => {
-      const snapshot = await readBrandBrowserSnapshot(card.browserTabId || BRAND_BROWSER_TAB_ID);
-      if (snapshot.status !== 'ready') {
-        return { ok: false, message: snapshot.message };
-      }
-      const { html, css, baseUrl } = snapshot;
-      const outcome = await extractBrandFromHtml(card.brandId, { html, css, baseUrl });
-      if (!outcome.ok) return { ok: false, message: outcome.error };
-      return { ok: true };
+      const url = card.url?.trim() || currentProject.metadata?.brandSourceUrl?.trim() || '';
+      if (!url) return { ok: false, message: t('chat.brandBrowserAssistReadFailed') };
+      setBrowserOpenRequest({
+        tabId: card.browserTabId || BRAND_BROWSER_TAB_ID,
+        url,
+        nonce: Date.now(),
+      });
+      return { ok: true, action: 'opened' };
     },
-    [readBrandBrowserSnapshot],
+    [currentProject.metadata?.brandSourceUrl, t],
   );
 
   // One-shot: when extraction is blocked by an anti-bot wall (or has stalled past
@@ -6355,6 +6363,8 @@ export function ProjectView({
     if (!projectIsProgrammaticBrandExtraction || !brandId) return;
     setBrandProgrammaticContinueStarting(true);
     setBrandExtractionStatusOverride({ brandId, status: 'extracting' });
+    const brandPreviewFile = brandExtractionPreviewFileName(projectFiles);
+    requestOpenFile(brandPreviewFile);
 
     const refreshAfterProgrammaticContinue = async (
       status: string,
@@ -6372,7 +6382,7 @@ export function ProjectView({
         refreshWorkspaceItems(),
       ]);
       setFilesRefresh((n) => n + 1);
-      requestOpenFile(DESIGN_SYSTEM_TAB);
+      requestOpenFile(brandPreviewFile);
       const refreshConversationId = conversationId || activeConversationId;
       if (refreshConversationId) scheduleConversationMessageRefresh(refreshConversationId);
     };
@@ -6440,6 +6450,7 @@ export function ProjectView({
     onDesignSystemsRefresh,
     onProjectsRefresh,
     projectDetail,
+    projectFiles,
     projectIsProgrammaticBrandExtraction,
     readBrandBrowserSnapshot,
     refreshWorkspaceItems,
@@ -6886,6 +6897,7 @@ export function ProjectView({
               connectRepoNeeded={connectRepoNeeded}
               githubConnected={githubConnected}
               onConnectRepo={handleConnectRepo}
+              brandExtractionComplete={effectiveBrandExtractionStatus === 'ready' || Boolean(brandReady)}
               brandEnrichmentEligible={brandEnrichmentEligibleForProject}
               onContinueBrandEnrichment={handleBrandEnrichment}
               brandEnrichmentBusy={brandEnrichmentStarting}
@@ -7011,6 +7023,7 @@ export function ProjectView({
           commentQueueOnSend={commentQueueOnSend}
           commentSendDisabled={currentConversationQueueDisabled}
           openRequest={openRequest}
+          browserOpenRequest={browserOpenRequest}
           shareRequest={shareRequest}
           downloadRequest={downloadRequest}
           slideNavRequest={slideNavRequest}

@@ -39,18 +39,35 @@ vi.mock('../../src/components/DesignBrowserPanel', () => ({
     initialIconUrl,
     initialTitle,
     initialUrl,
+    navigateRequest,
   }: {
     initialIconUrl?: string;
     initialTitle?: string;
     initialUrl?: string;
+    navigateRequest?: { url: string; nonce: number };
   }) => (
     <div
       data-testid="design-browser-panel"
       data-initial-icon-url={initialIconUrl ?? ''}
       data-initial-title={initialTitle ?? ''}
       data-initial-url={initialUrl ?? ''}
+      data-navigate-url={navigateRequest?.url ?? ''}
+      data-navigate-nonce={navigateRequest?.nonce ?? ''}
     />
   ),
+  labelFromUrl: (url: string) => {
+    try {
+      return new URL(url).hostname.replace(/^www\./, '') || url;
+    } catch {
+      return url;
+    }
+  },
+  normalizeBrowserAddress: (rawAddress: string) => {
+    const value = rawAddress.trim();
+    if (/^https?:\/\//i.test(value)) return value;
+    if (/^[\w.-]+\.[a-z]{2,}/i.test(value)) return `https://${value}`;
+    return value || 'about:blank';
+  },
 }));
 
 vi.mock('../../src/components/workspace/TerminalViewer', () => ({
@@ -950,6 +967,44 @@ describe('FileWorkspace launcher tab creation', () => {
         active: '__browser__:1',
         browserTabs,
       });
+    });
+  });
+
+  it('creates and navigates a browser tab from a browser open request', async () => {
+    const onTabsStateChange = vi.fn();
+
+    render(
+      <FileWorkspace
+        projectId="project-1"
+        projectKind="prototype"
+        files={[workspaceFile('cover.html')]}
+        liveArtifacts={[]}
+        onRefreshFiles={vi.fn()}
+        isDeck={false}
+        tabsState={{ tabs: ['cover.html'], active: 'cover.html' }}
+        browserOpenRequest={{ tabId: '__browser__:1', url: 'https://economist.com/', nonce: 7 }}
+        onTabsStateChange={onTabsStateChange}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(onTabsStateChange).toHaveBeenCalledWith({
+        tabs: ['cover.html'],
+        active: '__browser__:1',
+        browserTabs: [
+          {
+            id: '__browser__:1',
+            insertAfter: 'cover.html',
+            label: 'Browser',
+            title: 'economist.com',
+            url: 'https://economist.com/',
+          },
+        ],
+      });
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('design-browser-panel').getAttribute('data-navigate-url'))
+        .toBe('https://economist.com/');
     });
   });
 

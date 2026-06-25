@@ -401,6 +401,29 @@ describe('agent-driven brand extraction engine', () => {
     expect(html).toContain('"brandReady":"设计体系已就绪"');
   });
 
+  it('rolls back the reserved draft design system when brand startup fails', async () => {
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+    closeDatabase();
+
+    await expect(startOfflineBrandExtraction({
+      url: 'acme.com',
+      brandsRoot,
+      projectsRoot,
+      userDesignSystemsRoot,
+      skillsRoot: SKILLS_ROOT,
+      db,
+      logoFallback: NO_LOGO_FALLBACK,
+    })).rejects.toThrow();
+
+    const systems = await listDesignSystems(userDesignSystemsRoot, {
+      idPrefix: 'user:',
+      source: 'user',
+      isEditable: true,
+      defaultStatus: 'draft',
+    });
+    expect(systems).toHaveLength(0);
+  });
+
   it('seeds a running chat transcript immediately and completes it when the programmatic pass returns ready', async () => {
     const db = openDatabase(tempDir, { dataDir: tempDir });
     const startedBeforeRequest = Date.now();
@@ -1678,7 +1701,7 @@ describe('agent-driven brand extraction engine', () => {
     expect('browserTabs' in tabs ? tabs.browserTabs ?? [] : []).toHaveLength(0);
   });
 
-  it('startBrandExtraction renders a saved draft when the programmatic harvest fails', async () => {
+  it('startBrandExtraction renders a failed preview when the programmatic harvest fails', async () => {
     const db = openDatabase(tempDir, { dataDir: tempDir });
     let backgroundExtraction: Promise<unknown> | null = null;
 
@@ -1715,8 +1738,8 @@ describe('agent-driven brand extraction engine', () => {
     expect(draftSystems.find((s) => s.id === detail?.meta.designSystemId)?.status).toBe('draft');
 
     const html = readFileSync(path.join(projectsRoot, result.projectId, 'brand.html'), 'utf8');
-    expect(html).toContain('"status":"draft"');
-    expect(html).toContain('"draftSaved":"Draft saved"');
+    expect(html).toContain('"status":"failed"');
+    expect(html).toContain('"extractionFailed":"Extraction failed"');
   });
 
   it('renders stopped programmatic extraction previews as a saved draft', async () => {
@@ -1728,8 +1751,6 @@ describe('agent-driven brand extraction engine', () => {
       projectsRoot,
       skillsRoot: SKILLS_ROOT,
       db,
-      userDesignSystemsRoot,
-      prefetch: async () => null,
       logoFallback: NO_LOGO_FALLBACK,
       imageryFallback: NO_IMAGERY_FALLBACK,
     });
@@ -1741,12 +1762,43 @@ describe('agent-driven brand extraction engine', () => {
       skillsRoot: SKILLS_ROOT,
       projectsRoot,
       projectId: result.projectId,
+      previewStatus: 'draft',
     });
 
     const html = readFileSync(path.join(projectsRoot, result.projectId, 'brand.html'), 'utf8');
     expect(html).toContain('"status":"draft"');
     expect(html).toContain('"draftSaved":"Draft saved"');
     expect(html).not.toContain('"status":"extracting"');
+  });
+
+  it('renders genuinely failed extraction previews as failed', async () => {
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+
+    const result = await startOfflineBrandExtraction({
+      url: 'acme.com',
+      brandsRoot,
+      projectsRoot,
+      skillsRoot: SKILLS_ROOT,
+      db,
+      logoFallback: NO_LOGO_FALLBACK,
+      imageryFallback: NO_IMAGERY_FALLBACK,
+    });
+
+    patchMeta(brandsRoot, result.id, {
+      status: 'failed',
+      error: 'Daemon extraction failed',
+    });
+    await renderBrandPreviewIntoProject({
+      id: result.id,
+      brandsRoot,
+      skillsRoot: SKILLS_ROOT,
+      projectsRoot,
+      projectId: result.projectId,
+    });
+
+    const html = readFileSync(path.join(projectsRoot, result.projectId, 'brand.html'), 'utf8');
+    expect(html).toContain('"status":"failed"');
+    expect(html).toContain('"extractionFailed":"Extraction failed"');
   });
 
   it('does not finalize blocked or thin programmatic harvests as ready', async () => {
@@ -1801,7 +1853,8 @@ describe('agent-driven brand extraction engine', () => {
       // Entity-first: the draft exists after failure but is not promoted.
       expect(detail?.meta.designSystemId).toMatch(/^user:/);
       const html = readFileSync(path.join(projectsRoot, result.projectId, 'brand.html'), 'utf8');
-      expect(html).toContain('"status":"draft"');
+      expect(html).toContain('"status":"failed"');
+      expect(html).toContain('"extractionFailed":"Extraction failed"');
 
       const project = getProject(db, result.projectId);
       expect(project?.pendingPrompt ?? '').toContain('DESIGN SYSTEM EXTRACTION');

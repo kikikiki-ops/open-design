@@ -277,9 +277,9 @@ interface Props {
   projectFiles?: ProjectFile[];
   projectFileNames?: Set<string>;
   onRequestOpenFile?: (name: string) => void;
-  // Client-side confirm for a <od-card type="brand-browser-assist"> button: read
-  // the unblocked browser DOM and re-extract the brand. Excluded from the memo
-  // comparison (routed through ChatPane's stable callbacks ref).
+  // Client-side action for a <od-card type="brand-browser-assist"> button: open
+  // or focus the Browser tab so the user can clear verification. Excluded from
+  // the memo comparison (routed through ChatPane's stable callbacks ref).
   onBrandBrowserAssistConfirm?: BrandBrowserAssistConfirm;
   onRequestPluginFolderAgentAction?: (
     relativePath: string,
@@ -578,17 +578,25 @@ function AssistantMessageImpl({
   const hasEmptyResponse = events.some(
     (e) => e.kind === "status" && e.label === "empty_response"
   );
+  const isBrandBrowserAssistMessage =
+    (nextStepVariant === 'brand-extraction' || nextStepVariant === 'brand-extraction-incomplete') &&
+    message.content.includes('<od-card type="brand-browser-assist"');
   const unfinishedTodos = streaming ? [] : unfinishedTodosFromEvents(events);
   const runSucceeded =
     !streaming &&
-    (message.runStatus === "succeeded" || (!message.runStatus && !!message.endedAt));
+    (
+      message.runStatus === "succeeded" ||
+      (!message.runStatus && !!message.endedAt) ||
+      isBrandBrowserAssistMessage
+    );
   const runTerminal =
     !streaming &&
     (
       message.runStatus === "succeeded" ||
       message.runStatus === "failed" ||
       message.runStatus === "canceled" ||
-      (!message.runStatus && !!message.endedAt)
+      (!message.runStatus && !!message.endedAt) ||
+      isBrandBrowserAssistMessage
     );
   const canContinueTodos =
     !streaming &&

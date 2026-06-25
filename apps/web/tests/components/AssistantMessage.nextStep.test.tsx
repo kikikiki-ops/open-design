@@ -173,7 +173,8 @@ describe('AssistantMessage next-step affordance', () => {
 
     expect(screen.getByTestId('next-step-actions')).toBeTruthy();
     expect(screen.getByText('Continue extraction')).toBeTruthy();
-    expect(screen.getByText(en['nextStep.brandAiOptimizeTitle'])).toBeTruthy();
+    fireEvent.click(screen.getByTestId('next-step-toolbox-more'));
+    expect(screen.getByText('Continue with agent')).toBeTruthy();
     fireEvent.click(screen.getByTestId('next-step-brand-action-brand-continue-extraction'));
     expect(onContinueExtraction).toHaveBeenCalledTimes(1);
   });

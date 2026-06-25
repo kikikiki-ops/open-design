@@ -314,6 +314,7 @@ export async function startBrandExtraction(
     patchMeta(brandsRoot, id, { designSystemId: draft.id });
     metadata.brandDesignSystemId = draft.id;
   }
+  try {
   insertProject(db, {
     id: projectId,
     name,
@@ -469,6 +470,16 @@ export async function startBrandExtraction(
     status: meta.status,
     ...(draftDesignSystemId ? { designSystemId: draftDesignSystemId } : {}),
   };
+  } catch (err) {
+    if (draftDesignSystemId && opts.userDesignSystemsRoot) {
+      try {
+        await deleteUserDesignSystem(opts.userDesignSystemsRoot, draftDesignSystemId);
+      } catch (rollbackErr) {
+        console.warn(`[brand] failed to roll back draft design system for ${id}`, rollbackErr);
+      }
+    }
+    throw err;
+  }
 }
 
 function launchProgrammaticBackgroundExtraction(input: {
@@ -1570,6 +1581,8 @@ export interface RenderBrandPreviewOptions {
   projectsRoot: string;
   /** Overrides the brand's recorded backing project. */
   projectId?: string;
+  /** Explicit preview lifecycle for caller-known states such as user stop. */
+  previewStatus?: BrandKitStatus;
   /** Optional override; defaults to the locale stored in brand meta. */
   locale?: string;
 }
@@ -1597,11 +1610,13 @@ export async function renderBrandPreviewIntoProject(
   const meta = readMeta(brandsRoot, id);
   if (!meta) throw new Error(`brand not found: ${id}`);
   const projectId = opts.projectId ?? meta.projectId ?? brandProjectId(id);
-  const status: BrandKitStatus = meta.status === 'ready'
+  const status: BrandKitStatus = opts.previewStatus ?? (meta.status === 'ready'
     ? 'ready'
-    : meta.status === 'extracting' || meta.status === 'needs_input'
+    : meta.status === 'failed'
+      ? 'failed'
+      : meta.status === 'extracting' || meta.status === 'needs_input'
       ? 'extracting'
-      : 'draft';
+      : 'draft');
 
   const raw = await readProjectTextOrNull(projectsRoot, projectId, 'brand.json');
   let brand: Record<string, unknown> = { sourceUrl: meta.sourceUrl, colors: [], typography: {} };

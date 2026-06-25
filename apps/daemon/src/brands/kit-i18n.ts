@@ -13,6 +13,7 @@ export interface BrandKitCopy {
   extracting: string;
   brandReady: string;
   draftSaved: string;
+  extractionFailed: string;
   stopExtraction: string;
   lookingForLogo: string;
   noLogoFound: string;
@@ -57,6 +58,7 @@ const EN: BrandKitCopy = {
   extracting: 'Extracting...',
   brandReady: 'Brand ready',
   draftSaved: 'Draft saved',
+  extractionFailed: 'Extraction failed',
   stopExtraction: 'Stop extraction',
   lookingForLogo: 'Looking for a logo...',
   noLogoFound: 'No logo found',
@@ -102,6 +104,7 @@ const ZH_CN: BrandKitCopy = {
   extracting: '提取中...',
   brandReady: '设计体系已就绪',
   draftSaved: '草稿已保存',
+  extractionFailed: '提取失败',
   stopExtraction: '停止提取',
   lookingForLogo: '正在查找标志...',
   noLogoFound: '未找到标志',
@@ -145,6 +148,7 @@ const ZH_TW: BrandKitCopy = {
   extracting: '擷取中...',
   brandReady: '設計系統已就緒',
   draftSaved: '草稿已儲存',
+  extractionFailed: '擷取失敗',
   stopExtraction: '停止擷取',
   lookingForLogo: '正在尋找標誌...',
   noLogoFound: '未找到標誌',

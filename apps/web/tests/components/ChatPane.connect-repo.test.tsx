@@ -209,6 +209,8 @@ describe('ChatPane connect-repo CTA', () => {
         importedFrom: 'brand-extraction',
         brandId: 'brand-1',
       },
+      onContinueBrandExtraction: vi.fn(),
+      onContinueBrandEnrichment: vi.fn(),
       messages: [
         {
           id: 'assist-card',
@@ -223,5 +225,10 @@ describe('ChatPane connect-repo CTA', () => {
 
     expect(screen.getByText('artifact.odCardBrandAssistBody')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'artifact.odCardBrandAssistConfirm' })).toBeTruthy();
+    expect(screen.getByTestId('next-step-brand-action-brand-continue-extraction')).toBeTruthy();
+    expect(screen.getByTestId('next-step-brand-action-brand-ai-optimize').textContent)
+      .toContain('Continue with agent');
+    expect(screen.queryByText('Refine extracted design system')).toBeNull();
+    expect(screen.queryByText('Create with this design system')).toBeNull();
   });
 });

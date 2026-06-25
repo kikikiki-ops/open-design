@@ -1060,14 +1060,17 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
     if (activeSkillRecord) onOpenSkillDetails(activeSkillRecord);
   }
 
-  // plugin/MCP/connector contexts now render as inline @mention pills in the
-  // composer, so they no longer drive this top row — only staged files (which
-  // have no inline representation) and the active plugin/skill/example chips do.
+  // Inline-backed plugin/MCP/connector contexts already render as @mention pills
+  // in the editor. This row should mount only for content that has a visible chip
+  // here; the aggregate context count is just an aria label when the row exists.
+  const showActivePluginRow = Boolean(showActivePluginChip && activePluginTitle);
   const showActiveContextRow =
-    contextItemCount > 0 ||
-    (showActivePluginChip && activePluginTitle) ||
-    activeSkillTitle ||
-    stagedFiles.length > 0;
+    stagedFiles.length > 0 ||
+    showActivePluginRow ||
+    Boolean(activeSkillTitle) ||
+    contextOnlyPlugins.length > 0 ||
+    contextOnlyMcpServers.length > 0 ||
+    contextOnlyConnectors.length > 0;
 
   let optionRenderIndex = 0;
 
@@ -1175,7 +1178,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
                 })}
               </span>
             ) : null}
-            {showActivePluginChip && activePluginTitle ? (
+            {showActivePluginRow ? (
               <span className="home-hero__active-chip" data-testid="home-hero-active-plugin">
                 <button
                   type="button"

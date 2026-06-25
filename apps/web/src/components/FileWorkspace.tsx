@@ -88,7 +88,12 @@ import { createTerminal, killTerminal } from '../state/projects';
 import { navigate } from '../router';
 import type { QuestionForm } from '../artifacts/question-form';
 import { DesignFilesPanel, type DesignFilesNavState } from './DesignFilesPanel';
-import { DesignBrowserPanel, labelFromUrl, type BrowserPageInfo } from './DesignBrowserPanel';
+import {
+  DesignBrowserPanel,
+  labelFromUrl,
+  normalizeBrowserAddress,
+  type BrowserPageInfo,
+} from './DesignBrowserPanel';
 import type { PluginFolderAgentAction } from './design-files/pluginFolderActions';
 import { designSystemGithubEvidenceState, repoConnectCopy } from './design-system-github-evidence';
 import { APP_CHROME_FILE_ACTIONS_ID } from './AppChromeHeader';
@@ -138,6 +143,7 @@ interface Props {
   commentQueueOnSend?: boolean;
   commentSendDisabled?: boolean;
   openRequest?: { name: string; nonce: number } | null;
+  browserOpenRequest?: BrowserOpenRequest | null;
   // Open the named file AND surface its Share/Export menu. Drives the chat-side
   // "Share" next-step action without a dedicated share backend.
   shareRequest?: { name: string; nonce: number } | null;
@@ -281,6 +287,11 @@ const BROWSER_KEEPALIVE_CAP = 3;
 const EMPTY_PROJECT_FOLDERS: ProjectFolder[] = [];
 type TabDropEdge = 'before' | 'after';
 type BrowserWorkspaceTab = ProjectBrowserWorkspaceTab;
+export interface BrowserOpenRequest {
+  tabId?: string;
+  url: string;
+  nonce: number;
+}
 type WorkspaceOrderedTab =
   | { id: string; kind: 'browser'; browserTab: BrowserWorkspaceTab }
   | { id: string; kind: 'file'; name: string };
@@ -411,6 +422,7 @@ export function FileWorkspace({
   commentQueueOnSend = false,
   commentSendDisabled = false,
   openRequest,
+  browserOpenRequest,
   shareRequest,
   downloadRequest,
   slideNavRequest,
@@ -533,6 +545,9 @@ export function FileWorkspace({
   const [browserTabs, setBrowserTabs] = useState<BrowserWorkspaceTab[]>(
     () => browserTabsFromState(tabsState.browserTabs),
   );
+  const [browserNavigateRequests, setBrowserNavigateRequests] = useState<
+    Record<string, { url: string; nonce: number }>
+  >({});
   // "+" launcher (file search + registry-driven create-new actions:
   // Side Chat, Terminal, Browser).
   const [launcherOpen, setLauncherOpen] = useState(false);
@@ -626,6 +641,7 @@ export function FileWorkspace({
 
   useEffect(() => {
     setBrowserTabs([]);
+    setBrowserNavigateRequests({});
     browserTabSequenceRef.current = 0;
     setLauncherOpen(false);
   }, [projectId]);
@@ -657,6 +673,49 @@ export function FileWorkspace({
     const nextActive = name ?? defaultRootTab;
     setActiveTab(nextActive);
     commitTabsState(workspaceTabsState(persistedTabs, name));
+  }
+
+  function openRequestedBrowserTab(request: BrowserOpenRequest) {
+    const requestedTabId = request.tabId?.trim();
+    const normalizedUrl = normalizeBrowserAddress(request.url);
+    const tabId =
+      requestedTabId && isBrowserTabId(requestedTabId)
+        ? requestedTabId
+        : `${BROWSER_TAB_PREFIX}${browserTabSequenceRef.current + 1}`;
+    const requestedIndex = browserTabIndex(tabId);
+    if (requestedIndex > 0) {
+      browserTabSequenceRef.current = Math.max(browserTabSequenceRef.current, requestedIndex);
+    }
+    const browserTitle = normalizedUrl && normalizedUrl !== 'about:blank'
+      ? labelFromUrl(normalizedUrl)
+      : undefined;
+    let found = false;
+    const nextTabs = browserTabs.map((tab) => {
+      if (tab.id !== tabId) return tab;
+      found = true;
+      return {
+        ...tab,
+        ...(browserTitle ? { title: browserTitle, url: normalizedUrl } : {}),
+      };
+    });
+    if (!found) {
+      const anchor = lastWorkspaceTabId(orderedWorkspaceTabs) ?? activeTab;
+      const label = requestedIndex > 1 ? `Browser ${requestedIndex}` : 'Browser';
+      nextTabs.push({
+        id: tabId,
+        insertAfter: anchor,
+        label,
+        ...(browserTitle ? { title: browserTitle, url: normalizedUrl } : {}),
+      });
+    }
+    setUploadError(null);
+    setBrowserTabs(nextTabs);
+    setBrowserNavigateRequests((current) => ({
+      ...current,
+      [tabId]: { url: normalizedUrl, nonce: request.nonce },
+    }));
+    setActiveTab(tabId);
+    commitTabsState(workspaceTabsState(persistedTabs, tabId, nextTabs));
   }
 
   function openBrowserTab() {
@@ -814,6 +873,12 @@ export function FileWorkspace({
     setActiveTab(name);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openRequest]);
+
+  useEffect(() => {
+    if (!browserOpenRequest) return;
+    openRequestedBrowserTab(browserOpenRequest);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [browserOpenRequest]);
 
   // Share request: ensure the target file is open + active so the FileViewer
   // below receives the matching `shareRequest` and opens its Share menu.
@@ -2129,6 +2194,7 @@ export function FileWorkspace({
               initialIconUrl={browserTab.iconUrl}
               initialTitle={browserTab.title}
               initialUrl={browserTab.url}
+              navigateRequest={browserNavigateRequests[browserTab.id]}
               sendDisabled={Boolean(streaming)}
               previewComments={previewComments}
               onSavePreviewComment={onSavePreviewComment}
@@ -4868,6 +4934,12 @@ function kindIconName(
 
 function isBrowserTabId(tabId: string): boolean {
   return tabId.startsWith(BROWSER_TAB_PREFIX);
+}
+
+function browserTabIndex(tabId: string): number {
+  if (!isBrowserTabId(tabId)) return 0;
+  const value = Number.parseInt(tabId.slice(BROWSER_TAB_PREFIX.length), 10);
+  return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
 function browserTabsFromState(value: OpenTabsState['browserTabs']): BrowserWorkspaceTab[] {

@@ -56,7 +56,7 @@ describe('useBrandReadyPrompt', () => {
     expect(result.current.prompt).toBeNull();
   });
 
-  it('surfaces browser assist for a recoverable failed extraction', async () => {
+  it('does not surface browser assist for an ordinary failed extraction', async () => {
     mockBrandsResponse([
       {
         meta: {
@@ -72,10 +72,33 @@ describe('useBrandReadyPrompt', () => {
     const { result } = renderHook(() => useBrandReadyPrompt(BRAND_METADATA));
 
     await waitFor(() => {
+      expect(result.current.status).toBe('failed');
+    });
+    expect(result.current.browserAssist).toBeNull();
+  });
+
+  it('surfaces browser assist for an anti-bot failed extraction', async () => {
+    mockBrandsResponse([
+      {
+        meta: {
+          id: 'brand-1',
+          status: 'failed',
+          sourceUrl: 'https://www.economist.com/',
+          blocked: true,
+          blockedReason: 'Cloudflare',
+          error: 'Programmatic extraction blocked by Cloudflare.',
+        },
+        brand: null,
+      },
+    ]);
+
+    const { result } = renderHook(() => useBrandReadyPrompt(BRAND_METADATA));
+
+    await waitFor(() => {
       expect(result.current.browserAssist).toEqual({
         brandId: 'brand-1',
         sourceUrl: 'https://www.economist.com/',
-        reason: 'Brand extraction failed in the backing project.',
+        reason: 'Cloudflare',
       });
     });
     expect(result.current.status).toBe('failed');

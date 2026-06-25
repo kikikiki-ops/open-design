@@ -99,8 +99,8 @@ export const BRAND_EXTRACTION_INCOMPLETE_NEXT_STEP_ACTIONS = [
   {
     id: 'brand-ai-optimize',
     icon: 'sparkles' as IconName,
-    titleKey: 'nextStep.brandAiOptimizeTitle' as keyof Dict,
-    descriptionKey: 'nextStep.brandAiOptimizeBody' as keyof Dict,
+    title: 'Continue with agent',
+    description: 'Use the selected agent to extract from the saved draft if the programmatic pass still cannot finish.',
     busyKey: 'brandEnrichment.busy' as keyof Dict,
   },
 ] as const;
@@ -595,7 +595,7 @@ export function NextStepActions({
         ? createPortal(
             (() => {
               if (detail.kind === 'brand') {
-                const action = ALL_BRAND_EXTRACTION_NEXT_STEP_ACTIONS.find((item) => item.id === detail.id);
+                const action = brandActions.find((item) => item.id === detail.id);
                 if (!action) return null;
                 return (
                   <div

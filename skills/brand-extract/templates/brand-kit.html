@@ -63,6 +63,7 @@
   .status-pill.extracting .dot { animation: pulse 1.1s ease-in-out infinite; }
   .status-pill.ready .dot { background: var(--ok); }
   .status-pill.draft .dot { background: var(--ink-faint); }
+  .status-pill.failed .dot { background: #d14c3f; }
   @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1);} 50% { opacity: .35; transform: scale(.7);} }
 
   .sec { margin-top: 40px; }
@@ -291,6 +292,7 @@
   var assets = arr(data.assets);
   var extracting = status === 'extracting';
   var ready = status === 'ready';
+  var failed = status === 'failed';
 
   var colors = arr(brand.colors);
   var bg = role(brand, 'background', '#ffffff');
@@ -550,8 +552,9 @@
       var stopLabel = txt('stopExtraction', 'Stop extraction');
       return '<button type="button" id="brand-stop-extraction" class="status-pill extracting" title="' + esc(stopLabel) + '" aria-label="' + esc(stopLabel) + '"><span class="dot"></span>' + esc(txt('extracting', 'Extracting...')) + '</button>';
     }
-    var label = ready ? txt('brandReady', 'Brand ready') : txt('draftSaved', 'Draft saved');
-    return '<span class="status-pill ' + (ready ? 'ready' : 'draft') + '"><span class="dot"></span>' + esc(label) + '</span>';
+    var pillClass = ready ? 'ready' : (failed ? 'failed' : 'draft');
+    var label = ready ? txt('brandReady', 'Brand ready') : (failed ? txt('extractionFailed', 'Extraction failed') : txt('draftSaved', 'Draft saved'));
+    return '<span class="status-pill ' + pillClass + '"><span class="dot"></span>' + esc(label) + '</span>';
   }
 
   var html = '' +

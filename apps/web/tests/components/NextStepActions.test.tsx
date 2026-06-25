@@ -124,7 +124,7 @@ describe('NextStepActions', () => {
     expect(onCreateDesign).toHaveBeenCalledTimes(1);
   });
 
-  it('offers continue extraction and AI Optimize for incomplete brand extraction', () => {
+  it('offers continue extraction and agent fallback for incomplete brand extraction', () => {
     const onContinueExtraction = vi.fn();
     const onAiOptimize = vi.fn();
     renderActions({
@@ -135,11 +135,12 @@ describe('NextStepActions', () => {
     });
 
     expect(screen.getByText('Continue extraction')).toBeTruthy();
-    expect(screen.getByText(en['nextStep.brandAiOptimizeTitle'])).toBeTruthy();
     expect(screen.queryByText(en['nextStep.brandCreateDesignTitle'])).toBeNull();
 
     fireEvent.click(screen.getByTestId('next-step-brand-action-brand-continue-extraction'));
     expect(onContinueExtraction).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByTestId('next-step-toolbox-more'));
+    expect(screen.getByText('Continue with agent')).toBeTruthy();
     fireEvent.click(screen.getByTestId('next-step-brand-action-brand-ai-optimize'));
     expect(onAiOptimize).toHaveBeenCalledTimes(1);
   });
