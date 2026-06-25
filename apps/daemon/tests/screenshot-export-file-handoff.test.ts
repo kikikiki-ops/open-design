@@ -107,6 +107,18 @@ describe('screenshot export desktop renderer file handoff', () => {
     expect(bytes.subarray(0, 2).toString('hex')).toBe('ffd8');
   });
 
+  it('routes legacy generic image export through the screenshot renderer too', async () => {
+    const before = seenDirs.length;
+    const res = await fetch(`${baseUrl}/api/projects/${projectId}/export`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileName: 'index.html', format: 'image', imageFormat: 'jpeg' }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('image/jpeg');
+    expect(seenDirs.length).toBe(before + 1);
+  });
+
   it('rejects unsupported image export formats before rendering', async () => {
     const before = seenDirs.length;
     const res = await fetch(`${baseUrl}/api/projects/${projectId}/export/image`, {

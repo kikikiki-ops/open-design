@@ -788,14 +788,6 @@ export function registerProjectExportRoutes(app: Express, ctx: RegisterProjectEx
   // Electron path. The desktop renderer writes the result to a temp file and
   // returns its path; we stream those bytes back and remove the temp file.
   app.post('/api/projects/:id/export', async (req, res) => {
-    if (typeof desktopArtifactExporter !== 'function') {
-      return sendApiError(
-        res,
-        501,
-        'UPSTREAM_UNAVAILABLE',
-        'programmatic export is only available when a desktop runtime is reachable',
-      );
-    }
     try {
       const { fileName, title, deck, format, imageFormat, width, height } = req.body || {};
       if (typeof fileName !== 'string' || fileName.length === 0) {
@@ -803,6 +795,23 @@ export function registerProjectExportRoutes(app: Express, ctx: RegisterProjectEx
       }
       if (!isExportFormat(format)) {
         return sendApiError(res, 400, 'BAD_REQUEST', 'invalid export format');
+      }
+      if (format === 'image') {
+        await handleScreenshotExport(res, 'image', req.params.id, {
+          fileName,
+          deck: deck === true,
+          ...(typeof imageFormat === 'string' ? { imageFormat } : {}),
+          ...(typeof title === 'string' ? { title } : {}),
+        });
+        return;
+      }
+      if (typeof desktopArtifactExporter !== 'function') {
+        return sendApiError(
+          res,
+          501,
+          'UPSTREAM_UNAVAILABLE',
+          'programmatic export is only available when a desktop runtime is reachable',
+        );
       }
       const input = await buildDesktopArtifactExportInput({
         daemonUrl: daemonUrlRef.current,
