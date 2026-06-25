@@ -1433,14 +1433,13 @@ const matterRuntime = readFileSync(
         // Product and Resources are category labels rendered as
         // <button data-nav-dropdown-toggle> disclosures driven solely by the
         // JS-toggled .is-open class (`.has-dropdown-click` opts them out of the
-        // CSS :hover / :focus-within reveal, so an explicit click/Escape close
-        // always wins). At <=1080px the hamburger menu flattens every dropdown
-        // to always-visible, so there they are plain section headers: drop the
-        // disclosure ARIA and no-op the click. Mirrors `header-enhancer.astro`.
+        // CSS :hover / :focus-within reveal AND collapses them on the flattened
+        // mobile menu, so the SSR aria-expanded="false" is truthful even
+        // before/without JS — collapsed by default at every width: desktop
+        // flyout, mobile accordion). Mirrors `header-enhancer.astro`.
         (function enhanceNavDropdownToggles() {
           const toggles = document.querySelectorAll('[data-nav-dropdown-toggle]');
           if (toggles.length === 0) return;
-          const navFlattened = window.matchMedia('(max-width: 1080px)');
           const closeDropdown = (li) => {
             li.classList.remove('is-open');
             const btn = li.querySelector('[data-nav-dropdown-toggle]');
@@ -1451,28 +1450,11 @@ const matterRuntime = readFileSync(
               if (li !== except) closeDropdown(li);
             });
           };
-          const syncDisclosureMode = () => {
-            const flattened = navFlattened.matches;
-            toggles.forEach((btn) => {
-              const li = btn.closest('li.has-dropdown');
-              if (flattened) {
-                btn.removeAttribute('aria-expanded');
-                btn.removeAttribute('aria-haspopup');
-                if (li) li.classList.remove('is-open');
-              } else {
-                btn.setAttribute('aria-haspopup', 'true');
-                if (!btn.hasAttribute('aria-expanded')) btn.setAttribute('aria-expanded', 'false');
-              }
-            });
-          };
-          syncDisclosureMode();
-          navFlattened.addEventListener('change', syncDisclosureMode);
           toggles.forEach((btn) => {
             const li = btn.closest('li.has-dropdown');
             if (!li) return;
             btn.addEventListener('click', (ev) => {
               ev.stopPropagation();
-              if (navFlattened.matches) return; // flattened mobile menu — not a disclosure
               const open = !li.classList.contains('is-open');
               closeAllDropdowns(li);
               li.classList.toggle('is-open', open);

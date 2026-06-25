@@ -5291,6 +5291,15 @@ footer .container {
   /* Let the Solution panel flow naturally inside the flattened nav panel
      instead of scrolling within a capped box. */
   .nav-dropdown-solution { max-height: none; overflow: visible; }
+  /* Product / Resources stay real disclosures here too: unlike the hub menus
+     (always flattened-visible), their panel is collapsed until the JS .is-open
+     toggle, so the button's aria-expanded matches what's visible even in SSR /
+     no-JS, and tapping the control actually shows/hides its links (an
+     accordion). Re-show the caret, hidden by default on mobile, as the
+     expand affordance. */
+  .nav-links li.has-dropdown-click .nav-dropdown { display: none; }
+  .nav-links li.has-dropdown-click.is-open .nav-dropdown { display: grid; }
+  .nav-links li.has-dropdown-click .dropdown-caret { display: inline-flex; }
 }
 @media (max-width: 1080px) {
   .container { padding: 0 32px; }
