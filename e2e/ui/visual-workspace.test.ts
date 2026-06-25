@@ -4,6 +4,7 @@ import {
   configureVisualPage,
   gotoVisualHome,
   gotoVisualWorkspace,
+  mockSignedInVelaAccount,
   openAvatarMenu,
   openSettingsDetailsFromHeader,
   VISUAL_AMR_AGENT,
@@ -80,6 +81,31 @@ test('[P2] captures the topbar execution switcher surface', async ({ page }) => 
   await captureVisual(page, 'visual-topbar-execution-switcher');
 });
 
+test('[P1] captures the topbar Open Design account balance surface', async ({ page }) => {
+  test.setTimeout(60_000);
+
+  await configureVisualPage(page, {
+    agents: [VISUAL_AMR_AGENT, ...VISUAL_CLI_AGENTS],
+    config: {
+      agentId: 'amr',
+      agentModels: { amr: { model: 'deepseek-v4-flash', reasoning: 'default' } },
+      agentCliEnv: { amr: { OPEN_DESIGN_AMR_PROFILE: 'test' } },
+    },
+  });
+  await mockSignedInVelaAccount(page);
+  await gotoVisualHome(page);
+
+  await page.getByTestId('inline-model-switcher-chip').click();
+  const popover = page.getByTestId('inline-model-switcher-popover');
+  await expect(popover).toBeVisible();
+  await expect(popover.locator('.inline-switcher__account')).toContainText('Open Design');
+  await expect(popover.locator('.inline-switcher__account')).toContainText('plus');
+  await expect(popover.locator('.inline-switcher__account')).toContainText('$247.51');
+  await expect(page.getByTestId('inline-model-switcher-account-upgrade')).toBeVisible();
+
+  await captureVisual(page, 'visual-topbar-open-design-account');
+});
+
 test('[P2] captures the topbar local CLI model dropdown surface', async ({ page }) => {
   await configureVisualPage(page, {
     agents: VISUAL_CLI_AGENTS,
@@ -154,6 +180,8 @@ test('[P2] captures the avatar menu surface', async ({ page }) => {
 });
 
 test('[P1] Avatar menu surfaces the signed-in plan/balance and upgrade entry', async ({ page }) => {
+  test.setTimeout(60_000);
+
   await configureVisualPage(page, {
     agents: [VISUAL_AMR_AGENT, ...VISUAL_CLI_AGENTS],
     config: {
@@ -163,22 +191,7 @@ test('[P1] Avatar menu surfaces the signed-in plan/balance and upgrade entry', a
       agentCliEnv: { amr: { OPEN_DESIGN_AMR_PROFILE: 'test' } },
     },
   });
-  // Override the default signed-out status so the Open Design account row
-  // renders the live plan/balance + upgrade entry (last-registered route wins).
-  await page.route('**/api/integrations/vela/status', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        loggedIn: true,
-        loginInFlight: false,
-        profile: 'test',
-        user: { id: 'u1', email: 'leaf@example.com' },
-        account: { plan: 'plus', balanceUsd: '247.5087' },
-        configPath: '/home/test/.amr/config.json',
-      }),
-    });
-  });
+  await mockSignedInVelaAccount(page);
   await gotoVisualHome(page);
   await gotoVisualWorkspace(page);
 
@@ -191,6 +204,8 @@ test('[P1] Avatar menu surfaces the signed-in plan/balance and upgrade entry', a
     'href',
     /view=plans/,
   );
+
+  await captureVisual(page, 'visual-avatar-open-design-account');
 });
 
 test('[P2] captures the avatar local agent list surface', async ({ page }) => {
