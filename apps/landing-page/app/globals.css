@@ -752,8 +752,8 @@ body::before {
   color: var(--ink-faint);
   transition: transform 0.18s ease, color 0.18s ease;
 }
-.nav-links li.has-dropdown:hover .dropdown-caret,
-.nav-links li.has-dropdown:focus-within .dropdown-caret,
+.nav-links li.has-dropdown:not(.has-dropdown-click):hover .dropdown-caret,
+.nav-links li.has-dropdown:not(.has-dropdown-click):focus-within .dropdown-caret,
 .nav-links li.has-dropdown.is-open .dropdown-caret {
   /* keep the -1px optical baseline; nudge down 1px more as the open affordance */
   transform: translateY(0);
@@ -777,8 +777,8 @@ body::before {
   transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
   z-index: 50;
 }
-.nav-links li.has-dropdown:hover .nav-dropdown,
-.nav-links li.has-dropdown:focus-within .nav-dropdown,
+.nav-links li.has-dropdown:not(.has-dropdown-click):hover .nav-dropdown,
+.nav-links li.has-dropdown:not(.has-dropdown-click):focus-within .nav-dropdown,
 .nav-links li.has-dropdown.is-open .nav-dropdown {
   opacity: 1;
   visibility: visible;
@@ -816,8 +816,8 @@ body::before {
        the blur; opening stays instant via the override below. */
     transition: opacity 220ms cubic-bezier(0.23, 1, 0.32, 1) 120ms;
   }
-  .site-chrome:has(.nav-links li.has-dropdown:hover)::after,
-  .site-chrome:has(.nav-links li.has-dropdown:focus-within)::after,
+  .site-chrome:has(.nav-links li.has-dropdown:not(.has-dropdown-click):hover)::after,
+  .site-chrome:has(.nav-links li.has-dropdown:not(.has-dropdown-click):focus-within)::after,
   .site-chrome:has(.nav-links li.has-dropdown.is-open)::after,
   .site-chrome:has(.locale-switch[open])::after {
     opacity: 1;

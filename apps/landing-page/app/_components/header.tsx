@@ -178,8 +178,13 @@ export function Header({
           <ul className='nav-links'>
             {/* Product — the Open Design products. The trigger lights up only
                 for its own family; every other section maps to its own
-                trigger below, so a sub-page never marks Product by accident. */}
-            <li className='has-dropdown'>
+                trigger below, so a sub-page never marks Product by accident.
+                `has-dropdown-click` opts this menu out of the CSS :hover /
+                :focus-within reveal so it is driven solely by the JS .is-open
+                toggle (disclosure-button semantics) — otherwise a retained
+                hover/focus would re-open the panel right after an explicit
+                click/Escape close. */}
+            <li className='has-dropdown has-dropdown-click'>
               <button
                 type='button'
                 data-nav-dropdown-toggle
@@ -339,9 +344,11 @@ export function Header({
               </ul>
             </li>
 
-            {/* Resources — the top-level link mirrors the live site, which
-                points it at the blog index. */}
-            <li className='has-dropdown'>
+            {/* Resources — a category label (Blog / Tutorials / Compare), not
+                a page. `has-dropdown-click` opts it out of the CSS hover /
+                focus-within reveal so the JS .is-open toggle is the single
+                source of truth for open/close (see Product above). */}
+            <li className='has-dropdown has-dropdown-click'>
               <button
                 type='button'
                 data-nav-dropdown-toggle
