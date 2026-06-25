@@ -439,6 +439,7 @@ describe("packaged smoke workflow", () => {
     const staticGate = sectionBetween(workflow, "  static_gate:", "  persistent_runner_poc:");
     const workspaceUnitTests = sectionBetween(workflow, "  workspace_unit_tests:", "  windows_tools_pack_payload_tests:");
     const webWorkspaceTests = sectionBetween(workflow, "  web_workspace_tests:", "  e2e_vitest:");
+    const e2eVitest = sectionBetween(workflow, "  e2e_vitest:", "  playwright_critical:");
     const nixValidation = sectionBetween(workflow, "  nix_validation:", "  preflight:");
     const dockerPr = sectionBetween(workflow, "  docker_pr:", "  validate:");
     const uiP0 = sectionBetween(workflow, "  ui_p0:", "  playwright_visual:");
@@ -450,6 +451,9 @@ describe("packaged smoke workflow", () => {
     expect(webWorkspaceTests).toContain("vars.OD_CI_RUNNER_MODE == 'performance'");
     expect(webWorkspaceTests).toContain('["ubuntu-24.04"]');
     expect(webWorkspaceTests).not.toContain('"od-persistent-ci"');
+    expect(e2eVitest).toContain("vars.OD_CI_RUNNER_MODE == 'performance'");
+    expect(e2eVitest).toContain('["ubuntu-24.04"]');
+    expect(e2eVitest).not.toContain('"od-persistent-ci"');
     expect(nixValidation).toContain("vars.OD_CI_RUNNER_MODE == 'performance'");
     expect(nixValidation).toContain('["ubuntu-24.04"]');
     expect(dockerPr).toContain("vars.OD_CI_RUNNER_MODE == 'performance'");

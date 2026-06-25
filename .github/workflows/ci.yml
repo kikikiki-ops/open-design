@@ -871,7 +871,7 @@ jobs:
     name: E2E Vitest
     needs: [scopes]
     if: ${{ needs.scopes.outputs.run_e2e_vitest == 'true' }}
-    runs-on: ${{ fromJSON(vars.OD_CI_RUNNER_MODE == 'performance' && '["blacksmith-4vcpu-ubuntu-2404"]' || vars.OD_CI_RUNNER_MODE == 'economic' && '["ubuntu-24.04"]' || '["self-hosted","Linux","X64","od-persistent-ci","od-ci-hot-poc"]') }}
+    runs-on: ${{ fromJSON(vars.OD_CI_RUNNER_MODE == 'performance' && '["blacksmith-4vcpu-ubuntu-2404"]' || '["ubuntu-24.04"]') }}
     timeout-minutes: 20
 
     steps:
@@ -884,14 +884,14 @@ jobs:
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
         with:
-          runner-labels: ${{ vars.OD_CI_RUNNER_MODE == 'performance' && '["blacksmith-4vcpu-ubuntu-2404"]' || vars.OD_CI_RUNNER_MODE == 'economic' && '["ubuntu-24.04"]' || '["self-hosted","Linux","X64","od-persistent-ci","od-ci-hot-poc"]' }}
+          runner-labels: ${{ vars.OD_CI_RUNNER_MODE == 'performance' && '["blacksmith-4vcpu-ubuntu-2404"]' || '["ubuntu-24.04"]' }}
 
       - name: Setup Playwright
         uses: ./.github/actions/setup-playwright
         with:
           package-json-path: e2e/package.json
           install-command: pnpm -C e2e exec playwright install --with-deps chromium
-          runner-labels: ${{ vars.OD_CI_RUNNER_MODE == 'performance' && '["blacksmith-4vcpu-ubuntu-2404"]' || vars.OD_CI_RUNNER_MODE == 'economic' && '["ubuntu-24.04"]' || '["self-hosted","Linux","X64","od-persistent-ci","od-ci-hot-poc"]' }}
+          runner-labels: ${{ vars.OD_CI_RUNNER_MODE == 'performance' && '["blacksmith-4vcpu-ubuntu-2404"]' || '["ubuntu-24.04"]' }}
 
       - name: Prebuild workspace type declarations
         run: |
