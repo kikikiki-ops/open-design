@@ -246,6 +246,10 @@ import {
   buildFinalizeRequest,
 } from '../lib/resolve-finalize-request';
 
+type BrandBrowserSnapshot =
+  | { status: 'ready'; html: string; css: string; baseUrl: string }
+  | { status: 'unavailable'; message: string }
+  | { status: 'read-failed'; message: string };
 
 type ProjectChatSendMeta = ChatSendMeta & {
   queueOnly?: boolean;
@@ -2549,26 +2553,21 @@ export function ProjectView({
     [activeConversationId, project.id],
   );
 
-  // Client-side handler for the brand-browser-assist od-card's Confirm button:
-  // read the now-unblocked page DOM out of the in-app browser webview and re-run
-  // extraction against it. Desktop-only — the web-only <iframe> fallback can't
-  // read cross-origin guest DOM, so it returns a graceful refusal instead.
-  const handleBrandBrowserAssistConfirm = useCallback<BrandBrowserAssistConfirm>(
-    async (card): Promise<BrandBrowserAssistResult> => {
-      const tabId = card.browserTabId || BRAND_BROWSER_TAB_ID;
+  const readBrandBrowserSnapshot = useCallback(
+    async (tabId = BRAND_BROWSER_TAB_ID): Promise<BrandBrowserSnapshot> => {
       const handle = getBrandBrowser(project.id, tabId);
       if (!handle || !handle.isDesktopWebview) {
-        return { ok: false, message: t('chat.brandBrowserAssistDesktopOnly') };
+        return { status: 'unavailable', message: t('chat.brandBrowserAssistDesktopOnly') };
       }
       // Guard against a tab that never actually navigated/loaded — reading a
       // blank webview would otherwise look like an empty page.
       const tabUrl = handle.getURL();
       if (!tabUrl || tabUrl === 'about:blank') {
-        return { ok: false, message: t('chat.brandBrowserAssistReadFailed') };
+        return { status: 'read-failed', message: t('chat.brandBrowserAssistReadFailed') };
       }
       // Electron's executeJavaScript never times out on its own; a tab still on a
-      // challenge wall / mid-redirect / hung renderer would freeze the Confirm
-      // forever. Cap the read so the card surfaces a retryable error instead.
+      // challenge wall / mid-redirect / hung renderer would freeze the recovery
+      // forever. Cap the read so the UI surfaces a retryable error instead.
       const readTab = async (script: string): Promise<string> => {
         const promise = handle.executeJavaScript<string>(script, true);
         if (!promise) return '';
@@ -2589,19 +2588,35 @@ export function ProjectView({
         css = await readTab(BROWSER_SERIALIZE_STYLES_SCRIPT).catch(() => '');
       } catch (err) {
         return {
-          ok: false,
+          status: 'read-failed',
           message: err instanceof Error ? err.message : t('chat.brandBrowserAssistReadFailed'),
         };
       }
       if (!html.trim()) {
-        return { ok: false, message: t('chat.brandBrowserAssistReadFailed') };
+        return { status: 'read-failed', message: t('chat.brandBrowserAssistReadFailed') };
       }
-      const baseUrl = handle.getURL() || card.url || '';
+      const baseUrl = handle.getURL() || tabUrl;
+      return { status: 'ready', html, css, baseUrl };
+    },
+    [project.id, t],
+  );
+
+  // Client-side handler for the brand-browser-assist od-card's Confirm button:
+  // read the now-unblocked page DOM out of the in-app browser webview and re-run
+  // extraction against it. Desktop-only — the web-only <iframe> fallback can't
+  // read cross-origin guest DOM, so it returns a graceful refusal instead.
+  const handleBrandBrowserAssistConfirm = useCallback<BrandBrowserAssistConfirm>(
+    async (card): Promise<BrandBrowserAssistResult> => {
+      const snapshot = await readBrandBrowserSnapshot(card.browserTabId || BRAND_BROWSER_TAB_ID);
+      if (snapshot.status !== 'ready') {
+        return { ok: false, message: snapshot.message };
+      }
+      const { html, css, baseUrl } = snapshot;
       const outcome = await extractBrandFromHtml(card.brandId, { html, css, baseUrl });
       if (!outcome.ok) return { ok: false, message: outcome.error };
       return { ok: true };
     },
-    [project.id, t],
+    [readBrandBrowserSnapshot],
   );
 
   // One-shot: when extraction is blocked by an anti-bot wall (or has stalled past
@@ -2611,20 +2626,27 @@ export function ProjectView({
   const injectedAssistRef = useRef<string | null>(null);
   useEffect(() => {
     if (!brandBrowserAssist || !activeConversationId) return;
+    if (messagesConversationId !== activeConversationId) return;
     const { brandId, sourceUrl, reason } = brandBrowserAssist;
     const dedupeKey = `${activeConversationId}:${brandId}`;
     if (injectedAssistRef.current === dedupeKey) return;
     injectedAssistRef.current = dedupeKey;
+    if (conversationHasBrandBrowserAssist(messagesRef.current, brandId)) {
+      dismissBrandBrowserAssist();
+      return;
+    }
     const payload = JSON.stringify({
       brandId,
       browserTabId: BRAND_BROWSER_TAB_ID,
       ...(sourceUrl ? { url: sourceUrl } : {}),
       reason,
     });
+    const content = `${t('chat.brandBrowserAssistMessage')}\n\n<od-card type="brand-browser-assist">${payload}</od-card>`;
     appendConversationMessage(activeConversationId, {
       id: randomUUID(),
       role: 'assistant',
-      content: `${t('chat.brandBrowserAssistMessage')}\n\n<od-card type="brand-browser-assist">${payload}</od-card>`,
+      content,
+      events: [{ kind: 'text', text: content }],
       createdAt: Date.now(),
     });
     dismissBrandBrowserAssist();
@@ -2633,6 +2655,7 @@ export function ProjectView({
     activeConversationId,
     appendConversationMessage,
     dismissBrandBrowserAssist,
+    messagesConversationId,
     t,
   ]);
 
@@ -6332,8 +6355,36 @@ export function ProjectView({
     if (!projectIsProgrammaticBrandExtraction || !brandId) return;
     setBrandProgrammaticContinueStarting(true);
     setBrandExtractionStatusOverride({ brandId, status: 'extracting' });
-    void continueBrandExtraction(brandId)
-      .then(async (outcome) => {
+
+    const refreshAfterProgrammaticContinue = async (
+      status: string,
+      conversationId?: string | null,
+    ) => {
+      setBrandExtractionStatusOverride({
+        brandId,
+        status: isBrandStatusValue(status) ? status : 'extracting',
+      });
+      dismissBrandBrowserAssist();
+      await Promise.allSettled([
+        projectDetail.refresh(),
+        Promise.resolve(onProjectsRefresh()),
+        Promise.resolve(onDesignSystemsRefresh?.()),
+        refreshWorkspaceItems(),
+      ]);
+      setFilesRefresh((n) => n + 1);
+      requestOpenFile(DESIGN_SYSTEM_TAB);
+      const refreshConversationId = conversationId || activeConversationId;
+      if (refreshConversationId) scheduleConversationMessageRefresh(refreshConversationId);
+    };
+
+    void (async () => {
+      const snapshot = await readBrandBrowserSnapshot(BRAND_BROWSER_TAB_ID);
+      if (snapshot.status === 'ready') {
+        const outcome = await extractBrandFromHtml(brandId, {
+          html: snapshot.html,
+          css: snapshot.css,
+          baseUrl: snapshot.baseUrl,
+        });
         if (!outcome.ok) {
           setBrandExtractionStatusOverride({ brandId, status: 'failed' });
           setProjectActionsToast({
@@ -6344,23 +6395,45 @@ export function ProjectView({
           });
           return;
         }
-        setBrandExtractionStatusOverride({
-          brandId,
-          status: isBrandStatusValue(outcome.result.status) ? outcome.result.status : 'extracting',
+        await refreshAfterProgrammaticContinue('ready');
+        return;
+      }
+      if (snapshot.status === 'read-failed') {
+        setBrandExtractionStatusOverride({ brandId, status: 'failed' });
+        setProjectActionsToast({
+          message: snapshot.message,
+          details: null,
+          tone: 'error',
+          ttlMs: 5000,
         });
-        dismissBrandBrowserAssist();
-        await Promise.allSettled([
-          projectDetail.refresh(),
-          Promise.resolve(onProjectsRefresh()),
-          Promise.resolve(onDesignSystemsRefresh?.()),
-          refreshWorkspaceItems(),
-        ]);
-        setFilesRefresh((n) => n + 1);
-        requestOpenFile(DESIGN_SYSTEM_TAB);
-        scheduleConversationMessageRefresh(outcome.result.conversationId);
+        return;
+      }
+
+      const outcome = await continueBrandExtraction(brandId);
+      if (!outcome.ok) {
+        setBrandExtractionStatusOverride({ brandId, status: 'failed' });
+        setProjectActionsToast({
+          message: outcome.error,
+          details: null,
+          tone: 'error',
+          ttlMs: 5000,
+        });
+        return;
+      }
+      await refreshAfterProgrammaticContinue(outcome.result.status, outcome.result.conversationId);
+    })()
+      .catch((err) => {
+        setBrandExtractionStatusOverride({ brandId, status: 'failed' });
+        setProjectActionsToast({
+          message: err instanceof Error ? err.message : t('chat.brandBrowserAssistReadFailed'),
+          details: null,
+          tone: 'error',
+          ttlMs: 5000,
+        });
       })
       .finally(() => setBrandProgrammaticContinueStarting(false));
   }, [
+    activeConversationId,
     brandProgrammaticContinueStarting,
     currentProject.metadata,
     dismissBrandBrowserAssist,
@@ -6368,9 +6441,11 @@ export function ProjectView({
     onProjectsRefresh,
     projectDetail,
     projectIsProgrammaticBrandExtraction,
+    readBrandBrowserSnapshot,
     refreshWorkspaceItems,
     requestOpenFile,
     scheduleConversationMessageRefresh,
+    t,
   ]);
 
   // Run the deeper "AI Optimize" enrichment pass on a programmatically-extracted
@@ -7105,6 +7180,19 @@ function artifactExtensionFor(art: Artifact): '.html' | '.jsx' | '.tsx' {
     return '.jsx';
   }
   return '.html';
+}
+
+function conversationHasBrandBrowserAssist(messages: ChatMessage[], brandId: string): boolean {
+  const brandNeedle = `"brandId":"${escapeJsonNeedle(brandId)}"`;
+  return messages.some((message) =>
+    message.role === 'assistant' &&
+    message.content.includes('<od-card type="brand-browser-assist"') &&
+    message.content.includes(brandNeedle),
+  );
+}
+
+function escapeJsonNeedle(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
 function artifactBaseNameFor(art: Artifact): string {

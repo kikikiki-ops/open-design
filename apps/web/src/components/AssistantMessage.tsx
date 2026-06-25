@@ -445,7 +445,12 @@ function AssistantMessageImpl({
   nextStepVariant = 'default',
 }: Props) {
   const t = useT();
-  const events = message.events ?? [];
+  const events =
+    (message.events?.length ?? 0) > 0
+      ? message.events!
+      : message.content.trim()
+        ? ([{ kind: "text", text: message.content }] satisfies AgentEvent[])
+        : [];
   const displayEvents = useMemo(() => dedupeToolUsesById(events), [events]);
   // ChatPane renders the canonical TodoWrite card as a standalone chat row, so
   // we strip TodoWrite tool-groups out of the per-message flow to avoid the

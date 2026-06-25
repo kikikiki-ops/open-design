@@ -148,6 +148,7 @@ describe('ChatPane connect-repo CTA', () => {
           role: 'assistant',
           agentName: 'Assistant',
           content: '',
+          events: [{ kind: 'status', label: 'done' }],
           runStatus: 'succeeded',
           endedAt: 3,
           createdAt: 2,
@@ -157,5 +158,70 @@ describe('ChatPane connect-repo CTA', () => {
 
     expect(screen.getByText('The automatic pass needs a hand.')).toBeTruthy();
     expect(screen.queryByText('Assistant')).toBeNull();
+  });
+
+  it('hides brand extraction terminal rows whose only content is a stripped artifact block', () => {
+    renderPane({
+      projectMetadata: {
+        kind: 'brand',
+        importedFrom: 'brand-extraction',
+        brandId: 'brand-1',
+      },
+      messages: [
+        {
+          id: 'brand-needs-hand',
+          role: 'assistant',
+          agentName: 'AMR',
+          content: 'The automatic pass needs a hand.',
+          events: [{ kind: 'text', text: 'The automatic pass needs a hand.' }],
+          runStatus: 'succeeded',
+          endedAt: 2,
+          createdAt: 1,
+        },
+        {
+          id: 'artifact-only-assistant',
+          role: 'assistant',
+          agentName: 'Assistant',
+          content:
+            '<artifact type="text/html" identifier="brand.html"><html><body>Brand</body></html></artifact>',
+          events: [
+            {
+              kind: 'text',
+              text: '<artifact type="text/html" identifier="brand.html"><html><body>Brand</body></html></artifact>',
+            },
+            { kind: 'usage', outputTokens: 12 },
+          ],
+          runStatus: 'succeeded',
+          endedAt: 3,
+          createdAt: 2,
+        },
+      ],
+    });
+
+    expect(screen.getByText('The automatic pass needs a hand.')).toBeTruthy();
+    expect(screen.queryByText('Assistant')).toBeNull();
+  });
+
+  it('renders persisted content-only browser assist cards for brand extraction projects', () => {
+    renderPane({
+      projectMetadata: {
+        kind: 'brand',
+        importedFrom: 'brand-extraction',
+        brandId: 'brand-1',
+      },
+      messages: [
+        {
+          id: 'assist-card',
+          role: 'assistant',
+          agentName: 'Assistant',
+          content:
+            'chat.brandBrowserAssistMessage\n\n<od-card type="brand-browser-assist">{"brandId":"brand-1","browserTabId":"__browser__:1","url":"https://economist.com/","reason":"Cloudflare"}</od-card>',
+          createdAt: 1,
+        },
+      ],
+    });
+
+    expect(screen.getByText('artifact.odCardBrandAssistBody')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'artifact.odCardBrandAssistConfirm' })).toBeTruthy();
   });
 });

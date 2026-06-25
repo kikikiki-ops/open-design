@@ -14,6 +14,7 @@ import {
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { hasOdCard } from '@open-design/contracts';
 import { useAnalytics } from '../analytics/provider';
 import { getResolvedDeviceId } from '../analytics/client';
 import { trackChatPanelClick, trackMessageQueueClick, trackRunFailedToastSurfaceView } from '../analytics/events';
@@ -29,6 +30,8 @@ import type { Dict } from '../i18n/types';
 import { copyToClipboard } from '../lib/copy-to-clipboard';
 import { projectRawUrl } from '../providers/registry';
 import { takeComposerSeedFor } from '../state/libraryHandoff';
+import { splitOnQuestionForms } from '../artifacts/question-form';
+import { stripArtifact } from '../artifacts/strip';
 import type { TodoItem } from '../runtime/todos';
 import type { AppliedPluginSnapshot, ChatSessionMode, WorkspaceContextItem } from '@open-design/contracts';
 import type { TrackingProjectKind } from '@open-design/contracts/analytics';
@@ -680,10 +683,56 @@ const ANCHOR_TOP_PADDING = 12;
 function shouldHideEmptyBrandAssistantMessage(message: ChatMessage, metadata?: ProjectMetadata): boolean {
   if (metadata?.importedFrom !== 'brand-extraction' && metadata?.kind !== 'brand') return false;
   if (message.role !== 'assistant') return false;
-  if (message.content.trim()) return false;
-  if ((message.events?.length ?? 0) > 0) return false;
+  if (brandAssistantTextHasVisibleContent(message.content)) return false;
+  if ((message.events ?? []).some(hasVisibleBrandAssistantEvent)) return false;
   if ((message.producedFiles?.length ?? 0) > 0) return false;
   return Boolean(message.runStatus || message.endedAt);
+}
+
+function brandAssistantTextHasVisibleContent(content: string): boolean {
+  const trimmed = content.trim();
+  if (!trimmed) return false;
+  if (hasOdCard(trimmed)) return true;
+  const withoutArtifacts = stripArtifact(trimmed).trim();
+  if (!withoutArtifacts) return false;
+  return splitOnQuestionForms(withoutArtifacts).some((segment) => {
+    if (segment.kind === 'form') return true;
+    return segment.text.trim().length > 0;
+  });
+}
+
+const HIDDEN_BRAND_ASSISTANT_STATUS_LABELS = new Set([
+  'streaming',
+  'starting',
+  'running',
+  'requesting',
+  'thinking',
+  'empty_response',
+  'done',
+  'completed',
+]);
+
+function hasVisibleBrandAssistantEvent(event: NonNullable<ChatMessage['events']>[number]): boolean {
+  switch (event.kind) {
+    case 'text':
+      return brandAssistantTextHasVisibleContent(event.text);
+    case 'thinking':
+      return event.text.trim().length > 0;
+    case 'tool_use':
+    case 'live_artifact':
+    case 'live_artifact_refresh':
+    case 'plugin_candidate':
+      return true;
+    case 'tool_result':
+      return false;
+    case 'raw':
+      return false;
+    case 'status':
+      return !HIDDEN_BRAND_ASSISTANT_STATUS_LABELS.has(event.label);
+    case 'usage':
+    case 'conversation_title':
+      return false;
+  }
 }
 
 export function ChatPane({

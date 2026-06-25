@@ -87,6 +87,9 @@ function writeRuleProposalDecision(key: string, decision: Exclude<RuleProposalDe
  *  can show a done / error state. */
 export interface BrandBrowserAssistResult {
   ok: boolean;
+  /** `opened` means the Browser tab was focused/navigated; extraction still
+   * continues from the next-step action after the user clears verification. */
+  action?: 'opened' | 'confirmed';
   /** Failure reason to show inline (e.g. "needs the desktop app"). */
   message?: string;
 }
@@ -490,9 +493,9 @@ function writeBrandAssistDone(key: string): void {
   }
 }
 
-// Brand extraction hit an anti-bot wall. This card asks the user to clear it in
-// the in-app browser tab, then its Confirm button runs a CLIENT-side handler
-// (read the unblocked DOM → re-extract) — it does NOT round-trip to the agent.
+// Brand extraction hit an anti-bot wall. This card opens/focuses the in-app
+// browser tab so the user can clear verification, then the normal next-step
+// action continues extraction from that live page.
 // A localStorage latch keyed off the brand id keeps a resolved card from
 // re-prompting on reload.
 function BrandBrowserAssistCard({
@@ -505,7 +508,7 @@ function BrandBrowserAssistCard({
   const t = useT();
   const storageKey = useMemo(() => brandAssistStorageKey(card.brandId), [card.brandId]);
   const [done, setDone] = useState(() => readBrandAssistDone(storageKey));
-  const [status, setStatus] = useState<'idle' | 'working' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'working' | 'opened' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   if (done) {
@@ -531,6 +534,10 @@ function BrandBrowserAssistCard({
       if (!result || result.ok !== true) {
         setStatus('error');
         setErrorMsg((result && result.message) || null);
+        return;
+      }
+      if (result.action === 'opened') {
+        setStatus('opened');
         return;
       }
       writeBrandAssistDone(storageKey);
@@ -559,6 +566,11 @@ function BrandBrowserAssistCard({
       {status === 'error' ? (
         <p className={styles.ruleError} role="status">
           {errorMsg || t('artifact.odCardBrandAssistError')}
+        </p>
+      ) : null}
+      {status === 'opened' ? (
+        <p className={styles.ruleDescription} role="status">
+          {t('artifact.odCardBrandAssistBody')}
         </p>
       ) : null}
       <div className={styles.ruleActions}>

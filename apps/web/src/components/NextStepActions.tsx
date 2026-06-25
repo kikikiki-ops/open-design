@@ -93,7 +93,7 @@ export const BRAND_EXTRACTION_INCOMPLETE_NEXT_STEP_ACTIONS = [
     id: 'brand-continue-extraction',
     icon: 'sparkles' as IconName,
     title: 'Continue extraction',
-    description: 'Pick up the saved draft and keep filling logo, palette, type, imagery, and kit files.',
+    description: 'After the Browser tab is past any verification, read it and keep filling the saved kit.',
     prompt: BRAND_CONTINUE_EXTRACTION_PROMPT,
   },
   {

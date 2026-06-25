@@ -17,9 +17,19 @@ import {
   createConversation,
   listConversations,
   listMessages,
+  saveMessage,
 } from '../../src/state/projects';
 import { fetchPreviewComments } from '../../src/providers/registry';
-import { cancelBrandExtraction, continueBrandExtraction, fetchBrands } from '../../src/runtime/brands';
+import {
+  cancelBrandExtraction,
+  continueBrandExtraction,
+  extractBrandFromHtml,
+  fetchBrands,
+} from '../../src/runtime/brands';
+
+const brandBrowserBridgeMocks = vi.hoisted(() => ({
+  getBrandBrowser: vi.fn(),
+}));
 
 const fileWorkspaceSpy = vi.hoisted(() => vi.fn());
 const chatPaneSpy = vi.hoisted(() => vi.fn());
@@ -71,9 +81,24 @@ vi.mock('../../src/runtime/brands', async () => {
         designSystemId: 'user:brand-retry',
       },
     }),
+    extractBrandFromHtml: vi.fn().mockResolvedValue({
+      ok: true,
+      result: {
+        id: 'brand-retry',
+        brand: null,
+        designSystemId: 'user:brand-retry',
+        projectId: 'brand-retry',
+        files: [],
+      },
+    }),
     fetchBrands: vi.fn().mockResolvedValue([]),
   };
 });
+
+vi.mock('../../src/runtime/brand-browser-bridge', () => ({
+  BRAND_BROWSER_TAB_ID: '__browser__:1',
+  getBrandBrowser: brandBrowserBridgeMocks.getBrandBrowser,
+}));
 
 vi.mock('../../src/providers/registry', async () => {
   const actual = await vi.importActual<typeof import('../../src/providers/registry')>(
@@ -161,7 +186,9 @@ const mockedListMessages = vi.mocked(listMessages);
 const mockedFetchPreviewComments = vi.mocked(fetchPreviewComments);
 const mockedCancelBrandExtraction = vi.mocked(cancelBrandExtraction);
 const mockedContinueBrandExtraction = vi.mocked(continueBrandExtraction);
+const mockedExtractBrandFromHtml = vi.mocked(extractBrandFromHtml);
 const mockedFetchBrands = vi.mocked(fetchBrands);
+const mockedSaveMessage = vi.mocked(saveMessage);
 
 const config: AppConfig = {
   mode: 'api',
@@ -223,6 +250,8 @@ function renderProjectView(
 
 describe('ProjectView pending prompt seeding', () => {
   beforeEach(() => {
+    window.sessionStorage.clear();
+    window.localStorage.clear();
     mockedListConversations.mockImplementation(async (projectId) => [
       conversation(projectId),
     ]);
@@ -232,6 +261,7 @@ describe('ProjectView pending prompt seeding', () => {
     mockedListMessages.mockResolvedValue([]);
     mockedFetchPreviewComments.mockResolvedValue([]);
     mockedFetchBrands.mockResolvedValue([]);
+    brandBrowserBridgeMocks.getBrandBrowser.mockReturnValue(null);
   });
 
   afterEach(() => {
@@ -413,6 +443,100 @@ describe('ProjectView pending prompt seeding', () => {
         ),
       ).toBe(true);
     });
+  });
+
+  it('continues a blocked brand extraction from the unblocked Browser tab DOM when available', async () => {
+    const onDesignSystemsRefresh = vi.fn();
+    const onProjectsRefresh = vi.fn();
+    const executeJavaScript = vi.fn()
+      .mockResolvedValueOnce('<html><head><title>Economist</title></head><body><h1>Economist</h1></body></html>')
+      .mockResolvedValueOnce('body { color: #111111; background: #ffffff; }');
+    brandBrowserBridgeMocks.getBrandBrowser.mockReturnValue({
+      isDesktopWebview: true,
+      getURL: () => 'https://economist.com/',
+      executeJavaScript,
+    });
+
+    renderProjectView(
+      {
+        ...project('brand-retry'),
+        metadata: {
+          kind: 'brand',
+          importedFrom: 'brand-extraction',
+          brandId: 'brand-retry',
+          brandSourceUrl: 'https://economist.com/',
+          brandDesignSystemId: 'user:brand-retry',
+        },
+      },
+      vi.fn(),
+      { onDesignSystemsRefresh, onProjectsRefresh },
+    );
+
+    await waitFor(() => {
+      expect(chatPaneSpy.mock.calls.at(-1)?.[0].onContinueBrandExtraction).toBeTypeOf('function');
+    });
+    chatPaneSpy.mock.calls.at(-1)?.[0].onContinueBrandExtraction?.();
+
+    await waitFor(() => {
+      expect(mockedExtractBrandFromHtml).toHaveBeenCalledWith('brand-retry', {
+        html: '<html><head><title>Economist</title></head><body><h1>Economist</h1></body></html>',
+        css: 'body { color: #111111; background: #ffffff; }',
+        baseUrl: 'https://economist.com/',
+      });
+    });
+    expect(mockedContinueBrandExtraction).not.toHaveBeenCalled();
+    await waitFor(() => expect(onDesignSystemsRefresh).toHaveBeenCalled());
+    await waitFor(() => expect(onProjectsRefresh).toHaveBeenCalled());
+  });
+
+  it('does not duplicate a persisted browser-assist card already in the conversation', async () => {
+    mockedFetchBrands.mockResolvedValue([
+      {
+        meta: {
+          id: 'brand-blocked',
+          sourceUrl: 'https://economist.com/',
+          createdAt: 1,
+          updatedAt: 2,
+          status: 'failed',
+          blocked: true,
+          blockedReason: 'Cloudflare',
+          designSystemId: 'user:brand-blocked',
+        },
+        brand: null,
+      },
+    ]);
+    mockedListMessages.mockResolvedValueOnce([
+      {
+        id: 'existing-assist',
+        role: 'assistant',
+        content:
+          'chat.brandBrowserAssistMessage\n\n<od-card type="brand-browser-assist">{"brandId":"brand-blocked","browserTabId":"__browser__:1","url":"https://economist.com/","reason":"Cloudflare"}</od-card>',
+        createdAt: 2,
+      },
+    ]);
+
+    renderProjectView(
+      {
+        ...project('brand-blocked'),
+        metadata: {
+          kind: 'brand',
+          importedFrom: 'brand-extraction',
+          brandId: 'brand-blocked',
+          brandSourceUrl: 'https://economist.com/',
+          brandDesignSystemId: 'user:brand-blocked',
+        },
+      },
+    );
+
+    await waitFor(() => expect(mockedFetchBrands).toHaveBeenCalled());
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(
+      mockedSaveMessage.mock.calls.some((call) =>
+        String(call[2]?.content ?? '').includes('<od-card type="brand-browser-assist"'),
+      ),
+    ).toBe(false);
   });
 
   it('refreshes brand.html when the brand extraction reaches a failed terminal state', async () => {
