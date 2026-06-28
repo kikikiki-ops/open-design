@@ -119,4 +119,13 @@ describe('VisualInspirationPanel', () => {
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(onSubmit.mock.calls[0]?.[0]).toContain('[visual inspiration — skipped]');
   });
+
+  it('shows a notice when community examples fail to load', async () => {
+    vi.mocked(listPlugins).mockRejectedValueOnce(new Error('offline'));
+
+    renderPanel();
+
+    expect(await screen.findByText(/Community examples could not be loaded/)).toBeTruthy();
+    expect(await screen.findByTestId('visual-inspiration-card-portfolio-deck')).toBeTruthy();
+  });
 });

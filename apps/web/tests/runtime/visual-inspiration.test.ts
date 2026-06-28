@@ -36,6 +36,20 @@ const candidates: VisualInspirationCandidate[] = [
     previewUrl: '/api/plugins/mobile-wireframe/example/index',
     previewKind: 'html',
   },
+  {
+    id: 'portfolio-site',
+    source: 'community',
+    title: 'Editorial portfolio website',
+    description: 'A web portfolio with project cards.',
+    prompt: 'Create a portfolio website.',
+    tags: ['portfolio', 'web'],
+    surface: 'web',
+    mode: 'prototype',
+    platform: 'desktop',
+    scenario: 'design',
+    previewUrl: '/api/plugins/portfolio-site/example/index',
+    previewKind: 'html',
+  },
 ];
 
 describe('visual inspiration matching', () => {
@@ -50,6 +64,13 @@ describe('visual inspiration matching', () => {
       currentSkillId: 'portfolio-deck',
     });
     expect(ranked[0]?.id).toBe('portfolio-deck');
+  });
+
+  it('keeps the web surface filter scoped to web candidates', () => {
+    const ranked = rankVisualInspirations(candidates, 'portfolio', {
+      surfaceFilter: 'web',
+    });
+    expect(ranked.map((candidate) => candidate.id)).toEqual(['portfolio-site']);
   });
 
   it('formats selected inspiration context after form answers', () => {

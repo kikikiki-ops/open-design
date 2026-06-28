@@ -101,7 +101,7 @@ export function rankVisualInspirations(
   const queryPhrase = normalize(query);
   const filtered = candidates.filter((candidate) => {
     if (sourceFilter !== 'all' && candidate.source !== sourceFilter) return false;
-    if (surfaceFilter === 'web' && candidate.surface === 'mobile') return false;
+    if (surfaceFilter === 'web' && candidate.surface !== 'web') return false;
     if (surfaceFilter === 'mobile' && candidate.surface !== 'mobile') return false;
     return true;
   });

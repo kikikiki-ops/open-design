@@ -74,7 +74,7 @@ export function VisualInspirationPanel({
     let cancelled = false;
     setLoadingPlugins(true);
     setPluginError(false);
-    void listPlugins()
+    void listPlugins({ throwOnError: true })
       .then((rows) => {
         if (cancelled) return;
         setPlugins(rows);

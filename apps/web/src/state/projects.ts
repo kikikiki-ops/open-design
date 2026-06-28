@@ -676,6 +676,7 @@ export async function persistTabsToDaemonNow(
 
 export interface ListPluginsOptions {
   includeHidden?: boolean;
+  throwOnError?: boolean;
 }
 
 export async function listPlugins(
@@ -683,11 +684,17 @@ export async function listPlugins(
 ): Promise<InstalledPluginRecord[]> {
   try {
     const resp = await fetch('/api/plugins');
-    if (!resp.ok) return [];
+    if (!resp.ok) {
+      if (options.throwOnError) {
+        throw new Error(`Failed to load plugins: ${resp.status}`);
+      }
+      return [];
+    }
     const json = (await resp.json()) as { plugins?: InstalledPluginRecord[] };
     const plugins = json.plugins ?? [];
     return options.includeHidden ? plugins : plugins.filter(isVisiblePlugin);
-  } catch {
+  } catch (error) {
+    if (options.throwOnError) throw error;
     return [];
   }
 }
