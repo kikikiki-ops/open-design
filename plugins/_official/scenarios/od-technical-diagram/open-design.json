@@ -3,8 +3,8 @@
   "specVersion": "1.0.0",
   "name": "od-technical-diagram",
   "title": "Technical diagram (default scenario)",
-  "version": "0.1.0",
-  "description": "Default scenario plugin for architecture diagrams, workflow charts, RAG/agent diagrams, UML, data-flow maps, and comparison diagrams.",
+  "version": "0.2.0",
+  "description": "Default scenario plugin for architecture diagrams, workflow charts, RAG/agent diagrams, UML, data-flow maps, timelines, mind maps, and comparison diagrams, upgraded with fireworks-tech-graph templates and style samples.",
   "license": "MIT",
   "author": {
     "name": "Open Design",
@@ -46,7 +46,22 @@
       ],
       "assets": [
         "./assets/template.html",
+        "./assets/samples/sample-style1-flat.png",
+        "./assets/samples/sample-style3-blueprint.png",
+        "./assets/samples/sample-style6-claude.png",
+        "./assets/samples/sample-style8-dark-luxury.png",
+        "./templates/architecture.svg",
+        "./templates/agent-architecture.svg",
+        "./templates/data-flow.svg",
+        "./templates/flowchart.svg",
+        "./templates/sequence.svg",
+        "./templates/state-machine.svg",
+        "./templates/timeline.svg",
+        "./templates/comparison-matrix.svg",
         "./references/patterns.md",
+        "./references/style-diagram-matrix.md",
+        "./references/svg-layout-best-practices.md",
+        "./references/icons.md",
         "./references/checklist.md"
       ]
     },
@@ -73,13 +88,22 @@
     ],
     "useCase": {
       "query": {
-        "en": "Create a polished {{diagramType}} for {{audience}} explaining {{systemContext}}. Detail level: {{detailLevel}}. Visual style: {{visualStyle}}. Build an editable SVG/HTML diagram from `assets/template.html` and `references/patterns.md`; use semantic nodes, labeled arrows, clear grouping, and a legend when needed.",
-        "zh-CN": "为 {{audience}} 创建一张高质量 {{diagramType}}，解释 {{systemContext}}。细节层级：{{detailLevel}}。视觉风格：{{visualStyle}}。基于 `assets/template.html` 和 `references/patterns.md` 生成可编辑 SVG/HTML 图；使用语义节点、带标签箭头、清晰分组，必要时加图例。"
+        "en": "Create a polished {{diagramType}} for {{audience}} explaining {{systemContext}}. Detail level: {{detailLevel}}. Visual style: {{visualStyle}}. Read `assets/template.html`, route through `references/patterns.md`, then use the closest fireworks template under `templates/` plus the matching `references/style-*.md` guide. Build an editable SVG/HTML diagram with semantic nodes, labeled arrows, clear grouping, and a legend when needed; validate SVG syntax and visual collisions.",
+        "zh-CN": "为 {{audience}} 创建一张高质量 {{diagramType}}，解释 {{systemContext}}。细节层级：{{detailLevel}}。视觉风格：{{visualStyle}}。先读 `assets/template.html`，按 `references/patterns.md` 路由，再使用 `templates/` 下最接近的 fireworks 模板和匹配的 `references/style-*.md` 风格指南。生成可编辑 SVG/HTML 图，包含语义节点、带标签箭头、清晰分组和必要图例；检查 SVG 语法与视觉碰撞。",
+        "zh-TW": "為 {{audience}} 建立一張高品質 {{diagramType}}，解釋 {{systemContext}}。細節層級：{{detailLevel}}。視覺風格：{{visualStyle}}。先讀 `assets/template.html`，按 `references/patterns.md` 路由，再使用 `templates/` 下最接近的 fireworks 範本和匹配的 `references/style-*.md` 風格指南。生成可編輯 SVG/HTML 圖，包含語義節點、帶標籤箭頭、清晰分組和必要圖例；檢查 SVG 語法與視覺碰撞。"
       },
       "exampleOutputs": [
         {
           "path": "./assets/template.html",
           "title": "Diagram seed"
+        },
+        {
+          "path": "./templates/architecture.svg",
+          "title": "Architecture SVG starter"
+        },
+        {
+          "path": "./templates/agent-architecture.svg",
+          "title": "Agent architecture SVG starter"
         }
       ]
     },

@@ -80,12 +80,11 @@ export function TemplatePreview({ preset }: { preset: LocalTemplatePreset }) {
 
 // ---------------------------------------------------------------------------
 // Social layouts (HTML)
+//
+// Thumbnails render *real* micro-copy, not anonymous gray bars: a finished
+// card the user can recognize and want. Copy is intentionally evergreen and
+// product-flavored so it reads as a polished example regardless of palette.
 // ---------------------------------------------------------------------------
-
-// A small text line. `w` is a width keyword class.
-function Line({ w = 'full', strong = false }: { w?: string; strong?: boolean }) {
-  return <span className={`tpl-line tpl-w-${w}${strong ? ' is-strong' : ''}`} />;
-}
 
 function SocialPreview({ layout }: { layout: SocialPreviewLayout }) {
   switch (layout) {
@@ -93,29 +92,31 @@ function SocialPreview({ layout }: { layout: SocialPreviewLayout }) {
       return (
         <span className="tpl-card tpl-post">
           <span className="tpl-post__head">
-            <span className="tpl-avatar" />
+            <span className="tpl-avatar">A</span>
             <span className="tpl-post__id">
-              <Line w="40" strong />
-              <Line w="28" />
+              <strong className="tpl-post__name">Acme Labs</strong>
+              <span className="tpl-post__handle">@acmelabs · 2h</span>
             </span>
             <span className="tpl-post__verified" />
           </span>
           <span className="tpl-post__body">
-            <Line w="90" />
-            <Line w="75" />
+            <span className="tpl-post__text">We shipped onboarding v2 — and activation just did this:</span>
             <span className="tpl-post__metric">+248%</span>
+            <span className="tpl-post__sub">week-1 activation, 30-day rolling</span>
           </span>
           <span className="tpl-post__foot">
-            <i /><i /><i />
+            <span className="tpl-post__react"><i className="tpl-ico-reply" />84</span>
+            <span className="tpl-post__react"><i className="tpl-ico-rt" />312</span>
+            <span className="tpl-post__react"><i className="tpl-ico-like" />2.1K</span>
           </span>
         </span>
       );
     case 'metric':
       return (
         <span className="tpl-card tpl-metric">
-          <span className="tpl-eyebrow" />
+          <span className="tpl-eyebrow">Q3 GROWTH</span>
           <strong className="tpl-bignum">48%</strong>
-          <Line w="70" />
+          <span className="tpl-metric__cap">faster time-to-value vs. last quarter</span>
           <span className="tpl-spark">
             <i /><i /><i /><i /><i /><i />
           </span>
@@ -125,67 +126,78 @@ function SocialPreview({ layout }: { layout: SocialPreviewLayout }) {
       return (
         <span className="tpl-card tpl-chart">
           <span className="tpl-chart__head">
-            <Line w="55" strong />
+            <strong className="tpl-chart__title">Revenue, last 5 weeks</strong>
+            <span className="tpl-chart__delta">▲ 31%</span>
           </span>
           <span className="tpl-bars">
-            <i style={{ height: '38%' }} />
-            <i style={{ height: '58%' }} />
-            <i style={{ height: '46%' }} />
-            <i className="is-accent" style={{ height: '92%' }} />
-            <i style={{ height: '70%' }} />
+            <span style={{ height: '38%' }}><b>W1</b></span>
+            <span style={{ height: '58%' }}><b>W2</b></span>
+            <span style={{ height: '46%' }}><b>W3</b></span>
+            <span className="is-accent" style={{ height: '92%' }}><b>W4</b></span>
+            <span style={{ height: '70%' }}><b>W5</b></span>
           </span>
         </span>
       );
-    case 'thread-strip':
+    case 'thread-strip': {
+      const beats = ['The hook that stopped the scroll', 'Proof: 3 numbers that matter', 'How we actually did it', 'Your turn — steal this'];
       return (
         <span className="tpl-strip">
           <span className="tpl-strip__rail" />
-          {[1, 2, 3, 4].map((n) => (
-            <span key={n} className={`tpl-strip__card${n === 1 ? ' is-lead' : ''}`}>
-              <span className="tpl-strip__num">{n}</span>
-              <Line w="80" />
-              <Line w="55" />
+          {beats.map((beat, i) => (
+            <span key={beat} className={`tpl-strip__card${i === 0 ? ' is-lead' : ''}`}>
+              <span className="tpl-strip__num">{i + 1}</span>
+              <span className="tpl-strip__head">{beat}</span>
             </span>
           ))}
         </span>
       );
-    case 'editorial-carousel':
+    }
+    case 'editorial-carousel': {
+      const titles = ['The Slow Studio', 'Made by Hand', 'Less, Better'];
+      const kickers = ['ISSUE 04', 'CRAFT', 'ESSAY'];
       return (
         <span className="tpl-carousel tpl-carousel--editorial">
-          {[0, 1, 2].map((i) => (
-            <span key={i} className="tpl-mag">
+          {titles.map((title, i) => (
+            <span key={title} className="tpl-mag">
               <span className="tpl-mag__img" />
-              <span className="tpl-serif">Aa</span>
-              <Line w="80" />
+              <span className="tpl-mag__kicker">{kickers[i]}</span>
+              <span className="tpl-serif">{title}</span>
               <span className="tpl-rule" />
-              <Line w="50" />
+              <span className="tpl-mag__by">Words by Studio Editorial</span>
             </span>
           ))}
           <span className="tpl-dots"><i className="is-on" /><i /><i /></span>
         </span>
       );
-    case 'swiss-carousel':
+    }
+    case 'swiss-carousel': {
+      const cards = [
+        { tag: 'KPI', head: 'NPS climbed to 72' },
+        { tag: 'S09', head: 'Setup in 9 minutes' },
+        { tag: 'MX', head: 'Wins on every axis' },
+      ];
       return (
         <span className="tpl-carousel tpl-carousel--swiss">
-          {['KPI', 'S09', 'MX'].map((label) => (
-            <span key={label} className="tpl-swiss">
+          {cards.map((card) => (
+            <span key={card.tag} className="tpl-swiss">
               <span className="tpl-swiss__anchor" />
-              <strong className="tpl-swiss__tag">{label}</strong>
-              <Line w="80" />
-              <Line w="55" />
+              <strong className="tpl-swiss__tag">{card.tag}</strong>
+              <span className="tpl-swiss__head">{card.head}</span>
             </span>
           ))}
         </span>
       );
+    }
     case 'cover':
       return (
         <span className="tpl-cover">
           <span className="tpl-cover__img" />
-          <span className="tpl-cover__band">
-            <Line w="70" strong />
-            <Line w="42" />
-          </span>
           <span className="tpl-cover__page">1/6</span>
+          <span className="tpl-cover__band">
+            <span className="tpl-cover__kicker">FIELD NOTES</span>
+            <strong className="tpl-cover__title">5 habits that <em>actually</em> stuck</strong>
+            <span className="tpl-cover__hook">save this before you forget →</span>
+          </span>
         </span>
       );
     case 'wechat-pair':
@@ -193,11 +205,11 @@ function SocialPreview({ layout }: { layout: SocialPreviewLayout }) {
         <span className="tpl-wechat">
           <span className="tpl-wechat__wide">
             <span className="tpl-wechat__wide-img" />
-            <strong>21:9</strong>
+            <strong className="tpl-wechat__wide-title">深度 · 一篇讲透增长</strong>
           </span>
           <span className="tpl-wechat__square">
-            <strong>1:1</strong>
-            <Line w="60" />
+            <strong className="tpl-wechat__sq-title">分享卡</strong>
+            <span className="tpl-wechat__sq-sub">点击阅读全文</span>
           </span>
         </span>
       );
@@ -205,46 +217,46 @@ function SocialPreview({ layout }: { layout: SocialPreviewLayout }) {
       return (
         <span className="tpl-story">
           <span className="tpl-story__segs"><i className="is-on" /><i /><i /><i /></span>
+          <span className="tpl-story__kicker">LAUNCHING IN</span>
           <strong className="tpl-story__num">03</strong>
-          <Line w="70" />
-          <Line w="45" />
-          <span className="tpl-story__cta" />
+          <span className="tpl-story__line">days until early access</span>
+          <span className="tpl-story__cta">Swipe up to join →</span>
         </span>
       );
     case 'poll':
       return (
         <span className="tpl-story tpl-poll">
           <span className="tpl-story__segs"><i className="is-on" /><i /><i /></span>
-          <Line w="60" />
+          <span className="tpl-poll__q">Which do you ship first?</span>
           <span className="tpl-poll__sticker">
-            <span className="tpl-poll__opt is-a">A</span>
-            <span className="tpl-poll__opt is-b">B</span>
+            <span className="tpl-poll__opt is-a">Dark mode</span>
+            <span className="tpl-poll__opt is-b">Mobile app</span>
           </span>
-          <Line w="40" />
+          <span className="tpl-poll__tap">tap to vote</span>
         </span>
       );
     case 'quote':
       return (
         <span className="tpl-quote">
           <span className="tpl-quote__mark">&#8220;</span>
-          <Line w="80" />
-          <Line w="90" />
-          <Line w="60" />
-          <span className="tpl-quote__by" />
+          <span className="tpl-quote__text">Ship the thing you’re slightly afraid of.</span>
+          <span className="tpl-quote__by">— Founder’s notebook</span>
         </span>
       );
-    case 'framework':
+    case 'framework': {
+      const steps = ['Find the real bottleneck', 'Make it embarrassingly small', 'Ship, then measure', 'Cut what didn’t move'];
       return (
         <span className="tpl-card tpl-framework">
-          <Line w="50" strong />
-          {[1, 2, 3, 4].map((n) => (
-            <span key={n} className="tpl-frw__row">
-              <span className="tpl-frw__num">{n}</span>
-              <Line w={n % 2 === 0 ? '70' : '85'} />
+          <strong className="tpl-framework__title">The 4-step ship loop</strong>
+          {steps.map((step, i) => (
+            <span key={step} className="tpl-frw__row">
+              <span className="tpl-frw__num">{i + 1}</span>
+              <span className="tpl-frw__label">{step}</span>
             </span>
           ))}
         </span>
       );
+    }
     case 'photo-grid':
       return (
         <span className="tpl-grid">
@@ -252,6 +264,28 @@ function SocialPreview({ layout }: { layout: SocialPreviewLayout }) {
           <i />
           <i className="is-accent" />
           <i />
+        </span>
+      );
+    case 'thumbnail':
+      return (
+        <span className="tpl-thumb">
+          <span className="tpl-thumb__burst" />
+          <span className="tpl-thumb__face" />
+          <span className="tpl-thumb__title">
+            <b>I tried this</b>
+            <b className="is-accent">for 30 days</b>
+          </span>
+          <span className="tpl-thumb__dur">10:24</span>
+        </span>
+      );
+    case 'poster':
+      return (
+        <span className="tpl-poster">
+          <span className="tpl-poster__frame">
+            <span className="tpl-poster__mark">&#8220;</span>
+            <span className="tpl-poster__text">The best time to start was yesterday. The second best is now.</span>
+            <span className="tpl-poster__by">— Daily Reminder</span>
+          </span>
         </span>
       );
     default:
@@ -343,6 +377,9 @@ function DiagramBody({ layout, arrow, arrowAccent }: { layout: DiagramPreviewLay
     case 'architecture':
       return (
         <>
+          {Band({ x: 8, y: 9, w: 232, h: 58 })}
+          {Band({ x: 8, y: 71, w: 232, h: 31 })}
+          {Band({ x: 8, y: 105, w: 232, h: 35 })}
           <path d="M124 34V42" className="tpl-d-arw" {...A} />
           <path d="M105 62L52 76M124 62V74M143 62L196 76" className="tpl-d-arw" {...A} />
           <path d="M45 98V112M124 98V110M203 98V110" className="tpl-d-arw" {...A} />
@@ -377,6 +414,7 @@ function DiagramBody({ layout, arrow, arrowAccent }: { layout: DiagramPreviewLay
     case 'agent-loop':
       return (
         <>
+          {Band({ x: 8, y: 48, w: 232, h: 52 })}
           <path d="M124 36V47" className="tpl-d-arw" {...A} />
           <path d="M105 68L60 68M143 68L188 68" className="tpl-d-arw" {...A} />
           <path d="M124 90V110" className="tpl-d-arw" {...A} />
@@ -391,6 +429,8 @@ function DiagramBody({ layout, arrow, arrowAccent }: { layout: DiagramPreviewLay
     case 'rag':
       return (
         <>
+          {Band({ x: 6, y: 32, w: 236, h: 38 })}
+          {Band({ x: 36, y: 100, w: 60, h: 36 })}
           <path d="M42 52H50M84 52H90M126 52H134M170 52H176" className="tpl-d-arw" {...A} />
           <path d="M196 64Q196 92 150 92Q116 92 116 70" className="tpl-d-loop" {...AA} />
           <path d="M107 92H78Q66 92 66 104" className="tpl-d-arw" {...A} />
@@ -528,9 +568,49 @@ function DiagramBody({ layout, arrow, arrowAccent }: { layout: DiagramPreviewLay
           <StateNode cx={210} cy={76} r={17} accent terminal />
         </>
       );
+    case 'mindmap':
+      return (
+        <>
+          <path d="M101 67Q74 44 62 31" className="tpl-d-branch" />
+          <path d="M147 67Q174 44 186 31" className="tpl-d-branch is-alt" />
+          <path d="M98 75H54" className="tpl-d-branch" />
+          <path d="M150 75H194" className="tpl-d-branch is-alt" />
+          <path d="M104 84Q74 108 78 120" className="tpl-d-branch is-alt" />
+          <path d="M144 84Q176 108 172 120" className="tpl-d-branch" />
+          {N({ x: 16, y: 16, w: 46, h: 18, r: 9 })}
+          {N({ x: 186, y: 16, w: 46, h: 18, r: 9 })}
+          {N({ x: 10, y: 66, w: 44, h: 18, r: 9 })}
+          {N({ x: 194, y: 66, w: 44, h: 18, r: 9 })}
+          {N({ x: 32, y: 116, w: 46, h: 18, r: 9 })}
+          {N({ x: 172, y: 116, w: 46, h: 18, r: 9 })}
+          {N({ x: 96, y: 62, w: 56, h: 26, accent: true, r: 13 })}
+        </>
+      );
+    case 'timeline':
+      return (
+        <>
+          <path d="M14 75H236" className="tpl-d-axis is-thick" {...A} />
+          {[44, 96, 148, 200].map((x) => (
+            <line key={`s${x}`} x1={x} y1="75" x2={x} y2={x % 96 === 44 || x === 148 ? 50 : 100} className="tpl-d-stem" />
+          ))}
+          {N({ x: 22, y: 26, w: 44, h: 22 })}
+          {N({ x: 74, y: 102, w: 44, h: 22 })}
+          {N({ x: 126, y: 26, w: 44, h: 22 })}
+          {N({ x: 178, y: 102, w: 44, h: 22, accent: true })}
+          {[44, 96, 148, 200].map((x, i) => (
+            <circle key={`d${x}`} cx={x} cy="75" r={i === 3 ? 5 : 4} className={`tpl-d-cell${i === 3 ? ' is-accent' : ''}`} />
+          ))}
+        </>
+      );
     default:
       return null;
   }
+}
+
+// Dashed section-group container — the signature "fireworks" grouping that
+// makes a flow diagram read as a real, sectioned technical figure.
+function Band({ x, y, w, h }: { x: number; y: number; w: number; h: number }) {
+  return <rect x={x} y={y} width={w} height={h} rx={9} className="tpl-d-band" />;
 }
 
 function ClassBox({ x, y, w, h, accent = false }: { x: number; y: number; w: number; h: number; accent?: boolean }) {

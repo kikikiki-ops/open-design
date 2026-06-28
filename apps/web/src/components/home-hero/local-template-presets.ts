@@ -29,7 +29,9 @@ export type SocialPreviewLayout =
   | 'poll' // 9:16 interactive poll sticker
   | 'quote' // serif pull-quote card
   | 'framework' // numbered framework / checklist
-  | 'photo-grid'; // casual 2x2 photo dump
+  | 'photo-grid' // casual 2x2 photo dump
+  | 'thumbnail' // 16:9 YouTube-style cover with bold title + face
+  | 'poster'; // full-bleed dramatic quote poster
 
 // Editorial + swiss color themes and per-platform brand tints.
 export type SocialPalette =
@@ -66,7 +68,9 @@ export type DiagramPreviewLayout =
   | 'before-after' // split before | after panel
   | 'quadrant' // 2x2 two-axis positioning
   | 'mesh' // multi-agent ring + coordinator
-  | 'state'; // state-machine circles + transitions
+  | 'state' // state-machine circles + transitions
+  | 'mindmap' // central root + radiating branches
+  | 'timeline'; // horizontal axis + alternating milestones
 
 // Diagram visual styles (fireworks-tech-graph). Mostly light surfaces plus
 // the two canonical dark showcases (blueprint, dark-terminal).
@@ -107,9 +111,15 @@ interface LocalizedPresetSource {
   chipId: LocalTemplatePresetChipId;
   subcategorySlug: string;
   preview: PreviewSpec;
-  title: { en: string; zh: string };
-  description: { en: string; zh: string };
-  promptText: { en: string; zh: string };
+  title: LocalizedPresetCopy;
+  description: LocalizedPresetCopy;
+  promptText: LocalizedPresetCopy;
+}
+
+interface LocalizedPresetCopy {
+  en: string;
+  zh: string;
+  zhTW?: string;
 }
 
 // Order matters: it is the display order inside the "All" rail. Per the
@@ -442,7 +452,7 @@ const PRESET_SOURCES: LocalizedPresetSource[] = [
     id: 'social-youtube-thumb',
     chipId: 'social-card',
     subcategorySlug: 'youtube-thumbnail',
-    preview: { kind: 'social', layout: 'cover', palette: 'youtube' },
+    preview: { kind: 'social', layout: 'thumbnail', palette: 'youtube' },
     title: { en: 'YouTube Thumbnail', zh: 'YouTube 封面' },
     description: { en: '16:9 high-CTR cover', zh: '16:9 高点击封面' },
     promptText: {
@@ -454,7 +464,7 @@ const PRESET_SOURCES: LocalizedPresetSource[] = [
     id: 'social-youtube-metric',
     chipId: 'social-card',
     subcategorySlug: 'youtube-thumbnail',
-    preview: { kind: 'social', layout: 'metric', palette: 'youtube' },
+    preview: { kind: 'social', layout: 'thumbnail', palette: 'instagram' },
     title: { en: 'YouTube Milestone', zh: 'YouTube 里程碑' },
     description: { en: 'Subscriber / view stat', zh: '订阅 / 播放数据' },
     promptText: {
@@ -542,7 +552,7 @@ const PRESET_SOURCES: LocalizedPresetSource[] = [
     id: 'social-quote-midnight',
     chipId: 'social-card',
     subcategorySlug: 'quote-poster',
-    preview: { kind: 'social', layout: 'quote', palette: 'midnight' },
+    preview: { kind: 'social', layout: 'poster', palette: 'midnight' },
     title: { en: 'Gold Quote Poster', zh: '烫金金句海报' },
     description: { en: 'Serif quote, gold mark', zh: '衬线金句 · 烫金引号' },
     promptText: {
@@ -554,7 +564,7 @@ const PRESET_SOURCES: LocalizedPresetSource[] = [
     id: 'social-quote-ink',
     chipId: 'social-card',
     subcategorySlug: 'quote-poster',
-    preview: { kind: 'social', layout: 'quote', palette: 'ink' },
+    preview: { kind: 'social', layout: 'poster', palette: 'ink' },
     title: { en: 'Editorial Quote', zh: '编辑金句卡' },
     description: { en: 'Ink-on-cream pull-quote', zh: '米底墨字金句' },
     promptText: {
@@ -888,7 +898,7 @@ const PRESET_SOURCES: LocalizedPresetSource[] = [
     id: 'diagram-mindmap-topic',
     chipId: 'diagram',
     subcategorySlug: 'mindmap-diagram',
-    preview: { kind: 'diagram', layout: 'mesh', palette: 'flat' },
+    preview: { kind: 'diagram', layout: 'mindmap', palette: 'flat' },
     title: { en: 'Topic Mind Map', zh: '主题思维导图' },
     description: { en: 'Central idea + branches', zh: '中心主题 + 分支' },
     promptText: {
@@ -900,7 +910,7 @@ const PRESET_SOURCES: LocalizedPresetSource[] = [
     id: 'diagram-mindmap-plan',
     chipId: 'diagram',
     subcategorySlug: 'mindmap-diagram',
-    preview: { kind: 'diagram', layout: 'mesh', palette: 'claude' },
+    preview: { kind: 'diagram', layout: 'mindmap', palette: 'claude' },
     title: { en: 'Project Map', zh: '项目脑图' },
     description: { en: 'Goals, tasks, owners', zh: '目标 · 任务 · 负责人' },
     promptText: {
@@ -963,7 +973,7 @@ const PRESET_SOURCES: LocalizedPresetSource[] = [
     id: 'diagram-timeline-roadmap',
     chipId: 'diagram',
     subcategorySlug: 'timeline-diagram',
-    preview: { kind: 'diagram', layout: 'pipeline', palette: 'flat' },
+    preview: { kind: 'diagram', layout: 'timeline', palette: 'flat' },
     title: { en: 'Roadmap Timeline', zh: '路线图时间线' },
     description: { en: 'Phases & milestones', zh: '阶段与里程碑' },
     promptText: {
@@ -975,7 +985,7 @@ const PRESET_SOURCES: LocalizedPresetSource[] = [
     id: 'diagram-timeline-release',
     chipId: 'diagram',
     subcategorySlug: 'timeline-diagram',
-    preview: { kind: 'diagram', layout: 'pipeline', palette: 'claude' },
+    preview: { kind: 'diagram', layout: 'timeline', palette: 'claude' },
     title: { en: 'Release Timeline', zh: '发布时间线' },
     description: { en: 'Versions & dates', zh: '版本与日期' },
     promptText: {
@@ -1010,22 +1020,153 @@ const PRESET_SOURCES: LocalizedPresetSource[] = [
   },
 ];
 
-function promptLocale(locale: Locale): 'en' | 'zh' {
-  return locale === 'zh-CN' || locale === 'zh-TW' ? 'zh' : 'en';
-}
-
 function localizePreset(source: LocalizedPresetSource, locale: Locale): LocalTemplatePreset {
-  const kind = promptLocale(locale);
   return {
     id: source.id,
     chipId: source.chipId,
     subcategorySlug: source.subcategorySlug,
-    title: source.title[kind] ?? source.title.en,
-    description: source.description[kind] ?? source.description.en,
-    promptText: source.promptText[kind] ?? source.promptText.en,
+    title: localizePresetCopy(source.title, locale),
+    description: localizePresetCopy(source.description, locale),
+    promptText: localizePresetCopy(source.promptText, locale),
     preview: source.preview,
   };
 }
+
+function localizePresetCopy(copy: LocalizedPresetCopy, locale: Locale): string {
+  if (locale === 'zh-CN') return copy.zh;
+  if (locale === 'zh-TW') return copy.zhTW ?? toTraditionalChinesePresetCopy(copy.zh);
+  return copy.en;
+}
+
+// The home template rail is intentionally local data, not part of the global
+// Dict contract. Keep non-Chinese locales on English, but do not show
+// simplified copy in Traditional Chinese UI.
+function toTraditionalChinesePresetCopy(text: string): string {
+  return ZH_TW_REPLACEMENTS.reduce((next, [from, to]) => next.replaceAll(from, to), text);
+}
+
+const ZH_TW_REPLACEMENTS: Array<[string, string]> = [
+  ['小红书', '小紅書'],
+  ['公众号', '公眾號'],
+  ['瑞士风', '瑞士風'],
+  ['创始人', '創辦人'],
+  ['思想领导力', '思想領導力'],
+  ['笔记', '筆記'],
+  ['关键', '關鍵'],
+  ['视觉', '視覺'],
+  ['风格', '風格'],
+  ['简述', '簡述'],
+  ['品牌', '品牌'],
+  ['配色', '配色'],
+  ['复制', '複製'],
+  ['种子', '種子'],
+  ['避免', '避免'],
+  ['安全裁切', '安全裁切'],
+  ['清晰', '清晰'],
+  ['金句', '金句'],
+  ['数据故事', '數據故事'],
+  ['数据血缘', '資料血緣'],
+  ['数据卡', '數據卡'],
+  ['数据', '資料'],
+  ['图表', '圖表'],
+  ['组图', '組圖'],
+  ['封面对', '封面組'],
+  ['封面', '封面'],
+  ['头图', '頭圖'],
+  ['头部', '頭部'],
+  ['头像', '頭像'],
+  ['账号', '帳號'],
+  ['电光蓝', '電光藍'],
+  ['指标', '指標'],
+  ['经验', '經驗'],
+  ['下一步', '下一步'],
+  ['点击', '點擊'],
+  ['订阅', '訂閱'],
+  ['播放', '播放'],
+  ['烫金', '燙金'],
+  ['衬线', '襯線'],
+  ['编辑', '編輯'],
+  ['主题', '主題'],
+  ['目标', '目標'],
+  ['任务', '任務'],
+  ['负责人', '負責人'],
+  ['网络', '網路'],
+  ['拓扑', '拓樸'],
+  ['订单', '訂單'],
+  ['已下单', '已下單'],
+  ['发货', '出貨'],
+  ['送达', '送達'],
+  ['后台', '後台'],
+  ['运行', '執行'],
+  ['创建', '建立'],
+  ['设计', '設計'],
+  ['内容', '內容'],
+  ['选择', '選擇'],
+  ['用户', '使用者'],
+  ['截图', '截圖'],
+  ['内置', '內建'],
+  ['导出', '匯出'],
+  ['静态', '靜態'],
+  ['画板', '畫板'],
+  ['标签', '標籤'],
+  ['语义', '語義'],
+  ['质量', '品質'],
+  ['输出', '輸出'],
+  ['时间线', '時間軸'],
+  ['时间', '時間'],
+  ['路线图', '路線圖'],
+  ['流程图', '流程圖'],
+  ['架构图', '架構圖'],
+  ['微服务', '微服務'],
+  ['服务', '服務'],
+  ['状态机', '狀態機'],
+  ['状态', '狀態'],
+  ['转移', '轉移'],
+  ['队列', '佇列'],
+  ['排队', '佇列'],
+  ['失败', '失敗'],
+  ['终止', '終止'],
+  ['重试', '重試'],
+  ['守卫', '守衛'],
+  ['路径', '路徑'],
+  ['节点', '節點'],
+  ['阶段', '階段'],
+  ['并行', '平行'],
+  ['轨道', '軌道'],
+  ['热修复', '熱修復'],
+  ['发布', '發布'],
+  ['页面', '頁面'],
+  ['滑动', '滑動'],
+  ['轮播', '輪播'],
+  ['文档', '文件'],
+  ['对比', '對比'],
+  ['编号', '編號'],
+  ['方法论', '方法論'],
+  ['清单', '清單'],
+  ['测评', '評測'],
+  ['观点', '觀點'],
+  ['洞察', '洞察'],
+  ['证据', '證據'],
+  ['产品', '產品'],
+  ['领导力', '領導力'],
+  ['管理层', '管理層'],
+  ['倒计时', '倒數計時'],
+  ['投票贴', '投票貼'],
+  ['揭晓', '揭曉'],
+  ['卡片', '卡片'],
+  ['强调色', '強調色'],
+  ['强', '強'],
+  ['干净', '乾淨'],
+  ['风', '風'],
+  ['图', '圖'],
+  ['这', '這'],
+  ['个', '個'],
+  ['与', '與'],
+  ['对', '對'],
+  ['为', '為'],
+  ['时', '時'],
+  ['后', '後'],
+];
 
 export function localTemplatePresetsForChip(
   chipId: string | null,

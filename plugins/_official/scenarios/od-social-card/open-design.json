@@ -3,9 +3,9 @@
   "specVersion": "1.0.0",
   "name": "od-social-card",
   "title": "Social card (default scenario)",
-  "version": "0.1.0",
-  "description": "Default scenario plugin for platform-ready social cards, carousels, covers, threads, stories, and launch visuals.",
-  "license": "MIT",
+  "version": "0.2.0",
+  "description": "Default scenario plugin for platform-ready social cards, carousels, covers, threads, stories, and launch visuals, upgraded with Guizang editorial/Swiss seeds and bundled visual assets.",
+  "license": "AGPL-3.0",
   "author": {
     "name": "Open Design",
     "url": "https://github.com/nexu-io"
@@ -47,8 +47,19 @@
       ],
       "assets": [
         "./assets/template.html",
+        "./assets/template-editorial-card.html",
+        "./assets/template-swiss-card.html",
         "./references/layouts.md",
-        "./references/checklist.md"
+        "./references/platform-specs.md",
+        "./references/style-system.md",
+        "./references/theme-presets.md",
+        "./references/layout-recipes.md",
+        "./references/components.md",
+        "./references/image-overlay.md",
+        "./references/screenshot-treatment.md",
+        "./references/qa-checklist.md",
+        "./references/checklist.md",
+        "./scripts/validate-social-deck.mjs"
       ]
     },
     "pipeline": {
@@ -74,13 +85,22 @@
     ],
     "useCase": {
       "query": {
-        "en": "Create platform-ready social design for {{audience}}. Platform: {{platform}}. Layout: {{layout}}. Content brief: {{content}}. Palette direction: {{palette}}. Use {{designSystem}} as brand direction. Build from `assets/template.html` and choose the closest pattern from `references/layouts.md`; output export-ready static frames with strong typography and crop-safe composition.",
-        "zh-CN": "为 {{audience}} 创建可发布的社媒设计。平台：{{platform}}。版式：{{layout}}。内容简述：{{content}}。配色方向：{{palette}}。品牌方向使用 {{designSystem}}。基于 `assets/template.html` 并从 `references/layouts.md` 选择最接近的模式；输出可导出的静态画板，强调强排版和安全裁切。"
+        "en": "Create platform-ready social design for {{audience}}. Platform: {{platform}}. Layout: {{layout}}. Content brief: {{content}}. Palette direction: {{palette}}. Use {{designSystem}} as brand direction. Read `assets/template.html`, choose Editorial or Swiss via `references/layouts.md`, then copy `assets/template-editorial-card.html` or `assets/template-swiss-card.html` as the seed. Use supplied images/screenshots or bundled `assets/screenshot-backgrounds/` so the output is not a purely abstract poster. Export static frames with strong typography and crop-safe composition.",
+        "zh-CN": "为 {{audience}} 创建可发布的社媒设计。平台：{{platform}}。版式：{{layout}}。内容简述：{{content}}。配色方向：{{palette}}。品牌方向使用 {{designSystem}}。先读 `assets/template.html`，再按 `references/layouts.md` 选择 Editorial 或 Swiss，并复制 `assets/template-editorial-card.html` 或 `assets/template-swiss-card.html` 作为种子。优先使用用户图片/截图，或使用内置 `assets/screenshot-backgrounds/`，避免做成纯抽象海报。输出可导出的静态画板，强调强排版和安全裁切。",
+        "zh-TW": "為 {{audience}} 建立可發布的社群設計。平台：{{platform}}。版式：{{layout}}。內容簡述：{{content}}。配色方向：{{palette}}。品牌方向使用 {{designSystem}}。先讀 `assets/template.html`，再按 `references/layouts.md` 選擇 Editorial 或 Swiss，並複製 `assets/template-editorial-card.html` 或 `assets/template-swiss-card.html` 作為種子。優先使用使用者圖片/截圖，或使用內建 `assets/screenshot-backgrounds/`，避免做成純抽象海報。輸出可匯出的靜態畫板，強調強排版和安全裁切。"
       },
       "exampleOutputs": [
         {
           "path": "./assets/template.html",
           "title": "Social card seed"
+        },
+        {
+          "path": "./assets/template-editorial-card.html",
+          "title": "Guizang editorial seed"
+        },
+        {
+          "path": "./assets/template-swiss-card.html",
+          "title": "Guizang Swiss seed"
         }
       ]
     },
