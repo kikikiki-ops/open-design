@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import type { Brand } from '@open-design/contracts';
 import type { ComponentProps, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ProjectView } from '../../src/components/ProjectView';
+import { BROWSER_PAGE_ARCHIVE_SCHEMA } from '../../src/components/design-browser-tools';
 import type {
   AgentInfo,
   AppConfig,
@@ -287,6 +289,7 @@ describe('ProjectView pending prompt seeding', () => {
 
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
     vi.clearAllMocks();
   });
 
@@ -626,6 +629,112 @@ describe('ProjectView pending prompt seeding', () => {
         ),
       ).toBe(true);
     });
+  });
+
+  it('continues to the current Browser tab when a saved page archive is stale', async () => {
+    const onDesignSystemsRefresh = vi.fn();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/raw/browser/latest-page-snapshot.json')) {
+        return new Response(JSON.stringify({
+          schema: BROWSER_PAGE_ARCHIVE_SCHEMA,
+          capturedAt: 123,
+          title: 'Stale wall',
+          url: 'https://economist.com/',
+          baseUrl: 'https://economist.com/',
+          htmlFile: 'browser/page-archive/stale.html',
+          cssFile: 'browser/page-archive/stale.css',
+          manifestFile: 'browser/latest-page-snapshot.json',
+          resources: [],
+        }), { status: 200 });
+      }
+      if (url.includes('/raw/browser/page-archive/stale.html')) {
+        return new Response('<html><body>Human verification required</body></html>', { status: 200 });
+      }
+      if (url.includes('/raw/browser/page-archive/stale.css')) {
+        return new Response('body { color: #888888; }', { status: 200 });
+      }
+      return new Response('', { status: 404 });
+    });
+    mockedExtractBrandFromHtml
+      .mockResolvedValueOnce({
+        ok: false,
+        error: 'Programmatic extraction blocked by Cloudflare.',
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        result: {
+          id: 'brand-retry',
+          brand: {
+            name: 'Economist',
+            tagline: '',
+            description: '',
+            sourceUrl: 'https://economist.com/',
+            logo: { primary: null, alternates: [], notes: '' },
+            colors: [],
+            typography: {
+              display: { family: 'serif', fallbacks: [], weights: [400] },
+              body: { family: 'serif', fallbacks: [], weights: [400] },
+            },
+            voice: {
+              adjectives: [],
+              tone: '',
+              messagingPillars: [],
+              vocabulary: { use: [], avoid: [] },
+            },
+            imagery: { style: '', subjects: [], treatment: '', avoid: [] },
+            layout: { radius: '0', borderWeight: '1px', spacing: 'normal', postureRules: [] },
+          } satisfies Brand,
+          designSystemId: 'user:brand-retry',
+          projectId: 'brand-retry',
+          files: [],
+        },
+      });
+    const executeJavaScript = vi.fn()
+      .mockResolvedValueOnce('<html><head><title>Economist</title></head><body><h1>Current page</h1></body></html>')
+      .mockResolvedValueOnce('body { color: #111111; background: #ffffff; }');
+    brandBrowserBridgeMocks.getBrandBrowser.mockReturnValue({
+      isDesktopWebview: true,
+      getURL: () => 'https://economist.com/',
+      executeJavaScript,
+    });
+
+    renderProjectView(
+      {
+        ...project('brand-retry'),
+        metadata: {
+          kind: 'brand',
+          importedFrom: 'brand-extraction',
+          brandId: 'brand-retry',
+          brandSourceUrl: 'https://economist.com/',
+          brandDesignSystemId: 'user:brand-retry',
+        },
+      },
+      vi.fn(),
+      { onDesignSystemsRefresh },
+    );
+
+    await waitFor(() => {
+      expect(chatPaneSpy.mock.calls.at(-1)?.[0].onContinueBrandExtraction).toBeTypeOf('function');
+    });
+    chatPaneSpy.mock.calls.at(-1)?.[0].onContinueBrandExtraction?.();
+
+    await waitFor(() => {
+      expect(mockedExtractBrandFromHtml).toHaveBeenCalledTimes(2);
+    });
+    expect(mockedExtractBrandFromHtml).toHaveBeenNthCalledWith(1, 'brand-retry', {
+      html: '<html><body>Human verification required</body></html>',
+      css: 'body { color: #888888; }',
+      baseUrl: 'https://economist.com/',
+    });
+    expect(mockedExtractBrandFromHtml).toHaveBeenNthCalledWith(2, 'brand-retry', {
+      html: '<html><head><title>Economist</title></head><body><h1>Current page</h1></body></html>',
+      css: 'body { color: #111111; background: #ffffff; }',
+      baseUrl: 'https://economist.com/',
+    });
+    expect(mockedContinueBrandExtraction).toHaveBeenCalledWith('brand-retry');
+    await waitFor(() => expect(onDesignSystemsRefresh).toHaveBeenCalled());
+    fetchSpy.mockRestore();
   });
 
   it('continues browser DOM extraction after a www redirect from the source URL', async () => {

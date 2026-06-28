@@ -13,9 +13,11 @@
 // We poll `/api/brands` while the backing project is a brand-extraction project
 // and stop when it reaches `ready` or the bounded polling window expires. A
 // failed extraction may be retried against the same brand id, so `failed` keeps
-// watching for a later ready transition. The prompt stays visible until the user
-// dismisses or acts on it; that manual action sets a sessionStorage flag so a
-// later visit does not nag again.
+// watching for a later ready transition. The ready prompt stays visible until
+// the user dismisses or acts on it; that manual action sets a sessionStorage
+// flag so a later visit does not nag again. Browser assist is deliberately not
+// session-latched: when anti-bot extraction remains blocked, the recovery entry
+// needs to stay discoverable.
 
 import { useCallback, useEffect, useState } from 'react';
 import type { BrandMeta, BrandStatus, ProjectMetadata } from '@open-design/contracts';
@@ -34,10 +36,6 @@ const ASSIST_TIMEOUT_MS = 30_000;
 
 function shownStorageKey(brandId: string): string {
   return `od:brand-ready-prompt:${brandId}`;
-}
-
-function assistStorageKey(brandId: string): string {
-  return `od:brand-browser-assist:${brandId}`;
 }
 
 function readFlag(key: string): boolean {
@@ -63,14 +61,6 @@ function alreadyShown(brandId: string): boolean {
 
 function markShown(brandId: string): void {
   writeFlag(shownStorageKey(brandId));
-}
-
-function assistAlreadyShown(brandId: string): boolean {
-  return readFlag(assistStorageKey(brandId));
-}
-
-function markAssistShown(brandId: string): void {
-  writeFlag(assistStorageKey(brandId));
 }
 
 function finiteTimestamp(value: unknown): number | null {
@@ -189,8 +179,7 @@ export function useBrandReadyPrompt(
           antiBotFailureText,
         );
       const stalled = status === 'extracting' && Date.now() - assistBaselineAt >= ASSIST_TIMEOUT_MS;
-      if ((blocked || failedWithAntiBotSignal || stalled) && !assistAlreadyShown(brandId)) {
-        markAssistShown(brandId);
+      if (blocked || failedWithAntiBotSignal || stalled) {
         setBrowserAssist({
           brandId,
           sourceUrl: summary?.meta.sourceUrl ?? '',

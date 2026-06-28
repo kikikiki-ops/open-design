@@ -489,15 +489,16 @@ function writeBrandAssistDone(key: string): void {
   try {
     window.localStorage.setItem(key, 'done');
   } catch {
-    // Best effort — the in-memory `done` state still hides the button this mount.
+    // Best effort — the in-memory `done` state still shows the opened marker.
   }
 }
 
 // Brand extraction hit an anti-bot wall. This card opens/focuses the in-app
 // browser tab so the user can clear verification, then the normal next-step
 // action continues extraction from that live page.
-// A localStorage latch keyed off the brand id keeps a resolved card from
-// re-prompting on reload.
+// A localStorage marker keyed off the brand id remembers that the browser was
+// opened, but the action remains available because users may need to re-open the
+// Browser tab or re-trigger the Download Page highlight.
 function BrandBrowserAssistCard({
   card,
   onConfirm,
@@ -510,17 +511,6 @@ function BrandBrowserAssistCard({
   const [done, setDone] = useState(() => readBrandAssistDone(storageKey));
   const [status, setStatus] = useState<'idle' | 'working' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  if (done) {
-    return (
-      <div className={`${styles.card} ${styles.ruleSaved}`} data-od-card="brand-browser-assist">
-        <span className={styles.ruleSavedIcon} aria-hidden>
-          <Icon name="check" size={14} />
-        </span>
-        <span className={styles.ruleSavedLabel}>{t('artifact.odCardBrandAssistDone')}</span>
-      </div>
-    );
-  }
 
   const confirm = async () => {
     if (!onConfirm) return;
@@ -559,6 +549,14 @@ function BrandBrowserAssistCard({
       <div className={styles.ruleSummary}>
         <p className={styles.ruleDescription}>{t('artifact.odCardBrandAssistBody')}</p>
         {card.url ? <p className={styles.ruleName}>{card.url}</p> : null}
+        {done ? (
+          <div className={styles.ruleSaved} role="status">
+            <span className={styles.ruleSavedIcon} aria-hidden>
+              <Icon name="check" size={14} />
+            </span>
+            <span className={styles.ruleSavedLabel}>{t('artifact.odCardBrandAssistDone')}</span>
+          </div>
+        ) : null}
       </div>
       {status === 'error' ? (
         <p className={styles.ruleError} role="status">

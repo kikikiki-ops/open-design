@@ -111,7 +111,7 @@ describe('DesignBrowserPanel <webview> navigation', () => {
 
     const downloadItem = await screen.findByRole('menuitem', { name: 'Download Page' });
     expect(downloadItem.classList.contains('is-attention')).toBe(true);
-    expect(screen.getByText(/Use Download Page in this menu/)).toBeTruthy();
+    expect(screen.getByText(/click Download Page here/)).toBeTruthy();
 
     view.rerender(
       <DesignBrowserPanel
@@ -195,6 +195,48 @@ describe('DesignBrowserPanel <webview> navigation', () => {
     expect(onOpenFile).toHaveBeenCalledTimes(1);
     expect(onOpenFile.mock.calls[0]?.[0]).toMatch(/^browser\/snapshots\/example\.com-/);
     expect(onOpenFile.mock.calls[0]?.[0]).toMatch(/\/manifest\.json$/);
+  });
+
+  it('finishes a page snapshot when an archive resource cannot be fetched', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('network stalled'));
+    vi.mocked(writeProjectTextFile).mockImplementation(async (_projectId, name) => ({
+      kind: 'code',
+      mime: 'application/json',
+      mtime: 1,
+      name,
+      size: 1,
+      type: 'file',
+    }));
+    const { container } = render(
+      <DesignBrowserPanel
+        projectId="proj-webview-download-resource-failure"
+        initialTitle="Example"
+        initialUrl="https://example.com"
+        onOpenFile={() => {}}
+        onRefreshFiles={() => {}}
+      />,
+    );
+    const webview = container.querySelector('webview.db-webview') as HTMLElement & {
+      executeJavaScript?: ReturnType<typeof vi.fn>;
+    };
+    webview.executeJavaScript = vi.fn().mockResolvedValue({
+      title: 'Example',
+      url: 'https://example.com',
+      html: '<!doctype html><html><body>Example</body></html>',
+      css: '',
+      resources: [{ kind: 'image', url: 'https://cdn.example.test/hero.png' }],
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Browser menu' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Download Page' }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Saved page snapshot with 0\/1 resources/)).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Browser menu' }));
+    expect((screen.getByRole('menuitem', { name: 'Download Page' }) as HTMLButtonElement).disabled).toBe(false);
+
+    fetchMock.mockRestore();
   });
 
   it('searches inspiration actions and adds an operation prompt for the current browser tab', () => {

@@ -1,5 +1,5 @@
 import type { Server } from 'node:http';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { chmod, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { register } from 'prom-client';
@@ -104,6 +104,53 @@ describe('project design-system copy route', () => {
         id: copied.designSystemId,
         projectId: copied.project.id,
       }),
+    );
+  }, 60_000);
+
+  it('fails design-system workspace creation when a source file cannot be copied', async () => {
+    dataDir = await mkdtemp(join(tmpdir(), 'od-project-ds-copy-fail-'));
+    started = await startIsolatedServer(dataDir);
+
+    const sourceId = `source-fail-${Date.now()}`;
+    await postJson(`${started.url}/api/projects`, {
+      id: sourceId,
+      name: 'Broken Evidence Project',
+      metadata: { kind: 'prototype' },
+      pendingPrompt: 'Original project prompt',
+    });
+    await postJson(`${started.url}/api/projects/${sourceId}/files`, {
+      name: 'index.html',
+      content: '<!doctype html><title>Landing</title><main>Readable source artifact</main>',
+    });
+    await postJson(`${started.url}/api/projects/${sourceId}/files`, {
+      name: 'refs/unreadable.md',
+      content: '# Hidden evidence\nThis file must not be silently skipped.',
+    });
+    await chmod(join(dataDir, 'projects', sourceId, 'refs', 'unreadable.md'), 0o000);
+
+    const response = await fetch(`${started.url}/api/projects/${sourceId}/design-system-copy`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Broken Evidence Design System' }),
+    });
+
+    expect(response.status).toBe(400);
+    const body = await response.json() as { error?: { message?: string } };
+    expect(body.error?.message).toContain('unreadable.md');
+
+    const projects = await fetchJson<{ projects: Array<{ id: string; name: string }> }>(
+      `${started.url}/api/projects`,
+    );
+    expect(projects.projects).toContainEqual(expect.objectContaining({ id: sourceId }));
+    expect(projects.projects).not.toContainEqual(
+      expect.objectContaining({ name: 'Broken Evidence Design System' }),
+    );
+
+    const systems = await fetchJson<{ designSystems: Array<{ title: string }> }>(
+      `${started.url}/api/design-systems`,
+    );
+    expect(systems.designSystems).not.toContainEqual(
+      expect.objectContaining({ title: 'Broken Evidence Design System' }),
     );
   }, 60_000);
 

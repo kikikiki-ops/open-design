@@ -3267,6 +3267,7 @@ export function browserFileName(prefix: string, url: string, extension: 'md' | '
 const BROWSER_ARCHIVE_RESOURCE_LIMIT = 220;
 const BROWSER_ARCHIVE_RESOURCE_MAX_BYTES = 15 * 1024 * 1024;
 const BROWSER_ARCHIVE_TOTAL_MAX_BYTES = 80 * 1024 * 1024;
+const BROWSER_ARCHIVE_RESOURCE_TIMEOUT_MS = 8000;
 
 function browserPageArchiveDir(url: string, date = new Date()): string {
   const host = labelFromUrl(url).replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '') || 'page';
@@ -3350,12 +3351,27 @@ function browserArchiveManifestResourceBase(
 async function fetchBrowserArchiveResource(
   url: string,
 ): Promise<{ base64: string; mime: string; size: number }> {
-  const resp = await fetch(url, { cache: 'force-cache', credentials: 'include' });
-  if (!resp.ok) throw new Error(`resource fetch failed (${resp.status})`);
-  const blob = await resp.blob();
-  const mime = blob.type || responseMimeFromUrl(url);
-  const base64 = await blobToBase64(blob);
-  return { base64, mime, size: blob.size };
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), BROWSER_ARCHIVE_RESOURCE_TIMEOUT_MS);
+  try {
+    const resp = await fetch(url, {
+      cache: 'force-cache',
+      credentials: 'include',
+      signal: controller.signal,
+    });
+    if (!resp.ok) throw new Error(`resource fetch failed (${resp.status})`);
+    const blob = await resp.blob();
+    const mime = blob.type || responseMimeFromUrl(url);
+    const base64 = await blobToBase64(blob);
+    return { base64, mime, size: blob.size };
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error('resource fetch timed out');
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 function blobToBase64(blob: Blob): Promise<string> {

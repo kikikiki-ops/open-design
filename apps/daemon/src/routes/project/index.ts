@@ -1814,34 +1814,26 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
           metadata: sourceProject.metadata,
         });
         const copiedFiles: string[] = [];
-        const skippedFiles: Array<{ name: string; reason: string }> = [];
         for (const file of sourceFiles) {
           if (!file?.name || typeof file.name !== 'string') continue;
-          try {
-            const sourceFile = await readProjectFile(
-              PROJECTS_DIR,
-              sourceProject.id,
-              file.name,
-              sourceProject.metadata,
-            );
-            await writeProjectFile(
-              PROJECTS_DIR,
-              targetProjectId,
-              sourceFile.name,
-              sourceFile.buffer,
-              {
-                overwrite: true,
-                ...(sourceFile.artifactManifest ? { artifactManifest: sourceFile.artifactManifest } : {}),
-              },
-              metadata,
-            );
-            copiedFiles.push(sourceFile.name);
-          } catch (err: any) {
-            skippedFiles.push({
-              name: file.name,
-              reason: String(err?.message ?? err),
-            });
-          }
+          const sourceFile = await readProjectFile(
+            PROJECTS_DIR,
+            sourceProject.id,
+            file.name,
+            sourceProject.metadata,
+          );
+          await writeProjectFile(
+            PROJECTS_DIR,
+            targetProjectId,
+            sourceFile.name,
+            sourceFile.buffer,
+            {
+              overwrite: true,
+              ...(sourceFile.artifactManifest ? { artifactManifest: sourceFile.artifactManifest } : {}),
+            },
+            metadata,
+          );
+          copiedFiles.push(sourceFile.name);
         }
 
         const pendingPrompt = requestedPendingPrompt ?? buildDesignSystemCopyPendingPrompt({
@@ -1883,7 +1875,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
               targetProjectId,
               designSystemId: designSystem.id,
               copiedFiles,
-              skippedFiles,
+              skippedFiles: [],
             }),
             'utf8',
           ),

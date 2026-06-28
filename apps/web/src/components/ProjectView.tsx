@@ -261,6 +261,10 @@ type BrandBrowserSnapshot =
   | { status: 'unavailable'; message: string }
   | { status: 'read-failed'; message: string };
 
+type BrandBrowserSnapshotExtractionResult =
+  | { status: 'handled' }
+  | { status: 'miss'; message: string | null };
+
 type ProjectChatSendMeta = ChatSendMeta & {
   queueOnly?: boolean;
   retryOfAssistantId?: string;
@@ -6825,8 +6829,13 @@ export function ProjectView({
         const handle = getBrandBrowser(project.id, BRAND_BROWSER_TAB_ID);
         return Boolean(handle?.isDesktopWebview);
       };
-      const extractSnapshot = async (snapshot: BrandBrowserSnapshot): Promise<boolean> => {
-        if (snapshot.status !== 'ready') return false;
+      const extractSnapshot = async (
+        snapshot: BrandBrowserSnapshot,
+        options: { recoverableFailureIsMiss?: boolean } = {},
+      ): Promise<BrandBrowserSnapshotExtractionResult> => {
+        if (snapshot.status !== 'ready') {
+          return { status: 'miss', message: snapshot.message };
+        }
         if (!brandBrowserSnapshotMatchesSource(snapshot.baseUrl, brandExtractionSourceUrl)) {
           // The Browser tab/saved archive is for a different page than the brand
           // source. Stop instead of extracting a design system for the wrong site.
@@ -6837,7 +6846,7 @@ export function ProjectView({
             tone: 'error',
             ttlMs: 7000,
           });
-          return true;
+          return { status: 'handled' };
         }
         const outcome = await extractBrandFromHtml(brandId, {
           html: snapshot.html,
@@ -6845,6 +6854,9 @@ export function ProjectView({
           baseUrl: snapshot.baseUrl,
         });
         if (!outcome.ok) {
+          if (options.recoverableFailureIsMiss) {
+            return { status: 'miss', message: outcome.error };
+          }
           // Recoverable, not terminal: the read may have caught the page mid-load
           // / still on the wall. Keep the kit in the calm `needs_input` state (a
           // retry or the agent fallback can still finish it) instead of flashing
@@ -6856,17 +6868,18 @@ export function ProjectView({
             tone: 'error',
             ttlMs: 6000,
           });
-          return true;
+          return { status: 'handled' };
         }
         await refreshAfterProgrammaticContinue('ready');
-        return true;
+        return { status: 'handled' };
       };
 
       const localSnapshot = await readLocalBrowserPageArchiveSnapshot(brandExtractionSourceUrl);
-      if (await extractSnapshot(localSnapshot)) return;
+      const localExtract = await extractSnapshot(localSnapshot, { recoverableFailureIsMiss: true });
+      if (localExtract.status === 'handled') return;
 
       const daemonOutcome = await continueBrandExtraction(brandId);
-      let fallbackMessage: string | null = null;
+      let fallbackMessage: string | null = localExtract.message;
       if (daemonOutcome.ok) {
         await refreshAfterProgrammaticContinue(
           daemonOutcome.result.status,
@@ -6905,11 +6918,11 @@ export function ProjectView({
 
       const liveSnapshot = await readBrandBrowserSnapshotWithRetry(BRAND_BROWSER_TAB_ID);
       requestOpenFile(brandPreviewFile);
-      if (await extractSnapshot(liveSnapshot)) return;
+      if ((await extractSnapshot(liveSnapshot)).status === 'handled') return;
 
       const archivedSnapshot = await downloadBrandBrowserPageArchive(brandExtractionSourceUrl);
       requestOpenFile(brandPreviewFile);
-      if (await extractSnapshot(archivedSnapshot)) return;
+      if ((await extractSnapshot(archivedSnapshot)).status === 'handled') return;
 
       // Still no readable local source. Recoverable — clear/settle/download the
       // Browser page and click Continue again, or use the agent fallback.

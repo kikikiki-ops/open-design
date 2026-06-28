@@ -218,4 +218,31 @@ describe('useBrandReadyPrompt', () => {
     });
     expect(result.current.status).toBe('failed');
   });
+
+  it('keeps browser assist discoverable even after an earlier assist display', async () => {
+    window.sessionStorage.setItem('od:brand-browser-assist:brand-1', '1');
+    mockBrandsResponse([
+      {
+        meta: {
+          id: 'brand-1',
+          status: 'failed',
+          sourceUrl: 'https://www.economist.com/',
+          blocked: true,
+          blockedReason: 'Cloudflare',
+          error: 'Programmatic extraction blocked by Cloudflare.',
+        },
+        brand: null,
+      },
+    ]);
+
+    const { result } = renderHook(() => useBrandReadyPrompt(BRAND_METADATA));
+
+    await waitFor(() => {
+      expect(result.current.browserAssist).toEqual({
+        brandId: 'brand-1',
+        sourceUrl: 'https://www.economist.com/',
+        reason: 'Cloudflare',
+      });
+    });
+  });
 });
