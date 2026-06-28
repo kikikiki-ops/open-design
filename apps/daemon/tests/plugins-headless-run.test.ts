@@ -133,6 +133,89 @@ async function readSseUntilSuccess(resp: Response) {
 }
 
 describe('Plan §8 e2e-3 (entry slice) — headless install → project → run', () => {
+  it('duplicates a bundled HTML example into a project without starting a run', async () => {
+    const listResp = await fetch(`${baseUrl}/api/plugins`);
+    expect(listResp.status).toBe(200);
+    const listBody = (await listResp.json()) as {
+      plugins?: Array<{
+        id: string;
+        title?: string;
+        manifest?: { name?: string; od?: { preview?: { entry?: string } } };
+      }>;
+    };
+    const plugin = (listBody.plugins ?? []).find((record) =>
+      record.id === 'example-mobile-app' ||
+      record.manifest?.name === 'example-mobile-app' ||
+      record.title === 'Mobile App',
+    );
+    expect(plugin).toBeTruthy();
+
+    const duplicateResp = await fetch(
+      `${baseUrl}/api/plugins/${encodeURIComponent(plugin!.id)}/duplicate-project`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'Duplicated mobile app' }),
+      },
+    );
+    expect(duplicateResp.status).toBe(201);
+    const duplicateBody = (await duplicateResp.json()) as {
+      ok: true;
+      projectId: string;
+      conversationId: string;
+      relPath: string;
+      sourcePluginId: string;
+      sourceEntry: string;
+      copiedFiles: number;
+      project: {
+        id: string;
+        name: string;
+        pendingPrompt?: string | null;
+        metadata?: {
+          kind?: string;
+          duplicatedFromPluginId?: string;
+          duplicatedFromPluginEntry?: string;
+          entryFile?: string;
+        };
+      };
+    };
+    expect(duplicateBody.ok).toBe(true);
+    expect(duplicateBody.projectId).toBeTruthy();
+    expect(duplicateBody.conversationId).toBeTruthy();
+    expect(duplicateBody.relPath).toBe('index.html');
+    expect(duplicateBody.sourcePluginId).toBe(plugin!.id);
+    expect(duplicateBody.sourceEntry).toMatch(/example\.html$/);
+    expect(duplicateBody.copiedFiles).toBeGreaterThan(0);
+    expect(duplicateBody.project.name).toBe('Duplicated mobile app');
+    expect(duplicateBody.project.pendingPrompt ?? null).toBeNull();
+    expect(duplicateBody.project.metadata).toMatchObject({
+      kind: 'prototype',
+      duplicatedFromPluginId: plugin!.id,
+      duplicatedFromPluginEntry: duplicateBody.sourceEntry,
+      entryFile: 'index.html',
+    });
+
+    const filesResp = await fetch(
+      `${baseUrl}/api/projects/${encodeURIComponent(duplicateBody.projectId)}/files`,
+    );
+    expect(filesResp.status).toBe(200);
+    const filesBody = (await filesResp.json()) as { files: Array<{ name: string }> };
+    const fileNames = filesBody.files.map((file) => file.name).sort();
+    expect(fileNames).toContain('index.html');
+    expect(fileNames).toContain('assets/template.html');
+
+    const runsResp = await fetch(
+      `${baseUrl}/api/runs?projectId=${encodeURIComponent(duplicateBody.projectId)}`,
+    );
+    expect(runsResp.status).toBe(200);
+    const runsBody = (await runsResp.json()) as { runs?: unknown[] };
+    expect(runsBody.runs ?? []).toHaveLength(0);
+
+    await fetch(`${baseUrl}/api/projects/${encodeURIComponent(duplicateBody.projectId)}`, {
+      method: 'DELETE',
+    }).catch(() => {});
+  });
+
   it('walks install → project create → run start → status with snapshot pinned', async () => {
     // 1. Install a local fixture plugin via the SSE install endpoint.
     const installResp = await fetch(`${baseUrl}/api/plugins/install`, {

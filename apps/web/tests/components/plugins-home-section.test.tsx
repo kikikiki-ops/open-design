@@ -134,14 +134,31 @@ const sample: InstalledPluginRecord[] = [
 ];
 
 describe('PluginsHomeSection (community gallery)', () => {
-  it('keeps gallery tiles free of inline Use actions — Use lives in the detail modal', () => {
-    renderSection(sample, { cardLayout: 'gallery' });
+  it('surfaces gallery tile actions without restoring the heavier split Use menu', () => {
+    const onUse = vi.fn();
+    const onDuplicate = vi.fn();
+    const onOpenDetails = vi.fn();
+    renderSection(sample, {
+      cardLayout: 'gallery',
+      onUse,
+      onDuplicate,
+      onOpenDetails,
+    });
 
-    // The tile itself stays a pure preview: name button opens details,
-    // ↗ opens the example page. Use / Use with query are detail-modal
-    // affordances only.
+    // The tile overlay exposes direct actions, but keeps the richer
+    // split-menu affordance in the detail modal/rich management surface.
     expect(screen.getByTestId('plugins-home-details-prototype-dashboard')).toBeTruthy();
-    expect(screen.queryByTestId('plugins-home-use-prototype-dashboard')).toBeNull();
+    fireEvent.click(screen.getByTestId('plugins-home-use-prototype-dashboard'));
+    expect(onUse).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'prototype-dashboard' }),
+      'use',
+    );
+    expect(onOpenDetails).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('plugins-home-duplicate-prototype-dashboard'));
+    expect(onDuplicate).toHaveBeenCalledWith(expect.objectContaining({ id: 'prototype-dashboard' }));
+    expect(onOpenDetails).not.toHaveBeenCalled();
+
     expect(screen.queryByTestId('plugins-home-use-menu-prototype-dashboard')).toBeNull();
     expect(screen.queryByTestId('plugins-home-use-with-query-prototype-dashboard')).toBeNull();
   });

@@ -14,6 +14,8 @@ import type { PreviewPrimaryActionMenuItem } from '../PreviewModal';
 
 type TranslateUseMenu = (
   key:
+    | 'preview.duplicateTemplate'
+    | 'preview.duplicateTemplateDesc'
     | 'preview.usePlugin'
     | 'preview.usePluginOnly'
     | 'preview.usePluginOnlyDesc'
@@ -39,24 +41,36 @@ export function buildPluginUseMenu(
   record: InstalledPluginRecord,
   onUse: (record: InstalledPluginRecord, action: PluginUseAction) => void,
   t: TranslateUseMenu,
+  onDuplicate?: (record: InstalledPluginRecord) => void,
 ): PreviewPrimaryActionMenuItem[] | undefined {
   const hasQuery = Boolean(record.manifest?.od?.useCase?.query);
-  if (!hasQuery) return undefined;
+  if (!hasQuery && !onDuplicate) return undefined;
   // Replicate-content leads: the menu only exists when the plugin ships an
   // example query, and reproducing the previewed result is what most users
   // open it for — structure-only use is the secondary path.
-  return [
-    {
-      label: t('preview.replicateContent'),
-      description: t('preview.replicateContentDesc'),
-      onClick: () => onUse(record, 'use-with-query'),
-      testId: `plugin-details-use-with-query-${record.id}`,
-    },
-    {
-      label: t('preview.usePluginOnly'),
-      description: t('preview.usePluginOnlyDesc'),
-      onClick: () => onUse(record, 'use'),
-      testId: `plugin-details-use-option-${record.id}`,
-    },
-  ];
+  const items: PreviewPrimaryActionMenuItem[] = hasQuery
+    ? [
+        {
+          label: t('preview.replicateContent'),
+          description: t('preview.replicateContentDesc'),
+          onClick: () => onUse(record, 'use-with-query'),
+          testId: `plugin-details-use-with-query-${record.id}`,
+        },
+        {
+          label: t('preview.usePluginOnly'),
+          description: t('preview.usePluginOnlyDesc'),
+          onClick: () => onUse(record, 'use'),
+          testId: `plugin-details-use-option-${record.id}`,
+        },
+      ]
+    : [];
+  if (onDuplicate) {
+    items.push({
+      label: t('preview.duplicateTemplate'),
+      description: t('preview.duplicateTemplateDesc'),
+      onClick: () => onDuplicate(record),
+      testId: `plugin-details-duplicate-${record.id}`,
+    });
+  }
+  return items;
 }
