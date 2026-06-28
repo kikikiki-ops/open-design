@@ -112,6 +112,7 @@ import type {
   DesignSystemGenerationJob,
   DesignSystemSummary,
   Project,
+  ProjectMetadata,
   ProjectTemplate,
   ProviderModelOption,
   PromptTemplateSummary,
@@ -146,6 +147,18 @@ function normalizeSavedComposioConfig(config: AppConfig['composio']): AppConfig[
 function amrProfileForConfig(config: AppConfig): string | null {
   const profile = config.agentCliEnv?.[AMR_AGENT_ID]?.[AMR_PROFILE_ENV_KEY];
   return typeof profile === 'string' && profile ? profile : null;
+}
+
+function mergeLinkedDirsIntoMetadata(
+  metadata: ProjectMetadata,
+  linkedDirs?: string[] | null,
+): ProjectMetadata {
+  const nextDirs = (linkedDirs ?? []).map((dir) => dir.trim()).filter(Boolean);
+  if (nextDirs.length === 0) return metadata;
+  return {
+    ...metadata,
+    linkedDirs: Array.from(new Set([...(metadata.linkedDirs ?? []), ...nextDirs])),
+  };
 }
 
 function sameAgentModelChoice(
@@ -1354,6 +1367,7 @@ function AppInner() {
         requestId?: string;
         pendingFiles?: File[];
         userWorkingDirToken?: string;
+        linkedDirs?: string[] | null;
       },
     ): Promise<boolean> => {
       // Honor an explicit `null` design system — the create panel defaults
@@ -1364,8 +1378,9 @@ function AppInner() {
       input.pendingPrompt ??
       (input.metadata?.promptTemplate?.prompt?.trim() || undefined);
 
-      const kind = input.metadata?.kind ?? null;
-      const fidelity = fidelityToTracking(input.metadata?.fidelity ?? null);
+      const metadata = mergeLinkedDirsIntoMetadata(input.metadata, input.linkedDirs);
+      const kind = metadata.kind ?? null;
+      const fidelity = fidelityToTracking(metadata.fidelity ?? null);
       const creationSource: 'blank' | 'template' | 'zip' | 'folder' =
         kind === 'template' ? 'template' : 'blank';
       let result;
@@ -1375,7 +1390,7 @@ function AppInner() {
           skillId: input.skillId,
           designSystemId: input.designSystemId,
           pendingPrompt: derivedPendingPrompt,
-          metadata: input.metadata,
+          metadata,
           ...(input.conversationMode ? { conversationMode: input.conversationMode } : {}),
           ...(input.pluginId ? { pluginId: input.pluginId } : {}),
           ...(input.appliedPluginSnapshotId
@@ -1395,7 +1410,7 @@ function AppInner() {
             area: 'new_project',
             project_source: 'create_button',
             project_id: null,
-            project_kind: projectKindFromMetadataToTracking(input.metadata),
+            project_kind: projectKindFromMetadataToTracking(metadata),
             fidelity,
             result: 'failed',
             error_code: errorCode,
@@ -1412,7 +1427,7 @@ function AppInner() {
             area: 'new_project',
             project_source: 'create_button',
             project_id: null,
-            project_kind: projectKindFromMetadataToTracking(input.metadata),
+            project_kind: projectKindFromMetadataToTracking(metadata),
             fidelity,
             ...(input.pluginId ? { plugin_id: input.pluginId } : {}),
             ...(input.pluginType ? { plugin_type: input.pluginType } : {}),
@@ -1434,7 +1449,7 @@ function AppInner() {
       // from Design Files and the first auto-send context once the working
       // dir flips. Doing the handoff first means the initial upload lands in
       // the final tree.
-      const userWorkingDir = input.metadata?.userWorkingDir;
+      const userWorkingDir = metadata.userWorkingDir;
       let workingDirHandoffFailed = false;
       if (userWorkingDir) {
         try {
@@ -1492,7 +1507,7 @@ function AppInner() {
           area: 'new_project',
           project_source: 'create_button',
           project_id: result.project.id,
-          project_kind: projectKindFromMetadataToTracking(input.metadata),
+          project_kind: projectKindFromMetadataToTracking(metadata),
           fidelity,
           ...(input.pluginId ? { plugin_id: input.pluginId } : {}),
           ...(input.pluginType ? { plugin_type: input.pluginType } : {}),

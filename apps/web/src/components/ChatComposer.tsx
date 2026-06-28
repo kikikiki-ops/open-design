@@ -96,6 +96,11 @@ import type { PlaceholderScenario } from './home-hero/placeholderScenarios';
 
 type TranslateFn = (key: keyof Dict, vars?: Record<string, string | number>) => string;
 
+interface TrackedWorkspaceLinkedDir {
+  dir: string;
+  previousLinkedDirs: string[];
+}
+
 type ToolsTab = 'plugins' | 'skills' | 'mcp' | 'import';
 
 type MentionTab = 'all' | 'tabs' | 'files' | 'plugins' | 'skills' | 'mcp' | 'connectors';
@@ -431,6 +436,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
     const [stagedMcpServers, setStagedMcpServers] = useState<McpServerConfig[]>([]);
     const [stagedConnectors, setStagedConnectors] = useState<ConnectorDetail[]>([]);
     const [stagedWorkspaceContexts, setStagedWorkspaceContexts] = useState<WorkspaceContextItem[]>([]);
+    const [workspaceLinkedDirAdds, setWorkspaceLinkedDirAdds] = useState<Record<string, TrackedWorkspaceLinkedDir>>({});
     const [dismissedWorkspaceContextId, setDismissedWorkspaceContextId] = useState<string | null>(null);
     const activeWorkspaceContextId = activeWorkspaceContext?.id ?? null;
     const previousWorkspaceContextIdRef = useRef<string | null>(activeWorkspaceContextId);
@@ -502,10 +508,15 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
     const pendingEntryFromRef = useRef<ChatAnalyticsEntryFrom | null>(null);
     const petEnabled = Boolean(onAdoptPet && onTogglePet);
     const linkedDirs = projectMetadata?.linkedDirs ?? [];
+    const workspaceContextLinkedDirs = useMemo(
+      () => new Set(Object.values(workspaceLinkedDirAdds).map((tracked) => tracked.dir)),
+      [workspaceLinkedDirAdds],
+    );
     // The project's working directory: the local folder the agent can read
     // (via `linkedDirs` → `--add-dir`). Shown in the WorkingDirPicker below
-    // the input, mirroring Home. We treat it as a single primary folder.
-    const workingDir = linkedDirs[0] ?? null;
+    // the input, mirroring Home. Context-only folders are still linked for
+    // agent read access, but they should not become the displayed primary dir.
+    const workingDir = linkedDirs.find((dir) => !workspaceContextLinkedDirs.has(dir)) ?? null;
     const [recentDirs, setRecentDirs] = useState<string[]>([]);
     useEffect(() => {
       let cancelled = false;
@@ -1138,13 +1149,13 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       setComposerEngaged(true);
     }
 
-    async function addLinkedDir(dir: string) {
+    async function addLinkedDir(dir: string): Promise<TrackedWorkspaceLinkedDir | null | false> {
       if (!projectId) return false;
       const trimmed = dir.trim();
       if (!trimmed) return false;
       const base = projectMetadata ?? { kind: 'prototype' as const };
       const existing = base.linkedDirs ?? [];
-      if (existing.includes(trimmed)) return true;
+      if (existing.includes(trimmed)) return null;
       const metadata: ProjectMetadata = { ...base, linkedDirs: [...existing, trimmed] };
       const result = await patchProject(projectId, { metadata });
       if (!result?.metadata) {
@@ -1153,12 +1164,13 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       }
       onProjectMetadataChange?.(result.metadata);
       void rememberRecentDir(trimmed);
-      return true;
+      return { dir: trimmed, previousLinkedDirs: existing };
     }
 
     async function handleReferenceProject(project: Project, resolvedDir: string) {
       const path = resolvedDir.trim();
-      if (!path || !(await addLinkedDir(path))) return;
+      const trackedLinkedDir = path ? await addLinkedDir(path) : false;
+      if (trackedLinkedDir === false) return;
       const item: WorkspaceContextItem = {
         id: `project:${project.id}`,
         kind: 'project',
@@ -1168,13 +1180,17 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
         ...(path ? { absolutePath: path } : {}),
       };
       appendWorkspacePrompt(item);
+      if (trackedLinkedDir) {
+        setWorkspaceLinkedDirAdds((current) => ({ ...current, [item.id]: trackedLinkedDir }));
+      }
       setProjectReferenceOpen(false);
     }
 
     async function handleLinkLocalCodeContext() {
       const selected = await openFolderDialog();
       if (!selected) return;
-      if (!(await addLinkedDir(selected))) return;
+      const trackedLinkedDir = await addLinkedDir(selected);
+      if (trackedLinkedDir === false) return;
       const label = selected.split(/[/\\]/).filter(Boolean).pop() || selected;
       const item: WorkspaceContextItem = {
         id: `local-code:${selected}`,
@@ -1184,6 +1200,9 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
         absolutePath: selected,
       };
       appendWorkspacePrompt(item);
+      if (trackedLinkedDir) {
+        setWorkspaceLinkedDirAdds((current) => ({ ...current, [item.id]: trackedLinkedDir }));
+      }
     }
 
     async function insertSkillMention(skill: SkillSummary) {
@@ -1383,11 +1402,43 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       ]));
     }
 
-    function removeWorkspaceContext(id: string) {
+    async function removeTrackedWorkspaceLinkedDir(
+      id: string,
+      tracked: TrackedWorkspaceLinkedDir,
+    ): Promise<boolean> {
+      if (!projectId) return true;
+      const base = projectMetadata ?? { kind: 'prototype' as const };
+      const currentLinkedDirs = base.linkedDirs ?? [...tracked.previousLinkedDirs, tracked.dir];
+      const nextLinkedDirs = currentLinkedDirs.filter((dir) => dir !== tracked.dir);
+      const metadata: ProjectMetadata = { ...base, linkedDirs: nextLinkedDirs };
+      const result = await patchProject(projectId, { metadata });
+      if (!result?.metadata) {
+        onShowToast?.(t('homeWorkingDir.applyFailed'));
+        return false;
+      }
+      onProjectMetadataChange?.(result.metadata);
+      setWorkspaceLinkedDirAdds((current) => {
+        const { [id]: _removed, ...rest } = current;
+        return rest;
+      });
+      return true;
+    }
+
+    async function removeWorkspaceContext(id: string) {
       trackComposerBar({ element: 'context_remove', resource_kind: 'workspace', resource_id: id });
-      if (visibleWorkspaceContext?.id === id) setDismissedWorkspaceContextId(id);
       const workspaceItem = selectedWorkspaceContexts.find((item) => item.id === id) ?? null;
+      const trackedLinkedDir = workspaceLinkedDirAdds[id] ?? null;
+      if (trackedLinkedDir && !(await removeTrackedWorkspaceLinkedDir(id, trackedLinkedDir))) {
+        return;
+      }
+      if (visibleWorkspaceContext?.id === id) setDismissedWorkspaceContextId(id);
       setStagedWorkspaceContexts((prev) => prev.filter((item) => item.id !== id));
+      if (!trackedLinkedDir) {
+        setWorkspaceLinkedDirAdds((current) => {
+          const { [id]: _removed, ...rest } = current;
+          return rest;
+        });
+      }
       if (workspaceItem) {
         replaceEditorDraft(stripInlineMentionLabels(draft, [
           workspaceItem.label,

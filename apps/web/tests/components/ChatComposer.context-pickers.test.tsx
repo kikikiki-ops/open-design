@@ -172,6 +172,12 @@ function stagedPluginChip(): Element | null {
     ?.querySelector('.staged-chip.staged-context--plugin') ?? null;
 }
 
+function projectPatchBodies(): Array<{ metadata?: { linkedDirs?: string[] } }> {
+  return fetchMock.mock.calls
+    .filter(([url, init]) => url === '/api/projects/project-1' && init?.method === 'PATCH')
+    .map(([, init]) => JSON.parse(String(init?.body ?? '{}')));
+}
+
 // The contenteditable serializes newlines as `<br>`, which jsdom's
 // `.textContent` drops — so use the Lexical-aware `composerText()` helper for
 // every editor-text assertion (it walks the tree and emits real `\n`s).
@@ -206,8 +212,25 @@ beforeEach(() => {
         headers: { 'content-type': 'application/json' },
       });
     }
+    if (url === '/api/dialog/open-folder' && init?.method === 'POST') {
+      return new Response(JSON.stringify({ path: '/Users/me/reference-dir' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
     if (url === '/api/projects/project-1' && init?.method === 'PATCH') {
-      return new Response(JSON.stringify({ project: { id: 'project-1', skillId: SKILL.id } }), {
+      const body = JSON.parse(String(init.body ?? '{}')) as { metadata?: unknown };
+      return new Response(JSON.stringify({
+        project: {
+          id: 'project-1',
+          name: 'Project',
+          skillId: SKILL.id,
+          designSystemId: null,
+          createdAt: 1,
+          updatedAt: 1,
+          metadata: body.metadata ?? { kind: 'prototype' },
+        },
+      }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       });
@@ -404,6 +427,36 @@ describe('ChatComposer context pickers', () => {
 
     await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
     expect(onSend.mock.calls[0]?.[3]?.context?.workspaceItems).toEqual([browserContext]);
+  });
+
+  it('removes the linked dir added for a local-code context when its chip is cleared', async () => {
+    const onProjectMetadataChange = vi.fn();
+    renderComposer({
+      projectMetadata: { kind: 'prototype' },
+      onProjectMetadataChange,
+    });
+    await flushMounts();
+
+    fireEvent.click(screen.getByTestId('chat-plus-trigger'));
+    fireEvent.click(await screen.findByText('Link local code'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('staged-contexts').textContent).toContain('reference-dir');
+    });
+    expect(projectPatchBodies()[0]?.metadata?.linkedDirs).toEqual(['/Users/me/reference-dir']);
+
+    fireEvent.click(screen.getByLabelText('Remove reference-dir'));
+
+    await waitFor(() => {
+      expect(projectPatchBodies()).toHaveLength(2);
+    });
+    expect(projectPatchBodies()[1]?.metadata?.linkedDirs).toEqual([]);
+    await waitFor(() => {
+      expect(screen.queryByText('reference-dir')).toBeNull();
+    });
+    expect(onProjectMetadataChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ linkedDirs: [] }),
+    );
   });
 
   it('selects an MCP server from @ search and keeps the inline token visible', async () => {
