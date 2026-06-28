@@ -235,3 +235,20 @@
 /* hero matches the same column width for a tidy masthead */
 .v4 .v4hero .v4in { max-width: 880px; }
 .v4 .v4hero .v4heroimg { max-width: 100%; margin: 40px 0 0; }
+
+/* === review #4853 (Looper) fixes === */
+/* 1. The .v4 full-bleed shell is 100vw; when a vertical scrollbar is present
+ *    100vw includes the gutter and the shell overflows by the scrollbar width,
+ *    causing horizontal scroll/jitter. Clip page-level horizontal overflow on
+ *    pages that use the .v4 layout. (overflow:clip keeps sticky/fixed working.) */
+html:has(.v4) body { overflow-x: clip; }
+
+/* 2. The rich wrapper moved from .solution-page to .v4, so the .solution-page
+ *    FAQ refinements no longer matched. Port them under .v4 so the styled
+ *    accordion (border, padding, type scale) is preserved. */
+.v4 .faq-list { display: grid; gap: var(--spacing-10); }
+.v4 .faq-item { border: 1px solid var(--line); border-radius: var(--spacing-8); background: var(--bone); }
+.v4 .faq-item summary { grid-template-columns: 40px 1fr 32px; gap: var(--spacing-16); padding: var(--spacing-16); }
+.v4 .faq-q { color: var(--ink); font-family: var(--sans); font-size: var(--font-size-18, 18px); font-weight: 600; line-height: 125%; }
+.v4 .faq-toggle { border-radius: var(--spacing-8); border-color: var(--line); }
+.v4 .faq-a { margin: 0; padding: 0 var(--spacing-16) var(--spacing-16) 72px; max-width: none; color: var(--ink-soft); font-family: var(--sans); font-size: var(--font-size-14, 14px); line-height: 125%; }
