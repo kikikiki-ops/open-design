@@ -169,6 +169,11 @@ function shellWords(command: string): string[] {
   const words: string[] = [];
   let current = '';
   let quote: '"' | "'" | null = null;
+  const flushCurrent = () => {
+    if (!current) return;
+    words.push(current);
+    current = '';
+  };
   for (let i = 0; i < command.length; i += 1) {
     const char = command[i]!;
     if (quote) {
@@ -187,27 +192,41 @@ function shellWords(command: string): string[] {
       continue;
     }
     if (/\s/.test(char)) {
-      if (current) {
-        words.push(current);
-        current = '';
-      }
+      flushCurrent();
       continue;
     }
-    if ((char === '&' || char === '|') && command[i + 1] === char) {
-      if (current) {
-        words.push(current);
-        current = '';
+    if (char === '&' || char === '|') {
+      flushCurrent();
+      if (command[i + 1] === char) {
+        words.push(`${char}${char}`);
+        i += 1;
+      } else {
+        words.push(char);
       }
-      words.push(`${char}${char}`);
-      i += 1;
       continue;
     }
     if (char === ';') {
-      if (current) {
-        words.push(current);
-        current = '';
-      }
+      flushCurrent();
       words.push(char);
+      continue;
+    }
+    if (char === '<' || char === '>') {
+      let operator = char;
+      if (/^\d+$/.test(current)) {
+        operator = `${current}${operator}`;
+        current = '';
+      } else {
+        flushCurrent();
+      }
+      if (command[i + 1] === char) {
+        operator += char;
+        i += 1;
+      }
+      if (command[i + 1] === '&') {
+        operator += '&';
+        i += 1;
+      }
+      words.push(operator);
       continue;
     }
     if (char === '\\' && i + 1 < command.length) {
@@ -222,7 +241,18 @@ function shellWords(command: string): string[] {
 }
 
 function isShellSeparator(token: string): boolean {
-  return token === '&&' || token === '||' || token === ';';
+  return (
+    token === '&&' ||
+    token === '||' ||
+    token === ';' ||
+    token === '|' ||
+    token === '&' ||
+    isRedirectionOperator(token)
+  );
+}
+
+function isRedirectionOperator(token: string): boolean {
+  return /^(?:\d+)?(?:>{1,2}|<{1,2})(?:&)?$/.test(token);
 }
 
 function looksUnsafeForFileList(token: string): boolean {

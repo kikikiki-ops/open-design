@@ -144,6 +144,24 @@ describe('deriveFileOps', () => {
     expect(rows.map((row) => row.ops)).toEqual([['delete'], ['delete'], ['delete']]);
   });
 
+  it('stops Bash rm target inference at pipes and redirections', () => {
+    const events: AgentEvent[] = [
+      use('Bash', { command: 'rm old.txt | cat deletion.log' }, 't1'),
+      ok('t1'),
+      use('Bash', { command: 'rm stale.txt > deletion.log 2> errors.log' }, 't2'),
+      ok('t2'),
+      use('Bash', { command: 'rm ./queued.tmp& echo done' }, 't3'),
+      ok('t3'),
+    ];
+
+    const rows = deriveFileOps(events);
+    expect(rows.map((row) => row.fullPath).sort()).toEqual([
+      './queued.tmp',
+      'old.txt',
+      'stale.txt',
+    ]);
+  });
+
   it('drops events whose path is missing or "(unnamed)"', () => {
     const events: AgentEvent[] = [
       use('Write', { file_path: '' }, 't1'),
