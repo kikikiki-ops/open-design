@@ -701,7 +701,7 @@ async function seedDeckArtifact(
     (() => {
       let active = 0;
       const slides = Array.from(document.querySelectorAll('.slide'));
-      function render() { slides.forEach((slide, index) => { slide.hidden = index !== active; }); }
+      function render() { slides.forEach((slide, index) => { slide.style.display = index === active ? '' : 'none'; }); }
       window.addEventListener('message', (event) => {
         if (!event.data || event.data.type !== 'od:slide') return;
         if (event.data.action === 'next') active = Math.min(slides.length - 1, active + 1);
