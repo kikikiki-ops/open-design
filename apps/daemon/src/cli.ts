@@ -430,11 +430,17 @@ async function runExport(args) {
     ...(format === 'image' && flags['image-format'] ? { imageFormat: flags['image-format'] } : {}),
     ...(flags.title ? { title: flags.title } : {}),
   });
-  const resp = await fetch(`${base}/api/projects/${encodeURIComponent(projectId)}/${exportPath}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(requestBody),
-  });
+  let resp;
+  try {
+    resp = await fetch(`${base}/api/projects/${encodeURIComponent(projectId)}/${exportPath}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    });
+  } catch (err) {
+    surfaceFetchError(err, base);
+    process.exit(3);
+  }
   if (!resp.ok) return structuredHttpFailure(resp);
   const buffer = Buffer.from(await resp.arrayBuffer());
   let out = flags.out || flags.output;

@@ -23,16 +23,16 @@ async function loadDomToPptxBundle(): Promise<string> {
   const candidates = [
     ...(resourcesPath
       ? [
-          path.join(resourcesPath, "dom-to-pptx.bundle.js"),
           path.join(resourcesPath, "dom-to-pptx.bundle.js.gz"),
+          path.join(resourcesPath, "dom-to-pptx.bundle.js"),
         ]
       : []),
-    path.resolve(here, "../../vendor/dom-to-pptx/dom-to-pptx.bundle.js"),
     path.resolve(here, "../../vendor/dom-to-pptx/dom-to-pptx.bundle.js.gz"),
-    path.resolve(here, "../../../vendor/dom-to-pptx/dom-to-pptx.bundle.js"),
+    path.resolve(here, "../../vendor/dom-to-pptx/dom-to-pptx.bundle.js"),
     path.resolve(here, "../../../vendor/dom-to-pptx/dom-to-pptx.bundle.js.gz"),
-    path.resolve(here, "dom-to-pptx.bundle.js"),
+    path.resolve(here, "../../../vendor/dom-to-pptx/dom-to-pptx.bundle.js"),
     path.resolve(here, "dom-to-pptx.bundle.js.gz"),
+    path.resolve(here, "dom-to-pptx.bundle.js"),
   ];
   for (const candidate of candidates) {
     try {
