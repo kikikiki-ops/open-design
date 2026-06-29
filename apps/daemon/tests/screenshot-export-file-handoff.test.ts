@@ -349,6 +349,38 @@ describe('screenshot export desktop renderer file handoff', () => {
     }
   });
 
+  it('does not fall back to the legacy artifact exporter for raster PDF export', async () => {
+    const seenLegacyInputs: DesktopExportArtifactInput[] = [];
+    const legacyExporter = async (
+      input: DesktopExportArtifactInput,
+    ): Promise<DesktopExportArtifactResult> => {
+      seenLegacyInputs.push(input);
+      const dir = path.join(os.tmpdir(), `od-legacy-pdf-export-${Date.now()}`);
+      await mkdir(dir, { recursive: true });
+      const file = path.join(dir, 'artifact.pdf');
+      await writeFile(file, Buffer.from('%PDF-legacy'));
+      return { ok: true, path: file, mime: 'application/pdf' };
+    };
+    const srv = (await startServer({
+      port: 0,
+      returnServer: true,
+      desktopSlideRenderer: null,
+      desktopArtifactExporter: legacyExporter,
+    })) as { url: string; server: http.Server };
+    try {
+      const res = await fetch(`${srv.url}/api/projects/${projectId}/export/pdf-image`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName: 'index.html' }),
+      });
+      expect(res.status).toBe(501);
+      expect(await res.text()).toContain('screenshot export is only available');
+      expect(seenLegacyInputs).toHaveLength(0);
+    } finally {
+      await new Promise<void>((resolve) => srv.server.close(() => resolve()));
+    }
+  });
+
   it('deletes the scratch render dir after the export completes', async () => {
     const res = await exportImage();
     await res.arrayBuffer();

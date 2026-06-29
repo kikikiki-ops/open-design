@@ -478,7 +478,7 @@ export function registerProjectExportRoutes(app: Express, ctx: RegisterProjectEx
         return sendApiError(res, 400, 'BAD_REQUEST', 'height must be a positive number');
       }
       if (typeof desktopSlideRenderer !== 'function') {
-        if ((format === 'pdf' || format === 'image') && typeof desktopArtifactExporter === 'function') {
+        if (format === 'image' && typeof desktopArtifactExporter === 'function') {
           const input = await buildDesktopArtifactExportInput({
             daemonUrl: daemonUrlRef.current,
             fileName,
@@ -514,18 +514,8 @@ export function registerProjectExportRoutes(app: Express, ctx: RegisterProjectEx
           try {
             const buffer = await fs.promises.readFile(result.path);
             const contentType =
-              result.mime ||
-              (format === 'pdf'
-                ? 'application/pdf'
-                : imageFormat === 'jpeg'
-                  ? 'image/jpeg'
-                  : 'image/png');
-            const ext =
-              format === 'pdf'
-                ? 'pdf'
-                : contentType.includes('jpeg') || contentType.includes('jpg')
-                  ? 'jpg'
-                  : 'png';
+              result.mime || (imageFormat === 'jpeg' ? 'image/jpeg' : 'image/png');
+            const ext = contentType.includes('jpeg') || contentType.includes('jpg') ? 'jpg' : 'png';
             const titleBase =
               typeof title === 'string' && title.trim().length > 0
                 ? title.trim()
