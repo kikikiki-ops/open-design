@@ -21,8 +21,7 @@ type ProviderPackage =
   | '@ai-sdk/openai'
   | '@ai-sdk/openai-compatible'
   | '@ai-sdk/azure'
-  | '@ai-sdk/google'
-  | '@ai-sdk/ollama';
+  | '@ai-sdk/google';
 
 export interface OpenCodeByokProviderConfig {
   providerId: string;
@@ -106,6 +105,10 @@ function normalizeProviderBaseUrl(
   if (protocol === 'google' && isExactOrigin(trimmed, 'https://generativelanguage.googleapis.com')) {
     return 'https://generativelanguage.googleapis.com/v1beta';
   }
+  if (protocol === 'ollama') {
+    if (isExactOrigin(trimmed, 'https://ollama.com')) return 'https://ollama.com/v1';
+    if (trimmed.endsWith('/api')) return `${trimmed.slice(0, -4)}/v1`;
+  }
   return trimmed;
 }
 
@@ -124,6 +127,8 @@ function buildProviderEntry(
   apiVersion: string | undefined,
 ): { npm: ProviderPackage; options: Record<string, unknown> } {
   const keyRef = `{env:${BYOK_OPENCODE_API_KEY_ENV}}`;
+  const usesAzureOpenAICompatiblePath =
+    protocol === 'azure' && /\/openai\/v\d+(?:$|\/)/.test(safeUrlPathname(baseUrl));
   switch (protocol) {
     case 'anthropic':
       return {
@@ -139,7 +144,10 @@ function buildProviderEntry(
         options: {
           apiKey: keyRef,
           ...(baseUrl ? { baseURL: baseUrl } : {}),
-          apiVersion: apiVersion?.trim() || '2024-10-21',
+          ...(usesAzureOpenAICompatiblePath
+            ? {}
+            : { useDeploymentBasedUrls: true }),
+          ...apiVersionOption(apiVersion, usesAzureOpenAICompatiblePath),
         },
       };
     case 'google':
@@ -152,12 +160,10 @@ function buildProviderEntry(
       };
     case 'ollama':
       return {
-        npm: '@ai-sdk/ollama',
+        npm: '@ai-sdk/openai-compatible',
         options: {
-          baseURL: baseUrl.replace(/\/+$/, ''),
-          headers: {
-            Authorization: `Bearer ${keyRef}`,
-          },
+          baseURL: baseUrl,
+          apiKey: keyRef,
         },
       };
     case 'openai':
@@ -178,4 +184,21 @@ function buildProviderEntry(
         },
       };
   }
+}
+
+function safeUrlPathname(value: string): string {
+  try {
+    return new URL(value).pathname.replace(/\/+$/, '');
+  } catch {
+    return '';
+  }
+}
+
+function apiVersionOption(
+  apiVersion: string | undefined,
+  omitWhenBlank: boolean,
+): Record<string, string> {
+  const trimmed = apiVersion?.trim() ?? '';
+  if (trimmed) return { apiVersion: trimmed };
+  return omitWhenBlank ? {} : { apiVersion: '2024-10-21' };
 }

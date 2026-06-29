@@ -99,7 +99,7 @@ describe('byok-opencode runtime config', () => {
     });
   });
 
-  it('maps other BYOK protocols to provider packages', () => {
+  it('maps other native BYOK protocols to provider packages', () => {
     expect(buildOpenCodeByokProviderConfig(
       { protocol: 'anthropic', apiKey: 'sk-ant', baseUrl: 'https://api.anthropic.com' },
       'claude-sonnet-4-5',
@@ -112,17 +112,110 @@ describe('byok-opencode runtime config', () => {
     )?.config).toMatchObject({
       provider: { [BYOK_OPENCODE_PROVIDER_ID]: { npm: '@ai-sdk/google' } },
     });
+  });
+
+  it('preserves Azure deployment-based URL mode for classic Azure OpenAI resources', () => {
     expect(buildOpenCodeByokProviderConfig(
       { protocol: 'azure', apiKey: 'azure-key', baseUrl: 'https://example.openai.azure.com', apiVersion: '2024-10-21' },
       'gpt-4o',
     )?.config).toMatchObject({
-      provider: { [BYOK_OPENCODE_PROVIDER_ID]: { npm: '@ai-sdk/azure' } },
+      provider: {
+        [BYOK_OPENCODE_PROVIDER_ID]: {
+          npm: '@ai-sdk/azure',
+          options: {
+            baseURL: 'https://example.openai.azure.com',
+            apiKey: `{env:${BYOK_OPENCODE_API_KEY_ENV}}`,
+            apiVersion: '2024-10-21',
+            useDeploymentBasedUrls: true,
+          },
+          models: {
+            'gpt-4o': {
+              name: 'gpt-4o',
+            },
+          },
+        },
+      },
     });
+    expect(buildOpenCodeByokProviderConfig(
+      { protocol: 'azure', apiKey: 'azure-key', baseUrl: 'https://example.openai.azure.com' },
+      'deployment-one',
+    )?.config).toMatchObject({
+      provider: {
+        [BYOK_OPENCODE_PROVIDER_ID]: {
+          options: {
+            apiVersion: '2024-10-21',
+            useDeploymentBasedUrls: true,
+          },
+        },
+      },
+    });
+  });
+
+  it('keeps Azure OpenAI-compatible v1 paths in model-based URL mode', () => {
+    expect(buildOpenCodeByokProviderConfig(
+      {
+        protocol: 'azure',
+        apiKey: 'azure-key',
+        baseUrl: 'https://resource.services.ai.azure.com/api/projects/project/openai/v1',
+        apiVersion: '',
+      },
+      'prod',
+    )?.config).toMatchObject({
+      provider: {
+        [BYOK_OPENCODE_PROVIDER_ID]: {
+          npm: '@ai-sdk/azure',
+          options: {
+            baseURL: 'https://resource.services.ai.azure.com/api/projects/project/openai/v1',
+            apiKey: `{env:${BYOK_OPENCODE_API_KEY_ENV}}`,
+          },
+        },
+      },
+    });
+    const provider = (buildOpenCodeByokProviderConfig(
+      {
+        protocol: 'azure',
+        apiKey: 'azure-key',
+        baseUrl: 'https://resource.services.ai.azure.com/api/projects/project/openai/v1',
+        apiVersion: '',
+      },
+      'prod',
+    )?.config.provider as Record<string, { options?: Record<string, unknown> }> | undefined)
+      ?.[BYOK_OPENCODE_PROVIDER_ID];
+    expect(provider?.options).not.toHaveProperty('useDeploymentBasedUrls');
+    expect(provider?.options).not.toHaveProperty('apiVersion');
+  });
+
+  it('maps Ollama Cloud to OpenCode documented OpenAI-compatible v1 config', () => {
     expect(buildOpenCodeByokProviderConfig(
       { protocol: 'ollama', apiKey: 'ollama-key', baseUrl: 'https://ollama.com' },
       'gpt-oss:20b',
     )?.config).toMatchObject({
-      provider: { [BYOK_OPENCODE_PROVIDER_ID]: { npm: '@ai-sdk/ollama' } },
+      provider: {
+        [BYOK_OPENCODE_PROVIDER_ID]: {
+          npm: '@ai-sdk/openai-compatible',
+          options: {
+            baseURL: 'https://ollama.com/v1',
+            apiKey: `{env:${BYOK_OPENCODE_API_KEY_ENV}}`,
+          },
+          models: {
+            'gpt-oss:20b': {
+              name: 'gpt-oss:20b',
+            },
+          },
+        },
+      },
+    });
+    expect(buildOpenCodeByokProviderConfig(
+      { protocol: 'ollama', apiKey: 'ollama-key', baseUrl: 'https://ollama.example.com/api' },
+      'llama3.1',
+    )?.config).toMatchObject({
+      provider: {
+        [BYOK_OPENCODE_PROVIDER_ID]: {
+          options: {
+            baseURL: 'https://ollama.example.com/v1',
+          },
+        },
+      },
     });
   });
 });
