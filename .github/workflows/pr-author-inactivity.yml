@@ -8,7 +8,7 @@ name: PR author inactivity
 #   1) an issue comment,
 #   2) a submitted pull-request review,
 #   3) an inline review comment reply, or
-#   4) a commit / force-push timeline event.
+#   4) a PR commit / force-push timeline event.
 # - We then find the first trusted human reviewer / maintainer feedback that
 #   arrived after that author response via:
 #   1) issue comments,
@@ -109,6 +109,14 @@ jobs:
               return (users || []).map((user) => user.login).filter(Boolean);
             }
 
+            function commitTimestamp(commit) {
+              return ts(commit.commit?.committer?.date || commit.commit?.author?.date);
+            }
+
+            function commitLogins(commit) {
+              return [commit.author?.login, commit.committer?.login].filter(Boolean);
+            }
+
             const TRUSTED_PERMISSIONS = new Set(['admin', 'maintain', 'write', 'triage']);
             const trustedReviewerCache = new Map();
 
@@ -175,7 +183,7 @@ jobs:
                 continue;
               }
 
-              const [comments, reviews, reviewComments, timeline, detailedPr, checkRuns, combinedStatus] = await Promise.all([
+              const [comments, reviews, reviewComments, timeline, prCommits, detailedPr, checkRuns, combinedStatus] = await Promise.all([
                 paginate(github.rest.issues.listComments, {
                   owner: context.repo.owner,
                   repo: context.repo.repo,
@@ -195,6 +203,11 @@ jobs:
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   issue_number: pr.number,
+                }),
+                paginate(github.rest.pulls.listCommits, {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: pr.number,
                 }),
                 github.rest.pulls.get({
                   owner: context.repo.owner,
@@ -308,12 +321,26 @@ jobs:
                 latestAuthorResponseAt = Math.max(latestAuthorResponseAt, ts(reviewComment.created_at));
               }
 
+              for (const commit of prCommits) {
+                const commitAt = commitTimestamp(commit);
+                const logins = commitLogins(commit);
+                if (logins.length === 0 && commitAt) {
+                  latestHumanActivityAt = Math.max(latestHumanActivityAt, commitAt);
+                }
+                for (const login of logins) {
+                  recordHumanActivity(login, commitAt);
+                  if (login === author) {
+                    latestAuthorResponseAt = Math.max(latestAuthorResponseAt, commitAt);
+                  }
+                }
+              }
+
               for (const event of timeline) {
                 const eventAt = ts(event.created_at);
                 if (HUMAN_ACTIVITY_EVENTS.has(event.event)) {
                   recordHumanActivity(event.actor?.login, eventAt);
                 }
-                if (event.actor?.login === author && ['committed', 'head_ref_force_pushed'].includes(event.event)) {
+                if (event.actor?.login === author && event.event === 'head_ref_force_pushed') {
                   latestAuthorResponseAt = Math.max(latestAuthorResponseAt, eventAt);
                 }
               }
@@ -366,7 +393,7 @@ jobs:
                 .filter((status) => FAILED_STATUS_STATES.has(String(status.state || '').toLowerCase()))
                 .map((status) => ts(status.updated_at || status.created_at))
                 .filter(Boolean);
-              const failingSignalAts = [...failingCheckAts, ...failingStatusAts].filter((failingAt) => failingAt > latestAuthorResponseAt);
+              const failingSignalAts = [...failingCheckAts, ...failingStatusAts];
               if (failingSignalAts.length > 0) {
                 authorActionReasons.push('failing CI');
                 authorActionAts.push(Math.max(...failingSignalAts));
