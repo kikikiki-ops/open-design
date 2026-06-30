@@ -709,11 +709,23 @@
     setTimeout(function () { if (!ov.classList.contains('in')) ov.classList.remove('open'); }, 160);
   }
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && ovStack.length) closeOverlay(ovStack[ovStack.length - 1]);
+    if (e.key === 'Escape' && ovStack.length) {
+      e.preventDefault();
+      closeOverlay(ovStack[ovStack.length - 1]);
+      return;
+    }
+    if (ovStack[ovStack.length - 1] !== lightOv || !lightGalleryMode || SAMPLES.length <= 1) return;
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      showLight(lightIdx - 1);
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      showLight(lightIdx + 1);
+    }
   });
 
   // Lightbox: a single enlarged image with optional prev/next + caption.
-  var lightOv = null, lightImg = null, lightCap = null, lightIdx = 0, lightPrev = null, lightNext = null;
+  var lightOv = null, lightImg = null, lightCap = null, lightIdx = 0, lightPrev = null, lightNext = null, lightGalleryMode = false;
   function buildLight() {
     if (lightOv) return;
     lightOv = mkOverlay('ov-light');
@@ -761,12 +773,14 @@
     buildLight();
     lightIdx = (idx % SAMPLES.length + SAMPLES.length) % SAMPLES.length;
     var s = SAMPLES[lightIdx];
+    lightGalleryMode = true;
     setLightContent(s.file, s.caption || brand.name || '', s.caption || s.kind || '', SAMPLES.length > 1);
     openOverlay(lightOv);
   }
   function showStandaloneLight(src, caption) {
     if (!src) return;
     buildLight();
+    lightGalleryMode = false;
     setLightContent(src, caption || brand.name || txt('images', 'Image'), caption || '', false);
     openOverlay(lightOv);
   }

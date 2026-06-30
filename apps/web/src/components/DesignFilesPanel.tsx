@@ -632,7 +632,9 @@ export function DesignFilesPanel({
             }
           }}
         >
-          {isSelected ? '☑' : '☐'}
+          <span className="df-row-check-box" aria-hidden>
+            {isSelected ? <Icon name="check" size={12} /> : null}
+          </span>
         </span>
         <span
           className="df-row-icon df-row-openable"
@@ -703,6 +705,13 @@ export function DesignFilesPanel({
           )}
         </div>
         <span
+          className="df-row-size df-row-openable"
+          onClick={() => setPreview(f.name)}
+          onDoubleClick={() => onOpenFile(f.name)}
+        >
+          {humanBytes(f.size)}
+        </span>
+        <span
           className="df-row-time df-row-openable"
           onClick={() => setPreview(f.name)}
           onDoubleClick={() => onOpenFile(f.name)}
@@ -752,6 +761,7 @@ export function DesignFilesPanel({
             </span>
           </button>
         </div>
+        <span className="df-row-size" />
         <span className="df-row-time" />
         <span className="df-row-menu df-row-menu-placeholder" aria-hidden />
       </div>

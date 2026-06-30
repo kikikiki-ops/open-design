@@ -2239,6 +2239,7 @@ export function ChatPane({
                 activeConversationId={activeConversationId}
                 activeConversationKey={activeConversationId ?? 'no-conversation'}
                 projectFiles={projectFiles}
+                projectMetadata={projectMetadata}
                 projectFileNames={projectFileNames}
                 onRequestOpenFile={onRequestOpenFile}
                 onRequestPluginDetails={onRequestPluginDetails}
@@ -2644,6 +2645,7 @@ function ChatRows({
   activeConversationId,
   activeConversationKey,
   projectFiles,
+  projectMetadata,
   projectFileNames,
   onRequestOpenFile,
   onRequestPluginDetails,
@@ -2697,6 +2699,7 @@ function ChatRows({
   activeConversationId: string | null;
   activeConversationKey: string;
   projectFiles: ProjectFile[];
+  projectMetadata?: ProjectMetadata;
   projectFileNames?: Set<string>;
   onRequestOpenFile?: (name: string) => void;
   onRequestPluginDetails?: (pluginId: string) => void;
@@ -2813,6 +2816,7 @@ function ChatRows({
         projectKind={projectKindForTracking}
         conversationId={activeConversationId}
         projectFiles={projectFiles}
+        projectMetadata={projectMetadata}
         projectFileNames={projectFileNames}
         onRequestOpenFile={onRequestOpenFile}
         onRequestPluginFolderAgentAction={onRequestPluginFolderAgentAction}

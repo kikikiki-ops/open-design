@@ -75,4 +75,13 @@ describe('Toast', () => {
     render(<Toast message="manual copy" code="x" onDismiss={() => {}} />);
     expect(screen.getByRole('button', { name: /Dismiss/i })).not.toBeNull();
   });
+
+  it('renders an optional action button', () => {
+    const onAction = vi.fn();
+    render(<Toast message="Saving page snapshot" actionLabel="Cancel" onAction={onAction} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(onAction).toHaveBeenCalledTimes(1);
+  });
 });

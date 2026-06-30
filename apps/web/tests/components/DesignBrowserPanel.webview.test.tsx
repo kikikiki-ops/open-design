@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { act } from 'react';
+import { act, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { installMockOpenDesignHost } from '@open-design/host/testing';
 
@@ -39,6 +39,7 @@ afterEach(() => {
   cleanup();
   restoreHost?.();
   restoreHost = null;
+  vi.useRealTimers();
   window.localStorage.clear();
 });
 
@@ -166,7 +167,7 @@ describe('DesignBrowserPanel <webview> navigation', () => {
     fireEvent.click(downloadItem);
 
     expect(screen.queryByRole('menuitem', { name: 'Download Page' })).toBeNull();
-    expect(screen.getByText('Saving page snapshot...')).toBeTruthy();
+    expect(screen.getByText(/Saving page snapshot/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Browser menu' }));
     expect((screen.getByRole('menuitem', { name: 'Copy Screenshot' }) as HTMLButtonElement).disabled).toBe(false);
@@ -197,8 +198,12 @@ describe('DesignBrowserPanel <webview> navigation', () => {
     expect(onOpenFile.mock.calls[0]?.[0]).toMatch(/\/manifest\.json$/);
   });
 
-  it('finishes a page snapshot when an archive resource cannot be fetched', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('network stalled'));
+  it('shows elapsed snapshot time and cancels a pending page snapshot', async () => {
+    vi.useFakeTimers();
+    let resolveCapture: (value: unknown) => void = () => {};
+    const capturePromise = new Promise<unknown>((resolve) => {
+      resolveCapture = resolve;
+    });
     vi.mocked(writeProjectTextFile).mockImplementation(async (_projectId, name) => ({
       kind: 'code',
       mime: 'application/json',
@@ -207,9 +212,124 @@ describe('DesignBrowserPanel <webview> navigation', () => {
       size: 1,
       type: 'file',
     }));
+    const onPageSnapshotToast = vi.fn();
     const { container } = render(
       <DesignBrowserPanel
-        projectId="proj-webview-download-resource-failure"
+        projectId="proj-webview-download-cancel"
+        initialTitle="Example"
+        initialUrl="https://example.com"
+        onOpenFile={() => {}}
+        onRefreshFiles={() => {}}
+        onPageSnapshotToast={onPageSnapshotToast}
+      />,
+    );
+    const webview = container.querySelector('webview.db-webview') as HTMLElement & {
+      executeJavaScript?: ReturnType<typeof vi.fn>;
+    };
+    webview.executeJavaScript = vi.fn(() => capturePromise);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Browser menu' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Download Page' }));
+
+    expect(container.querySelector('.db-status')).toBeNull();
+    expect(onPageSnapshotToast).toHaveBeenLastCalledWith(expect.objectContaining({
+      elapsedSeconds: 0,
+      status: 'loading',
+    }));
+
+    act(() => {
+      vi.advanceTimersByTime(2100);
+    });
+
+    expect(container.querySelector('.db-status')).toBeNull();
+    expect(onPageSnapshotToast).toHaveBeenLastCalledWith(expect.objectContaining({
+      elapsedSeconds: 2,
+      status: 'loading',
+    }));
+
+    const latestToast = onPageSnapshotToast.mock.calls.at(-1)?.[0];
+    expect(latestToast?.onCancel).toEqual(expect.any(Function));
+    act(() => {
+      latestToast?.onCancel?.();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('.db-status')).toBeNull();
+    expect(onPageSnapshotToast).toHaveBeenLastCalledWith(expect.objectContaining({
+      elapsedSeconds: 2,
+      status: 'canceled',
+    }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Browser menu' }));
+    expect((screen.getByRole('menuitem', { name: 'Download Page' }) as HTMLButtonElement).disabled).toBe(false);
+
+    await act(async () => {
+      resolveCapture({
+        title: 'Example',
+        url: 'https://example.com',
+        html: '<!doctype html><html><body>Example</body></html>',
+        css: '',
+        resources: [],
+      });
+      await Promise.resolve();
+    });
+  });
+
+  it('does not restart the snapshot progress effect when the parent toast callback changes identity', async () => {
+    function UnstableToastCallbackHarness() {
+      const [toastEventCount, setToastEventCount] = useState(0);
+      return (
+        <>
+          <span data-testid="toast-event-count">{toastEventCount}</span>
+          <DesignBrowserPanel
+            projectId="proj-webview-download-unstable-toast"
+            initialTitle="Example"
+            initialUrl="https://example.com"
+            onOpenFile={() => {}}
+            onRefreshFiles={() => {}}
+            onPageSnapshotToast={() => setToastEventCount((count) => count + 1)}
+          />
+        </>
+      );
+    }
+
+    const capturePromise = new Promise<unknown>(() => {});
+    const { container } = render(<UnstableToastCallbackHarness />);
+    const webview = container.querySelector('webview.db-webview') as HTMLElement & {
+      executeJavaScript?: ReturnType<typeof vi.fn>;
+    };
+    webview.executeJavaScript = vi.fn(() => capturePromise);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Browser menu' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Download Page' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('toast-event-count').textContent).toBe('1');
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('toast-event-count').textContent).toBe('1');
+  });
+
+  it('saves only HTML + CSS and never fetches page assets', async () => {
+    // Design-system extraction reads back nothing but page.html + styles.css
+    // (ProjectView.readLocalBrowserPageArchiveSnapshot → extract-from-html posts
+    // only { html, css, baseUrl }), so Download Page must not fan out to the
+    // page's images/fonts/scripts even when the capture lists them.
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('should not fetch assets'));
+    const writes: Array<{ name: string; content: string }> = [];
+    vi.mocked(writeProjectTextFile).mockImplementation(async (_projectId, name, content) => {
+      writes.push({ name, content: String(content ?? '') });
+      return { kind: 'code', mime: 'application/json', mtime: 1, name, size: 1, type: 'file' };
+    });
+    const { container } = render(
+      <DesignBrowserPanel
+        projectId="proj-webview-download-essentials"
         initialTitle="Example"
         initialUrl="https://example.com"
         onOpenFile={() => {}}
@@ -223,7 +343,7 @@ describe('DesignBrowserPanel <webview> navigation', () => {
       title: 'Example',
       url: 'https://example.com',
       html: '<!doctype html><html><body>Example</body></html>',
-      css: '',
+      css: 'body{color:#111}',
       resources: [{ kind: 'image', url: 'https://cdn.example.test/hero.png' }],
     });
 
@@ -231,12 +351,86 @@ describe('DesignBrowserPanel <webview> navigation', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Download Page' }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Saved page snapshot with 0\/1 resources/)).toBeTruthy();
+      expect(screen.getByText(/Saved page snapshot/)).toBeTruthy();
     });
+
+    // The listed image is never fetched, and the manifest records no resources.
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(writes.find((w) => w.name.endsWith('/page.html'))?.content).toContain('Example');
+    expect(writes.find((w) => w.name.endsWith('/styles.css'))?.content).toContain('#111');
+    const manifestWrite = writes.find((w) => w.name.endsWith('/manifest.json'));
+    expect(manifestWrite).toBeTruthy();
+    expect(JSON.parse(manifestWrite!.content).resources).toEqual([]);
+
     fireEvent.click(screen.getByRole('button', { name: 'Browser menu' }));
     expect((screen.getByRole('menuitem', { name: 'Download Page' }) as HTMLButtonElement).disabled).toBe(false);
 
     fetchMock.mockRestore();
+  });
+
+  it('does not re-fire the snapshot ticker when the parent recreates onPageSnapshotToast', async () => {
+    // Regression for "Maximum update depth exceeded": the 1s progress ticker's
+    // publish() emits a toast → the parent's setState re-renders and hands back a
+    // fresh onPageSnapshotToast identity. While that identity was an effect dep,
+    // every such render tore down and re-ran the effect, whose immediate publish()
+    // looped the cycle. The effect must subscribe to `archiveSaving` only.
+    let resolveCapture: (value: unknown) => void = () => {};
+    const capturePromise = new Promise<unknown>((resolve) => {
+      resolveCapture = resolve;
+    });
+    vi.mocked(writeProjectTextFile).mockResolvedValue({
+      kind: 'code',
+      mime: 'application/json',
+      mtime: 1,
+      name: 'x',
+      size: 1,
+      type: 'file',
+    });
+    const toastSpy = vi.fn();
+    // Mirrors FileWorkspace: a brand-new onPageSnapshotToast on every render.
+    function Harness({ nonce }: { nonce: number }) {
+      void nonce;
+      return (
+        <DesignBrowserPanel
+          projectId="proj-snapshot-ticker-stable"
+          initialTitle="Example"
+          initialUrl="https://example.com"
+          onOpenFile={() => {}}
+          onRefreshFiles={() => {}}
+          onPageSnapshotToast={(event) => toastSpy(event)}
+        />
+      );
+    }
+    const view = render(<Harness nonce={0} />);
+    const webview = view.container.querySelector('webview.db-webview') as HTMLElement & {
+      executeJavaScript?: ReturnType<typeof vi.fn>;
+    };
+    // Leave the capture pending so the snapshot stays in-progress (archiveSaving
+    // true) across the parent re-renders below.
+    webview.executeJavaScript = vi.fn(() => capturePromise);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Browser menu' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Download Page' }));
+
+    const baseline = toastSpy.mock.calls.length;
+    for (let i = 1; i <= 5; i += 1) {
+      view.rerender(<Harness nonce={i} />);
+    }
+
+    // No timer advanced, so any growth here means the effect re-ran per render —
+    // the regressed behavior. The fixed effect ignores onPageSnapshotToast churn.
+    expect(toastSpy.mock.calls.length).toBe(baseline);
+
+    resolveCapture({
+      title: 'Example',
+      url: 'https://example.com',
+      html: '<!doctype html><html><body>Example</body></html>',
+      css: '',
+      resources: [],
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
   });
 
   it('searches inspiration actions and adds an operation prompt for the current browser tab', () => {

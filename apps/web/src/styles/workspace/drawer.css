@@ -1747,7 +1747,7 @@
 }
 
 .ws-browser-panel {
-  display: none;
+  display: flex;
   position: absolute;
   inset: 0;
   flex: 1 1 auto;
@@ -1755,9 +1755,16 @@
   width: 100%;
   height: 100%;
   overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+  z-index: 0;
 }
 .ws-browser-panel.active {
-  display: flex;
+  opacity: 1;
+  pointer-events: auto;
+  visibility: visible;
+  z-index: 1;
 }
 
 .designs-empty-state {

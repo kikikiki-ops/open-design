@@ -180,6 +180,44 @@ describe('NextStepActions', () => {
     expect(onPromptAction).toHaveBeenCalledWith(PROJECT_GENERATE_ARTIFACT_PROMPT);
   });
 
+  it('localizes incomplete-project recovery prompts in Chinese', () => {
+    const onPromptAction = vi.fn();
+    renderActions({
+      variant: 'project-incomplete',
+      fileName: null,
+      onPromptAction,
+    }, 'zh-CN');
+
+    fireEvent.click(screen.getByTestId('next-step-project-action-project-continue'));
+    expect(onPromptAction).toHaveBeenCalledWith(
+      expect.stringContaining('从已停止或未完成的回合继续处理'),
+    );
+    fireEvent.click(screen.getByTestId('next-step-project-action-project-generate-artifact'));
+    expect(onPromptAction).toHaveBeenCalledWith(
+      expect.stringContaining('现在生成缺失的项目产物'),
+    );
+    expect(onPromptAction).not.toHaveBeenCalledWith(
+      expect.stringContaining('Generate the missing project artifact now'),
+    );
+  });
+
+  it('localizes design-system project prompts in Chinese', () => {
+    const onPromptAction = vi.fn();
+    renderActions({ variant: 'design-system', onPromptAction }, 'zh-CN');
+
+    fireEvent.click(screen.getByTestId('next-step-design-system-action-design-system-ai-refine'));
+    expect(onPromptAction).toHaveBeenCalledWith(
+      expect.stringContaining('原地优化这个设计系统'),
+    );
+    fireEvent.click(screen.getByTestId('next-step-design-system-action-design-system-audit-kit'));
+    expect(onPromptAction).toHaveBeenCalledWith(
+      expect.stringContaining('审查这个设计系统是否已经可用'),
+    );
+    expect(onPromptAction).not.toHaveBeenCalledWith(
+      expect.stringContaining('refine this design system in place'),
+    );
+  });
+
   it('keeps brand-extraction rows visible and disabled while their actions are starting', () => {
     renderActions({
       variant: 'brand-extraction',

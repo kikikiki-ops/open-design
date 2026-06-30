@@ -2881,7 +2881,11 @@ export function ProjectView({
     async (
       sourceUrl: string | null | undefined,
       tabId = BRAND_BROWSER_TAB_ID,
-      timeoutMs = 12_000,
+      // The page-snapshot download now persists only page.html + styles.css
+      // (extraction reads nothing else), so it completes in well under a
+      // second. This race is just a generous safety ceiling for serializing a
+      // very large DOM, not a budget for asset fetching.
+      timeoutMs = 30_000,
     ): Promise<BrandBrowserSnapshot> => {
       const handle = getBrandBrowser(project.id, tabId);
       if (!handle || !handle.isDesktopWebview || !handle.downloadPageSnapshot) {
@@ -6929,13 +6933,21 @@ export function ProjectView({
       // Still no readable local source. Recoverable — clear/settle/download the
       // Browser page and click Continue again, or use the agent fallback.
       setBrandExtractionStatusOverride({ brandId, status: 'needs_input' });
+      if (isOpenDesignHostAvailable() && brandExtractionSourceUrl) {
+        setBrowserOpenRequest({
+          tabId: BRAND_BROWSER_TAB_ID,
+          url: brandExtractionSourceUrl,
+          nonce: Date.now(),
+          attentionAction: 'download-page',
+        });
+      }
       setProjectActionsToast({
         message:
           snapshotMessage(archivedSnapshot) ||
           snapshotMessage(liveSnapshot) ||
           fallbackMessage ||
           t('chat.brandBrowserAssistReadFailed'),
-        details: null,
+        details: t('chat.brandBrowserAssistDownloadGuideDetails'),
         tone: 'error',
         ttlMs: 7000,
       });

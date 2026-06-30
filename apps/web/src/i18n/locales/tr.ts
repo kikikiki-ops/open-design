@@ -99,7 +99,7 @@ export const tr: Dict = {
   'designBrowser.status.pageSnapshotStarted': 'Saving page snapshot...',
   'designBrowser.status.pageSnapshotUnsupported': 'This page cannot be archived.',
   'designBrowser.status.pageSnapshotFailed': 'Page snapshot save failed.',
-  'designBrowser.status.pageSnapshotSaved': 'Saved page snapshot with {saved}/{total} resources.',
+  'designBrowser.status.pageSnapshotSaved': 'Saved page snapshot (HTML + CSS).',
   'designBrowser.status.downloadAssistHint': 'Step 2: click Download Page here, wait for the saved snapshot success, then return to the left Next Step card and click Continue extraction.',
   'designBrowser.status.desktopDataUnavailable': 'Desktop browser data is unavailable here.',
   'designBrowser.status.browserDataCleared': 'Browser data cleared.',

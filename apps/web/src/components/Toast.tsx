@@ -19,6 +19,9 @@ import { toastSlideUp } from '../motion';
 export interface ToastProps {
   message: string;
   details?: string | null;
+  actionLabel?: string | null;
+  actionAriaLabel?: string;
+  onAction?: () => void;
   // Optional code/preformatted body. When present the toast pins
   // itself open (no auto-dismiss) so the user has time to manually
   // copy the content. Used for the clipboard-failure recovery path
@@ -53,7 +56,19 @@ const TONE_ICON: Record<NonNullable<ToastProps['tone']>, 'check' | 'close' | 'sp
   loading: 'spinner',
 };
 
-export function Toast({ message, details, code, ttlMs = DEFAULT_TTL, onDismiss, role = 'status', tone = 'default', placement = 'bottom' }: ToastProps) {
+export function Toast({
+  message,
+  details,
+  actionLabel,
+  actionAriaLabel,
+  onAction,
+  code,
+  ttlMs = DEFAULT_TTL,
+  onDismiss,
+  role = 'status',
+  tone = 'default',
+  placement = 'bottom',
+}: ToastProps) {
   // When code is present the toast is a manual-action surface; never
   // auto-dismiss it out from under the user mid-copy.
   const effectiveTtl = code ? 0 : ttlMs;
@@ -99,6 +114,16 @@ export function Toast({ message, details, code, ttlMs = DEFAULT_TTL, onDismiss, 
       {details ? <div className="od-toast-details">{details}</div> : null}
       {code ? (
         <pre className="od-toast-code">{code}</pre>
+      ) : null}
+      {actionLabel && onAction ? (
+        <button
+          type="button"
+          className="od-toast-action"
+          onClick={onAction}
+          aria-label={actionAriaLabel ?? actionLabel}
+        >
+          {actionLabel}
+        </button>
       ) : null}
       {!code && onDismiss ? (
         <button

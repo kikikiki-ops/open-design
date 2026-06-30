@@ -232,6 +232,35 @@ describe('ChatPane connect-repo CTA', () => {
     expect(screen.queryByText('Create with this design system')).toBeNull();
   });
 
+  it('renders a fallback browser assist card when the transcript references one without od-card markup', () => {
+    renderPane({
+      projectMetadata: {
+        kind: 'brand',
+        importedFrom: 'brand-extraction',
+        brandId: 'brand-1',
+        brandSourceUrl: 'https://economist.com/',
+      },
+      onBrandBrowserAssistConfirm: vi.fn(),
+      onContinueBrandExtraction: vi.fn(),
+      onContinueBrandAgentExtraction: vi.fn(),
+      messages: [
+        {
+          id: 'assist-copy-only',
+          role: 'assistant',
+          agentName: 'Assistant',
+          content:
+            'The automatic pass needs a hand.\n\nI could not finish automatically. Use the browser assist card below to open Browser, click More > Download Page, then Continue extraction.',
+          runStatus: 'failed',
+          createdAt: 1,
+          endedAt: 2,
+        },
+      ],
+    });
+
+    expect(screen.getByText('artifact.odCardBrandAssistBody')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'artifact.odCardBrandAssistConfirm' })).toBeTruthy();
+  });
+
   it('renders only agent continuation after an incomplete AI brand extraction turn', () => {
     renderPane({
       projectMetadata: {

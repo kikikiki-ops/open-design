@@ -955,24 +955,49 @@ export async function reconcileProgrammaticExtractionTranscript(input: {
   }
 
   // needs_attention | stopped — an actionable terminal so the row stops counting
-  // up. The web surfaces the browser-assist card (open the page / retry)
-  // alongside, driven off meta.blocked / the stall signal.
+  // up. Browser-assist recovery belongs in this same transcript row so it cannot
+  // race with the web-side status poll that also offers the recovery path.
   const stopped = input.outcome === 'stopped';
   const title = stopped ? copy.stoppedTitle : copy.stalledTitle;
   const body = stopped
     ? copy.stoppedBody(sourceLine)
     : copy.stalledBody(sourceLine, meta.blockedReason ?? null);
+  const browserAssistCard =
+    !stopped && /^https?:\/\//i.test(meta.sourceUrl)
+      ? brandBrowserAssistOdCard({
+          brandId: input.brandId,
+          sourceUrl: meta.sourceUrl,
+          ...(meta.blockedReason ? { reason: meta.blockedReason } : {}),
+        })
+      : null;
+  const content = browserAssistCard
+    ? [title, '', body, '', browserAssistCard].join('\n')
+    : [title, '', body].join('\n');
   upsertMessage(input.db, conversationId, {
     id: assistantMessageId,
     role: 'assistant',
-    content: [title, '', body].join('\n'),
+    content,
     ...agentFields,
-    events: [{ kind: 'text', text: `${title}\n\n${body}` }],
+    events: [{ kind: 'text', text: content }],
     runStatus: stopped ? 'canceled' : 'failed',
     createdAt,
     startedAt,
     endedAt: now,
   });
+}
+
+function brandBrowserAssistOdCard(input: {
+  brandId: string;
+  sourceUrl: string;
+  reason?: string | null;
+}): string {
+  const payload = JSON.stringify({
+    brandId: input.brandId,
+    browserTabId: BRAND_BROWSER_TAB_ID,
+    ...(input.sourceUrl ? { url: input.sourceUrl } : {}),
+    ...(input.reason ? { reason: input.reason } : {}),
+  });
+  return `<od-card type="brand-browser-assist">${payload}</od-card>`;
 }
 
 async function seedProgrammaticExtractionTranscript(input: {
@@ -1103,7 +1128,7 @@ function brandExtractionTranscriptCopy(locale?: string | null): BrandExtractionT
         next: '接下来，你可以运行 AI 优化做更深一轮抽取，或者用这个系统新建设计。',
         stalledTitle: '程序化抽取需要你帮一把。',
         stalledBody: (source, reason) =>
-          `我没能自动从 ${source} 抽取完成${reason ? `（${reason}）` : ''}。请使用下方浏览器辅助卡片打开 Browser，必要时清掉人机验证，然后点击 More > 下载页面，等待页面快照保存成功，再回到左侧“下一步”卡片点击“继续提取”继续程序化抽取；也可以直接用 AI 继续。`,
+          `我没能自动从 ${source} 抽取完成${reason ? `（${reason}）` : ''}。请使用下方浏览器辅助卡片打开 Browser，必要时清掉人机验证，然后点击 More > 下载页面，等待页面快照保存成功，再回到左侧“下一步”卡片点击“继续提取”继续程序化抽取。如果下方卡片没有出现，也可以手动打开右侧 Browser tab，按同样的 More > 下载页面 > 继续提取路径操作；也可以直接用 AI 继续。`,
         stoppedTitle: '抽取已停止。',
         stoppedBody: (source) =>
           `你停止了从 ${source} 的抽取。已经抽到的内容会保留成一个可编辑的设计系统，你可以从这里继续编辑或重试。`,
@@ -1119,7 +1144,7 @@ function brandExtractionTranscriptCopy(locale?: string | null): BrandExtractionT
         next: '接下來，你可以執行 AI 優化做更深一輪抽取，或者用這個系統建立新設計。',
         stalledTitle: '程式化抽取需要你幫一把。',
         stalledBody: (source, reason) =>
-          `我沒能自動從 ${source} 抽取完成${reason ? `（${reason}）` : ''}。請使用下方瀏覽器輔助卡片開啟 Browser，必要時清掉人機驗證，然後點擊 More > 下載頁面，等待頁面快照儲存成功，再回到左側「下一步」卡片點擊「繼續擷取」繼續程式化擷取；也可以直接用 AI 繼續。`,
+          `我沒能自動從 ${source} 抽取完成${reason ? `（${reason}）` : ''}。請使用下方瀏覽器輔助卡片開啟 Browser，必要時清掉人機驗證，然後點擊 More > 下載頁面，等待頁面快照儲存成功，再回到左側「下一步」卡片點擊「繼續擷取」繼續程式化擷取。如果下方卡片沒有出現，也可以手動開啟右側 Browser tab，按同樣的 More > 下載頁面 > 繼續擷取路徑操作；也可以直接用 AI 繼續。`,
         stoppedTitle: '抽取已停止。',
         stoppedBody: (source) =>
           `你停止了從 ${source} 的抽取。已經抽到的內容會保留成一個可編輯的設計系統，你可以從這裡繼續編輯或重試。`,
@@ -1135,7 +1160,7 @@ function brandExtractionTranscriptCopy(locale?: string | null): BrandExtractionT
         next: 'Next, you can run AI Optimize for a deeper extraction pass, or create a new design with this system.',
         stalledTitle: 'The automatic pass needs a hand.',
         stalledBody: (source, reason) =>
-          `I couldn't finish extracting ${source} automatically${reason ? ` (${reason})` : ''}. Use the browser assist card below to open Browser, clear any human check, click More > Download Page, wait for the saved snapshot success message, then use the left Next Step card and click Continue extraction to continue the programmatic extraction — or keep going with AI.`,
+          `I couldn't finish extracting ${source} automatically${reason ? ` (${reason})` : ''}. Use the browser assist card below to open Browser, clear any human check, click More > Download Page, wait for the saved snapshot success message, then use the left Next Step card and click Continue extraction to continue the programmatic extraction. If the card is not visible, manually open the Browser tab on the right and follow the same More > Download Page > Continue extraction path — or keep going with AI.`,
         stoppedTitle: 'Extraction stopped.',
         stoppedBody: (source) =>
           `You stopped extracting ${source}. Whatever was gathered is kept as an editable design system — pick up from there or retry.`,

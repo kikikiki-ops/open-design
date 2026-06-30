@@ -33,13 +33,16 @@ import {
   type QuestionForm,
 } from "../artifacts/question-form";
 import {
+  hasOdCard,
   splitOnOdCards,
   stripTrailingOpenOdCard,
   type OdCard,
+  type OdCardBrandBrowserAssist,
 } from "@open-design/contracts";
 import { OdCardView, type BrandBrowserAssistConfirm } from "./OdCard";
 import { parseSubmittedAnswers } from "./QuestionForm";
 import { splitStreamingArtifact, stripArtifact, stripRecoveredHtmlFallbackForDisplay } from "../artifacts/strip";
+import { BRAND_BROWSER_TAB_ID } from "../runtime/brand-browser-bridge";
 import {
   getPluginFolderCandidates,
   type PluginFolderCandidate,
@@ -68,6 +71,7 @@ import type {
   ChatMessageFeedbackRating,
   ChatMessageFeedbackReasonCode,
   ProjectFile,
+  ProjectMetadata,
   SkillSummary,
 } from "../types";
 
@@ -102,6 +106,47 @@ function buildActionNotice(message: string, url?: string): ActionNotice {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function isBrandExtractionNextStepVariant(variant: NextStepActionsVariant): boolean {
+  return (
+    variant === 'brand-extraction' ||
+    variant === 'brand-extraction-incomplete' ||
+    variant === 'brand-programmatic-incomplete'
+  );
+}
+
+function textNeedsBrandBrowserAssistFallback(content: string): boolean {
+  if (!content.trim() || hasOdCard(content)) return false;
+  return (
+    /browser assist card|browser assist/i.test(content) ||
+    /浏览器辅助卡片|瀏覽器輔助卡片/.test(content) ||
+    /More\s*>\s*Download Page/i.test(content) ||
+    /More\s*>\s*(下载页面|下載頁面)/.test(content)
+  );
+}
+
+function buildBrandBrowserAssistFallbackCard({
+  content,
+  metadata,
+  nextStepVariant,
+}: {
+  content: string;
+  metadata?: ProjectMetadata;
+  nextStepVariant: NextStepActionsVariant;
+}): OdCardBrandBrowserAssist | null {
+  if (!isBrandExtractionNextStepVariant(nextStepVariant)) return null;
+  if (!textNeedsBrandBrowserAssistFallback(content)) return null;
+  const brandId = metadata?.brandId?.trim();
+  if (!brandId) return null;
+  const url = metadata?.brandSourceUrl?.trim();
+  return {
+    kind: 'brand-browser-assist',
+    brandId,
+    browserTabId: BRAND_BROWSER_TAB_ID,
+    ...(url ? { url } : {}),
+    reason: 'Browser',
+  };
 }
 
 function ActionNoticeView({ notice }: { notice: ActionNotice | null }) {
@@ -275,6 +320,7 @@ interface Props {
   projectKind?: TrackingProjectKind | null;
   conversationId?: string | null;
   projectFiles?: ProjectFile[];
+  projectMetadata?: ProjectMetadata;
   projectFileNames?: Set<string>;
   onRequestOpenFile?: (name: string) => void;
   // Client-side action for a <od-card type="brand-browser-assist"> button: open
@@ -357,6 +403,7 @@ const ASSISTANT_MESSAGE_COMPARED_PROPS: Array<keyof Props> = [
   'projectKind',
   'conversationId',
   'projectFiles',
+  'projectMetadata',
   'projectFileNames',
   'onRequestOpenFile',
   'onRequestPluginFolderAgentAction',
@@ -420,6 +467,7 @@ function AssistantMessageImpl({
   projectKind = null,
   conversationId = null,
   projectFiles = [],
+  projectMetadata,
   projectFileNames,
   onRequestOpenFile,
   onBrandBrowserAssistConfirm,
@@ -592,10 +640,20 @@ function AssistantMessageImpl({
     (e) => e.kind === "status" && e.label === "empty_response"
   );
   const isBrandBrowserAssistMessage =
-    (nextStepVariant === 'brand-extraction' ||
-      nextStepVariant === 'brand-extraction-incomplete' ||
-      nextStepVariant === 'brand-programmatic-incomplete') &&
-    message.content.includes('<od-card type="brand-browser-assist"');
+    isBrandExtractionNextStepVariant(nextStepVariant) &&
+    (message.content.includes('<od-card type="brand-browser-assist"') ||
+      textNeedsBrandBrowserAssistFallback(message.content));
+  const brandBrowserAssistFallbackCard = useMemo(
+    () =>
+      streaming
+        ? null
+        : buildBrandBrowserAssistFallbackCard({
+            content: message.content,
+            metadata: projectMetadata,
+            nextStepVariant,
+          }),
+    [message.content, nextStepVariant, projectMetadata, streaming],
+  );
   const unfinishedTodos = streaming ? [] : unfinishedTodosFromEvents(events);
   const runSucceeded =
     !streaming &&
@@ -773,6 +831,19 @@ function AssistantMessageImpl({
           }
           return null;
         })}
+        {brandBrowserAssistFallbackCard ? (
+          <OdCardView
+            card={brandBrowserAssistFallbackCard}
+            onBrandBrowserAssistConfirm={onBrandBrowserAssistConfirm}
+            instanceScope={[
+              projectId ?? "no-project",
+              conversationId ?? "no-conversation",
+              message.runId ?? "no-run",
+              message.id,
+              "brand-browser-assist-fallback",
+            ].join(":")}
+          />
+        ) : null}
         {fileOps.length > 0 ? (
           <FileOpsSummary
             entries={fileOps}

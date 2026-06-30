@@ -1557,13 +1557,25 @@ function AppInner() {
   );
 
   const handleCreateProjectFromDesignSystem = useCallback(
-    async (designSystemId: string) => {
+    async (designSystemId: string, designSystemTitle: string) => {
       await handleCreateProject({
         name: t('common.untitled'),
         skillId: null,
         designSystemId,
+        pluginId: 'example-web-prototype',
+        pluginInputs: {
+          artifactKind: 'web prototype',
+          fidelity: 'high-fidelity',
+          audience: 'product evaluators',
+          designSystem: designSystemTitle,
+          template: 'the bundled web prototype seed',
+        },
+        conversationMode: 'design',
         metadata: {
           kind: 'prototype',
+          fidelity: 'high-fidelity',
+          platform: 'responsive',
+          platformTargets: ['responsive'],
           nameSource: 'generated',
         },
       });

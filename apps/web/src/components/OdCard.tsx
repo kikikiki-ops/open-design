@@ -543,7 +543,7 @@ function BrandBrowserAssistCard({
           <Icon name="globe" size={13} />
         </span>
         <span className={styles.ruleKicker}>
-          {t('artifact.odCardBrandAssistKicker', { reason: card.reason || 'Cloudflare' })}
+          {t('artifact.odCardBrandAssistKicker', { reason: card.reason || 'Browser' })}
         </span>
       </div>
       <div className={styles.ruleSummary}>

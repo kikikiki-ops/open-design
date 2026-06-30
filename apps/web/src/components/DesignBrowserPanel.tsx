@@ -49,9 +49,7 @@ import {
   BROWSER_SERIALIZE_HTML_SCRIPT,
   BROWSER_VIEWPORT_PRESETS,
   type BrowserPageArchiveCapture,
-  type BrowserPageArchiveCaptureResource,
   type BrowserPageArchiveManifest,
-  type BrowserPageArchiveManifestResource,
   type BrowserElementSnapshot,
   browserApplyStyleScript,
   browserApplyTextScript,
@@ -185,7 +183,18 @@ type BrowserStatusMessage = string | {
   actionFileName?: string;
   actionLabel?: string;
   message: string;
+  source?: 'page-snapshot';
 };
+export interface BrowserPageSnapshotToastEvent {
+  actionFileName?: string;
+  actionLabel?: string;
+  elapsedSeconds?: number;
+  message: string;
+  onCancel?: () => void;
+  status: 'loading' | 'success' | 'error' | 'canceled';
+  tabId: string;
+  ttlMs?: number;
+}
 type BrowserStyleDraft = Required<Pick<
   PreviewAnnotationStyle,
   'backgroundColor' | 'borderRadius' | 'color' | 'fontSize' | 'fontWeight' | 'lineHeight' | 'paddingTop' | 'textAlign'
@@ -236,6 +245,7 @@ interface DesignBrowserPanelProps {
   onRemovePreviewComment?: (commentId: string) => Promise<void>;
   onSendBoardCommentAttachments?: (attachments: ChatCommentAttachment[], images?: File[]) => Promise<boolean | void> | boolean | void;
   onRequestBrowserUsePrompt?: (prompt: string) => void;
+  onPageSnapshotToast?: (event: BrowserPageSnapshotToastEvent) => void;
   sendDisabled?: boolean;
   /** Workspace tab id. When set, this panel registers its live webview in the
    *  brand-browser bridge so the chat can read the rendered DOM (e.g. to
@@ -729,6 +739,7 @@ export function DesignBrowserPanel({
   onRemovePreviewComment,
   onSendBoardCommentAttachments,
   onRequestBrowserUsePrompt,
+  onPageSnapshotToast,
   sendDisabled = false,
   browserTabId,
 }: DesignBrowserPanelProps) {
@@ -775,6 +786,7 @@ export function DesignBrowserPanel({
     brief: false,
     screenshot: false,
   });
+  const [archiveElapsedSeconds, setArchiveElapsedSeconds] = useState(0);
   const [downloadAttentionNonce, setDownloadAttentionNonce] = useState<number | null>(null);
   const addressInputRef = useRef<HTMLInputElement | null>(null);
   const chromeRef = useRef<HTMLDivElement | null>(null);
@@ -785,6 +797,10 @@ export function DesignBrowserPanel({
   const navigationIndexRef = useRef(initialState.navigationIndex);
   const pendingLoadTargetRef = useRef<string | null>(null);
   const lastNavigateRequestNonceRef = useRef<number | null>(null);
+  const archiveRunIdRef = useRef(0);
+  const archiveRunRef = useRef<{ controller: AbortController; id: number; startedAt: number } | null>(null);
+  const pageSnapshotToastRef = useRef(onPageSnapshotToast);
+  const browserTabIdRef = useRef(browserTabId ?? '');
   const archiveSaving = savingActions.archive;
   const briefSaving = savingActions.brief;
   const screenshotSaving = savingActions.screenshot;
@@ -795,6 +811,22 @@ export function DesignBrowserPanel({
     setSavingActions((current) => (
       current[action] === saving ? current : { ...current, [action]: saving }
     ));
+  }, []);
+
+  const cancelPageSnapshot = useCallback(() => {
+    archiveRunRef.current?.controller.abort();
+  }, []);
+
+  useEffect(() => {
+    pageSnapshotToastRef.current = onPageSnapshotToast;
+    browserTabIdRef.current = browserTabId ?? '';
+  }, [browserTabId, onPageSnapshotToast]);
+
+  const emitPageSnapshotToast = useCallback((event: Omit<BrowserPageSnapshotToastEvent, 'tabId'>) => {
+    pageSnapshotToastRef.current?.({
+      ...event,
+      tabId: browserTabIdRef.current,
+    });
   }, []);
 
   // Publish a handle to this tab's live webview so the chat can read the rendered
@@ -855,10 +887,46 @@ export function DesignBrowserPanel({
 
   useEffect(() => {
     if (!statusMessage) return;
+    // Keep the status pinned while the page-snapshot download runs: it can take
+    // several seconds, and a 2.6s auto-dismiss would leave the user staring at a
+    // disabled Download Page action with no sign it's still working. When saving
+    // ends, the effect re-runs and the success/failure message dismisses normally.
+    if (archiveSaving) return;
     const hasAction = typeof statusMessage === 'object' && Boolean(statusMessage.actionFileName);
     const timer = window.setTimeout(() => setStatusMessage(null), hasAction ? 8000 : 2600);
     return () => window.clearTimeout(timer);
-  }, [statusMessage]);
+  }, [statusMessage, archiveSaving]);
+
+  // Latest snapshot-progress publisher, kept in a ref so the 1s ticker effect
+  // below can depend only on `archiveSaving`. `emitPageSnapshotToast` and `t`
+  // get a fresh identity on every parent render (FileWorkspace passes a new
+  // `onPageSnapshotToast` each render), so listing them as effect deps made the
+  // effect tear down and re-run every render — and its immediate publish() then
+  // set state on each run, re-rendering in a tight loop until React aborted with
+  // "Maximum update depth exceeded". Reading the ref sidesteps that, and the
+  // single stable interval also stops the parent toast from being replaced ~60×
+  // a second (which rendered as overlapping/duplicate snapshot toasts).
+  const publishSnapshotProgressRef = useRef<() => void>(() => {});
+  publishSnapshotProgressRef.current = () => {
+    const run = archiveRunRef.current;
+    if (!run) return;
+    const elapsedSeconds = Math.max(0, Math.floor((Date.now() - run.startedAt) / 1000));
+    setArchiveElapsedSeconds(elapsedSeconds);
+    emitPageSnapshotToast({
+      elapsedSeconds,
+      message: t('designBrowser.status.pageSnapshotStarted'),
+      onCancel: cancelPageSnapshot,
+      status: 'loading',
+      ttlMs: 0,
+    });
+  };
+
+  useEffect(() => {
+    if (!archiveSaving || !archiveRunRef.current) return;
+    publishSnapshotProgressRef.current();
+    const interval = window.setInterval(() => publishSnapshotProgressRef.current(), 1000);
+    return () => window.clearInterval(interval);
+  }, [archiveSaving]);
 
   useEffect(() => {
     if (!menuOpen && !suggestionsOpen && !browserUseOpen) return;
@@ -1467,14 +1535,29 @@ export function DesignBrowserPanel({
       setStatusMessage(message);
       return { ok: false, message };
     }
+    const controller = new AbortController();
+    const run = {
+      controller,
+      id: archiveRunIdRef.current + 1,
+      startedAt: Date.now(),
+    };
+    archiveRunIdRef.current = run.id;
+    archiveRunRef.current = run;
+    setArchiveElapsedSeconds(0);
     setSavingAction('archive', true);
     setDownloadAttentionNonce(null);
     setMenuOpen(false);
-    setStatusMessage(t('designBrowser.status.pageSnapshotStarted'));
+    setStatusMessage({
+      message: t('designBrowser.status.pageSnapshotStarted'),
+      source: 'page-snapshot',
+    });
     try {
-      const capture = await webviewNode.executeJavaScript<BrowserPageArchiveCapture>(
-        BROWSER_CAPTURE_PAGE_ARCHIVE_SCRIPT,
-        true,
+      const capture = await abortablePageSnapshotPromise(
+        webviewNode.executeJavaScript<BrowserPageArchiveCapture>(
+          BROWSER_CAPTURE_PAGE_ARCHIVE_SCRIPT,
+          true,
+        ),
+        controller.signal,
       );
       if (!isBrowserPageArchiveCapture(capture)) {
         throw new Error(t('designBrowser.status.pageSnapshotUnsupported'));
@@ -1483,17 +1566,24 @@ export function DesignBrowserPanel({
       const htmlFile = `${dir}/page.html`;
       const cssFile = `${dir}/styles.css`;
       const manifestFile = `${dir}/manifest.json`;
-      const htmlSaved = await writeProjectTextFile(projectId, htmlFile, capture.html);
+      const htmlSaved = await abortablePageSnapshotPromise(
+        writeProjectTextFile(projectId, htmlFile, capture.html),
+        controller.signal,
+      );
       if (!htmlSaved) throw new Error(t('designBrowser.status.pageSnapshotFailed'));
-      const cssSaved = await writeProjectTextFile(projectId, cssFile, capture.css ?? '');
+      const cssSaved = await abortablePageSnapshotPromise(
+        writeProjectTextFile(projectId, cssFile, capture.css ?? ''),
+        controller.signal,
+      );
       if (!cssSaved) throw new Error(t('designBrowser.status.pageSnapshotFailed'));
 
-      const resources = await saveBrowserPageArchiveResources({
-        dir,
-        projectId,
-        resources: capture.resources,
-      });
-      const savedResources = resources.filter((resource) => resource.status === 'saved').length;
+      // The snapshot's only consumer is design-system extraction, which reads
+      // back nothing but page.html + styles.css (see ProjectView's
+      // readLocalBrowserPageArchiveSnapshot → extract-from-html, which POSTs
+      // only { html, css, baseUrl }). The daemon then harvests logos/fonts
+      // itself, server-side, from refs inside that HTML/CSS. Downloading the
+      // page's images/fonts/scripts/video here added nothing extraction reads
+      // yet cost a 12s+ fan-out, so we persist the two text files and stop.
       const manifest: BrowserPageArchiveManifest = {
         schema: BROWSER_PAGE_ARCHIVE_SCHEMA,
         capturedAt: Date.now(),
@@ -1503,22 +1593,35 @@ export function DesignBrowserPanel({
         htmlFile,
         cssFile,
         manifestFile,
-        resources,
+        resources: [],
       };
       const manifestText = JSON.stringify(manifest, null, 2);
-      const savedManifest = await writeProjectTextFile(projectId, manifestFile, manifestText);
-      const savedIndex = await writeProjectTextFile(projectId, BROWSER_PAGE_ARCHIVE_INDEX_FILE, manifestText);
+      const savedManifest = await abortablePageSnapshotPromise(
+        writeProjectTextFile(projectId, manifestFile, manifestText),
+        controller.signal,
+      );
+      const savedIndex = await abortablePageSnapshotPromise(
+        writeProjectTextFile(projectId, BROWSER_PAGE_ARCHIVE_INDEX_FILE, manifestText),
+        controller.signal,
+      );
       if (!savedManifest || !savedIndex) throw new Error(t('designBrowser.status.pageSnapshotFailed'));
-      await onRefreshFiles();
+      await abortablePageSnapshotPromise(Promise.resolve(onRefreshFiles()), controller.signal);
       if (options.openAfterSave !== false) onOpenFile(manifestFile);
-      const message = t('designBrowser.status.pageSnapshotSaved', {
-        saved: savedResources,
-        total: resources.length,
-      });
+      const message = t('designBrowser.status.pageSnapshotSaved');
+      const elapsedSeconds = pageSnapshotRunElapsedSeconds(run);
       setStatusMessage({
         actionFileName: manifestFile,
         actionLabel: t('workspace.designFiles'),
         message,
+        source: 'page-snapshot',
+      });
+      emitPageSnapshotToast({
+        actionFileName: manifestFile,
+        actionLabel: t('workspace.designFiles'),
+        elapsedSeconds,
+        message,
+        status: 'success',
+        ttlMs: 8000,
       });
       return {
         ok: true,
@@ -1528,16 +1631,30 @@ export function DesignBrowserPanel({
         indexFile: BROWSER_PAGE_ARCHIVE_INDEX_FILE,
         manifestFile,
         message,
-        savedResources,
-        totalResources: resources.length,
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : t('designBrowser.status.pageSnapshotFailed');
-      setStatusMessage(message);
+      const canceled = isPageSnapshotAbortError(error) || controller.signal.aborted;
+      const message = canceled
+        ? t('designs.status.canceled')
+        : error instanceof Error ? error.message : t('designBrowser.status.pageSnapshotFailed');
+      const elapsedSeconds = pageSnapshotRunElapsedSeconds(run);
+      setStatusMessage({
+        message,
+        source: 'page-snapshot',
+      });
+      emitPageSnapshotToast({
+        elapsedSeconds,
+        message,
+        status: canceled ? 'canceled' : 'error',
+        ttlMs: canceled ? 3000 : 8000,
+      });
       return { ok: false, message };
     } finally {
-      setSavingAction('archive', false);
-      setMenuOpen(false);
+      if (archiveRunRef.current?.id === run.id) {
+        archiveRunRef.current = null;
+        setSavingAction('archive', false);
+        setMenuOpen(false);
+      }
     }
   }
 
@@ -1935,10 +2052,17 @@ export function DesignBrowserPanel({
       commenting
     />
   ) : null;
-  const statusText = typeof statusMessage === 'string' ? statusMessage : statusMessage?.message ?? '';
+  const statusBaseText = typeof statusMessage === 'string' ? statusMessage : statusMessage?.message ?? '';
+  const statusText = archiveSaving && statusBaseText
+    ? `${statusBaseText} · ${formatBrowserSnapshotElapsed(archiveElapsedSeconds)}`
+    : statusBaseText;
   const statusAction = statusMessage && typeof statusMessage === 'object' && statusMessage.actionFileName
     ? statusMessage
     : null;
+  const statusIsPageSnapshot = Boolean(
+    statusMessage && typeof statusMessage === 'object' && statusMessage.source === 'page-snapshot',
+  );
+  const showStatusMessage = Boolean(statusMessage) && !(statusIsPageSnapshot && onPageSnapshotToast);
 
   return (
     <section className="design-browser" aria-label="Design Browser">
@@ -2138,10 +2262,18 @@ export function DesignBrowserPanel({
           ) : null}
         </div>
       </div>
-      {statusMessage ? (
+      {showStatusMessage ? (
         <div className="db-status" role="status">
           <span>{statusText}</span>
-          {statusAction ? (
+          {archiveSaving ? (
+            <button
+              type="button"
+              className="db-status-action"
+              onClick={cancelPageSnapshot}
+            >
+              {t('common.cancel')}
+            </button>
+          ) : statusAction ? (
             <button
               type="button"
               className="db-status-action"
@@ -3264,10 +3396,50 @@ export function browserFileName(prefix: string, url: string, extension: 'md' | '
   return `browser/${prefix}-${host}-${stamp}.${extension}`;
 }
 
-const BROWSER_ARCHIVE_RESOURCE_LIMIT = 220;
-const BROWSER_ARCHIVE_RESOURCE_MAX_BYTES = 15 * 1024 * 1024;
-const BROWSER_ARCHIVE_TOTAL_MAX_BYTES = 80 * 1024 * 1024;
-const BROWSER_ARCHIVE_RESOURCE_TIMEOUT_MS = 8000;
+function pageSnapshotAbortError(): Error {
+  const error = new Error('Page snapshot canceled.');
+  error.name = 'AbortError';
+  return error;
+}
+
+function isPageSnapshotAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
+function throwIfPageSnapshotAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw pageSnapshotAbortError();
+}
+
+function abortablePageSnapshotPromise<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(pageSnapshotAbortError());
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const settle = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener('abort', onAbort);
+      callback();
+    };
+    const onAbort = () => settle(() => reject(pageSnapshotAbortError()));
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => settle(() => resolve(value)),
+      (error: unknown) => settle(() => reject(error)),
+    );
+  });
+}
+
+function pageSnapshotRunElapsedSeconds(run: { startedAt: number }): number {
+  return Math.max(0, Math.floor((Date.now() - run.startedAt) / 1000));
+}
+
+function formatBrowserSnapshotElapsed(seconds: number): string {
+  const safe = Math.max(0, Math.floor(seconds));
+  if (safe < 60) return `${safe}s`;
+  const minutes = Math.floor(safe / 60);
+  const remainder = safe % 60;
+  return remainder === 0 ? `${minutes}m` : `${minutes}m ${String(remainder).padStart(2, '0')}s`;
+}
 
 function browserPageArchiveDir(url: string, date = new Date()): string {
   const host = labelFromUrl(url).replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '') || 'page';
@@ -3284,193 +3456,6 @@ function isBrowserPageArchiveCapture(value: unknown): value is BrowserPageArchiv
     typeof capture.css === 'string' &&
     Array.isArray(capture.resources)
   );
-}
-
-async function saveBrowserPageArchiveResources(input: {
-  dir: string;
-  projectId: string;
-  resources: BrowserPageArchiveCaptureResource[];
-}): Promise<BrowserPageArchiveManifestResource[]> {
-  const unique = new Map<string, BrowserPageArchiveCaptureResource>();
-  for (const resource of input.resources) {
-    if (!resource || typeof resource.url !== 'string') continue;
-    const url = resource.url.trim();
-    if (!url || unique.has(url)) continue;
-    unique.set(url, resource);
-    if (unique.size >= BROWSER_ARCHIVE_RESOURCE_LIMIT) break;
-  }
-
-  const out: BrowserPageArchiveManifestResource[] = [];
-  let totalBytes = 0;
-  let index = 0;
-  for (const resource of unique.values()) {
-    index += 1;
-    const base = browserArchiveManifestResourceBase(resource);
-    if (totalBytes >= BROWSER_ARCHIVE_TOTAL_MAX_BYTES) {
-      out.push({ ...base, status: 'skipped', error: 'archive byte budget reached' });
-      continue;
-    }
-    try {
-      const fetched = await fetchBrowserArchiveResource(resource.url);
-      if (fetched.size > BROWSER_ARCHIVE_RESOURCE_MAX_BYTES) {
-        out.push({ ...base, status: 'skipped', error: 'resource too large', mime: fetched.mime, size: fetched.size });
-        continue;
-      }
-      if (totalBytes + fetched.size > BROWSER_ARCHIVE_TOTAL_MAX_BYTES) {
-        out.push({ ...base, status: 'skipped', error: 'archive byte budget reached', mime: fetched.mime, size: fetched.size });
-        continue;
-      }
-      const file = `${input.dir}/assets/${browserArchiveResourceFileName(resource, fetched.mime, index)}`;
-      const saved = await writeProjectBase64File(input.projectId, file, fetched.base64);
-      if (!saved) throw new Error('file save failed');
-      totalBytes += fetched.size;
-      out.push({ ...base, status: 'saved', file, mime: fetched.mime, size: fetched.size });
-    } catch (error) {
-      out.push({
-        ...base,
-        status: 'failed',
-        error: error instanceof Error ? error.message : 'resource download failed',
-      });
-    }
-  }
-  return out;
-}
-
-function browserArchiveManifestResourceBase(
-  resource: BrowserPageArchiveCaptureResource,
-): Omit<BrowserPageArchiveManifestResource, 'status'> {
-  return {
-    url: resource.url,
-    kind: resource.kind,
-    ...(resource.tag ? { tag: resource.tag } : {}),
-    ...(resource.rel ? { rel: resource.rel } : {}),
-    ...(resource.source ? { source: resource.source } : {}),
-  };
-}
-
-async function fetchBrowserArchiveResource(
-  url: string,
-): Promise<{ base64: string; mime: string; size: number }> {
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), BROWSER_ARCHIVE_RESOURCE_TIMEOUT_MS);
-  try {
-    const resp = await fetch(url, {
-      cache: 'force-cache',
-      credentials: 'include',
-      signal: controller.signal,
-    });
-    if (!resp.ok) throw new Error(`resource fetch failed (${resp.status})`);
-    const blob = await resp.blob();
-    const mime = blob.type || responseMimeFromUrl(url);
-    const base64 = await blobToBase64(blob);
-    return { base64, mime, size: blob.size };
-  } catch (error) {
-    if (controller.signal.aborted) {
-      throw new Error('resource fetch timed out');
-    }
-    throw error;
-  } finally {
-    window.clearTimeout(timeout);
-  }
-}
-
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = String(reader.result || '');
-      resolve(result.split(',', 2)[1] ?? '');
-    };
-    reader.onerror = () => reject(reader.error ?? new Error('blob read failed'));
-    reader.readAsDataURL(blob);
-  });
-}
-
-function browserArchiveResourceFileName(
-  resource: BrowserPageArchiveCaptureResource,
-  mime: string,
-  index: number,
-): string {
-  const ext = extensionFromUrl(resource.url) || extensionFromMime(mime) || extensionFromKind(resource.kind);
-  let base = 'resource';
-  try {
-    const parsed = new URL(resource.url);
-    const name = decodeURIComponent(parsed.pathname.split('/').filter(Boolean).pop() || '');
-    base = name.replace(/\.[a-z0-9]{1,8}$/i, '') || parsed.hostname || base;
-  } catch {
-    base = resource.kind || base;
-  }
-  const safeBase = base.replace(/[^a-z0-9._-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 56) || 'resource';
-  return `${String(index).padStart(3, '0')}-${safeBase}${ext}`;
-}
-
-function extensionFromUrl(url: string): string {
-  try {
-    const parsed = new URL(url);
-    const ext = /\.[a-z0-9]{1,8}$/i.exec(parsed.pathname)?.[0]?.toLowerCase() ?? '';
-    return ext && !/^\.(?:php|aspx?|jsp)$/i.test(ext) ? ext : '';
-  } catch {
-    return '';
-  }
-}
-
-function extensionFromMime(mime: string): string {
-  const clean = mime.split(';', 1)[0]?.toLowerCase() ?? '';
-  const map: Record<string, string> = {
-    'application/javascript': '.js',
-    'application/json': '.json',
-    'application/octet-stream': '',
-    'application/pdf': '.pdf',
-    'font/otf': '.otf',
-    'font/ttf': '.ttf',
-    'font/woff': '.woff',
-    'font/woff2': '.woff2',
-    'image/avif': '.avif',
-    'image/gif': '.gif',
-    'image/jpeg': '.jpg',
-    'image/png': '.png',
-    'image/svg+xml': '.svg',
-    'image/webp': '.webp',
-    'text/css': '.css',
-    'text/html': '.html',
-    'text/javascript': '.js',
-    'video/mp4': '.mp4',
-    'video/webm': '.webm',
-  };
-  return map[clean] ?? '';
-}
-
-function extensionFromKind(kind: BrowserPageArchiveCaptureResource['kind']): string {
-  if (kind === 'stylesheet') return '.css';
-  if (kind === 'script') return '.js';
-  if (kind === 'font') return '.woff2';
-  if (kind === 'media') return '.bin';
-  if (kind === 'document') return '.html';
-  return '.bin';
-}
-
-function responseMimeFromUrl(url: string): string {
-  const ext = extensionFromUrl(url);
-  const map: Record<string, string> = {
-    '.avif': 'image/avif',
-    '.css': 'text/css',
-    '.gif': 'image/gif',
-    '.html': 'text/html',
-    '.ico': 'image/x-icon',
-    '.jpeg': 'image/jpeg',
-    '.jpg': 'image/jpeg',
-    '.js': 'application/javascript',
-    '.mp4': 'video/mp4',
-    '.otf': 'font/otf',
-    '.png': 'image/png',
-    '.svg': 'image/svg+xml',
-    '.ttf': 'font/ttf',
-    '.webm': 'video/webm',
-    '.webp': 'image/webp',
-    '.woff': 'font/woff',
-    '.woff2': 'font/woff2',
-  };
-  return map[ext] ?? 'application/octet-stream';
 }
 
 export function pageBriefMarkdown(brief: PageBrief, fallbackUrl: string): string {

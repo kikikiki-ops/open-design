@@ -94,6 +94,7 @@ import {
   DesignBrowserPanel,
   labelFromUrl,
   normalizeBrowserAddress,
+  type BrowserPageSnapshotToastEvent,
   type BrowserPageInfo,
 } from './DesignBrowserPanel';
 import type { PluginFolderAgentAction } from './design-files/pluginFolderActions';
@@ -429,6 +430,18 @@ const DESIGN_SYSTEM_GUIDANCE_FILES = new Set([
 ]);
 const DESIGN_SYSTEM_IMAGE_OR_FONT_EXTENSIONS = /\.(svg|png|jpe?g|gif|webp|avif|ico|otf|ttf|woff2?)$/i;
 
+type WorkspaceToastTone = 'default' | 'success' | 'error' | 'loading';
+
+interface WorkspaceActionToast {
+  actionLabel?: string | null;
+  details?: string | null;
+  message: string;
+  onAction?: () => void;
+  role?: 'status' | 'alert';
+  tone?: WorkspaceToastTone;
+  ttlMs?: number;
+}
+
 export function FileWorkspace({
   projectId,
   projectKind,
@@ -584,6 +597,7 @@ export function FileWorkspace({
   // Transient feedback when a launcher "create" action (e.g. New Terminal)
   // fails on the daemon side, so the click is never a silent no-op.
   const [launcherToast, setLauncherToast] = useState<string | null>(null);
+  const [browserSnapshotToast, setBrowserSnapshotToast] = useState<WorkspaceActionToast | null>(null);
   const [tabsOverflowing, setTabsOverflowing] = useState(false);
   const [draggedTabName, setDraggedTabName] = useState<string | null>(null);
   const [dragOverTab, setDragOverTab] = useState<{
@@ -595,6 +609,7 @@ export function FileWorkspace({
   const tabsBarRef = useRef<HTMLDivElement | null>(null);
   const draggedTabNameRef = useRef<string | null>(null);
   const browserTabSequenceRef = useRef(0);
+  const openFileRef = useRef<(name: string) => void>(() => {});
   const designFilesNavProjectIdRef = useRef(projectId);
   const designFilesNavRef = useRef<DesignFilesNavState>(createDefaultDesignFilesNavState());
   if (designFilesNavProjectIdRef.current !== projectId) {
@@ -1039,6 +1054,41 @@ export function FileWorkspace({
     commitTabsState(workspaceTabsState(nextTabs, name, nextBrowserTabs));
     setActiveTab(name);
   }
+  openFileRef.current = openFile;
+
+  const handleBrowserPageSnapshotToast = useCallback((event: BrowserPageSnapshotToastEvent) => {
+    const details = event.elapsedSeconds == null
+      ? null
+      : `${t('homeHero.footer.duration')}: ${formatWorkspaceSnapshotElapsed(event.elapsedSeconds)}`;
+    const tone: WorkspaceToastTone =
+      event.status === 'loading'
+        ? 'loading'
+        : event.status === 'success'
+          ? 'success'
+          : event.status === 'error'
+            ? 'error'
+            : 'default';
+    const actionLabel = event.status === 'loading'
+      ? t('common.cancel')
+      : event.actionLabel;
+    const onAction = event.status === 'loading'
+      ? event.onCancel
+      : event.actionFileName
+        ? () => {
+            openFileRef.current(event.actionFileName!);
+            setBrowserSnapshotToast(null);
+          }
+        : undefined;
+    setBrowserSnapshotToast({
+      actionLabel,
+      details,
+      message: event.message,
+      onAction,
+      role: event.status === 'error' ? 'alert' : 'status',
+      tone,
+      ttlMs: event.ttlMs,
+    });
+  }, [t]);
 
   function focusWorkspaceTab(tabId: string) {
     setUploadError(null);
@@ -2219,7 +2269,18 @@ export function FileWorkspace({
           onClose={() => setLauncherOpen(false)}
         />
       ) : null}
-      {launcherToast ? (
+      {browserSnapshotToast ? (
+        <Toast
+          message={browserSnapshotToast.message}
+          details={browserSnapshotToast.details}
+          actionLabel={browserSnapshotToast.actionLabel}
+          onAction={browserSnapshotToast.onAction}
+          role={browserSnapshotToast.role}
+          tone={browserSnapshotToast.tone}
+          ttlMs={browserSnapshotToast.ttlMs}
+          onDismiss={() => setBrowserSnapshotToast(null)}
+        />
+      ) : launcherToast ? (
         <Toast
           message={launcherToast}
           role="alert"
@@ -2267,6 +2328,7 @@ export function FileWorkspace({
               onRemovePreviewComment={onRemovePreviewComment}
               onSendBoardCommentAttachments={onSendBoardCommentAttachments}
               onRequestBrowserUsePrompt={onRequestBrowserUsePrompt}
+              onPageSnapshotToast={handleBrowserPageSnapshotToast}
               onRefreshFiles={onRefreshFiles}
               onOpenFile={openFile}
               onPageInfoChange={(info) => updateBrowserTabInfo(browserTab.id, info)}
@@ -3778,6 +3840,14 @@ function isDesignSystemRawAssetFile(path: string): boolean {
 
 function isDesignSystemReviewableAssetArtifact(path: string): boolean {
   return /\b(brand|logo|logos|mark|wordmark|icon)\b/u.test(path);
+}
+
+function formatWorkspaceSnapshotElapsed(seconds: number): string {
+  const safe = Math.max(0, Math.floor(seconds));
+  if (safe < 60) return `${safe}s`;
+  const minutes = Math.floor(safe / 60);
+  const remainder = safe % 60;
+  return remainder === 0 ? `${minutes}m` : `${minutes}m ${String(remainder).padStart(2, '0')}s`;
 }
 
 function designSystemReviewArtifactSort(first: string, second: string): number {

@@ -133,11 +133,13 @@ vi.mock('../../src/components/EntryView', () => ({
 vi.mock('../../src/components/ProjectView', () => ({
   ProjectView: ({
     onBack,
+    onCreateProjectFromDesignSystem,
     onProjectsRefresh,
     project,
     routeConversationId,
   }: {
     onBack: () => void;
+    onCreateProjectFromDesignSystem?: (designSystemId: string, title: string) => Promise<void> | void;
     onProjectsRefresh: () => Promise<void>;
     project: Project;
     routeConversationId?: string | null;
@@ -150,6 +152,12 @@ vi.mock('../../src/components/ProjectView', () => ({
       </button>
       <button type="button" onClick={() => void onProjectsRefresh()}>
         Refresh projects
+      </button>
+      <button
+        type="button"
+        onClick={() => void onCreateProjectFromDesignSystem?.('slack', 'Slack')}
+      >
+        Create design from design system
       </button>
     </main>
   ),
@@ -563,6 +571,41 @@ describe('App project creation routing', () => {
 
     expect(screen.getByTestId('project-title').textContent).toBe('Fresh project');
     expect(window.location.pathname).toBe('/projects/project-new');
+  });
+
+  it('creates a web prototype project from the current design system context', async () => {
+    mockedListProjects.mockResolvedValue([existingProject]);
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Existing project' }));
+    await screen.findByTestId('project-view');
+    fireEvent.click(screen.getByRole('button', { name: 'Create design from design system' }));
+
+    await waitFor(() => {
+      expect(mockedCreateProject).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Untitled',
+          skillId: null,
+          designSystemId: 'slack',
+          pluginId: 'example-web-prototype',
+          conversationMode: 'design',
+          pluginInputs: expect.objectContaining({
+            artifactKind: 'web prototype',
+            fidelity: 'high-fidelity',
+            audience: 'product evaluators',
+            designSystem: 'Slack',
+            template: 'the bundled web prototype seed',
+          }),
+          metadata: expect.objectContaining({
+            kind: 'prototype',
+            fidelity: 'high-fidelity',
+            platform: 'responsive',
+            platformTargets: ['responsive'],
+          }),
+        }),
+      );
+    });
   });
 
   it('keeps a newly created project open when a post-create refresh resolves stale', async () => {

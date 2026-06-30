@@ -1058,6 +1058,8 @@ describe('agent-driven brand extraction engine', () => {
     const stalled = listMessages(db, result.conversationId)[1];
     expect(stalled?.runStatus).toBe('failed');
     expect(stalled?.content).toContain('needs a hand');
+    expect(stalled?.content).toContain('<od-card type="brand-browser-assist">');
+    expect(stalled?.content).toContain('"browserTabId":"__browser__:1"');
 
     controller.abort();
     releasePrefetch();
@@ -1238,6 +1240,10 @@ describe('agent-driven brand extraction engine', () => {
     expect(html).toContain('data-od-id="brand-name"');
     expect(html).toContain('data-od-id="brand-color-hex-');
     expect(html).toContain('data-od-id="brand-palette"');
+    expect(html).toContain("e.key === 'ArrowLeft'");
+    expect(html).toContain('showLight(lightIdx - 1)');
+    expect(html).toContain("e.key === 'ArrowRight'");
+    expect(html).toContain('showLight(lightIdx + 1)');
   });
 
   it('finalizeBrand registers the kit, marks it ready, and lights up the assets', async () => {

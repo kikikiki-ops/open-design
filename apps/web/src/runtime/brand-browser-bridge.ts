@@ -23,17 +23,16 @@ export interface BrandBrowserPageSnapshotResult {
   indexFile?: string;
   manifestFile?: string;
   message?: string;
-  savedResources?: number;
-  totalResources?: number;
 }
 
 export interface BrandBrowserHandle {
   /** Run a script inside the tab's webview. Returns null on the cross-origin
    *  <iframe> fallback (web-only host), where guest DOM access is impossible. */
   executeJavaScript: <T = unknown>(code: string, userGesture?: boolean) => Promise<T> | null;
-  /** Save the currently rendered page as Design Files (HTML, CSS digest,
-   *  best-effort resources, and manifest) using the same action exposed in the
-   *  Browser tab menu. */
+  /** Save the currently rendered page as Design Files (HTML, CSS digest, and
+   *  manifest) using the same action exposed in the Browser tab menu. This is
+   *  the lightweight capture the extraction flow reads back — page assets are
+   *  not downloaded, since extraction only consumes the HTML + CSS. */
   downloadPageSnapshot?: () => Promise<BrandBrowserPageSnapshotResult>;
   /** The webview's current committed URL. */
   getURL: () => string;
