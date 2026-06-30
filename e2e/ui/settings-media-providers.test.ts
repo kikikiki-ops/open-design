@@ -35,6 +35,14 @@ async function routeBootstrapApis(
   options?: {
     mediaConfigGet?: (route: Route) => Promise<void>;
     mediaConfigPut?: (route: Route) => Promise<void>;
+    projectCreate?: (route: Route) => Promise<void>;
+    runProject?: {
+      id: string;
+      conversationId: string;
+      name: string;
+      metadata: Record<string, unknown>;
+      runBodies: Array<Record<string, unknown>>;
+    };
   },
 ) {
   await page.route('**/api/**', async (route) => {
@@ -63,6 +71,10 @@ async function routeBootstrapApis(
           ],
         }),
       });
+      return;
+    }
+    if (path === '/api/editors') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"editors":[]}' });
       return;
     }
     if (path === '/api/app-config') {
@@ -102,6 +114,10 @@ async function routeBootstrapApis(
       return;
     }
     if (path === '/api/projects') {
+      if (method === 'POST' && options?.projectCreate) {
+        await options.projectCreate(route);
+        return;
+      }
       await route.fulfill({ status: 200, contentType: 'application/json', body: '{"projects":[]}' });
       return;
     }
@@ -111,6 +127,62 @@ async function routeBootstrapApis(
     }
     if (path === '/api/prompt-templates') {
       await route.fulfill({ status: 200, contentType: 'application/json', body: '{"promptTemplates":[]}' });
+      return;
+    }
+    if (options?.runProject && path === `/api/projects/${options.runProject.id}`) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          project: {
+            id: options.runProject.id,
+            name: options.runProject.name,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            metadata: options.runProject.metadata,
+          },
+        }),
+      });
+      return;
+    }
+    if (options?.runProject && path === `/api/projects/${options.runProject.id}/conversations`) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          conversations: [
+            { id: options.runProject.conversationId, title: options.runProject.name, updatedAt: Date.now() },
+          ],
+        }),
+      });
+      return;
+    }
+    if (
+      options?.runProject &&
+      path === `/api/projects/${options.runProject.id}/conversations/${options.runProject.conversationId}/messages`
+    ) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"messages":[]}' });
+      return;
+    }
+    if (options?.runProject && path === `/api/projects/${options.runProject.id}/files`) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"files":[]}' });
+      return;
+    }
+    if (path === '/api/runs') {
+      if (method === 'POST' && options?.runProject) {
+        options.runProject.runBodies.push(route.request().postDataJSON() as Record<string, unknown>);
+        await route.fulfill({ status: 202, contentType: 'application/json', body: '{"runId":"configured-image-run"}' });
+        return;
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{"runs":[]}' });
+      return;
+    }
+    if (/^\/api\/runs\/[^/]+\/events$/.test(path)) {
+      await route.fulfill({
+        status: 200,
+        headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' },
+        body: ['event: end', 'data: {"code":0,"status":"succeeded"}', '', ''].join('\n'),
+      });
       return;
     }
 
@@ -253,5 +325,149 @@ test.describe('Settings media providers flows', () => {
     const openaiGroup = await openNewProjectImageModelPicker(page);
     await expect(openaiGroup).toContainText('Configured');
     await expect(openaiGroup).not.toContainText('Integrated');
+  });
+
+  test('[P1] configured media provider model is written into image project metadata', async ({ page }) => {
+    test.setTimeout(60_000);
+
+    await seedSettingsBase(page);
+
+    const createBodies: Array<Record<string, unknown>> = [];
+    await routeBootstrapApis(page, {
+      projectCreate: async (route) => {
+        const body = route.request().postDataJSON() as Record<string, unknown>;
+        createBodies.push(body);
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            project: {
+              id: 'configured-image-project',
+              name: body.name ?? 'Configured image generation',
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              metadata: body.metadata ?? {},
+            },
+            conversationId: 'configured-image-conversation',
+          }),
+        });
+      },
+    });
+
+    const dialog = await openMediaSettings(page);
+    await dialog.getByLabel('OpenAI API key').fill('sk-openai-image-project');
+    await page.waitForFunction(
+      ({ key }) => {
+        const raw = window.localStorage.getItem(key);
+        if (!raw) return false;
+        const parsed = JSON.parse(raw);
+        return parsed.mediaProviders?.openai?.apiKey === 'sk-openai-image-project';
+      },
+      { key: STORAGE_KEY },
+    );
+    await dialog.getByRole('button', { name: /Close/i }).click();
+    await expect(dialog).toHaveCount(0);
+
+    await ensureRailOpen(page);
+    await page.getByTestId('entry-nav-new-project').click();
+    await expect(page.getByTestId('new-project-modal')).toBeVisible();
+    await page.getByTestId('new-project-tab-media').click();
+    await page.getByTestId('new-project-media-surface-image').click();
+    await page.getByTestId('new-project-name').fill('Configured image generation');
+
+    await page.getByTestId('model-picker-trigger').click();
+    const openaiGroup = page.locator('.ds-picker-group').filter({ has: page.getByText('OpenAI', { exact: true }) });
+    await expect(openaiGroup).toContainText('Configured');
+    await openaiGroup.getByTestId('model-picker-option-gpt-image-2').click();
+
+    await page.getByTestId('create-project').click();
+    await expect
+      .poll(() => createBodies.length, { timeout: 10_000 })
+      .toBe(1);
+
+    expect(createBodies[0]).toMatchObject({
+      name: 'Configured image generation',
+      metadata: {
+        kind: 'image',
+        imageModel: 'gpt-image-2',
+      },
+    });
+  });
+
+  test('[P1] configured image media model is carried into the first daemon run without leaking provider keys', async ({ page }) => {
+    test.setTimeout(60_000);
+
+    await seedSettingsBase(page);
+
+    const projectId = 'configured-image-run-project';
+    const conversationId = 'configured-image-run-conversation';
+    const runBodies: Array<Record<string, unknown>> = [];
+    await routeBootstrapApis(page, {
+      projectCreate: async (route) => {
+        const body = route.request().postDataJSON() as Record<string, unknown>;
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            project: {
+              id: projectId,
+              name: body.name ?? 'Configured image run',
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              metadata: body.metadata ?? {},
+            },
+            conversationId,
+          }),
+        });
+      },
+      runProject: {
+        id: projectId,
+        conversationId,
+        name: 'Configured image run',
+        metadata: { kind: 'image', imageModel: 'gpt-image-2' },
+        runBodies,
+      },
+    });
+
+    const dialog = await openMediaSettings(page);
+    await dialog.getByLabel('OpenAI API key').fill('sk-openai-run-secret');
+    await page.waitForFunction(
+      ({ key }) => {
+        const raw = window.localStorage.getItem(key);
+        if (!raw) return false;
+        const parsed = JSON.parse(raw);
+        return parsed.mediaProviders?.openai?.apiKey === 'sk-openai-run-secret';
+      },
+      { key: STORAGE_KEY },
+    );
+    await dialog.getByRole('button', { name: /Close/i }).click();
+    await expect(dialog).toHaveCount(0);
+
+    await ensureRailOpen(page);
+    await page.getByTestId('entry-nav-new-project').click();
+    await expect(page.getByTestId('new-project-modal')).toBeVisible();
+    await page.getByTestId('new-project-tab-media').click();
+    await page.getByTestId('new-project-media-surface-image').click();
+    await page.getByTestId('new-project-name').fill('Configured image run');
+    await page.getByTestId('model-picker-trigger').click();
+    const openaiGroup = page.locator('.ds-picker-group').filter({ has: page.getByText('OpenAI', { exact: true }) });
+    await openaiGroup.getByTestId('model-picker-option-gpt-image-2').click();
+    await page.getByTestId('create-project').click();
+
+    await expect(page).toHaveURL(new RegExp(`/projects/${projectId}`));
+    await page.getByTestId('chat-composer-input').fill('Generate a launch poster using the configured image provider.');
+    await page.getByTestId('chat-send').click();
+
+    await expect.poll(() => runBodies.length, { timeout: 10_000 }).toBe(1);
+    expect(runBodies[0]).toMatchObject({
+      projectId,
+      conversationId,
+      mediaExecution: {
+        mode: 'enabled',
+        allowedSurfaces: ['image'],
+        allowedModels: ['gpt-image-2'],
+      },
+    });
+    expect(JSON.stringify(runBodies[0])).not.toContain('sk-openai-run-secret');
   });
 });
