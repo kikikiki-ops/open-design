@@ -3001,9 +3001,17 @@ export function SettingsDialog({
         requiresApiKey: byokRequiresApiKey,
       }) && isValidApiBaseUrl(cfg.baseUrl);
     }
-    const entry = provider.protocol === apiProtocol
+    const providerDraft = cfg.byokProviderConfigDrafts?.[
+      byokProviderDraftKey(provider.protocol, provider.baseUrl, provider.baseUrl)
+    ]?.apiConfig;
+    const activeProvider = selectedByokProvider?.id === provider.id;
+    const entry = activeProvider
       ? currentApiProtocolConfig(cfg)
-      : cfg.apiProtocolConfigs?.[provider.protocol];
+      : providerDraft ?? (
+        provider.protocol === apiProtocol
+          ? undefined
+          : cfg.apiProtocolConfigs?.[provider.protocol]
+      );
     if (!entry || entry.baseUrl !== provider.baseUrl) return false;
     const knownProvider = KNOWN_PROVIDERS.find((item) => item.baseUrl === provider.baseUrl);
     return canRunProviderConnectionTest(entry, {

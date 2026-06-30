@@ -502,6 +502,27 @@ describe('SettingsDialog execution settings BYOK interactions', () => {
     expect(apiKeyInput.type).toBe('password');
   });
 
+  it('shows configured status from provider-scoped drafts for same-protocol presets', () => {
+    renderSettingsDialog({
+      apiProtocol: 'openai',
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-4o',
+      apiProviderBaseUrl: 'https://api.openai.com/v1',
+    });
+
+    const apiKeyInput = screen.getByLabelText('API key') as HTMLInputElement;
+    fireEvent.change(apiKeyInput, { target: { value: 'sk-openai-provider' } });
+    fireEvent.click(screen.getByRole('tab', { name: 'DeepSeek' }));
+    fireEvent.change(apiKeyInput, { target: { value: 'sk-deepseek-provider' } });
+
+    expect(screen.getByRole('tab', { name: 'OpenAI' }).getAttribute('title')).toBe(
+      'OpenAI - Configured',
+    );
+    expect(screen.getByRole('tab', { name: 'DeepSeek' }).getAttribute('title')).toBe(
+      'DeepSeek - Configured',
+    );
+  });
+
   it('persists provider-scoped BYOK drafts across Settings reopen', async () => {
     const first = renderSettingsDialog({
       apiProtocol: 'openai',
@@ -1322,7 +1343,7 @@ describe('SettingsDialog execution settings BYOK interactions', () => {
     ]);
   });
 
-  it('reports the merged dropdown count when account models are combined with provider suggestions', async () => {
+  it('reports the account model count when account models are combined with provider suggestions', async () => {
     fetchProviderModelsMock.mockResolvedValueOnce({
       ok: true,
       kind: 'success',
@@ -1348,7 +1369,7 @@ describe('SettingsDialog execution settings BYOK interactions', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: '智谱' }));
 
-    expect(await screen.findByText('✓ Loaded 10 models.')).toBeTruthy();
+    expect(await screen.findByText('✓ Loaded 8 models from your account.')).toBeTruthy();
     fireEvent.click(screen.getByRole('combobox', { name: 'Model' }));
     const modelPopover = screen.getByTestId('settings-byok-model-popover');
     expect(within(modelPopover).getByRole('option', { name: 'glm-4-plus · Suggested' })).toBeTruthy();
