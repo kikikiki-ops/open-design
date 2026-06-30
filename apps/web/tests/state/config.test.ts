@@ -978,6 +978,20 @@ describe('loadConfig', () => {
       baseUrl: 'https://api.openai.com/v1',
       model: 'gpt-4o',
     });
+
+    const persisted = JSON.parse(
+      store.get('open-design:config') ?? '{}',
+    ) as Partial<AppConfig>;
+    expect(persisted.apiProtocol).toBe('anthropic');
+    expect(persisted.apiKey).toBe('');
+    expect(persisted.apiVersion).toBe('');
+    expect(persisted.baseUrl).toBe(DEFAULT_CONFIG.baseUrl);
+    expect(persisted.apiProtocolConfigs?.bedrock).toBeUndefined();
+    expect(persisted.apiProtocolConfigs?.openai).toEqual({
+      apiKey: 'sk-openai',
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-4o',
+    });
   });
 
   it('infers protocol for legacy daemon-mode API fields without changing mode', () => {

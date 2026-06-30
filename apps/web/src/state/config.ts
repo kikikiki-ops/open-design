@@ -484,12 +484,12 @@ function isBedrockRuntimeBaseUrl(baseUrl: string): boolean {
   return (baseUrl || '').toLowerCase().includes('bedrock-runtime');
 }
 
-function downgradeUnsupportedChatProtocol(config: AppConfig): void {
+function downgradeUnsupportedChatProtocol(config: AppConfig): boolean {
   if (
     config.apiProtocol !== 'bedrock'
     && !isBedrockRuntimeBaseUrl(config.baseUrl)
   ) {
-    return;
+    return false;
   }
 
   config.apiProtocol = DEFAULT_CONFIG.apiProtocol;
@@ -499,6 +499,7 @@ function downgradeUnsupportedChatProtocol(config: AppConfig): void {
   config.model = DEFAULT_CONFIG.model;
   config.apiProviderBaseUrl = DEFAULT_CONFIG.apiProviderBaseUrl;
   delete config.apiProtocolConfigs?.bedrock;
+  return true;
 }
 
 function inferApiProtocol(model: string, baseUrl: string): ApiProtocol {
@@ -590,7 +591,8 @@ export function loadConfig(): AppConfig {
       merged.configMigrationVersion = CONFIG_MIGRATION_VERSION;
     }
 
-    downgradeUnsupportedChatProtocol(merged);
+    const downgradedUnsupportedChatProtocol =
+      downgradeUnsupportedChatProtocol(merged);
 
     // Fixed-origin gateways (e.g. AIHubMix) hide the Base URL field, so a config
     // persisted before the origin was auto-resolved can carry an empty baseUrl.
@@ -599,6 +601,10 @@ export function loadConfig(): AppConfig {
     // model-list fetch and leaves only the static suggestion list.
     if (merged.apiProtocol) {
       merged.baseUrl = resolveFixedOriginBaseUrl(merged.apiProtocol, merged.baseUrl);
+    }
+
+    if (downgradedUnsupportedChatProtocol) {
+      saveConfig(merged);
     }
 
     return merged;
