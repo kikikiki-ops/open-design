@@ -498,6 +498,7 @@ function downgradeUnsupportedChatProtocol(config: AppConfig): void {
   config.baseUrl = DEFAULT_CONFIG.baseUrl;
   config.model = DEFAULT_CONFIG.model;
   config.apiProviderBaseUrl = DEFAULT_CONFIG.apiProviderBaseUrl;
+  delete config.apiProtocolConfigs?.bedrock;
 }
 
 function inferApiProtocol(model: string, baseUrl: string): ApiProtocol {

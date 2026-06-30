@@ -945,6 +945,19 @@ describe('loadConfig', () => {
       baseUrl: 'https://bedrock-runtime.us-east-1.amazonaws.com',
       model: 'amazon.nova-lite-v1:0',
       configMigrationVersion: 1,
+      apiProtocolConfigs: {
+        bedrock: {
+          apiKey: 'nested-bedrock-secret',
+          apiVersion: 'bedrock-2023-05-31',
+          baseUrl: 'https://bedrock-runtime.us-east-1.amazonaws.com',
+          model: 'amazon.nova-lite-v1:0',
+        },
+        openai: {
+          apiKey: 'sk-openai',
+          baseUrl: 'https://api.openai.com/v1',
+          model: 'gpt-4o',
+        },
+      },
       agentId: null,
       skillId: null,
       designSystemId: null,
@@ -959,6 +972,12 @@ describe('loadConfig', () => {
     expect(config.baseUrl).toBe(DEFAULT_CONFIG.baseUrl);
     expect(config.model).toBe(DEFAULT_CONFIG.model);
     expect(config.apiProviderBaseUrl).toBe(DEFAULT_CONFIG.apiProviderBaseUrl);
+    expect(config.apiProtocolConfigs?.bedrock).toBeUndefined();
+    expect(config.apiProtocolConfigs?.openai).toEqual({
+      apiKey: 'sk-openai',
+      baseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-4o',
+    });
   });
 
   it('infers protocol for legacy daemon-mode API fields without changing mode', () => {
