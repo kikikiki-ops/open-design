@@ -305,9 +305,29 @@ describe('agent-driven brand extraction engine', () => {
       ],
     } as unknown as PrefetchResult;
 
+    // Regression: a dark decorative `background-image`/gradient is not the page
+    // canvas. `prop:background-image` must not be accepted as canvas evidence.
+    const lightWithDarkHero = {
+      colors: [
+        { hex: '#0a0a0a', count: 200, sources: ['prop:background-image selector:body'] },
+        { hex: '#ffffff', count: 60, sources: ['prop:background-color selector:html'] },
+        { hex: '#111111', count: 40, sources: ['prop:color'] },
+      ],
+    } as unknown as PrefetchResult;
+    // And when a dark hero image is the *only* background-ish evidence, there is
+    // no real canvas measurement — don't guess a dark canvas.
+    const onlyDarkHero = {
+      colors: [
+        { hex: '#0a0a0a', count: 200, sources: ['prop:background-image selector:body'] },
+        { hex: '#111111', count: 40, sources: ['prop:color'] },
+      ],
+    } as unknown as PrefetchResult;
+
     expect(isDarkNativeMaterial(darkSite)).toBe(true);
     expect(isDarkNativeMaterial(lightSite)).toBe(false);
     expect(isDarkNativeMaterial(lightWithDarkLogo)).toBe(false);
+    expect(isDarkNativeMaterial(lightWithDarkHero)).toBe(false);
+    expect(isDarkNativeMaterial(onlyDarkHero)).toBe(false);
   });
 
   beforeEach(() => {

@@ -276,7 +276,7 @@ export function isDarkNativeBrand(brand: Brand): boolean {
  * root/body selectors) and compare it against the `color` (text) evidence, the
  * same light-text-on-dark test `isDarkNativeBrand` uses.
  */
-function pickByEvidence(material: PrefetchResult, propMatch: RegExp): string | null {
+function pickByEvidence(material: PrefetchResult, props: Set<string>): string | null {
   let hex: string | null = null;
   let bestScore = -Infinity;
   for (const c of material.colors ?? []) {
@@ -285,7 +285,12 @@ function pickByEvidence(material: PrefetchResult, propMatch: RegExp): string | n
     let isMatch = false;
     let rootish = false;
     for (const s of c.sources) {
-      if (propMatch.test(s)) isMatch = true;
+      // `colorSourceForMatch` joins one `prop:`/`css-var:`/`logo-svg:` token and
+      // an optional `selector:` tail. Match the full prop token exactly so
+      // `prop:background` does not also accept `prop:background-image` /
+      // `-clip` (decorative backgrounds are not the page canvas).
+      const token = s.trim().split(/\s+/, 1)[0] ?? "";
+      if (props.has(token)) isMatch = true;
       const sl = s.toLowerCase();
       if (sl.includes("selector:") && (sl.includes(":root") || /\b(?:html|body)\b/.test(sl))) {
         rootish = true;
@@ -301,11 +306,14 @@ function pickByEvidence(material: PrefetchResult, propMatch: RegExp): string | n
   return hex;
 }
 
+const CANVAS_PROPS = new Set(["prop:background", "prop:background-color"]);
+const TEXT_PROPS = new Set(["prop:color"]);
+
 export function isDarkNativeMaterial(material: PrefetchResult): boolean {
-  const canvas = pickByEvidence(material, /\bprop:background(?:-color)?\b/);
+  const canvas = pickByEvidence(material, CANVAS_PROPS);
   if (!canvas) return false;
   const canvasLum = luminance(canvas);
-  const text = pickByEvidence(material, /\bprop:color\b/);
+  const text = pickByEvidence(material, TEXT_PROPS);
   if (text) return canvasLum < luminance(text) && canvasLum < 0.5;
   return canvasLum < 0.2;
 }
