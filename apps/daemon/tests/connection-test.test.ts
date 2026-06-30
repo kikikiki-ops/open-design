@@ -204,6 +204,9 @@ describe('POST /api/provider/models', () => {
           { id: 'gpt-4o-mini', object: 'model' },
           { id: 'gpt-4o', object: 'model' },
           { id: 'gpt-4o', object: 'model' },
+          { id: 'wan2-1-14b-t2v-250225', object: 'model' },
+          { id: 'text-embedding-3-large', object: 'model' },
+          { id: 'dall-e-3', object: 'model' },
         ],
       });
     });

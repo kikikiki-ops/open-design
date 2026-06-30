@@ -92,6 +92,32 @@ function uniqueModels(models: ProviderModelOption[]): ProviderModelOption[] {
   return out.sort((a, b) => a.id.localeCompare(b.id));
 }
 
+function isOpenAiChatModelId(id: string): boolean {
+  const normalized = id.trim().toLowerCase();
+  if (!normalized) return false;
+  if (
+    normalized.includes('embedding') ||
+    normalized.includes('moderation') ||
+    normalized.includes('rerank') ||
+    normalized.includes('whisper') ||
+    normalized.includes('tts') ||
+    normalized.includes('transcribe') ||
+    normalized.includes('speech') ||
+    normalized.includes('image') ||
+    normalized.includes('video') ||
+    normalized.includes('dall-e') ||
+    normalized.includes('stable-diffusion') ||
+    normalized.includes('flux') ||
+    (
+      normalized.includes('wan') &&
+      /(?:^|[-_.:])(?:t2v|i2v|v2v)(?:[-_.:]|$)/u.test(normalized)
+    )
+  ) {
+    return false;
+  }
+  return !/(?:^|[-_.:])(?:t2i|i2i|t2v|i2v|v2v|tts|asr|ocr)(?:[-_.:]|$)/u.test(normalized);
+}
+
 function extractOpenAiModels(data: unknown): ProviderModelOption[] {
   const items = (data as { data?: unknown }).data;
   if (!Array.isArray(items)) return [];
@@ -99,6 +125,7 @@ function extractOpenAiModels(data: unknown): ProviderModelOption[] {
     items
       .map((item) => (item as { id?: unknown })?.id)
       .filter((id): id is string => typeof id === 'string' && id.length > 0)
+      .filter(isOpenAiChatModelId)
       .map((id) => ({ id, label: id })),
   );
 }
