@@ -68,6 +68,7 @@ import {
   localizeSkillName,
 } from '../i18n/content';
 import { PreviewSurface } from './plugins-home/cards/PreviewSurface';
+import { canDuplicatePluginPreview } from './plugins-home/duplicate';
 import { readHomeGuideStage, writeHomeGuideStage } from './home-hero/firstRunGuide';
 import { curatedPluginPriorityForChip } from './plugins-home/curatedPriority';
 import { sortByVisualAppeal } from './plugins-home/visualScore';
@@ -77,6 +78,7 @@ import { pluginSubfacetLabel } from './plugins-home/subfacetLabel';
 import { ComposerPlusMenu } from './ComposerPlusMenu';
 import { TemplatePicker } from './home-hero/TemplatePicker';
 import { LibraryPicker } from './LibraryPicker';
+import { SessionModeToggle } from './SessionModeToggle';
 import { assetTitle } from './LibraryAssetMeta';
 import { libraryAssetRawUrl } from '../providers/registry';
 import type { LibraryAsset } from '@open-design/contracts';
@@ -89,8 +91,8 @@ import {
 import { CaretFloatingLayer } from './composer/CaretFloatingLayer';
 import { PlaceholderCarousel } from './home-hero/PlaceholderCarousel';
 import {
+  buildPlaceholderScenarios,
   PLACEHOLDER_BASE_HINT_KEY,
-  PLACEHOLDER_SCENARIO_DEFS,
   type PlaceholderScenario,
 } from './home-hero/placeholderScenarios';
 import type { DemoScenario } from './DemoControlBar';
@@ -144,6 +146,7 @@ interface Props {
   onClearActiveChip?: () => void;
   activeSkillId?: string | null;
   activeSkillTitle?: string | null;
+  activeSkillRecord?: SkillSummary | null;
   onClearActiveSkill?: () => void;
   activeCommandTitle?: string | null;
   onClearActiveCommand?: () => void;
@@ -164,6 +167,7 @@ interface Props {
   onAddConnector?: () => void;
   onAddMcp?: () => void;
   onOpenPluginDetails?: (record: InstalledPluginRecord) => void;
+  onOpenSkillDetails?: (skill: SkillSummary) => void;
   pluginInputFields?: InputFieldSpec[];
   pluginInputValues?: Record<string, unknown>;
   pluginInputTemplate?: string | null;
@@ -197,6 +201,8 @@ interface Props {
   submitting?: boolean;
   onPickPlugin: (record: InstalledPluginRecord, nextPrompt: string | null) => void;
   onPickExamplePlugin?: (record: InstalledPluginRecord, chipId: string, promptText: string) => void;
+  onDuplicateExamplePlugin?: (record: InstalledPluginRecord) => void;
+  pendingDuplicatePluginId?: string | null;
   onPickSkill?: (skill: SkillSummary, nextPrompt: string | null) => void;
   onPickMcp?: (server: McpServerConfig, nextPrompt: string) => void;
   onPickConnector?: (connector: ConnectorDetail, nextPrompt: string) => void;
@@ -267,6 +273,8 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
     onPromptChange,
     onSubmit,
     onSubmitScenario = () => undefined,
+    sessionMode = 'design',
+    onSessionModeChange,
     firstRunGuide,
     activePluginTitle,
     activePluginIsExplicit = false,
@@ -274,6 +282,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
     activeSkillId = null,
     activeSkillTitle = null,
     activeCommandTitle = null,
+    activeSkillRecord = null,
     activeChipId,
     onClearActivePlugin,
     onClearActiveChip = onClearActivePlugin,
@@ -290,6 +299,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
     onAddConnector = () => undefined,
     onAddMcp = () => undefined,
     onOpenPluginDetails = () => undefined,
+    onOpenSkillDetails = () => undefined,
     pluginInputFields = EMPTY_INPUT_FIELDS,
     pluginInputValues = EMPTY_PLUGIN_INPUT_VALUES,
     onPluginInputValuesChange = () => undefined,
@@ -314,6 +324,8 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
     submitting = false,
     onPickPlugin,
     onPickExamplePlugin = () => undefined,
+    onDuplicateExamplePlugin = () => undefined,
+    pendingDuplicatePluginId = null,
     onPickSkill = () => undefined,
     onPickMcp = () => undefined,
     onPickConnector = () => undefined,
@@ -398,21 +410,21 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
   // with nothing bound we cycle the full set. Memoised by chip + locale so the
   // reference only changes on a real switch, which restarts the carousel.
   const carouselScenarios = useMemo<PlaceholderScenario[]>(() => {
-    const resolved = PLACEHOLDER_SCENARIO_DEFS.map((def) => ({
-      id: def.id,
-      chipId: def.chipId,
-      text: t(def.textKey),
-    }));
-    return activeChipId
-      ? resolved.filter((scenario) => scenario.chipId === activeChipId)
-      : resolved;
-  }, [activeChipId, t]);
+    return buildPlaceholderScenarios({
+      activeChipId,
+      resolveTextKey: (key) => t(key),
+      examplesForChip: (chipId) => homeHeroChipPromptExamples(chipId, locale),
+      fallbackForChip: (chipId) => fallbackPlaceholderScenarioText(chipId, locale, t),
+    });
+  }, [activeChipId, locale, t]);
   // The placeholder carousel runs while the composer is empty and nothing
   // OTHER than a create-template chip is bound. A selected template keeps it
   // alive (showing that template's scenarios); only an explicit plugin/skill
   // pick — which owns its own placeholder — or a non-empty composer stops it.
-  // Media/live-artifact templates carry no scenarios, so the pool is empty and
-  // the editor falls back to its own placeholder there.
+  // Template types without curated carousel lines fall back to their localized
+  // prompt examples, then to a localized chip-label prompt. That keeps every
+  // create template submittable from an empty composer instead of silently
+  // disabling Send.
   const carouselActive =
     active &&
     !submitting &&
@@ -1066,15 +1078,23 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
     if (activePluginRecord) onOpenPluginDetails(activePluginRecord);
   }
 
-  // plugin/MCP/connector contexts now render as inline @mention pills in the
-  // composer, so they no longer drive this top row — only staged files (which
-  // have no inline representation) and the active plugin/skill/example chips do.
+  function openActiveSkillDetails() {
+    if (activeSkillRecord) onOpenSkillDetails(activeSkillRecord);
+  }
+
+  // Inline-backed plugin/MCP/connector contexts already render as @mention pills
+  // in the editor. This row should mount only for content that has a visible chip
+  // here; the aggregate context count is just an aria label when the row exists.
+  const showActivePluginRow = Boolean(showActivePluginChip && activePluginTitle);
   const showActiveContextRow =
     contextItemCount > 0 ||
-    (showActivePluginChip && activePluginTitle) ||
-    activeSkillTitle ||
-    activeCommandTitle ||
-    stagedFiles.length > 0;
+    showActivePluginRow ||
+    Boolean(activeSkillTitle) ||
+    Boolean(activeCommandTitle) ||
+    stagedFiles.length > 0 ||
+    contextOnlyPlugins.length > 0 ||
+    contextOnlyMcpServers.length > 0 ||
+    contextOnlyConnectors.length > 0;
 
   let optionRenderIndex = 0;
 
@@ -1173,7 +1193,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
                 })}
               </span>
             ) : null}
-            {showActivePluginChip && activePluginTitle ? (
+            {showActivePluginRow ? (
               <span className="home-hero__active-chip" data-testid="home-hero-active-plugin">
                 <button
                   type="button"
@@ -1222,10 +1242,26 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
                 className="home-hero__active-chip home-hero__active-chip--skill"
                 data-testid="home-hero-active-skill"
               >
-                <span className="home-hero__active-icon" aria-hidden>
-                  <Icon name="sparkles" size={12} />
-                </span>
-                <span className="home-hero__active-label">{t('homeHero.skillPrefix', { title: activeSkillTitle })}</span>
+                <button
+                  type="button"
+                  className="home-hero__active-chip-body"
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    openActiveSkillDetails();
+                  }}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    openActiveSkillDetails();
+                  }}
+                  onClick={openActiveSkillDetails}
+                  disabled={!activeSkillRecord}
+                  title={activeSkillRecord ? activeSkillRecord.description || activeSkillTitle : undefined}
+                >
+                  <span className="home-hero__active-icon" aria-hidden>
+                    <Icon name="sparkles" size={12} />
+                  </span>
+                  <span className="home-hero__active-label">{t('homeHero.skillPrefix', { title: activeSkillTitle })}</span>
+                </button>
                 <button
                   type="button"
                   className="home-hero__active-clear od-tooltip"
@@ -1556,6 +1592,17 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
                 });
                 onAddPlugin();
               }}
+              skills={skillOptions}
+              onPickSkill={(skill) => {
+                trackHomeChatComposerClick(analytics.track, {
+                  page_name: 'home',
+                  area: 'chat_composer',
+                  element: 'plus_pick',
+                  resource_kind: 'skill',
+                  resource_id: skill.id,
+                });
+                pickSkill(skill);
+              }}
               mcpServers={mcpOptions}
               onPickMcp={(server) => {
                 trackHomeChatComposerClick(analytics.track, {
@@ -1645,6 +1692,12 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
             ) : null}
           </div>
           <div className="home-hero__foot-right">
+            <div className="home-hero__mode-switcher">
+              <SessionModeToggle
+                mode={sessionMode}
+                onChange={onSessionModeChange}
+              />
+            </div>
             {executionSwitcher ? (
               <div className="home-hero__execution-switcher">
                 {executionSwitcher}
@@ -1806,8 +1859,10 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
           plugins={filteredExamplePlugins}
           activePluginId={activePluginRecord?.id ?? null}
           pendingPluginId={pendingPluginId}
+          pendingDuplicatePluginId={pendingDuplicatePluginId}
           locale={locale}
           onPick={pickExamplePluginPreset}
+          onDuplicate={onDuplicateExamplePlugin}
           pulseFirstPreset={guidePulseFirstPreset}
         />
       ) : activePromptExamples.length > 0 ? (
@@ -1877,6 +1932,8 @@ function PluginPromptPresets({
   chipId,
   locale,
   onPick,
+  onDuplicate,
+  pendingDuplicatePluginId,
   pendingPluginId,
   plugins,
   pulseFirstPreset = false,
@@ -1885,6 +1942,8 @@ function PluginPromptPresets({
   chipId: string;
   locale: Locale;
   onPick: (record: InstalledPluginRecord, chipId: string, promptText: string) => void;
+  onDuplicate: (record: InstalledPluginRecord) => void;
+  pendingDuplicatePluginId: string | null;
   pendingPluginId: string | null;
   plugins: InstalledPluginRecord[];
   // First-run guide: the first card carries the attention sheen.
@@ -1917,8 +1976,11 @@ function PluginPromptPresets({
               active={activePluginId === record.id}
               pending={pendingPluginId === record.id}
               disabled={pendingPluginId !== null}
+              duplicatePending={pendingDuplicatePluginId === record.id}
+              duplicateDisabled={pendingDuplicatePluginId !== null || pendingPluginId !== null}
               pulse={pulseFirstPreset && index === 0}
               onPick={onPick}
+              onDuplicate={onDuplicate}
             />
           ))}
         </div>
@@ -1932,7 +1994,10 @@ function PluginPromptPresetCard({
   active,
   chipId,
   disabled,
+  duplicateDisabled,
+  duplicatePending,
   locale,
+  onDuplicate,
   onPick,
   pending,
   pulse = false,
@@ -1941,12 +2006,16 @@ function PluginPromptPresetCard({
   active: boolean;
   chipId: string;
   disabled: boolean;
+  duplicateDisabled: boolean;
+  duplicatePending: boolean;
   locale: Locale;
+  onDuplicate: (record: InstalledPluginRecord) => void;
   onPick: (record: InstalledPluginRecord, chipId: string, promptText: string) => void;
   pending: boolean;
   pulse?: boolean;
   record: InstalledPluginRecord;
 }) {
+  const { t } = useI18n();
   // Example-prompt preset tiles are thumbnails too — prefer the cheap baked
   // hover-pan clip when one exists (same as the gallery cards).
   const preview = useMemo(() => inferPluginPreview(record, { preferBaked: true }), [record]);
@@ -1959,6 +2028,8 @@ function PluginPromptPresetCard({
   // frame the iframe fills natively, instead of letterboxing the stage with a
   // dark band above it (matches the Community gallery deck treatment).
   const odMode = (record.manifest?.od as { mode?: unknown } | undefined)?.mode;
+  const title = localizePluginTitle(locale, record);
+  const canDuplicate = canDuplicatePluginPreview(record);
   return (
     <span className="home-hero__plugin-preset-cell" role="listitem">
       <button
@@ -1973,7 +2044,7 @@ function PluginPromptPresetCard({
         <span className="home-hero__plugin-preset-preview" aria-hidden>
           <PreviewSurface
             pluginId={record.id}
-            pluginTitle={localizePluginTitle(locale, record)}
+            pluginTitle={title}
             preview={preview}
           />
           {active ? (
@@ -1983,9 +2054,35 @@ function PluginPromptPresetCard({
           ) : null}
         </span>
         <span className="home-hero__plugin-preset-title">
-          {localizePluginTitle(locale, record)}
+          {title}
         </span>
       </button>
+      <span className="home-hero__plugin-preset-actions">
+        <button
+          type="button"
+          className="home-hero__plugin-preset-action home-hero__plugin-preset-action--primary"
+          onClick={() => onPick(record, chipId, seedPrompt)}
+          disabled={disabled}
+          aria-busy={pending ? 'true' : undefined}
+          data-testid={`home-hero-plugin-preset-use-${record.id}`}
+        >
+          <Icon name={pending ? 'spinner' : 'play'} size={12} />
+          <span>{pending ? t('pluginCard.applying') : t('pluginCard.use')}</span>
+        </button>
+        {canDuplicate ? (
+          <button
+            type="button"
+            className="home-hero__plugin-preset-action"
+            onClick={() => onDuplicate(record)}
+            disabled={duplicateDisabled}
+            aria-busy={duplicatePending ? 'true' : undefined}
+            data-testid={`home-hero-plugin-preset-duplicate-${record.id}`}
+          >
+            <Icon name={duplicatePending ? 'spinner' : 'copy'} size={12} />
+            <span>{duplicatePending ? t('pluginCard.duplicating') : t('pluginCard.duplicate')}</span>
+          </button>
+        ) : null}
+      </span>
     </span>
   );
 }
@@ -3148,6 +3245,26 @@ function homeHeroChipDescription(chipId: string, t: ReturnType<typeof useT>): st
     case 'create-brand-kit': return t('homeHero.chip.createBrandKitDesc');
     default: return '';
   }
+}
+
+function fallbackPlaceholderScenarioText(
+  chipId: string,
+  locale: Locale,
+  t: ReturnType<typeof useT>,
+): string | null {
+  const label = homeHeroChipLabel(chipId, t).trim();
+  if (!label || label === chipId) return null;
+  const description = homeHeroChipDescription(chipId, t).trim();
+  const kind = promptLocaleKind(locale);
+  if (kind === 'zh') {
+    return description ? `创建一个${label}：${description}` : `创建一个${label}`;
+  }
+  if (kind === 'ja') {
+    return description ? `${label}を作成する：${description}` : `${label}を作成する`;
+  }
+  return description
+    ? `Create ${englishArticle(label)} ${label}: ${description}`
+    : `Create ${englishArticle(label)} ${label}`;
 }
 
 // The hover "what happens next" line — describes how the scenario will be

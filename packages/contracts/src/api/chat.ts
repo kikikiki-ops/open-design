@@ -16,7 +16,7 @@ import type { McpAuthMode, McpServerConfig, McpTransport } from './mcp';
 import type { TrackingRuntimeType } from '../analytics/public-params.js';
 
 export type ChatRole = 'user' | 'assistant';
-export type ChatSessionMode = 'design' | 'chat';
+export type ChatSessionMode = 'design' | 'chat' | 'plan';
 export type ChatCommentSelectionKind = PreviewCommentSelectionKind | 'visual';
 
 export interface ChatRequest {
@@ -488,6 +488,7 @@ export interface ChatMessage {
   attachments?: ChatAttachment[];
   commentAttachments?: ChatCommentAttachment[];
   producedFiles?: ProjectFile[];
+  traceObjectFiles?: ProjectFile[];
   // Diff baseline so reattach can rebuild producedFiles after reload.
   preTurnFileNames?: string[];
   feedback?: ChatMessageFeedback;

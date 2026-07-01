@@ -40,6 +40,7 @@ interface Props {
   onOpen: (id: string) => void;
   onViewAll?: () => void;
   onDelete?: (id: string) => Promise<boolean | void> | boolean | void;
+  onDuplicate?: (id: string) => Promise<void> | void;
   onRename?: (id: string, name: string) => void;
   limit?: number;
   /** 'recent' = mixed private/shared (home); 'drafts' = all private (mine);
@@ -196,6 +197,7 @@ export function RecentProjectsStrip({
   space = 'recent',
   onOpen,
   onDelete,
+  onDuplicate,
   onRename,
   limit = 6,
   collaborationEnabled = true,
@@ -393,6 +395,14 @@ export function RecentProjectsStrip({
   function requestDelete(project: Project) {
     setMenuOpenId(null);
     setConfirmTarget(project);
+  }
+
+  function requestDuplicate(project: Project) {
+    if (!onDuplicate) return;
+    setMenuOpenId(null);
+    void Promise.resolve(onDuplicate(project.id)).catch((err) => {
+      console.warn('[RecentProjectsStrip] duplicate project failed:', err);
+    });
   }
 
   async function commitDelete() {
@@ -772,6 +782,12 @@ export function RecentProjectsStrip({
                         <button type="button" role="menuitem" onClick={() => startRename(project)}>
                           <Icon name="pencil" size={12} />
                           <span>{t('designs.menuRename')}</span>
+                        </button>
+                      ) : null}
+                      {onDuplicate ? (
+                        <button type="button" role="menuitem" onClick={() => requestDuplicate(project)}>
+                          <Icon name="copy" size={12} />
+                          <span>{t('designs.menuDuplicate')}</span>
                         </button>
                       ) : null}
                       {onDelete ? (

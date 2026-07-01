@@ -31,7 +31,7 @@ import {
 import { downloadDesignSystemArchive, downloadProjectArchive } from '../runtime/exports';
 import { useDesignKit } from '../runtime/design-kit';
 import { DesignKitView, HeaderActionsMenu, type DesignKitActionFeedbackTone, type HeaderMenuAction } from './DesignKitView';
-import { hostnameOf } from './BrandPreviewCard';
+import { designSystemLogoHost, isUserSystem } from './design-system-metadata';
 import { Icon } from './Icon';
 import { Toast } from './Toast';
 import type { DesignSystemDetail, DesignSystemSummary, ProjectTemplate, Surface } from '../types';
@@ -258,18 +258,6 @@ const REFERENCE_BRAND_DOMAINS = new Map(
 
 function surfaceOf(system: DesignSystemSummary): Surface {
   return system.surface ?? 'web';
-}
-
-function isUserSystem(system: DesignSystemSummary): boolean {
-  return system.source === 'user' || system.isEditable === true;
-}
-
-function designSystemLogoHost(system: DesignSystemSummary): string {
-  const sourceUrl = system.provenance?.sourceUrls?.[0];
-  if (sourceUrl) return hostnameOf(sourceUrl);
-  const fromReference = REFERENCE_BRAND_DOMAINS.get(brandKey(system.title));
-  if (fromReference) return fromReference;
-  return OFFICIAL_PRESET_DOMAINS[system.id] ?? '';
 }
 
 // `system.status` is the DesignSystemSummary status string from the
