@@ -16,10 +16,12 @@ import {
   type HeaderCopy,
   type LandingLocaleCode,
 } from '../i18n';
+import { getSolutionPageCopy } from '../solution-pages-i18n';
+import type { SolutionPageKey } from '../solution-pages-i18n/types';
 
 const REPO = 'https://github.com/nexu-io/open-design';
 const REPO_DISCUSSIONS = `${REPO}/discussions`;
-const DISCORD = 'https://discord.gg/9ptkbbqRu';
+const DISCORD = 'https://discord.gg/mHAjSMV6gz';
 const X_PROFILE = 'https://x.com/OpenDesignHQ';
 // AMR product page on the production site (this repo has no /amr/ route).
 // Single destination for every AMR surface: the nav logo, the Agent
@@ -44,6 +46,17 @@ const ROLE_HREFS = [
   '/solutions/product-managers/',
   '/solutions/marketing/',
 ] as const;
+
+// Solution → Tools. AI generator pages. Labels come from the solution-page
+// copy (the page breadcrumb) so the dropdown and the hub cards share one
+// translation source and cannot drift apart.
+const TOOL_ENTRIES: ReadonlyArray<{ href: string; key: SolutionPageKey }> = [
+  { href: '/solutions/ai-wireframe-generator/', key: 'aiWireframeGenerator' },
+  { href: '/solutions/ai-ui-generator/', key: 'aiUiGenerator' },
+  { href: '/solutions/ai-landing-page-generator/', key: 'aiLandingPageGenerator' },
+  { href: '/solutions/design-to-code/', key: 'designToCode' },
+  { href: '/solutions/figma-to-code/', key: 'figmaToCode' },
+];
 
 // Agent column — AMR (the design Agent) heads the dropdown in the markup,
 // followed by the coding agents with a dedicated long-form design page
@@ -87,6 +100,7 @@ export interface HeaderProps {
     | 'solution'
     | 'agent'
     | 'plugins'
+    | 'pricing'
     | 'library'
     | 'skills'
     | 'systems'
@@ -94,9 +108,13 @@ export interface HeaderProps {
     | 'craft'
     | 'resources'
     | 'blog'
+    | 'stories'
     | 'tutorials'
     | 'download'
-    | 'community';
+    | 'community'
+    // Standalone landing pages (e.g. /enterprise/) that intentionally do not
+    // belong under any top-nav tab — pass this so no tab renders as active.
+    | 'enterprise';
   /**
    * Live counts from the Markdown catalogs. Required so we can never
    * silently render stale fallback numbers when a caller forgets to
@@ -178,22 +196,28 @@ export function Header({
           <ul className='nav-links'>
             {/* Product — the Open Design products. The trigger lights up only
                 for its own family; every other section maps to its own
-                trigger below, so a sub-page never marks Product by accident. */}
+                trigger below, so a sub-page never marks Product by accident.
+                It is a <button> (not a link) so it never navigates — Product
+                used to bounce to the homepage — but its dropdown is revealed
+                by the SAME pure-CSS :hover / :focus-within rule as the hub
+                menus, so it works with no JS (first paint / script failure)
+                and on touch (tapping focuses the button → :focus-within). */}
             <li className='has-dropdown'>
-              <a
-                href={href('/')}
+              <button
+                type='button'
                 className={
-                  active === 'product' ||
+                  'nav-trigger' +
+                  (active === 'product' ||
                   active === 'home' ||
                   active === 'html-anything' ||
                   active === 'html-video'
-                    ? 'is-active'
-                    : undefined
+                    ? ' is-active'
+                    : '')
                 }
               >
                 {productMenuCopy.product}
                 <span className='dropdown-caret' aria-hidden='true'>▾</span>
-              </a>
+              </button>
               <ul className='nav-dropdown' aria-label={productMenuCopy.product}>
                 <li>
                   <a href={href('/')}>
@@ -232,6 +256,20 @@ export function Header({
                 className='nav-dropdown nav-dropdown-solution'
                 aria-label={productMenuCopy.solution}
               >
+                <li className='nav-dropdown-group'>
+                  <span className='nav-dropdown-group-label'>
+                    {productMenuCopy.tools}
+                  </span>
+                </li>
+                {TOOL_ENTRIES.map(({ href: toolHref, key }) => (
+                  <li key={key}>
+                    <a href={href(toolHref)}>
+                      <span className='dropdown-name'>
+                        {getSolutionPageCopy(locale, key).breadcrumb}
+                      </span>
+                    </a>
+                  </li>
+                ))}
                 <li className='nav-dropdown-group'>
                   <span className='nav-dropdown-group-label'>
                     {productMenuCopy.useCases}
@@ -335,28 +373,52 @@ export function Header({
               </ul>
             </li>
 
-            {/* Resources — the top-level link mirrors the live site, which
-                points it at the blog index. */}
-            <li className='has-dropdown'>
+            {/* Pricing — localized page. The plan numbers it renders stay in
+                sync with the vela commerce app at runtime (see
+                app/_lib/pricing.ts); the card copy mirrors vela's subscription
+                modal (see app/_lib/pricing-content.ts). */}
+            <li>
               <a
-                href={href('/blog/')}
+                href={href('/pricing/')}
+                className={active === 'pricing' ? 'is-active' : undefined}
+              >
+                {productMenuCopy.pricing}
+              </a>
+            </li>
+
+            {/* Resources — a category label (Blog / Tutorials / Compare), not
+                a page; a <button> so it never navigates (it used to bounce to
+                /blog/), with its dropdown revealed by the same pure-CSS
+                :hover / :focus-within rule as the hub menus (see Product). */}
+            <li className='has-dropdown'>
+              <button
+                type='button'
                 className={
-                  active === 'resources' ||
+                  'nav-trigger' +
+                  (active === 'resources' ||
                   active === 'blog' ||
+                  active === 'stories' ||
                   active === 'tutorials' ||
                   active === 'download'
-                    ? 'is-active'
-                    : undefined
+                    ? ' is-active'
+                    : '')
                 }
               >
                 {productMenuCopy.resources}
                 <span className='dropdown-caret' aria-hidden='true'>▾</span>
-              </a>
+              </button>
               <ul className='nav-dropdown' aria-label={productMenuCopy.resources}>
                 <li>
                   <a href={href('/blog/')}>
                     <span className='dropdown-name'>
                       {productMenuCopy.resourceItems.blog}
+                    </span>
+                  </a>
+                </li>
+                <li>
+                  <a href={href('/stories/')}>
+                    <span className='dropdown-name'>
+                      {productMenuCopy.resourceItems.stories}
                     </span>
                   </a>
                 </li>

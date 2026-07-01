@@ -251,12 +251,18 @@ export interface HeaderProductMenuCopy {
   useCaseItems: [string, string, string, string, string, string];
   roles: string;
   roleItems: [string, string, string, string, string];
+  // Tool / generator pages (`/solutions/ai-<x>-generator/`). Group label plus
+  // the three tool names, in the same Wireframe → UI → Design-to-code order
+  // the hub and the dropdown render.
+  tools: string;
   agent: string;
   plugins: string;
   pluginItems: { templates: string; skills: string; systems: string };
+  pricing: string;
   resources: string;
   resourceItems: {
     blog: string;
+    stories: string;
     tutorials: string;
     compare: string;
     newsletter: string;
@@ -286,6 +292,7 @@ export interface CommonCopy {
 
 const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy> = {
   en: {
+    pricing: "Pricing",
     toggleNavigationMenu: 'Toggle navigation menu',
     product: 'Product',
     openDesignName: 'Open Design',
@@ -304,12 +311,14 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     useCaseItems: ['Prototype', 'Dashboard', 'Slides', 'Image', 'Video', 'Design System'],
     roles: 'Roles',
     roleItems: ['Solo Builder', 'Designer', 'Engineering', 'Product Managers', 'Marketing'],
+    tools: 'Tools',
     agent: 'Agent',
     plugins: 'Plugins',
     pluginItems: { templates: 'Templates', skills: 'Skills', systems: 'Systems' },
     resources: 'Resources',
     resourceItems: {
       blog: 'Blog',
+      stories: 'Stories',
       tutorials: 'Tutorials',
       compare: 'Compare',
       newsletter: 'Weekly Newsletter',
@@ -324,6 +333,7 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     },
   },
   zh: {
+    pricing: "价格",
     toggleNavigationMenu: '切换导航菜单',
     product: '产品',
     openDesignName: 'Open Design',
@@ -342,12 +352,14 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     useCaseItems: ['原型', '看板', '幻灯片', '图片', '视频', '设计系统'],
     roles: '角色',
     roleItems: ['独立开发者', '设计师', '工程', '产品经理', '市场'],
+    tools: '工具',
     agent: 'Agent',
     plugins: '插件',
     pluginItems: { templates: '模板', skills: '技能', systems: '设计系统' },
     resources: '资源',
     resourceItems: {
       blog: '博客',
+      stories: '客户故事',
       tutorials: '教程',
       compare: '比较',
       newsletter: '每周通讯',
@@ -362,6 +374,7 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     },
   },
   'zh-tw': {
+    pricing: "價格",
     toggleNavigationMenu: '切換導覽選單',
     product: '產品',
     openDesignName: 'Open Design',
@@ -380,12 +393,14 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     useCaseItems: ['原型', '儀表板', '投影片', '圖片', '影片', '設計系統'],
     roles: '角色',
     roleItems: ['獨立開發者', '設計師', '工程', '產品經理', '行銷'],
+    tools: '工具',
     agent: 'Agent',
     plugins: '外掛',
     pluginItems: { templates: '模板', skills: '技能', systems: '設計系統' },
     resources: '資源',
     resourceItems: {
       blog: '部落格',
+      stories: '客戶故事',
       tutorials: '教程',
       compare: '比較',
       newsletter: '每週通訊',
@@ -400,6 +415,7 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     },
   },
   ja: {
+    pricing: "料金",
     toggleNavigationMenu: 'ナビゲーションメニューを切り替え',
     product: 'プロダクト',
     openDesignName: 'Open Design',
@@ -418,12 +434,14 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     useCaseItems: ['プロトタイプ', 'ダッシュボード', 'スライド', '画像', '動画', 'デザインシステム'],
     roles: 'ロール',
     roleItems: ['ソロビルダー', 'デザイナー', 'エンジニアリング', 'プロダクトマネージャー', 'マーケティング'],
+    tools: 'ツール',
     agent: 'エージェント',
     plugins: 'プラグイン',
     pluginItems: { templates: 'テンプレート', skills: 'スキル', systems: 'システム' },
     resources: 'リソース',
     resourceItems: {
       blog: 'ブログ',
+      stories: '導入事例',
       tutorials: 'チュートリアル',
       compare: '比較',
       newsletter: '週刊ニュースレター',
@@ -438,6 +456,7 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     },
   },
   ko: {
+    pricing: "요금제",
     toggleNavigationMenu: '내비게이션 메뉴 전환',
     product: '제품',
     openDesignName: 'Open Design',
@@ -456,12 +475,14 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     useCaseItems: ['프로토타입', '대시보드', '슬라이드', '이미지', '영상', '디자인 시스템'],
     roles: '역할',
     roleItems: ['솔로 빌더', '디자이너', '엔지니어링', '프로덕트 매니저', '마케팅'],
+    tools: '도구',
     agent: '에이전트',
     plugins: '플러그인',
     pluginItems: { templates: '템플릿', skills: '스킬', systems: '시스템' },
     resources: '리소스',
     resourceItems: {
       blog: '블로그',
+      stories: '고객 사례',
       tutorials: '튜토리얼',
       compare: '비교',
       newsletter: '주간 뉴스레터',
@@ -476,6 +497,7 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     },
   },
   de: {
+    pricing: "Preise",
     toggleNavigationMenu: 'Navigationsmenu umschalten',
     product: 'Produkt',
     openDesignName: 'Open Design',
@@ -494,12 +516,14 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     useCaseItems: ['Prototyp', 'Dashboard', 'Slides', 'Bild', 'Video', 'Designsystem'],
     roles: 'Rollen',
     roleItems: ['Solo-Builder', 'Designer', 'Engineering', 'Produktmanager', 'Marketing'],
+    tools: 'Tools',
     agent: 'Agent',
     plugins: 'Plugins',
     pluginItems: { templates: 'Vorlagen', skills: 'Skills', systems: 'Systeme' },
     resources: 'Ressourcen',
     resourceItems: {
       blog: 'Blog',
+      stories: 'Kundenstories',
       tutorials: 'Tutorials',
       compare: 'Vergleich',
       newsletter: 'Wöchentlicher Newsletter',
@@ -514,6 +538,7 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     },
   },
   fr: {
+    pricing: "Tarifs",
     toggleNavigationMenu: 'Basculer le menu de navigation',
     product: 'Produit',
     openDesignName: 'Open Design',
@@ -532,12 +557,14 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     useCaseItems: ['Prototype', 'Tableau de bord', 'Diapositives', 'Image', 'Vidéo', 'Système de design'],
     roles: 'Rôles',
     roleItems: ['Créateur solo', 'Designer', 'Ingénierie', 'Product managers', 'Marketing'],
+    tools: 'Outils',
     agent: 'Agent',
     plugins: 'Plugins',
     pluginItems: { templates: 'Modèles', skills: 'Skills', systems: 'Systèmes' },
     resources: 'Ressources',
     resourceItems: {
       blog: 'Blog',
+      stories: 'Témoignages',
       tutorials: 'Tutoriels',
       compare: 'Comparaison',
       newsletter: 'Newsletter hebdomadaire',
@@ -552,6 +579,7 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     },
   },
   ru: {
+    pricing: "Цены",
     toggleNavigationMenu: 'Переключить меню навигации',
     product: 'Продукт',
     openDesignName: 'Open Design',
@@ -570,12 +598,14 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     useCaseItems: ['Прототип', 'Дашборд', 'Слайды', 'Изображение', 'Видео', 'Дизайн-система'],
     roles: 'Роли',
     roleItems: ['Соло-разработчик', 'Дизайнер', 'Инженерия', 'Продакт-менеджеры', 'Маркетинг'],
+    tools: 'Инструменты',
     agent: 'Агенты',
     plugins: 'Плагины',
     pluginItems: { templates: 'Шаблоны', skills: 'Skills', systems: 'Системы' },
     resources: 'Ресурсы',
     resourceItems: {
       blog: 'Блог',
+      stories: 'Истории клиентов',
       tutorials: 'Уроки',
       compare: 'Сравнение',
       newsletter: 'Еженедельная рассылка',
@@ -590,6 +620,7 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     },
   },
   es: {
+    pricing: "Precios",
     toggleNavigationMenu: 'Alternar menú de navegación',
     product: 'Producto',
     openDesignName: 'Open Design',
@@ -608,12 +639,14 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     useCaseItems: ['Prototipo', 'Panel', 'Diapositivas', 'Imagen', 'Vídeo', 'Sistema de diseño'],
     roles: 'Roles',
     roleItems: ['Creador en solitario', 'Diseñador', 'Ingeniería', 'Product Managers', 'Marketing'],
+    tools: 'Herramientas',
     agent: 'Agente',
     plugins: 'Plugins',
     pluginItems: { templates: 'Plantillas', skills: 'Skills', systems: 'Sistemas' },
     resources: 'Recursos',
     resourceItems: {
       blog: 'Blog',
+      stories: 'Casos de éxito',
       tutorials: 'Tutoriales',
       compare: 'Comparar',
       newsletter: 'Newsletter semanal',
@@ -628,6 +661,7 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     },
   },
   'pt-br': {
+    pricing: "Preços",
     toggleNavigationMenu: 'Alternar menu de navegação',
     product: 'Produto',
     openDesignName: 'Open Design',
@@ -646,12 +680,14 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     useCaseItems: ['Protótipo', 'Painel', 'Slides', 'Imagem', 'Vídeo', 'Sistema de design'],
     roles: 'Funções',
     roleItems: ['Criador solo', 'Designer', 'Engenharia', 'Product Managers', 'Marketing'],
+    tools: 'Ferramentas',
     agent: 'Agente',
     plugins: 'Plugins',
     pluginItems: { templates: 'Modelos', skills: 'Skills', systems: 'Sistemas' },
     resources: 'Recursos',
     resourceItems: {
       blog: 'Blog',
+      stories: 'Casos de sucesso',
       tutorials: 'Tutoriais',
       compare: 'Comparar',
       newsletter: 'Newsletter semanal',
@@ -666,6 +702,7 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     },
   },
   it: {
+    pricing: "Prezzi",
     toggleNavigationMenu: 'Apri o chiudi il menu di navigazione',
     product: 'Prodotto',
     openDesignName: 'Open Design',
@@ -684,12 +721,14 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     useCaseItems: ['Prototipo', 'Dashboard', 'Slide', 'Immagine', 'Video', 'Design system'],
     roles: 'Ruoli',
     roleItems: ['Solo builder', 'Designer', 'Ingegneria', 'Product Manager', 'Marketing'],
+    tools: 'Strumenti',
     agent: 'Agente',
     plugins: 'Plugin',
     pluginItems: { templates: 'Template', skills: 'Skill', systems: 'Sistemi' },
     resources: 'Risorse',
     resourceItems: {
       blog: 'Blog',
+      stories: 'Storie dei clienti',
       tutorials: 'Tutorial',
       compare: 'Confronta',
       newsletter: 'Newsletter settimanale',
@@ -704,6 +743,7 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     },
   },
   vi: {
+    pricing: "Giá",
     toggleNavigationMenu: 'Chuyển menu điều hướng',
     product: 'Sản phẩm',
     openDesignName: 'Open Design',
@@ -722,12 +762,14 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     useCaseItems: ['Nguyên mẫu', 'Dashboard', 'Slide', 'Hình ảnh', 'Video', 'Hệ thống thiết kế'],
     roles: 'Vai trò',
     roleItems: ['Nhà phát triển độc lập', 'Nhà thiết kế', 'Kỹ thuật', 'Quản lý sản phẩm', 'Tiếp thị'],
+    tools: 'Công cụ',
     agent: 'Agent',
     plugins: 'Plugin',
     pluginItems: { templates: 'Mẫu', skills: 'Skill', systems: 'Hệ thống' },
     resources: 'Tài nguyên',
     resourceItems: {
       blog: 'Blog',
+      stories: 'Câu chuyện khách hàng',
       tutorials: 'Hướng dẫn',
       compare: 'So sánh',
       newsletter: 'Bản tin hằng tuần',
@@ -742,6 +784,7 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     },
   },
   pl: {
+    pricing: "Cennik",
     toggleNavigationMenu: 'Przełącz menu nawigacji',
     product: 'Produkt',
     openDesignName: 'Open Design',
@@ -760,12 +803,14 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     useCaseItems: ['Prototyp', 'Dashboard', 'Slajdy', 'Grafika', 'Wideo', 'System projektowy'],
     roles: 'Role',
     roleItems: ['Samodzielny twórca', 'Projektant', 'Inżynieria', 'Menedżerowie produktu', 'Marketing'],
+    tools: 'Narzędzia',
     agent: 'Agent',
     plugins: 'Wtyczki',
     pluginItems: { templates: 'Szablony', skills: 'Skills', systems: 'Systemy' },
     resources: 'Zasoby',
     resourceItems: {
       blog: 'Blog',
+      stories: 'Historie klientów',
       tutorials: 'Samouczki',
       compare: 'Porównanie',
       newsletter: 'Cotygodniowy newsletter',
@@ -780,6 +825,7 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     },
   },
   id: {
+    pricing: "Harga",
     toggleNavigationMenu: 'Alihkan menu navigasi',
     product: 'Produk',
     openDesignName: 'Open Design',
@@ -798,12 +844,14 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     useCaseItems: ['Prototipe', 'Dashboard', 'Slide', 'Gambar', 'Video', 'Sistem Desain'],
     roles: 'Peran',
     roleItems: ['Solo Builder', 'Desainer', 'Teknik', 'Product Manager', 'Pemasaran'],
+    tools: 'Alat',
     agent: 'Agent',
     plugins: 'Plugin',
     pluginItems: { templates: 'Templat', skills: 'Skill', systems: 'Sistem' },
     resources: 'Sumber Daya',
     resourceItems: {
       blog: 'Blog',
+      stories: 'Kisah Pelanggan',
       tutorials: 'Tutorial',
       compare: 'Bandingkan',
       newsletter: 'Buletin mingguan',
@@ -818,6 +866,7 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     },
   },
   nl: {
+    pricing: "Prijzen",
     toggleNavigationMenu: 'Navigatiemenu wisselen',
     product: 'Product',
     openDesignName: 'Open Design',
@@ -836,12 +885,14 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     useCaseItems: ['Prototype', 'Dashboard', 'Slides', 'Afbeelding', 'Video', 'Designsysteem'],
     roles: 'Rollen',
     roleItems: ['Solobouwer', 'Ontwerper', 'Engineering', 'Productmanagers', 'Marketing'],
+    tools: 'Tools',
     agent: 'Agent',
     plugins: 'Plug-ins',
     pluginItems: { templates: 'Sjablonen', skills: 'Skills', systems: 'Systemen' },
     resources: 'Bronnen',
     resourceItems: {
       blog: 'Blog',
+      stories: 'Klantverhalen',
       tutorials: 'Tutorials',
       compare: 'Vergelijken',
       newsletter: 'Wekelijkse nieuwsbrief',
@@ -856,6 +907,7 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     },
   },
   ar: {
+    pricing: "الأسعار",
     toggleNavigationMenu: 'تبديل قائمة التنقل',
     product: 'المنتج',
     openDesignName: 'Open Design',
@@ -874,12 +926,14 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     useCaseItems: ['نموذج أولي', 'لوحة بيانات', 'شرائح', 'صورة', 'فيديو', 'نظام التصميم'],
     roles: 'الأدوار',
     roleItems: ['مطوّر فردي', 'مصمّم', 'الهندسة', 'مديرو المنتجات', 'التسويق'],
+    tools: 'الأدوات',
     agent: 'الوكلاء',
     plugins: 'الإضافات',
     pluginItems: { templates: 'قوالب', skills: 'Skills', systems: 'أنظمة' },
     resources: 'الموارد',
     resourceItems: {
       blog: 'المدونة',
+      stories: 'قصص العملاء',
       tutorials: 'الدروس',
       compare: 'مقارنة',
       newsletter: 'نشرة أسبوعية',
@@ -894,6 +948,7 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     },
   },
   tr: {
+    pricing: "Fiyatlandırma",
     toggleNavigationMenu: 'Gezinme menüsünü aç/kapat',
     product: 'Ürün',
     openDesignName: 'Open Design',
@@ -912,12 +967,14 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     useCaseItems: ['Prototip', 'Pano', 'Slaytlar', 'Görsel', 'Video', 'Tasarım Sistemi'],
     roles: 'Roller',
     roleItems: ['Tek Kişilik Geliştirici', 'Tasarımcı', 'Mühendislik', 'Ürün Yöneticileri', 'Pazarlama'],
+    tools: 'Araçlar',
     agent: 'Agent',
     plugins: 'Eklentiler',
     pluginItems: { templates: 'Şablonlar', skills: 'Skill', systems: 'Sistemler' },
     resources: 'Kaynaklar',
     resourceItems: {
       blog: 'Blog',
+      stories: 'Müşteri Hikayeleri',
       tutorials: 'Eğitimler',
       compare: 'Karşılaştır',
       newsletter: 'Haftalık bülten',
@@ -932,6 +989,7 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     },
   },
   uk: {
+    pricing: "Ціни",
     toggleNavigationMenu: 'Перемкнути меню навігації',
     product: 'Продукт',
     openDesignName: 'Open Design',
@@ -950,12 +1008,14 @@ const HEADER_PRODUCT_MENU_COPY: Record<LandingLocaleCode, HeaderProductMenuCopy>
     useCaseItems: ['Прототип', 'Панель', 'Слайди', 'Зображення', 'Відео', 'Дизайн-система'],
     roles: 'Ролі',
     roleItems: ['Соло-розробник', 'Дизайнер', 'Інженерія', 'Продакт-менеджери', 'Маркетинг'],
+    tools: 'Інструменти',
     agent: 'Агенти',
     plugins: 'Плагіни',
     pluginItems: { templates: 'Шаблони', skills: 'Skills', systems: 'Системи' },
     resources: 'Ресурси',
     resourceItems: {
       blog: 'Блог',
+      stories: 'Історії клієнтів',
       tutorials: 'Туторіали',
       compare: 'Порівняння',
       newsletter: 'Щотижнева розсилка',

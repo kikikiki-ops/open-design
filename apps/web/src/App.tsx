@@ -7,13 +7,15 @@ import {
   trackProjectCreateResult,
 } from './analytics/events';
 import { deriveUploadCohort } from './analytics/upload-tracking';
+import { setPendingDesignSystemCreateEntry } from './analytics/ds-create-entry';
 import { detectClientType } from './analytics/identity';
 import {
   deriveConfigureGlobals,
-  projectKindToTracking,
+  projectKindFromMetadataToTracking,
   fidelityToTracking,
 } from '@open-design/contracts/analytics';
 import type { AmrModelsResponse, ChatSessionMode } from '@open-design/contracts';
+import { DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID } from '@open-design/contracts';
 import { EntryView } from './components/EntryView';
 import type { IntegrationTab } from './components/IntegrationsView';
 import { MarketplaceView } from './components/MarketplaceView';
@@ -63,7 +65,7 @@ import {
   type VelaLoginStatus,
 } from './providers/daemon';
 import { AMR_LOGIN_STATUS_EVENT } from './components/amrLoginPolling';
-import { navigate, useRoute } from './router';
+import { goBack, navigate, useRoute } from './router';
 import {
   fetchDaemonConfig,
   DEFAULT_PET,
@@ -82,9 +84,11 @@ import {
 import { applyAppearanceToDocument } from './state/appearance';
 import { isMacPlatform } from './utils/platform';
 import {
+  createDesignSystemProjectFromProject,
   createProject,
   createPluginShareProject,
   deleteProject as deleteProjectApi,
+  duplicateProject,
   getProject,
   importClaudeDesignZip,
   importFolderProject,
@@ -116,6 +120,20 @@ import type {
   PromptTemplateSummary,
   SkillSummary,
 } from './types';
+
+type AppCreateProjectInput = Omit<CreateInput, 'metadata'> & {
+  metadata?: CreateInput['metadata'];
+  pendingPrompt?: string;
+  pluginId?: string;
+  pluginType?: string;
+  appliedPluginSnapshotId?: string;
+  pluginInputs?: Record<string, unknown>;
+  conversationMode?: ChatSessionMode;
+  autoSendFirstMessage?: boolean;
+  requestId?: string;
+  pendingFiles?: File[];
+  userWorkingDirToken?: string;
+};
 
 const APP_CONFIG_CHANGED_EVENT = 'open-design:app-config-changed';
 const AMR_AGENT_ID = 'amr';
@@ -348,6 +366,7 @@ function AppInner() {
   useEffect(() => {
     if (typeof document !== 'undefined') {
       document.documentElement.setAttribute('data-od-app-mounted', '1');
+      document.querySelectorAll('.od-loading-shell').forEach((node) => node.remove());
     }
   }, []);
   const [config, setConfig] = useState<AppConfig>(() => loadConfig());
@@ -1340,18 +1359,7 @@ function AppInner() {
 
   const handleCreateProject = useCallback(
     async (
-      input: CreateInput & {
-        pendingPrompt?: string;
-        pluginId?: string;
-        pluginType?: string;
-        appliedPluginSnapshotId?: string;
-        pluginInputs?: Record<string, unknown>;
-        conversationMode?: ChatSessionMode;
-        autoSendFirstMessage?: boolean;
-        requestId?: string;
-        pendingFiles?: File[];
-        userWorkingDirToken?: string;
-      },
+      input: AppCreateProjectInput,
     ): Promise<boolean> => {
       // Honor an explicit `null` design system — the create panel defaults
       // to "None" for every kind now, and the user expects that to land
@@ -1392,7 +1400,7 @@ function AppInner() {
             area: 'new_project',
             project_source: 'create_button',
             project_id: null,
-            project_kind: projectKindToTracking(kind),
+            project_kind: projectKindFromMetadataToTracking(input.metadata),
             fidelity,
             result: 'failed',
             error_code: errorCode,
@@ -1409,7 +1417,7 @@ function AppInner() {
             area: 'new_project',
             project_source: 'create_button',
             project_id: null,
-            project_kind: projectKindToTracking(kind, input.metadata?.videoModel),
+            project_kind: projectKindFromMetadataToTracking(input.metadata),
             fidelity,
             ...(input.pluginId ? { plugin_id: input.pluginId } : {}),
             ...(input.pluginType ? { plugin_type: input.pluginType } : {}),
@@ -1489,7 +1497,7 @@ function AppInner() {
           area: 'new_project',
           project_source: 'create_button',
           project_id: result.project.id,
-          project_kind: projectKindToTracking(kind, input.metadata?.videoModel),
+          project_kind: projectKindFromMetadataToTracking(input.metadata),
           fidelity,
           ...(input.pluginId ? { plugin_id: input.pluginId } : {}),
           ...(input.pluginType ? { plugin_type: input.pluginType } : {}),
@@ -1553,18 +1561,81 @@ function AppInner() {
   );
 
   const handleCreateProjectFromDesignSystem = useCallback(
-    async (designSystemId: string) => {
+    async (designSystemId: string, designSystemTitle: string) => {
+      // "Create with this design system" must NOT assume a prototype. Route
+      // the click through the hidden default design router (od-default) —
+      // exactly like a free-form Home prompt — so the agent first asks (via
+      // the task-type question-form) what to build with this system instead
+      // of silently binding the web-prototype scenario + high-fidelity
+      // metadata. The preset prompt seeds the conversation and is auto-sent
+      // so the router surfaces the confirmation form immediately; `kind`
+      // stays the neutral 'other' so no surface-specific default leaks back
+      // in on the daemon side.
+      const presetPrompt = t('nextStep.brandCreateDesignPrompt', {
+        designSystem: designSystemTitle,
+      });
       await handleCreateProject({
         name: t('common.untitled'),
         skillId: null,
         designSystemId,
+        pluginId: DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID,
+        pluginInputs: { prompt: presetPrompt },
+        pendingPrompt: presetPrompt,
+        autoSendFirstMessage: true,
+        conversationMode: 'design',
         metadata: {
-          kind: 'prototype',
+          kind: 'other',
           nameSource: 'generated',
         },
       });
     },
     [handleCreateProject, t],
+  );
+
+  const handleCreateDesignSystemFromProject = useCallback(
+    async (
+      sourceProjectId: string,
+      input: { name?: string; pendingPrompt?: string },
+    ) => {
+      const result = await createDesignSystemProjectFromProject(sourceProjectId, input);
+      try {
+        window.sessionStorage.setItem(`od:auto-send-first:${result.project.id}`, '1');
+      } catch {
+        // If sessionStorage is unavailable, the project still opens with the
+        // pending prompt ready for the user to send manually.
+      }
+      rememberLocalProject(result.project.id);
+      setProjects((curr) => [
+        result.project,
+        ...curr.filter((p) => p.id !== result.project.id),
+      ]);
+      void refreshDesignSystems();
+      navigate({
+        kind: 'project',
+        projectId: result.project.id,
+        conversationId: result.conversationId,
+        fileName: null,
+      });
+    },
+    [refreshDesignSystems, rememberLocalProject],
+  );
+
+  const handleDuplicateProject = useCallback(
+    async (sourceProjectId: string, input: { name?: string } = {}) => {
+      const result = await duplicateProject(sourceProjectId, input);
+      rememberLocalProject(result.project.id);
+      setProjects((curr) => [
+        result.project,
+        ...curr.filter((p) => p.id !== result.project.id),
+      ]);
+      navigate({
+        kind: 'project',
+        projectId: result.project.id,
+        conversationId: result.conversationId,
+        fileName: null,
+      });
+    },
+    [rememberLocalProject],
   );
 
   const handleCreatePluginShareProject = useCallback(
@@ -1678,16 +1749,17 @@ function AppInner() {
     });
   }, [beginProjectListRequest, rememberLocalProject, reconcileFetchedProjects]);
 
-  const handleOpenProject = useCallback(async (id: string): Promise<boolean> => {
+  const handleOpenProject = useCallback(async (id: string, fileName?: string): Promise<boolean> => {
+    const routeFileName = fileName ?? null;
     if (projectsRef.current.some((project) => project.id === id)) {
-      navigate({ kind: 'project', projectId: id, fileName: null });
+      navigate({ kind: 'project', projectId: id, fileName: routeFileName });
       return true;
     }
     try {
       const project = await getProject(id);
       if (project) {
         setProjects((curr) => [project, ...curr.filter((candidate) => candidate.id !== project.id)]);
-        navigate({ kind: 'project', projectId: id, fileName: null });
+        navigate({ kind: 'project', projectId: id, fileName: routeFileName });
         return true;
       }
       const request = beginProjectListRequest();
@@ -1697,7 +1769,7 @@ function AppInner() {
         ? undefined
         : list.find((candidate) => candidate.id === id);
       if (fetchedProject) {
-        navigate({ kind: 'project', projectId: id, fileName: null });
+        navigate({ kind: 'project', projectId: id, fileName: routeFileName });
         return true;
       }
     } catch {
@@ -1760,8 +1832,12 @@ function AppInner() {
     void patchProject(id, { name: trimmed });
   }, []);
 
+  // Return to wherever the user opened this project from (Projects, Tasks, a
+  // design system, …) by popping the history stack. Falls back to the Projects
+  // list only when there is no in-app history behind us (a deep link / fresh
+  // load straight onto the project URL) — see `goBack`.
   const handleBack = useCallback(() => {
-    navigate({ kind: 'home', view: 'home' });
+    goBack({ kind: 'home', view: 'projects' });
   }, []);
 
   const handleClearPendingPrompt = useCallback(() => {
@@ -2204,6 +2280,8 @@ function AppInner() {
         onChangeDefaultDesignSystem={handleChangeDefaultDesignSystem}
         onDesignSystemsRefresh={refreshDesignSystems}
         onCreateProjectFromDesignSystem={handleCreateProjectFromDesignSystem}
+        onCreateDesignSystemFromProject={handleCreateDesignSystemFromProject}
+        onDuplicateProject={handleDuplicateProject}
       />
     );
   } else {
@@ -2231,6 +2309,8 @@ function AppInner() {
         onApiProtocolChange={handleApiProtocolChange}
         onApiModelChange={handleApiModelChange}
         onConfigPersist={handleConfigPersist}
+        onSkillsRefresh={refreshSkills}
+        onSkillsChanged={handleSkillsChanged}
         onRefreshAgents={refreshAgents}
         onThemeChange={handleThemeChange}
         skillsLoading={skillsLoading}
@@ -2245,10 +2325,14 @@ function AppInner() {
         onOpenProject={handleOpenProject}
         onOpenLiveArtifact={handleOpenLiveArtifact}
         onDeleteProject={handleDeleteProject}
+        onDuplicateProject={handleDuplicateProject}
         onRenameProject={handleRenameProject}
         onProjectsRefresh={refreshProjectsStrict}
         onChangeDefaultDesignSystem={handleChangeDefaultDesignSystem}
-        onCreateDesignSystem={() => navigate({ kind: 'design-system-create' })}
+        onCreateDesignSystem={() => {
+          setPendingDesignSystemCreateEntry('design_systems_page');
+          navigate({ kind: 'design-system-create' });
+        }}
         onOpenDesignSystem={(id: string) => navigate({ kind: 'design-system-detail', designSystemId: id })}
         onDesignSystemsRefresh={refreshDesignSystems}
         onPersistComposioKey={handleConfigPersistComposioKey}
@@ -2312,7 +2396,6 @@ function AppInner() {
           }}
           onRefreshAgents={refreshAgents}
           onAmrLoginStatusChange={handleAmrLoginStatusChange}
-          onSkillsRefresh={refreshSkills}
           daemonMediaProviders={daemonMediaProviders}
           daemonMediaProvidersFetchState={daemonMediaProvidersFetchState}
           mediaProvidersNotice={mediaProvidersNotice}

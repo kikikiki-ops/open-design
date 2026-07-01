@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type CSSProperties, type DragEvent as ReactDragEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { createPortal, flushSync } from 'react-dom';
 import { Button, Input, Select } from '@open-design/components';
 import { APP_CHROME_FILE_ACTIONS_ID, APP_CHROME_FILE_ACTIONS_SELECTOR } from './AppChromeHeader';
@@ -29,6 +29,13 @@ import {
 } from '../analytics/events';
 import { MarkdownRenderer, artifactRendererRegistry } from '../artifacts/renderer-registry';
 import { renderMarkdownToSafeHtml } from '../artifacts/markdown';
+import {
+  buildScrollAnchors,
+  extractMarkdownBlockLines,
+  mapScrollPosition,
+  measureEditorBlockOffsets,
+  measurePreviewBlockOffsets,
+} from './markdown-scroll-sync';
 import { useT, useI18n } from '../i18n';
 import type { Dict, Locale } from '../i18n/types';
 import {
@@ -70,15 +77,21 @@ import {
   exportAsPdf,
   exportProjectAsHtml,
   exportProjectAsPdf,
+  exportProjectAsPptx,
   exportProjectAsZip,
+  exportProjectImageDataUrl,
+  exportProjectScreenshotPdf,
   copyImageDataUrlToClipboard,
   exportReactComponentAsHtml,
   exportReactComponentAsZip,
   captureHostIframeSnapshot,
   imageDataUrlToBlob,
+  isOpenDesignHostAvailable,
   openSandboxedPreviewInNewTab,
   prepareImageExportTarget,
+  planDeckImageCapture,
   requestPreviewSnapshot,
+  sourceLooksLikeExportableDeck,
   type ExportProgress,
   type ImageExportFormat,
 } from '../runtime/exports';
@@ -307,9 +320,11 @@ const MAX_CACHED_PREVIEW_VIEWPORTS = 128;
 const HOVER_CARD_DISMISS_DELAY_MS = 80;
 const htmlPreviewViewportState = new Map<string, PreviewViewportId>();
 const MARKDOWN_CODE_BLOCK_ATTR = 'data-markdown-code-block';
+const MARKDOWN_CODE_LANGUAGE_ATTR = 'data-code-language';
 const MARKDOWN_COPY_BLOCK_ATTR = 'data-copy-code-block';
 const MARKDOWN_COPY_BUTTON_CLASS = 'markdown-code-copy';
 const MARKDOWN_COPY_TOAST_CLASS = 'markdown-code-toast';
+const ABSOLUTE_MARKDOWN_IMAGE_SOURCE_RE = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
 
 const DEPLOY_PROVIDER_OPTIONS: DeployProviderOption[] = [
   {
@@ -456,8 +471,167 @@ function decorateMarkdownCodeBlocks(html: string): string {
   let blockIndex = 0;
   return html.replace(/<pre\b([^>]*)>([\s\S]*?)<\/pre>/g, (_match, attrs: string, content: string) => {
     const blockId = String(blockIndex++);
-    return `<div class="markdown-code-block" ${MARKDOWN_CODE_BLOCK_ATTR}="${blockId}"><pre${attrs}>${content}</pre></div>`;
+    const language = markdownCodeBlockLanguage(content);
+    const languageAttr = language ? ` ${MARKDOWN_CODE_LANGUAGE_ATTR}="${escapeHtmlAttribute(language.label)}"` : '';
+    return `<div class="markdown-code-block" ${MARKDOWN_CODE_BLOCK_ATTR}="${blockId}"${languageAttr}><pre${attrs}>${content}</pre></div>`;
   });
+}
+
+type MarkdownCodeLanguage = {
+  lang: string;
+  label: string;
+};
+
+function markdownCodeBlockLanguage(content: string): MarkdownCodeLanguage | null {
+  const codeMatch = content.match(/<code\b([^>]*)>/);
+  if (!codeMatch) return null;
+  const classMatch = codeMatch[1]?.match(/\bclass=(["'])(.*?)\1/);
+  const className = classMatch?.[2] ?? '';
+  const languageClass = className
+    .split(/\s+/)
+    .map((item) => item.trim())
+    .find((item) => /^(?:language|lang)-/i.test(item));
+  if (!languageClass) return null;
+  const raw = languageClass.replace(/^(?:language|lang)-/i, '').replace(/[^a-z0-9+#.-]/gi, '');
+  if (!raw) return null;
+  const aliases: Record<string, MarkdownCodeLanguage> = {
+    bash: { lang: 'bash', label: 'Bash' },
+    c: { lang: 'c', label: 'C' },
+    cpp: { lang: 'cpp', label: 'C++' },
+    css: { lang: 'css', label: 'CSS' },
+    diff: { lang: 'diff', label: 'Diff' },
+    dockerfile: { lang: 'dockerfile', label: 'Dockerfile' },
+    go: { lang: 'go', label: 'Go' },
+    graphql: { lang: 'graphql', label: 'GraphQL' },
+    html: { lang: 'html', label: 'HTML' },
+    java: { lang: 'java', label: 'Java' },
+    js: { lang: 'javascript', label: 'JS' },
+    javascript: { lang: 'javascript', label: 'JS' },
+    json: { lang: 'json', label: 'JSON' },
+    jsx: { lang: 'jsx', label: 'JSX' },
+    markdown: { lang: 'markdown', label: 'Markdown' },
+    md: { lang: 'markdown', label: 'Markdown' },
+    php: { lang: 'php', label: 'PHP' },
+    py: { lang: 'python', label: 'Python' },
+    python: { lang: 'python', label: 'Python' },
+    rb: { lang: 'ruby', label: 'Ruby' },
+    ruby: { lang: 'ruby', label: 'Ruby' },
+    rust: { lang: 'rust', label: 'Rust' },
+    shell: { lang: 'shell', label: 'Shell' },
+    sh: { lang: 'shell', label: 'Shell' },
+    sql: { lang: 'sql', label: 'SQL' },
+    swift: { lang: 'swift', label: 'Swift' },
+    toml: { lang: 'toml', label: 'TOML' },
+    ts: { lang: 'typescript', label: 'TS' },
+    tsx: { lang: 'tsx', label: 'TSX' },
+    typescript: { lang: 'typescript', label: 'TS' },
+    xml: { lang: 'xml', label: 'XML' },
+    yaml: { lang: 'yaml', label: 'YAML' },
+    yml: { lang: 'yaml', label: 'YAML' },
+  };
+  return aliases[raw.toLowerCase()] ?? { lang: raw.toLowerCase(), label: raw.toUpperCase() };
+}
+
+async function highlightMarkdownCodeBlocks(html: string): Promise<string> {
+  if (typeof document === 'undefined') return html;
+  const root = document.createElement('div');
+  root.innerHTML = html;
+  const blocks = Array.from(root.querySelectorAll<HTMLElement>(`[${MARKDOWN_CODE_BLOCK_ATTR}]`));
+  if (blocks.length === 0) return html;
+  const { highlightCode } = await import('../runtime/shiki');
+  let changed = false;
+  await Promise.all(blocks.map(async (block) => {
+    const code = block.querySelector<HTMLElement>('pre > code');
+    if (!code) return;
+    const language = markdownCodeBlockLanguage(code.outerHTML);
+    if (!language) return;
+    const source = (code.textContent ?? '').replace(/\n$/, '');
+    const highlighted = await highlightCode(source, language.lang);
+    if (!highlighted) return;
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = highlighted;
+    const highlightedPre = wrapper.firstElementChild;
+    if (!(highlightedPre instanceof HTMLElement)) return;
+    highlightedPre.classList.add('markdown-shiki');
+    highlightedPre.setAttribute('data-lang', language.label);
+    code.closest('pre')?.replaceWith(highlightedPre);
+    block.setAttribute(MARKDOWN_CODE_LANGUAGE_ATTR, language.label);
+    changed = true;
+  }));
+  return changed ? root.innerHTML : html;
+}
+
+function rewriteMarkdownImageSources(html: string, projectId: string, markdownPath: string): string {
+  return html.replace(/<img\b([^>]*?)\bsrc="([^"]*)"([^>]*)>/g, (match, before: string, src: string, after: string) => {
+    const resolved = markdownImageSourceUrl(projectId, markdownPath, decodeHtmlAttribute(src));
+    if (!resolved) return match;
+    const attrs = `${before}${after}`;
+    const loadingAttr = /\sloading=/.test(attrs) ? '' : ' loading="lazy"';
+    return `<img${before}src="${escapeHtmlAttribute(resolved)}"${loadingAttr}${after}>`;
+  });
+}
+
+export function markdownImageSourceUrl(projectId: string, markdownPath: string, src: string): string | null {
+  const trimmed = src.trim();
+  if (!trimmed) return null;
+  if (ABSOLUTE_MARKDOWN_IMAGE_SOURCE_RE.test(trimmed)) return trimmed;
+  const relativePath = trimmed.startsWith('/')
+    ? normalizeMarkdownProjectPath(trimmed.slice(1))
+    : normalizeMarkdownProjectPath(`${markdownDirectory(markdownPath)}/${trimmed}`);
+  return relativePath ? projectFileUrl(projectId, relativePath) : null;
+}
+
+function markdownDirectory(path: string): string {
+  const normalized = normalizeMarkdownProjectPath(path);
+  const slash = normalized.lastIndexOf('/');
+  return slash > 0 ? normalized.slice(0, slash) : '';
+}
+
+function normalizeMarkdownProjectPath(path: string): string {
+  const parts: string[] = [];
+  for (const raw of path.replace(/\\/g, '/').split('/')) {
+    const part = raw.trim();
+    if (!part || part === '.') continue;
+    if (part === '..') {
+      parts.pop();
+      continue;
+    }
+    parts.push(part);
+  }
+  return parts.join('/');
+}
+
+function markdownRelativeProjectPath(fromPath: string, targetPath: string): string {
+  const fromDir = markdownDirectory(fromPath);
+  const target = normalizeMarkdownProjectPath(targetPath);
+  if (!fromDir) return target;
+  if (target.startsWith(`${fromDir}/`)) return target.slice(fromDir.length + 1);
+  const fromParts = fromDir.split('/').filter(Boolean);
+  const targetParts = target.split('/').filter(Boolean);
+  let common = 0;
+  while (common < fromParts.length && common < targetParts.length && fromParts[common] === targetParts[common]) {
+    common += 1;
+  }
+  const up = Array.from({ length: fromParts.length - common }, () => '..');
+  const down = targetParts.slice(common);
+  return [...up, ...down].join('/') || target;
+}
+
+function decodeHtmlAttribute(value: string): string {
+  return value
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+}
+
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 function setMarkdownCodeBlockCopiedState(block: HTMLElement, copied: boolean, t: TranslateFn) {
@@ -952,6 +1126,7 @@ interface Props {
   onRemovePreviewComment?: (commentId: string) => Promise<void>;
   onSendBoardCommentAttachments?: (attachments: ChatCommentAttachment[], images?: File[]) => Promise<boolean | void> | boolean | void;
   onFileSaved?: () => Promise<void> | void;
+  onBrandExtractionStopRequest?: () => void;
   // Open `openName` as a tab (focusing it) and close `closeName` in one
   // atomic tab-state update. The React module pointer uses this to jump to the
   // HTML entry that renders a module and drop the dead-end module tab.
@@ -984,6 +1159,7 @@ export function FileViewer({
   onRemovePreviewComment,
   onSendBoardCommentAttachments,
   onFileSaved,
+  onBrandExtractionStopRequest,
   onOpenFileReplacing,
   commentPortalId,
   onCommentModeChange,
@@ -1028,6 +1204,7 @@ export function FileViewer({
         onRemovePreviewComment={onRemovePreviewComment}
         onSendBoardCommentAttachments={onSendBoardCommentAttachments}
         onFileSaved={onFileSaved}
+        onBrandExtractionStopRequest={onBrandExtractionStopRequest}
         commentPortalId={commentPortalId}
         onCommentModeChange={onCommentModeChange}
         shareRequest={shareRequest}
@@ -1046,7 +1223,13 @@ export function FileViewer({
     );
   }
   if (rendererMatch?.renderer.id === 'markdown') {
-    return <MarkdownViewer projectId={projectId} file={file} />;
+    return (
+      <MarkdownViewer
+        projectId={projectId}
+        file={file}
+        onFileSaved={onFileSaved}
+      />
+    );
   }
   if (rendererMatch?.renderer.id === 'svg') {
     return <SvgViewer projectId={projectId} file={file} />;
@@ -2665,17 +2848,6 @@ export function CommentSidePanel({
               </div>
             </div>
             <div className="composer-row comment-side-new-comment-actions">
-              <button
-                type="button"
-                className="icon-btn"
-                title={t('chat.cliSettingsTitle')}
-                aria-label={t('chat.cliSettingsAria')}
-                disabled
-              >
-                <span className="composer-tools-at" aria-hidden>
-                  @
-                </span>
-              </button>
               <button
                 type="button"
                 className="icon-btn"
@@ -4425,6 +4597,7 @@ function HtmlViewer({
   onRemovePreviewComment,
   onSendBoardCommentAttachments,
   onFileSaved,
+  onBrandExtractionStopRequest,
   commentPortalId,
   onCommentModeChange,
   shareRequest,
@@ -4445,6 +4618,7 @@ function HtmlViewer({
   onRemovePreviewComment?: (commentId: string) => Promise<void>;
   onSendBoardCommentAttachments?: (attachments: ChatCommentAttachment[], images?: File[]) => Promise<boolean | void> | boolean | void;
   onFileSaved?: () => Promise<void> | void;
+  onBrandExtractionStopRequest?: () => void;
   commentPortalId?: string;
   onCommentModeChange?: (active: boolean) => void;
   shareRequest?: { nonce: number } | null;
@@ -4464,6 +4638,7 @@ function HtmlViewer({
   const fireShareExport = (
     format:
       | 'pdf'
+      | 'pptx'
       | 'zip'
       | 'html'
       | 'image'
@@ -4509,7 +4684,7 @@ function HtmlViewer({
         { requestId },
       );
     };
-    const toastFormats = new Set(['pdf', 'zip', 'html', 'image', 'markdown']);
+    const toastFormats = new Set(['pdf', 'pptx', 'zip', 'html', 'image', 'markdown']);
     // Programmatic exports compute in-browser and can take a while (one render
     // per deck slide), so the loading toast ticks every second with elapsed time
     // and — once at least one slide is captured — a live ETA derived from the
@@ -4548,9 +4723,10 @@ function HtmlViewer({
       renderLoadingToast();
       ticker = setInterval(renderLoadingToast, 1000);
     }
-    const failToast = () => {
+    const failToast = (err?: unknown) => {
       stopTicker();
-      if (toastFormats.has(format)) setExportToast({ message: t('fileViewer.exportFailed'), tone: 'error' });
+      const message = err instanceof Error && err.message ? err.message : t('fileViewer.exportFailed');
+      if (toastFormats.has(format)) setExportToast({ message, tone: 'error' });
     };
     try {
       const out = fn();
@@ -4568,7 +4744,7 @@ function HtmlViewer({
           },
           (err) => {
             finish('failed', err instanceof Error ? err.name : 'UNKNOWN');
-            failToast();
+            failToast(err);
           },
         );
       } else {
@@ -4583,7 +4759,7 @@ function HtmlViewer({
       }
     } catch (err) {
       finish('failed', err instanceof Error ? err.name : 'UNKNOWN');
-      failToast();
+      failToast(err);
     }
   };
   // Feeds per-slide capture progress into the ref the loading-toast ticker reads
@@ -4792,6 +4968,20 @@ function HtmlViewer({
       source === srcDocPreviewIframeRef.current?.contentWindow
     );
   }, []);
+  useEffect(() => {
+    if (!onBrandExtractionStopRequest) return;
+    const requestStop = onBrandExtractionStopRequest;
+    function onMessage(ev: MessageEvent) {
+      if (!isOurPreviewIframeSource(ev.source)) return;
+      const data = ev.data;
+      if (!data || typeof data !== 'object' || (data as { type?: unknown }).type !== 'od:brand-extraction-stop-request') {
+        return;
+      }
+      requestStop();
+    }
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [isOurPreviewIframeSource, onBrandExtractionStopRequest]);
   const previewScrollRestoreRef = useRef<{
     hostLeft: number;
     hostTop: number;
@@ -4949,6 +5139,7 @@ function HtmlViewer({
   const templateNameId = useId();
   const templateDescriptionId = useId();
   const imageExportTitleId = useId();
+  const pptxExportTitleId = useId();
   // Opt back into the legacy inline-asset srcDoc path via `?forceInline=1`
   // on the host page. Lets users escape-hatch around the URL-load default
   // for non-deck HTML that depends on the in-iframe localStorage shim.
@@ -5046,13 +5237,10 @@ function HtmlViewer({
   const [deployActionToast, setDeployActionToast] = useState<string | null>(null);
   const [imageExportModalOpen, setImageExportModalOpen] = useState(false);
   const [imageExportFormat, setImageExportFormat] = useState<ImageExportFormat>('png');
-  const [imageExportBusy, setImageExportBusy] = useState(false);
-  const [imageExportPreparing, setImageExportPreparing] = useState(false);
   const [imageExportError, setImageExportError] = useState<string | null>(null);
-  const [imageExportSavedToast, setImageExportSavedToast] = useState<{ message: string; details: string } | null>(null);
-  const [imageExportPreparedBlob, setImageExportPreparedBlob] = useState<{ format: ImageExportFormat; blob: Blob } | null>(null);
+  const [pptxExportModalOpen, setPptxExportModalOpen] = useState(false);
+  const [pptxExportMode, setPptxExportMode] = useState<'editable' | 'screenshot'>('editable');
   const imageExportSnapshotDataUrlRef = useRef<string | null>(null);
-  const imageExportPrepareIdRef = useRef(0);
   // Threads the share-popover click → artifact_export_result(image) pair, the
   // same correlation other export formats get via fireShareExport. The image
   // export is a separate modal flow, so it owns its own request id / start.
@@ -5071,6 +5259,7 @@ function HtmlViewer({
   // cancelled, whether it ends in a save or a modal dismiss.
   const templateExportResolvedRef = useRef(false);
   const screenshotInFlightRef = useRef(false);
+  const imageExportInFlightRef = useRef(false);
   const [exportToast, setExportToast] = useState<
     { message: string; tone: 'default' | 'success' | 'error' | 'loading' } | null
   >(null);
@@ -5305,6 +5494,11 @@ function HtmlViewer({
   }, [source]);
   const effectiveDeck = isDeck || looksLikeDeck;
   const showDeckNavigation = effectiveDeck && (slideState === null || slideState.count > 0);
+  // Extra deck signal for EXPORT only. Runtime-managed decks (`<deck-stage>` /
+  // `data-screen-label`) need deck capture even when the viewer's nav bridge
+  // cannot drive them. Plain `.slide` is intentionally excluded: ordinary pages
+  // use it for carousels/testimonials and must export as full pages.
+  const structuredDeckExportSignal = sourceLooksLikeExportableDeck(source);
   const livePreviewSource = inlinedSource ?? source;
   // Annotation modes that should hold the preview still while open. Manual
   // Edit is handled by its own freeze just below; these are the non-edit
@@ -6917,6 +7111,7 @@ function HtmlViewer({
   useEffect(() => {
     if (!effectiveDeck || mode !== 'preview') return;
     function onKey(e: KeyboardEvent) {
+      if (document.activeElement === iframeRef.current) return;
       const target = e.target as HTMLElement | null;
       if (target) {
         const tag = target.tagName;
@@ -7728,7 +7923,13 @@ function HtmlViewer({
   const exportTitle = file.name.replace(/\.html?$/i, '') || file.name;
   const artifactKind = file.artifactManifest?.kind ?? file.artifactKind ?? null;
   const rendererId = file.artifactManifest?.renderer ?? null;
-  const isDeckArtifact = isDeck || artifactKind === 'deck' || rendererId === 'deck-html' || file.kind === 'presentation';
+  const isDeckArtifact =
+    isDeck ||
+    projectKind === 'slide_deck' ||
+    artifactKind === 'deck' ||
+    rendererId === 'deck-html' ||
+    file.kind === 'presentation';
+  const deckExportSignal = isDeckArtifact || structuredDeckExportSignal;
   const isMarkdownArtifact =
     artifactKind === 'markdown-document' ||
     rendererId === 'markdown' ||
@@ -7740,6 +7941,11 @@ function HtmlViewer({
     rendererId === 'html';
   const canShare = source !== null && isShareableArtifact;
   const canDownload = source !== null && (isShareableArtifact || isMarkdownArtifact);
+  // PPTX export is slide-based, so show it only for explicit decks plus
+  // structured deck runtimes. Do not key this off plain `.slide`: ordinary
+  // parallax/long pages may use that class but must remain page-mode exports.
+  const showPptxExport = canShare && deckExportSignal;
+  const canPptx = showPptxExport && !streaming;
   const showMarkdownExport = source !== null && isMarkdownArtifact;
   const showImageExport = canShare;
 
@@ -7828,7 +8034,9 @@ function HtmlViewer({
     setDownloadMenuOpen(false);
     setDeployMenuOpen((v) => !v);
   };
-  const captureExportImageSnapshot = useCallback(async () => {
+  const captureExportImageSnapshot = useCallback(async (
+    options?: { wholeDeck?: boolean },
+  ) => {
     // The host compositor grabs on-screen pixels, so any transient hover chrome
     // over the preview leaks into the capture. The screenshot control's own
     // tooltip is already dismissed by TooltipLayer's pointerdown/click listener,
@@ -7837,11 +8045,47 @@ function HtmlViewer({
     // in the browser screenshot flow (DesignBrowserPanel).
     await waitForAnimationFrame();
     await waitForAnimationFrame();
-    // Prefer the desktop compositor screenshot of the visible preview region:
-    // it returns the real rendered pixels (fonts, external CSS, gradients,
-    // images) and is never tainted, so it cannot produce the black/blank frames
-    // the in-iframe SVG-foreignObject bridge does. Works for both srcDoc and
-    // URL-load previews. Falls through to the bridge on pure web (no host).
+    // Prefer the daemon's off-screen render (desktop only): viewport-independent
+    // and, rendering the artifact alone in a hidden window, it can never capture
+    // Open Design's own UI. `wholeDeck` (Export as image) stitches every slide
+    // top-to-bottom into one long image — matching the slide count the viewer
+    // reports; otherwise (Copy screenshot, Mark/Draw capture) it grabs the
+    // CURRENT slide, mirroring what's on screen. An ordinary page is its
+    // full-page capture either way.
+    if (isOpenDesignHostAvailable() && projectId && file.name) {
+      // Deck-vs-page uses `deckExportSignal` — broader than the viewer's nav
+      // signal — so runtime-managed decks (`<deck-stage>` / `data-screen-label`,
+      // no literal `.slide`) export as a deck instead of a single page-mode shot
+      // of slide 1. The vector-PDF fallback below uses the SAME signal, so an
+      // artifact exports identically with or without a desktop host.
+      const wholeDeck = options?.wholeDeck === true;
+      // For a CURRENT-slide capture we need the active slide index, which only
+      // exists when the viewer tracks it. Runtime-managed decks have no
+      // active-slide bridge (slideState===null); for those the off-screen path
+      // would always grab slide 0, so plan to skip it and fall through to the
+      // visible host snapshot (= the slide on screen). Whole-deck / pages /
+      // tracked `.slide` decks still render off-screen.
+      const trackedActive = slideState?.active ?? htmlPreviewSlideState.get(previewStateKey)?.active ?? null;
+      const plan = planDeckImageCapture({ deck: deckExportSignal, wholeDeck, trackedActive });
+      if (plan.useOffscreen) {
+        const rendered = await exportProjectImageDataUrl({
+          projectId,
+          fileName: file.name,
+          deck: deckExportSignal,
+          ...(plan.index != null ? { index: plan.index } : {}),
+        });
+        if (rendered.ok) return rendered.snapshot;
+        // A semantic failure (e.g. "page is too tall — export as PDF") must surface,
+        // NOT silently downgrade to a partial visible-viewport screenshot. Only when
+        // the off-screen renderer is genuinely unavailable do we fall through.
+        if ('error' in rendered) throw new Error(rendered.error);
+      }
+    }
+
+    // Fallback: desktop compositor screenshot of the visible preview region.
+    // Returns real rendered pixels and is never tainted, unlike the in-iframe
+    // SVG-foreignObject bridge. Used on pure web (no host) or if the render
+    // above is unavailable. Works for both srcDoc and URL-load previews.
     const visibleIframe = iframeRef.current ?? srcDocPreviewIframeRef.current;
     const hostSnapshot = await captureHostIframeSnapshot(visibleIframe);
     if (hostSnapshot) return hostSnapshot;
@@ -7887,6 +8131,11 @@ function HtmlViewer({
     srcDocShellReady,
     useLazySrcDocTransport,
     useUrlLoadPreview,
+    deckExportSignal,
+    slideState?.active,
+    previewStateKey,
+    projectId,
+    file.name,
   ]);
 
   const handleCopyScreenshot = useCallback(async () => {
@@ -7915,44 +8164,20 @@ function HtmlViewer({
       );
     } catch (err) {
       console.warn('[handleCopyScreenshot] failed:', err);
-      setExportToast({ message: t('fileViewer.screenshotCaptureFailed'), tone: 'error' });
+      // Surface a semantic failure message (e.g. "page is too tall — export as
+      // PDF") rather than a generic one when the renderer gave us a reason.
+      const message = err instanceof Error && err.message ? err.message : t('fileViewer.screenshotCaptureFailed');
+      setExportToast({ message, tone: 'error' });
     } finally {
       screenshotInFlightRef.current = false;
     }
   }, [captureExportImageSnapshot, t]);
 
-  const prepareImageExportBlob = useCallback(async (format: ImageExportFormat) => {
-    const prepareId = imageExportPrepareIdRef.current + 1;
-    imageExportPrepareIdRef.current = prepareId;
-    setImageExportPreparing(true);
-    setImageExportError(null);
-    setImageExportPreparedBlob(null);
-    try {
-      let dataUrl = imageExportSnapshotDataUrlRef.current;
-      if (!dataUrl) {
-        const snap = await captureExportImageSnapshot();
-        if (!snap) throw new Error('Snapshot capture returned null');
-        dataUrl = snap.dataUrl;
-        imageExportSnapshotDataUrlRef.current = dataUrl;
-      }
-      const blob = await imageDataUrlToBlob(dataUrl, format);
-      if (blob.size <= 0) throw new Error('Snapshot capture produced an empty image');
-      if (imageExportPrepareIdRef.current === prepareId) {
-        setImageExportPreparedBlob({ format, blob });
-      }
-    } catch (err) {
-      console.warn('[exportAsImage] failed to prepare snapshot:', err);
-      if (imageExportPrepareIdRef.current === prepareId) {
-        setImageExportError(t('fileViewer.exportImageFailed'));
-      }
-    } finally {
-      if (imageExportPrepareIdRef.current === prepareId) {
-        setImageExportPreparing(false);
-      }
-    }
-  }, [captureExportImageSnapshot, t]);
-
   const openImageExportModal = async () => {
+    // Don't reopen while an export is still running: reopening resets the shared
+    // request/result bookkeeping refs, which would mis-attribute or drop the
+    // in-flight export's analytics result.
+    if (imageExportInFlightRef.current) return;
     flushSync(() => {
       setDownloadMenuOpen(false);
     });
@@ -7976,17 +8201,14 @@ function HtmlViewer({
       { requestId },
     );
     setImageExportError(null);
-    setImageExportPreparedBlob(null);
     imageExportSnapshotDataUrlRef.current = null;
-    await waitForAnimationFrame();
-    await waitForAnimationFrame();
+    // Just open the modal. Rendering happens on Save, after the user picks a
+    // format — not eagerly on open.
     setImageExportModalOpen(true);
-    void prepareImageExportBlob(imageExportFormat);
   };
 
   const changeImageExportFormat = (format: ImageExportFormat) => {
     setImageExportFormat(format);
-    void prepareImageExportBlob(format);
   };
 
   // Component-scoped so both the save flow and the modal Cancel button can
@@ -8018,43 +8240,71 @@ function HtmlViewer({
   };
 
   async function handleImageExportSave() {
-    const prepared = imageExportPreparedBlob;
-    if (!prepared || prepared.format !== imageExportFormat) {
-      setImageExportError(t('fileViewer.exportImageFailed'));
-      fireImageExportResult('failed', 'BLOB_NOT_READY');
-      return;
-    }
-    setImageExportBusy(true);
+    // Single-shot guard: closing the modal is async, so a fast double-click /
+    // Enter-repeat on Save could otherwise enqueue two concurrent exports
+    // (duplicate captures, downloads, and result bookkeeping) before the first
+    // re-render removes the button.
+    if (imageExportInFlightRef.current) return;
+    imageExportInFlightRef.current = true;
+    // Unify with the PPTX/PDF flow: close the modal and surface progress through
+    // the same portaled, viewport-centered export toast instead of an in-modal
+    // spinner + a separate (non-portaled, off-center) saved toast.
     setImageExportError(null);
+    setImageExportModalOpen(false);
+    setExportToast({ message: t('fileViewer.exportStarted'), tone: 'loading' });
+    // Let the modal unmount before capturing so the web-only host-compositor
+    // snapshot can't catch the overlay (the desktop off-screen renderer ignores
+    // it either way).
+    await waitForAnimationFrame();
+    await waitForAnimationFrame();
     try {
-      const target = await prepareImageExportTarget(exportTitle, imageExportFormat, { useNativePicker: false });
-      if (!target) {
-        // Not a terminal state: the modal stays open so the user can retry or
-        // Cancel. The cancelled result is emitted by the Cancel button.
+      let dataUrl = imageExportSnapshotDataUrlRef.current;
+      if (!dataUrl) {
+        // Export as image of a deck = the whole deck stitched into one long
+        // image (every slide), matching the count the viewer reports. Copy
+        // screenshot keeps the current slide.
+        const snap = await captureExportImageSnapshot({ wholeDeck: true });
+        if (!snap) {
+          setExportToast({ message: t('fileViewer.exportImageFailed'), tone: 'error' });
+          fireImageExportResult('failed', 'CAPTURE_FAILED');
+          return;
+        }
+        dataUrl = snap.dataUrl;
+        imageExportSnapshotDataUrlRef.current = dataUrl;
+      }
+      const blob = await imageDataUrlToBlob(dataUrl, imageExportFormat);
+      if (blob.size <= 0) {
+        setExportToast({ message: t('fileViewer.exportImageFailed'), tone: 'error' });
+        fireImageExportResult('failed', 'EMPTY_IMAGE');
         return;
       }
-      const preparedDataUrl = imageExportSnapshotDataUrlRef.current;
-      if (target.method === 'download' && imageExportFormat === 'png' && preparedDataUrl) {
-        downloadImageDataUrl(preparedDataUrl, target.filename);
-      } else {
-        await target.save(prepared.blob);
+      const target = await prepareImageExportTarget(exportTitle, imageExportFormat, { useNativePicker: false });
+      if (!target) {
+        // User dismissed the save picker — clear the loading toast.
+        setExportToast(null);
+        fireImageExportResult('cancelled');
+        return;
       }
-      setImageExportModalOpen(false);
+      if (target.method === 'download' && imageExportFormat === 'png' && dataUrl) {
+        downloadImageDataUrl(dataUrl, target.filename);
+      } else {
+        await target.save(blob);
+      }
       fireImageExportResult('success');
-      setImageExportSavedToast({
-        message: target.method === 'picker'
-          ? t('fileViewer.exportImageSaved')
-          : t('fileViewer.exportImageDownloadStarted'),
-        details: target.method === 'picker'
-          ? target.filename
-          : t('fileViewer.exportImageDownloadDetails', { filename: target.filename }),
+      setExportToast({
+        message:
+          target.method === 'picker'
+            ? t('fileViewer.exportImageSaved')
+            : t('fileViewer.exportImageDownloadStarted'),
+        tone: 'success',
       });
     } catch (err) {
       console.warn('[exportAsImage] failed to save snapshot:', err);
-      setImageExportError(t('fileViewer.exportImageFailed'));
+      const message = err instanceof Error && err.message ? err.message : t('fileViewer.exportImageFailed');
+      setExportToast({ message, tone: 'error' });
       fireImageExportResult('failed', err instanceof Error ? err.name : 'UNKNOWN');
     } finally {
-      setImageExportBusy(false);
+      imageExportInFlightRef.current = false;
     }
   }
   const creationSortedSideComments = useMemo(
@@ -9026,18 +9276,69 @@ function HtmlViewer({
                     role="menuitem"
                     onClick={() => {
                       setDownloadMenuOpen(false);
-                      fireShareExport('pdf', () => exportProjectAsPdf({
-                        deck: effectiveDeck,
-                        fallbackPdf: () => exportAsPdf(source ?? '', exportTitle, { deck: effectiveDeck, onProgress: onExportProgress }),
-                        filePath: file.name,
-                        projectId,
-                        title: exportTitle,
-                      }));
+                      // Pixel-perfect screenshot PDF (matches the preview, same
+                      // renderer as image/PPTX). Chosen over Chromium's vector
+                      // printToPDF because that path drops CJK glyphs in the
+                      // packaged runtime (no embedded fonts) — unacceptable for a
+                      // Chinese-first product. Falls back to the vector/browser
+                      // print path on web or on failure.
+                      fireShareExport('pdf', async () => {
+                        if (isOpenDesignHostAvailable()) {
+                          const res = await exportProjectScreenshotPdf({
+                            projectId,
+                            fileName: file.name,
+                            title: exportTitle,
+                            // Broader deck signal than the viewer's nav so
+                            // runtime-managed decks (<deck-stage>) paginate per
+                            // slide; the vector fallback below uses the SAME
+                            // signal, so an artifact exports identically with or
+                            // without a desktop host (no per-host divergence).
+                            deck: deckExportSignal,
+                          });
+                          if (res.ok) return;
+                          // A SEMANTIC failure (bad deck routing, unreadable
+                          // renderer output, renderer 502, …) must surface — NOT
+                          // silently downgrade to the vector PDF, which can
+                          // reintroduce the CJK-glyph / fidelity bugs the
+                          // screenshot path exists to avoid. Only a genuinely
+                          // unavailable renderer (no host / 501 / transport)
+                          // falls through to the vector path below.
+                          if (!('unavailable' in res)) throw new Error(res.error);
+                        }
+                        await exportProjectAsPdf({
+                          deck: deckExportSignal,
+                          fallbackPdf: () => exportAsPdf(source ?? '', exportTitle, { deck: deckExportSignal, onProgress: onExportProgress }),
+                          filePath: file.name,
+                          projectId,
+                          title: exportTitle,
+                        });
+                      });
                     }}
                   >
                     <span className="share-menu-icon"><RemixIcon name="file-line" size={15} /></span>
                     <span>{t('fileViewer.exportPdf')}</span>
                   </button>
+                  {showPptxExport ? (
+                    <button
+                      type="button"
+                      className="share-menu-item"
+                      role="menuitem"
+                      disabled={!canPptx}
+                      title={
+                        streaming
+                          ? t('fileViewer.exportPptxBusy')
+                          : t('fileViewer.exportPptxHint')
+                      }
+                      onClick={() => {
+                        setDownloadMenuOpen(false);
+                        setPptxExportMode('editable');
+                        setPptxExportModalOpen(true);
+                      }}
+                    >
+                      <span className="share-menu-icon"><RemixIcon name="file-ppt-line" size={15} /></span>
+                      <span>{t('fileViewer.exportPptx')}</span>
+                    </button>
+                  ) : null}
                   {showImageExport ? (
                     <button
                       type="button"
@@ -9492,8 +9793,99 @@ function HtmlViewer({
         </div>,
         document.body,
       ) : null}
-      {imageExportModalOpen && typeof document !== 'undefined' ? createPortal(
+      {pptxExportModalOpen && typeof document !== 'undefined' ? createPortal(
         <div className="modal-backdrop viewer-modal-backdrop image-export-backdrop" role="presentation">
+          <div
+            className="modal deploy-modal image-export-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={pptxExportTitleId}
+          >
+            <div className="modal-head">
+              <div className="kicker">PPTX</div>
+              <h2 id={pptxExportTitleId}>{t('fileViewer.exportPptx')}</h2>
+              <p className="subtitle">{t('fileViewer.exportPptxModalSubtitle')}</p>
+            </div>
+            <div className="deploy-form image-export-form">
+              <fieldset className="image-export-format-field">
+                <legend>{t('fileViewer.exportImageFormatLabel')}</legend>
+                <div className="pptx-export-mode-options">
+                  {([
+                    {
+                      value: 'editable' as const,
+                      title: t('fileViewer.exportPptxEditable'),
+                      hint: t('fileViewer.exportPptxEditableHint'),
+                      recommended: true,
+                    },
+                    {
+                      value: 'screenshot' as const,
+                      title: t('fileViewer.exportPptxScreenshot'),
+                      hint: t('fileViewer.exportPptxScreenshotHint'),
+                      recommended: false,
+                    },
+                  ]).map((opt) => (
+                    <label
+                      key={opt.value}
+                      className={`pptx-export-mode-option${pptxExportMode === opt.value ? ' active' : ''}`}
+                    >
+                      <input
+                        type="radio"
+                        name="pptx-export-mode"
+                        value={opt.value}
+                        checked={pptxExportMode === opt.value}
+                        onChange={() => setPptxExportMode(opt.value)}
+                      />
+                      <span className="pptx-export-mode-head">
+                        <span className="pptx-export-mode-title">{opt.title}</span>
+                        {opt.recommended ? (
+                          <span className="pptx-export-mode-badge">{t('fileViewer.exportPptxRecommended')}</span>
+                        ) : null}
+                      </span>
+                      <span className="pptx-export-mode-desc">{opt.hint}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            </div>
+            <div className="modal-foot">
+              <button
+                type="button"
+                className="ghost-link button-like"
+                onClick={() => setPptxExportModalOpen(false)}
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                className="viewer-action primary"
+                disabled={!canPptx}
+                onClick={() => {
+                  const editable = pptxExportMode === 'editable';
+                  setPptxExportModalOpen(false);
+                  fireShareExport('pptx', async () => {
+                    const res = await exportProjectAsPptx({
+                      projectId,
+                      fileName: file.name,
+                      title: exportTitle,
+                      deck: true,
+                      editable,
+                    });
+                    if (!res.ok) throw new Error('error' in res ? res.error : t('fileViewer.exportPptxNa'));
+                  });
+                }}
+              >
+                {t('fileViewer.exportPptxConfirm')}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      ) : null}
+      {imageExportModalOpen && typeof document !== 'undefined' ? createPortal(
+        <div
+          className="modal-backdrop viewer-modal-backdrop image-export-backdrop"
+          role="presentation"
+        >
           <div
             className="modal deploy-modal image-export-modal"
             role="dialog"
@@ -9506,7 +9898,7 @@ function HtmlViewer({
               <p className="subtitle">{t('fileViewer.exportImageModalSubtitle')}</p>
             </div>
             <div className="deploy-form image-export-form">
-              <fieldset className="image-export-format-field" disabled={imageExportBusy}>
+              <fieldset className="image-export-format-field">
                 <legend>{t('fileViewer.exportImageFormatLabel')}</legend>
                 <div className="image-export-format-options">
                   {IMAGE_EXPORT_FORMAT_OPTIONS.map((option) => (
@@ -9538,7 +9930,6 @@ function HtmlViewer({
               <button
                 type="button"
                 className="ghost-link button-like"
-                disabled={imageExportBusy}
                 onClick={() => {
                   // User dismissed the image export modal without saving —
                   // close the ui_click(image)→result funnel as cancelled.
@@ -9552,12 +9943,11 @@ function HtmlViewer({
               <button
                 type="button"
                 className="viewer-action primary"
-                disabled={imageExportBusy || imageExportPreparing || !imageExportPreparedBlob}
                 onClick={() => {
                   void handleImageExportSave();
                 }}
               >
-                {imageExportBusy ? t('fileViewer.exportImageSaving') : t('common.save')}
+                {t('common.save')}
               </button>
             </div>
           </div>
@@ -9973,16 +10363,6 @@ function HtmlViewer({
           onDismiss={() => setDeployActionToast(null)}
         />,
         document.body,
-      ) : null}
-      {imageExportSavedToast ? (
-        <Toast
-          message={imageExportSavedToast.message}
-          details={imageExportSavedToast.details}
-          tone="success"
-          placement="top"
-          ttlMs={3600}
-          onDismiss={() => setImageExportSavedToast(null)}
-        />
       ) : null}
       {shareGuideToast && typeof document !== 'undefined' ? createPortal(
         <Toast
@@ -10591,28 +10971,88 @@ function isJsonFile(file: ProjectFile): boolean {
   return file.name.toLowerCase().endsWith('.json') || file.mime.toLowerCase().startsWith('application/json');
 }
 
+type MarkdownViewerMode = 'edit' | 'split' | 'preview';
+type MarkdownSaveState = 'idle' | 'saving' | 'saved' | 'error';
+type MarkdownScrollPane = 'editor' | 'preview';
+type MarkdownSaveOptions = {
+  refreshFiles?: boolean;
+  showSaving?: boolean;
+};
+
+function markdownScrollRange(element: HTMLElement): number {
+  return Math.max(0, element.scrollHeight - element.clientHeight);
+}
+
+function markdownScrollRatio(element: HTMLElement): number {
+  const range = markdownScrollRange(element);
+  return range > 0 ? element.scrollTop / range : 0;
+}
+
+function markdownScrollTopForRatio(element: HTMLElement, ratio: number): number {
+  const clamped = Math.max(0, Math.min(1, Number.isFinite(ratio) ? ratio : 0));
+  return markdownScrollRange(element) * clamped;
+}
+
+function mergeMarkdownSaveOptions(a: MarkdownSaveOptions, b: MarkdownSaveOptions): MarkdownSaveOptions {
+  return {
+    refreshFiles: a.refreshFiles !== false || b.refreshFiles !== false,
+    showSaving: a.showSaving !== false || b.showSaving !== false,
+  };
+}
+
 function MarkdownViewer({
   projectId,
   file,
+  onFileSaved,
 }: {
   projectId: string;
   file: ProjectFile;
+  onFileSaved?: () => Promise<void> | void;
 }) {
-  const t = useT();
+  const { t, locale } = useI18n();
   const [text, setText] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
   const [copied, setCopied] = useState(false);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
+  const [mode, setMode] = useState<MarkdownViewerMode>('split');
+  const [saveState, setSaveState] = useState<MarkdownSaveState>('idle');
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [highlightedHtml, setHighlightedHtml] = useState<{ source: string; html: string; themeRevision: number } | null>(null);
+  const [highlightThemeRevision, setHighlightThemeRevision] = useState(0);
+  const [, bumpSavedRevision] = useState(0);
+  const editorRef = useRef<HTMLTextAreaElement | null>(null);
+  const markdownPreviewPaneRef = useRef<HTMLElement | null>(null);
   const markdownArticleRef = useRef<HTMLElement | null>(null);
   const copyBlockTimerRef = useRef<number | null>(null);
   const copiedMarkdownBlockRef = useRef<HTMLElement | null>(null);
+  const saveTimerRef = useRef<number | null>(null);
+  const scrollSyncFrameRef = useRef<number | null>(null);
+  const programmaticScrollClearFrameRef = useRef<number | null>(null);
+  const pendingScrollSyncRef = useRef<{ sourcePane: MarkdownScrollPane; targetPane: MarkdownScrollPane } | null>(null);
+  const programmaticScrollRef = useRef<{ pane: MarkdownScrollPane; top: number } | null>(null);
+  const activeMarkdownScrollPaneRef = useRef<MarkdownScrollPane>('editor');
+  const editorBlockOffsetsRef = useRef<{ width: number; offsets: number[] } | null>(null);
+  const previousModeRef = useRef<MarkdownViewerMode>('split');
+  const saveInFlightRef = useRef(false);
+  const pendingSaveAfterFlightRef = useRef<MarkdownSaveOptions | null>(null);
+  const textRef = useRef('');
+  const lastSavedTextRef = useRef<string | null>(null);
+  const loadedFileKeyRef = useRef<string | null>(null);
+  const markdownFileKey = `${projectId}::${file.name}`;
   const status = file.artifactManifest?.status ?? 'complete';
   const isStreaming = status === 'streaming';
   const isError = status === 'error';
   const exportTitle = file.name.replace(/\.mdx?$/i, '') || file.name;
 
   useEffect(() => {
-    setText(null);
+    const sameLoadedFile = loadedFileKeyRef.current === markdownFileKey;
+    if (
+      sameLoadedFile &&
+      lastSavedTextRef.current !== null &&
+      textRef.current !== lastSavedTextRef.current
+    ) {
+      return undefined;
+    }
+    if (!sameLoadedFile) setText(null);
     copiedMarkdownBlockRef.current = null;
     if (copyBlockTimerRef.current) {
       window.clearTimeout(copyBlockTimerRef.current);
@@ -10620,12 +11060,37 @@ function MarkdownViewer({
     }
     let cancelled = false;
     void fetchProjectFileText(projectId, file.name).then((next) => {
-      if (!cancelled) setText(next ?? '');
+      if (cancelled) return;
+      if (
+        loadedFileKeyRef.current === markdownFileKey &&
+        lastSavedTextRef.current !== null &&
+        textRef.current !== lastSavedTextRef.current
+      ) {
+        return;
+      }
+      const loaded = next ?? '';
+      if (
+        sameLoadedFile &&
+        lastSavedTextRef.current !== null &&
+        textRef.current === lastSavedTextRef.current &&
+        loaded === lastSavedTextRef.current
+      ) {
+        loadedFileKeyRef.current = markdownFileKey;
+        pendingSaveAfterFlightRef.current = null;
+        setSaveState((current) => current === 'saved' ? current : 'idle');
+        return;
+      }
+      textRef.current = loaded;
+      lastSavedTextRef.current = loaded;
+      loadedFileKeyRef.current = markdownFileKey;
+      pendingSaveAfterFlightRef.current = null;
+      setSaveState('idle');
+      setText(loaded);
     });
     return () => {
       cancelled = true;
     };
-  }, [projectId, file.name, file.mtime, reloadKey]);
+  }, [projectId, file.name, file.mtime, markdownFileKey]);
 
   useEffect(() => {
     return () => {
@@ -10633,6 +11098,125 @@ function MarkdownViewer({
       if (copyBlockTimerRef.current) {
         window.clearTimeout(copyBlockTimerRef.current);
       }
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+      }
+      if (scrollSyncFrameRef.current) {
+        window.cancelAnimationFrame(scrollSyncFrameRef.current);
+        scrollSyncFrameRef.current = null;
+      }
+      if (programmaticScrollClearFrameRef.current) {
+        window.cancelAnimationFrame(programmaticScrollClearFrameRef.current);
+        programmaticScrollClearFrameRef.current = null;
+      }
+      pendingScrollSyncRef.current = null;
+      programmaticScrollRef.current = null;
+      activeMarkdownScrollPaneRef.current = 'editor';
+    };
+  }, []);
+
+  const saveMarkdownText = useCallback(
+    (value: string, options: MarkdownSaveOptions = {}) => {
+      const run = async (nextValue: string, saveOptions: MarkdownSaveOptions): Promise<void> => {
+        if (lastSavedTextRef.current === nextValue) {
+          const showSaving = saveOptions.showSaving !== false;
+          if (textRef.current === nextValue) setSaveState(showSaving ? 'saved' : 'idle');
+          if (saveOptions.refreshFiles !== false && onFileSaved) {
+            void Promise.resolve(onFileSaved()).catch(() => undefined);
+          }
+          return;
+        }
+        if (saveInFlightRef.current) {
+          pendingSaveAfterFlightRef.current = pendingSaveAfterFlightRef.current
+            ? mergeMarkdownSaveOptions(pendingSaveAfterFlightRef.current, saveOptions)
+            : saveOptions;
+          return;
+        }
+        saveInFlightRef.current = true;
+        const showSaving = saveOptions.showSaving !== false;
+        if (showSaving) setSaveState('saving');
+        try {
+          const saved = await writeProjectTextFile(projectId, file.name, nextValue);
+          if (!saved) throw new Error('write failed');
+          lastSavedTextRef.current = nextValue;
+          bumpSavedRevision((n) => n + 1);
+          setSavedAt(Date.now());
+          if (textRef.current === nextValue) setSaveState(showSaving ? 'saved' : 'idle');
+          if (saveOptions.refreshFiles !== false && onFileSaved) {
+            void Promise.resolve(onFileSaved()).catch(() => undefined);
+          }
+        } catch {
+          if (textRef.current === nextValue) setSaveState('error');
+        } finally {
+          saveInFlightRef.current = false;
+          const pending = pendingSaveAfterFlightRef.current;
+          if (pending) {
+            pendingSaveAfterFlightRef.current = null;
+            const latest = textRef.current;
+            if (latest !== lastSavedTextRef.current) {
+              void run(latest, pending);
+            } else {
+              const showPendingSaving = pending.showSaving !== false;
+              if (textRef.current === latest) setSaveState(showPendingSaving ? 'saved' : 'idle');
+              if (pending.refreshFiles !== false && onFileSaved) {
+                void Promise.resolve(onFileSaved()).catch(() => undefined);
+              }
+            }
+          }
+        }
+      };
+      void run(value, options);
+    },
+    [file.name, onFileSaved, projectId],
+  );
+
+  const flushPendingMarkdownSave = useCallback(() => {
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    const latest = textRef.current;
+    if (lastSavedTextRef.current !== null && latest !== lastSavedTextRef.current) {
+      saveMarkdownText(latest, { refreshFiles: false, showSaving: false });
+    }
+  }, [saveMarkdownText]);
+
+  useEffect(() => {
+    return () => {
+      flushPendingMarkdownSave();
+    };
+  }, [flushPendingMarkdownSave]);
+
+  useEffect(() => {
+    if (text === null) return undefined;
+    textRef.current = text;
+    if (text === lastSavedTextRef.current) return undefined;
+    setSaveState((current) => current === 'saved' ? 'idle' : current);
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+    }
+    saveTimerRef.current = window.setTimeout(() => {
+      saveTimerRef.current = null;
+      saveMarkdownText(textRef.current, { refreshFiles: false, showSaving: false });
+    }, 700);
+    return () => {
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+    };
+  }, [saveMarkdownText, text]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const bump = () => setHighlightThemeRevision((revision) => revision + 1);
+    const observer = new MutationObserver(bump);
+    observer.observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+    const media = window.matchMedia?.('(prefers-color-scheme: dark)');
+    media?.addEventListener('change', bump);
+    return () => {
+      observer.disconnect();
+      media?.removeEventListener('change', bump);
     };
   }, []);
 
@@ -10645,11 +11229,234 @@ function MarkdownViewer({
     }
   }
 
-  const html = useMemo(() => {
+  const insertTextAtSelection = useCallback((insert: string) => {
+    setText((current) => {
+      if (current === null) return current;
+      const editor = editorRef.current;
+      if (!editor) return `${current}${insert}`;
+      const start = editor.selectionStart;
+      const end = editor.selectionEnd;
+      const next = `${current.slice(0, start)}${insert}${current.slice(end)}`;
+      window.requestAnimationFrame(() => {
+        const nextCursor = start + insert.length;
+        editor.focus();
+        editor.setSelectionRange(nextCursor, nextCursor);
+      });
+      return next;
+    });
+  }, []);
+
+  const insertImageFiles = useCallback(
+    async (files: File[]): Promise<boolean> => {
+      const images = files.filter((item) => isMarkdownImageFile(item));
+      if (images.length === 0) return false;
+      const targetDir = markdownDirectory(file.name);
+      const result = await uploadProjectFiles(projectId, images, targetDir);
+      if (result.uploaded.length > 0) {
+        await onFileSaved?.();
+        const snippet = result.uploaded
+          .map((item) => {
+            const alt = markdownImageAlt(item.name);
+            const path = markdownRelativeProjectPath(file.name, item.path);
+            return `![${alt}](${path})`;
+          })
+          .join('\n');
+        insertTextAtSelection(`\n${snippet}\n`);
+      }
+      return true;
+    },
+    [file.name, insertTextAtSelection, onFileSaved, projectId],
+  );
+
+  function handleEditorPaste(event: ReactClipboardEvent<HTMLTextAreaElement>) {
+    const files = Array.from(event.clipboardData.files ?? []);
+    if (!files.some(isMarkdownImageFile)) return;
+    event.preventDefault();
+    void insertImageFiles(files);
+  }
+
+  function handleEditorDrop(event: ReactDragEvent<HTMLTextAreaElement>) {
+    const files = Array.from(event.dataTransfer.files ?? []);
+    if (!files.some(isMarkdownImageFile)) return;
+    event.preventDefault();
+    void insertImageFiles(files);
+  }
+
+  // The markdown doc auto-saves on a debounce, so the toolbar shows a passive
+  // status (when it last auto-saved) instead of a manual Save button that is
+  // disabled almost all the time. Typing stays quiet: the indicator keeps the
+  // last auto-saved time and only refreshes once the debounced save lands, so
+  // there is no per-keystroke "Saving…" flicker. `saving` is reserved for an
+  // explicit, foreground write (the error-retry path).
+  const autoSaveStatus: 'error' | 'saving' | 'saved' | 'idle' =
+    saveState === 'error'
+      ? 'error'
+      : saveState === 'saving'
+        ? 'saving'
+        : savedAt != null
+          ? 'saved'
+          : 'idle';
+  const autoSaveTime =
+    savedAt != null
+      ? new Date(savedAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
+      : null;
+  const autoSaveLabel =
+    autoSaveStatus === 'error'
+      ? t('fileViewer.markdownSaveFailed')
+      : autoSaveStatus === 'saving'
+        ? t('fileViewer.markdownSaving')
+        : autoSaveStatus === 'saved' && autoSaveTime
+          ? t('fileViewer.markdownAutoSaved', { time: autoSaveTime })
+          : t('fileViewer.markdownAutoSaveHint');
+  const showEditor = mode === 'edit' || mode === 'split';
+  const showPreview = mode === 'preview' || mode === 'split';
+
+  const baseHtml = useMemo(() => {
     if (text === null) return null;
     const renderPartial = MarkdownRenderer.renderPartial ?? renderMarkdownToSafeHtml;
-    return decorateMarkdownCodeBlocks(renderPartial(text));
+    return rewriteMarkdownImageSources(decorateMarkdownCodeBlocks(renderPartial(text)), projectId, file.name);
+  }, [file.name, projectId, text]);
+  const html = highlightedHtml?.source === baseHtml && highlightedHtml.themeRevision === highlightThemeRevision
+    ? highlightedHtml.html
+    : baseHtml;
+  const markdownBlockLines = useMemo(() => extractMarkdownBlockLines(text ?? ''), [text]);
+
+  // The cached editor block offsets become stale whenever the source text
+  // changes (line positions move) — drop them so the next sync remeasures.
+  useEffect(() => {
+    editorBlockOffsetsRef.current = null;
   }, [text]);
+
+  useEffect(() => {
+    if (!baseHtml) {
+      setHighlightedHtml(null);
+      return undefined;
+    }
+    let cancelled = false;
+    highlightMarkdownCodeBlocks(baseHtml).then((nextHtml) => {
+      if (cancelled) return;
+      setHighlightedHtml(nextHtml === baseHtml ? null : { source: baseHtml, html: nextHtml, themeRevision: highlightThemeRevision });
+    }).catch(() => {
+      if (!cancelled) setHighlightedHtml(null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [baseHtml, highlightThemeRevision]);
+
+  const clearProgrammaticScrollSoon = useCallback(() => {
+    if (programmaticScrollClearFrameRef.current) {
+      window.cancelAnimationFrame(programmaticScrollClearFrameRef.current);
+    }
+    programmaticScrollClearFrameRef.current = window.requestAnimationFrame(() => {
+      programmaticScrollClearFrameRef.current = window.requestAnimationFrame(() => {
+        programmaticScrollRef.current = null;
+        programmaticScrollClearFrameRef.current = null;
+      });
+    });
+  }, []);
+
+  const getEditorBlockOffsets = useCallback((): number[] | null => {
+    const editor = editorRef.current;
+    if (!editor || markdownBlockLines.length === 0) return null;
+    const width = editor.clientWidth;
+    const cached = editorBlockOffsetsRef.current;
+    if (cached && cached.width === width && cached.offsets.length === markdownBlockLines.length) {
+      return cached.offsets;
+    }
+    const offsets = measureEditorBlockOffsets(editor, markdownBlockLines, textRef.current);
+    if (!offsets) return null;
+    editorBlockOffsetsRef.current = { width, offsets };
+    return offsets;
+  }, [markdownBlockLines]);
+
+  // Align the panes by matching each top-level markdown block's source line to
+  // its rendered element, then interpolating scroll position between those
+  // anchors. Falls back to proportional (ratio) sync when block anchors are
+  // unavailable (e.g. raw-HTML blocks change the rendered child count).
+  const computeMarkdownSyncTarget = useCallback(
+    (sourcePane: MarkdownScrollPane, source: HTMLElement, target: HTMLElement): number => {
+      const previewPane = markdownPreviewPaneRef.current;
+      if (markdownBlockLines.length > 0 && previewPane) {
+        const editorOffsets = getEditorBlockOffsets();
+        const previewOffsets = editorOffsets
+          ? measurePreviewBlockOffsets(previewPane, markdownBlockLines.length)
+          : null;
+        if (editorOffsets && previewOffsets) {
+          const isEditorSource = sourcePane === 'editor';
+          const sourceOffsets = isEditorSource ? editorOffsets : previewOffsets;
+          const targetOffsets = isEditorSource ? previewOffsets : editorOffsets;
+          const sourceAnchors = buildScrollAnchors(sourceOffsets, source.scrollHeight);
+          const targetAnchors = buildScrollAnchors(targetOffsets, target.scrollHeight);
+          const mapped = mapScrollPosition(source.scrollTop, sourceAnchors, targetAnchors);
+          return Math.max(0, Math.min(markdownScrollRange(target), mapped));
+        }
+      }
+      return markdownScrollTopForRatio(target, markdownScrollRatio(source));
+    },
+    [getEditorBlockOffsets, markdownBlockLines],
+  );
+
+  const applyMarkdownScrollSync = useCallback(
+    (sourcePane: MarkdownScrollPane, targetPane: MarkdownScrollPane) => {
+      const source = sourcePane === 'editor' ? editorRef.current : markdownPreviewPaneRef.current;
+      const target = targetPane === 'editor' ? editorRef.current : markdownPreviewPaneRef.current;
+      if (mode !== 'split' || !source || !target) return;
+      const targetTop = computeMarkdownSyncTarget(sourcePane, source, target);
+      if (Math.abs(target.scrollTop - targetTop) < 1) return;
+      programmaticScrollRef.current = { pane: targetPane, top: targetTop };
+      target.scrollTop = targetTop;
+      clearProgrammaticScrollSoon();
+    },
+    [clearProgrammaticScrollSoon, computeMarkdownSyncTarget, mode],
+  );
+
+  const scheduleMarkdownScrollSync = useCallback(
+    (sourcePane: MarkdownScrollPane, targetPane: MarkdownScrollPane) => {
+      if (mode !== 'split') {
+        pendingScrollSyncRef.current = null;
+        return;
+      }
+      pendingScrollSyncRef.current = { sourcePane, targetPane };
+      if (scrollSyncFrameRef.current !== null) return;
+      scrollSyncFrameRef.current = window.requestAnimationFrame(() => {
+        scrollSyncFrameRef.current = null;
+        const pending = pendingScrollSyncRef.current;
+        pendingScrollSyncRef.current = null;
+        if (!pending) return;
+        applyMarkdownScrollSync(pending.sourcePane, pending.targetPane);
+      });
+    },
+    [applyMarkdownScrollSync, mode],
+  );
+
+  const shouldIgnoreMarkdownScroll = useCallback((pane: MarkdownScrollPane, element: HTMLElement): boolean => {
+    const programmatic = programmaticScrollRef.current;
+    if (programmatic?.pane !== pane) return false;
+    if (Math.abs(element.scrollTop - programmatic.top) > 1 && activeMarkdownScrollPaneRef.current === pane) {
+      return false;
+    }
+    programmaticScrollRef.current = null;
+    return true;
+  }, []);
+
+  const handleMarkdownEditorScroll = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor || shouldIgnoreMarkdownScroll('editor', editor)) return;
+    activeMarkdownScrollPaneRef.current = 'editor';
+    scheduleMarkdownScrollSync('editor', 'preview');
+  }, [scheduleMarkdownScrollSync, shouldIgnoreMarkdownScroll]);
+
+  const handleMarkdownPreviewScroll = useCallback(() => {
+    const previewPane = markdownPreviewPaneRef.current;
+    if (!previewPane || shouldIgnoreMarkdownScroll('preview', previewPane)) return;
+    if (activeMarkdownScrollPaneRef.current !== 'preview') return;
+    scheduleMarkdownScrollSync('preview', 'editor');
+  }, [scheduleMarkdownScrollSync, shouldIgnoreMarkdownScroll]);
+
+  const activateMarkdownScrollPane = useCallback((pane: MarkdownScrollPane) => {
+    activeMarkdownScrollPaneRef.current = pane;
+  }, []);
 
   useEffect(() => {
     const article = markdownArticleRef.current;
@@ -10660,6 +11467,28 @@ function MarkdownViewer({
     }
   }, [html, t]);
 
+  useEffect(() => {
+    if (mode !== 'split') {
+      if (scrollSyncFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrollSyncFrameRef.current);
+        scrollSyncFrameRef.current = null;
+      }
+      if (programmaticScrollClearFrameRef.current !== null) {
+        window.cancelAnimationFrame(programmaticScrollClearFrameRef.current);
+        programmaticScrollClearFrameRef.current = null;
+      }
+      pendingScrollSyncRef.current = null;
+      programmaticScrollRef.current = null;
+      activeMarkdownScrollPaneRef.current = 'editor';
+      previousModeRef.current = mode;
+      return;
+    }
+    const sourcePane = activeMarkdownScrollPaneRef.current ?? (previousModeRef.current === 'preview' ? 'preview' : 'editor');
+    const targetPane = sourcePane === 'preview' ? 'editor' : 'preview';
+    scheduleMarkdownScrollSync(sourcePane, targetPane);
+    previousModeRef.current = mode;
+  }, [html, mode, scheduleMarkdownScrollSync]);
+
   async function handleMarkdownBodyClick(event: ReactMouseEvent<HTMLElement>) {
     const target = event.target;
     if (!(target instanceof Element)) return;
@@ -10669,7 +11498,7 @@ function MarkdownViewer({
     if (!(block instanceof HTMLElement)) return;
     const pre = block.querySelector('pre');
     if (!pre) return;
-    const didCopy = await copyTextToClipboard(pre.textContent ?? '');
+    const didCopy = await copyTextToClipboard((pre.textContent ?? '').replace(/\n$/, ''));
     if (!didCopy) return;
     if (copiedMarkdownBlockRef.current && copiedMarkdownBlockRef.current !== block) {
       setMarkdownCodeBlockCopiedState(copiedMarkdownBlockRef.current, false, t);
@@ -10694,17 +11523,50 @@ function MarkdownViewer({
         <div className="viewer-toolbar-left">
           {isStreaming ? <span className="viewer-meta">{t('fileViewer.markdownStreamingMeta')}</span> : null}
           {isError ? <span className="viewer-meta">{t('fileViewer.markdownErrorMeta')}</span> : null}
+          <div className="viewer-tabs markdown-mode-tabs" role="tablist" aria-label={t('fileViewer.markdownViewMode')}>
+            {(['edit', 'split', 'preview'] as const).map((item) => (
+              <button
+                key={item}
+                type="button"
+                role="tab"
+                aria-selected={mode === item}
+                className={`viewer-tab ${mode === item ? 'active' : ''}`}
+                onClick={() => setMode(item)}
+              >
+                {item === 'edit'
+                  ? t('fileViewer.source')
+                  : item === 'split'
+                    ? t('fileViewer.split')
+                    : t('fileViewer.preview')}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="viewer-toolbar-actions">
-          <button
-            type="button"
-            className="viewer-action"
-            onClick={() => setReloadKey((n) => n + 1)}
-            title={t('fileViewer.reloadDisk')}
-          >
-            <Icon name="reload" size={13} />
-            <span>{t('fileViewer.reload')}</span>
-          </button>
+          {autoSaveStatus === 'error' ? (
+            <button
+              type="button"
+              className="viewer-action markdown-autosave markdown-autosave-error"
+              onClick={() => {
+                if (text !== null) saveMarkdownText(text);
+              }}
+              title={t('fileViewer.save')}
+            >
+              <Icon name="alert-triangle" size={13} />
+              <span>{autoSaveLabel}</span>
+            </button>
+          ) : (
+            <span
+              className={`viewer-meta markdown-autosave markdown-autosave-${autoSaveStatus}`}
+            >
+              {autoSaveStatus === 'saving' ? (
+                <Icon name="spinner" size={13} className="icon-spin" />
+              ) : autoSaveStatus === 'saved' ? (
+                <Icon name="check" size={13} />
+              ) : null}
+              <span>{autoSaveLabel}</span>
+            </span>
+          )}
           <button
             type="button"
             className="viewer-action"
@@ -10746,25 +11608,74 @@ function MarkdownViewer({
           ) : null}
         </div>
       </div>
-      <div className="viewer-body">
-        {html === null ? (
+      <div className={`viewer-body markdown-workbench markdown-workbench-${mode}`}>
+        {text === null || html === null ? (
           <div className="viewer-empty">{t('fileViewer.loading')}</div>
         ) : (
           <>
-            {isStreaming ? <div className="markdown-status">{t('fileViewer.markdownStreamingStatus')}</div> : null}
-            {isError ? <div className="markdown-status markdown-status-error">{t('fileViewer.markdownErrorStatus')}</div> : null}
-            {/* Safe by contract: renderMarkdownToSafeHtml escapes raw HTML and rejects unsafe link protocols. */}
-            <article
-              ref={markdownArticleRef}
-              className="markdown-rendered"
-              onClick={(event) => void handleMarkdownBodyClick(event)}
-              dangerouslySetInnerHTML={{ __html: html }}
-            />
+            {showEditor ? (
+              <section className="markdown-editor-pane" aria-label={t('fileViewer.markdownEditor')}>
+                <textarea
+                  ref={editorRef}
+                  className="markdown-editor"
+                  value={text}
+                  aria-label={t('fileViewer.markdownEditor')}
+                  placeholder={t('fileViewer.markdownEditorPlaceholder')}
+                  spellCheck
+                  autoFocus
+                  onFocus={() => activateMarkdownScrollPane('editor')}
+                  onChange={(event) => {
+                    activateMarkdownScrollPane('editor');
+                    setText(event.currentTarget.value);
+                  }}
+                  onScroll={handleMarkdownEditorScroll}
+                  onPaste={handleEditorPaste}
+                  onDrop={handleEditorDrop}
+                />
+              </section>
+            ) : null}
+            {showPreview ? (
+              <div className="markdown-preview-pane-wrap">
+                <section
+                  ref={markdownPreviewPaneRef}
+                  className="markdown-preview-pane"
+                  aria-label={t('fileViewer.markdownPreview')}
+                  onPointerDown={() => activateMarkdownScrollPane('preview')}
+                  onWheel={() => activateMarkdownScrollPane('preview')}
+                  onTouchStart={() => activateMarkdownScrollPane('preview')}
+                  onKeyDown={() => activateMarkdownScrollPane('preview')}
+                  onFocus={() => activateMarkdownScrollPane('preview')}
+                  onScroll={handleMarkdownPreviewScroll}
+                >
+                  {isStreaming ? <div className="markdown-status">{t('fileViewer.markdownStreamingStatus')}</div> : null}
+                  {isError ? <div className="markdown-status markdown-status-error">{t('fileViewer.markdownErrorStatus')}</div> : null}
+                  {/* Safe by contract: renderMarkdownToSafeHtml escapes raw HTML and rejects unsafe link protocols. */}
+                  <article
+                    ref={markdownArticleRef}
+                    className="markdown-rendered"
+                    onClick={(event) => void handleMarkdownBodyClick(event)}
+                    dangerouslySetInnerHTML={{ __html: html }}
+                  />
+                </section>
+              </div>
+            ) : null}
           </>
         )}
       </div>
     </div>
   );
+}
+
+function isMarkdownImageFile(file: File): boolean {
+  return file.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(file.name);
+}
+
+function markdownImageAlt(name: string): string {
+  return name
+    .replace(/\.[^.]+$/, '')
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim() || 'image';
 }
 
 function CodeWithLines({ text }: { text: string }) {
