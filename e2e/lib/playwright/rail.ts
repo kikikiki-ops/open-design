@@ -20,6 +20,14 @@ export async function ensureRailOpen(page: Page): Promise<void> {
 export async function openNewProjectModal(page: Page): Promise<void> {
   if (await page.getByTestId('new-project-panel').isVisible().catch(() => false)) return;
   await ensureRailOpen(page);
+  const railCreateButton = page.getByTestId('entry-nav-new-project');
+  if (await railCreateButton.isVisible().catch(() => false)) {
+    await railCreateButton.evaluate((element: HTMLElement) => element.click());
+    await expect(page.getByTestId('new-project-modal')).toBeVisible();
+    await expect(page.getByTestId('new-project-panel')).toBeVisible();
+    return;
+  }
+
   const projectsNav = page.getByTestId('entry-nav-projects');
   await expect(projectsNav).toBeVisible();
   await projectsNav.evaluate((element: HTMLElement) => element.click());
