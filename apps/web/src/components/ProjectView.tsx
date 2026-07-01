@@ -1027,22 +1027,44 @@ function byokModelSeedForProtocol(
   return mediaModelProviderId(picked) === protocol ? picked : undefined;
 }
 
-function byokMediaDefaultsForRun({
-  imageModel,
-  videoModel,
-  speechModel,
-  speechVoice,
-}: {
-  imageModel: string;
-  videoModel: string;
-  speechModel: string;
-  speechVoice: string;
+function firstNonBlank(...values: Array<string | null | undefined>): string {
+  return values.find((value) => value?.trim())?.trim() ?? '';
+}
+
+function byokMediaDefaultsForRun(input: {
+  imageModelOverride: string;
+  videoModelOverride: string;
+  speechModelOverride: string;
+  speechVoiceOverride: string;
+  config: Pick<AppConfig, 'byokImageModel' | 'byokVideoModel' | 'byokSpeechModel' | 'byokSpeechVoice'>;
+  imageModelOptions: readonly { id: string }[];
+  videoModelOptions: readonly { id: string }[];
+  speechModelOptions: readonly { id: string }[];
 }): ByokMediaDefaults {
+  const imageModel = firstNonBlank(
+    input.imageModelOverride,
+    input.config.byokImageModel,
+    input.imageModelOptions[0]?.id,
+  );
+  const videoModel = firstNonBlank(
+    input.videoModelOverride,
+    input.config.byokVideoModel,
+    input.videoModelOptions[0]?.id,
+  );
+  const speechModel = firstNonBlank(
+    input.speechModelOverride,
+    input.config.byokSpeechModel,
+    input.speechModelOptions[0]?.id,
+  );
+  const speechVoice = firstNonBlank(
+    input.speechVoiceOverride,
+    input.config.byokSpeechVoice,
+  );
   return {
-    ...(imageModel.trim() ? { imageModel: imageModel.trim() } : {}),
-    ...(videoModel.trim() ? { videoModel: videoModel.trim() } : {}),
-    ...(speechModel.trim() ? { speechModel: speechModel.trim() } : {}),
-    ...(speechVoice.trim() ? { speechVoice: speechVoice.trim() } : {}),
+    ...(imageModel ? { imageModel } : {}),
+    ...(videoModel ? { videoModel } : {}),
+    ...(speechModel ? { speechModel } : {}),
+    ...(speechVoice ? { speechVoice } : {}),
   };
 }
 
@@ -4828,10 +4850,14 @@ export function ProjectView({
           ...(daemonByokOpenCode
             ? {
                 byokMediaDefaults: byokMediaDefaultsForRun({
-                  imageModel: byokImageModelOverride,
-                  videoModel: byokVideoModelOverride,
-                  speechModel: byokSpeechModelOverride,
-                  speechVoice: byokSpeechVoiceOverride,
+                  imageModelOverride: byokImageModelOverride,
+                  videoModelOverride: byokVideoModelOverride,
+                  speechModelOverride: byokSpeechModelOverride,
+                  speechVoiceOverride: byokSpeechVoiceOverride,
+                  config,
+                  imageModelOptions: byokImageModelOptionsPV,
+                  videoModelOptions: byokVideoModelOptionsPV,
+                  speechModelOptions: byokSpeechModelOptionsPV,
                 }),
               }
             : {}),
@@ -4963,10 +4989,14 @@ export function ProjectView({
           reasoning: null,
           ...(byokOpenCodeProvider ? { byokProvider: byokOpenCodeProvider } : {}),
           byokMediaDefaults: byokMediaDefaultsForRun({
-            imageModel: byokImageModelOverride,
-            videoModel: byokVideoModelOverride,
-            speechModel: byokSpeechModelOverride,
-            speechVoice: byokSpeechVoiceOverride,
+            imageModelOverride: byokImageModelOverride,
+            videoModelOverride: byokVideoModelOverride,
+            speechModelOverride: byokSpeechModelOverride,
+            speechVoiceOverride: byokSpeechVoiceOverride,
+            config,
+            imageModelOptions: byokImageModelOptionsPV,
+            videoModelOptions: byokVideoModelOptionsPV,
+            speechModelOptions: byokSpeechModelOptionsPV,
           }),
           titleGeneration: isFirstTurn ? { enabled: true } : undefined,
           locale,
@@ -5044,6 +5074,13 @@ export function ProjectView({
       scheduleProjectTimeout,
       onProjectsRefresh,
       onProjectChange,
+      byokImageModelOverride,
+      byokVideoModelOverride,
+      byokSpeechModelOverride,
+      byokSpeechVoiceOverride,
+      byokImageModelOptionsPV,
+      byokVideoModelOptionsPV,
+      byokSpeechModelOptionsPV,
     ],
   );
 
