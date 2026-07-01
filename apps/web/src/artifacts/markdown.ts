@@ -9,16 +9,54 @@ export function renderMarkdownToSafeHtml(markdown: string): string {
 }
 
 function escapeTableCodePipes(markdown: string): string {
-  return markdown
-    .replace(/\r\n/g, '\n')
-    .split('\n')
-    .map((line) => {
-      if (!line.includes('|') || !line.includes('`')) return line;
-      return line.replace(/`([^`]*\|[^`]*)`/g, (match, code: string) =>
-        `\`${code.replace(/\|/g, '\\|')}\``,
-      );
+  const lines = markdown.replace(/\r\n/g, '\n').split('\n');
+  let inFence = false;
+  let inTable = false;
+
+  return lines
+    .map((line, index) => {
+      if (/^\s*(```|~~~)/.test(line)) {
+        inFence = !inFence;
+        inTable = false;
+        return line;
+      }
+
+      if (inFence) return line;
+
+      const startsTable = isLikelyTableHeader(line) && isTableDelimiter(lines[index + 1] ?? '');
+      if (startsTable) {
+        inTable = true;
+        return escapeCodeSpanPipes(line);
+      }
+
+      if (!inTable) return line;
+
+      if (!line.includes('|') || isTableDelimiter(line)) {
+        if (!isTableDelimiter(line)) inTable = false;
+        return line;
+      }
+
+      return escapeCodeSpanPipes(line);
     })
     .join('\n');
+}
+
+function isLikelyTableHeader(line: string): boolean {
+  return line.includes('|') && line.trim().replace(/^\|/, '').replace(/\|$/, '').includes('|');
+}
+
+function isTableDelimiter(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed.includes('-') || !trimmed.includes('|')) return false;
+  const cells = trimmed.replace(/^\|/, '').replace(/\|$/, '').split('|');
+  return cells.length > 1 && cells.every((cell) => /^:?-{3,}:?$/.test(cell.trim()));
+}
+
+function escapeCodeSpanPipes(line: string): string {
+  if (!line.includes('|') || !line.includes('`')) return line;
+  return line.replace(/`([^`]*\|[^`]*)`/g, (_match, code: string) =>
+    `\`${code.replace(/\|/g, '\\|')}\``,
+  );
 }
 
 function postProcessMarkdownHtml(html: string): string {

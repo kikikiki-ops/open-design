@@ -163,4 +163,17 @@ describe('renderMarkdownToSafeHtml', () => {
     const out = renderMarkdownToSafeHtml(md);
     expect(out).toContain('<tr><td>ok</td><td><code>&quot;ready&quot; | &quot;done&quot;</code></td></tr>');
   });
+
+  it('does not rewrite inline code pipes outside tables', () => {
+    const out = renderMarkdownToSafeHtml('Use `a|b` in a normal paragraph.');
+    expect(out).toContain('<p>Use <code>a|b</code> in a normal paragraph.</p>');
+    expect(out).not.toContain('a\\|b');
+  });
+
+  it('does not rewrite fenced code pipes', () => {
+    const md = ['```sh', 'echo `date | cut -d" " -f1`', '```'].join('\n');
+    const out = renderMarkdownToSafeHtml(md);
+    expect(out).toContain('date | cut');
+    expect(out).not.toContain('date \\| cut');
+  });
 });
