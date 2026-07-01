@@ -1262,9 +1262,15 @@
       color-mix(in srgb, var(--accent-tint) 10%, var(--bg-panel))
     );
 }
+.agent-card-installed:has(.agent-card-amr-auth) .agent-card-main {
+  flex-wrap: nowrap;
+}
 .agent-card-installed.active .agent-card-select {
   min-height: 78px;
   padding: 14px 18px 12px 22px;
+}
+.agent-card-installed:has(.agent-card-amr-auth) .agent-card-select {
+  flex: 1;
 }
 .agent-card-installed.active .agent-icon {
   border-radius: var(--radius-md);
