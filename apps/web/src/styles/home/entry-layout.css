@@ -2044,17 +2044,16 @@
 }
 
 /* The two alternatives ("local CLI" / "your own key") are links to other
-   runtimes — give them the product accent + underline-on-hover so they read as
-   clickable instead of muted body text. (The shared `__cancel` button keeps the
-   muted style; only the alts row is overridden.) */
+   runtimes. Keep them dark and underlined on hover so they read as clickable
+   without competing with the primary sign-in button. */
 .onboarding-cloud__alts .onboarding-cloud__secondary {
   margin-top: 0;
-  color: var(--accent);
+  color: var(--text-strong);
   font-weight: 600;
 }
 
 .onboarding-cloud__alts .onboarding-cloud__secondary:hover {
-  color: var(--accent-hover);
+  color: var(--text-strong);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
