@@ -2941,6 +2941,15 @@ function OnboardingView({
 
           {step === 3 ? (
             <div className="onboarding-view__panel onboarding-view__build">
+              <button
+                type="button"
+                className="onboarding-view__back-to-cloud"
+                onClick={handleBackWithTracking}
+                disabled={onboardingNavigationLocked}
+              >
+                <Icon name="chevron-left" size={14} />
+                <span>{t('settings.onboardingBack')}</span>
+              </button>
               <span className="onboarding-view__build-badge">
                 <Icon name="sparkles" size={13} aria-hidden />
                 <span>{t('settings.onboardingDesignTitle')}</span>
@@ -3003,14 +3012,6 @@ function OnboardingView({
                 ))}
               </ul>
               <div className="onboarding-view__build-actions">
-                <button
-                  type="button"
-                  className="onboarding-view__ghost onboarding-view__build-back"
-                  onClick={handleBackWithTracking}
-                  disabled={onboardingNavigationLocked}
-                >
-                  {t('settings.onboardingBack')}
-                </button>
                 <button
                   type="button"
                   className="onboarding-view__secondary"

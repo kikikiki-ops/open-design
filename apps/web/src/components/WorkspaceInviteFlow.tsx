@@ -97,7 +97,7 @@ export function WorkspaceInviteFlow({ scenario, initiallySignedIn = false }: Pro
       <div className={styles.shell}>
         <header className={styles.brand}>
           <span>
-            <span className={styles.brandMark}>OD</span>
+            <span className={styles.brandMark} role="img" aria-label="Open Design" />
             <span>Open Design Web</span>
           </span>
         </header>
@@ -197,9 +197,6 @@ export function WorkspaceInviteFlow({ scenario, initiallySignedIn = false }: Pro
 
           {stage === 'confirm' ? (
             <div className={styles.result}>
-              <span className={`${styles.resultIcon} ${styles.resultIconSuccess}`}>
-                <Icon name="check" size={28} />
-              </span>
               <h1>加入团队，开始协作</h1>
               <p>确认加入后，将尝试打开本地 Open Design。</p>
 
@@ -286,7 +283,7 @@ export function WorkspaceInviteFlow({ scenario, initiallySignedIn = false }: Pro
 
         <p className={styles.securityNote}>
           <Icon name="info" size={13} />
-          如果无法打开客户端，将显示下载入口
+          还没安装也没关系——若本地客户端未能打开，会自动显示下载入口。
         </p>
       </div>
     </section>
