@@ -1369,6 +1369,7 @@ export function EntryShell({
                     onCreate={onCreateDesignSystem}
                     onOpenSystem={onOpenDesignSystem}
                     onSystemsRefresh={onDesignSystemsRefresh}
+                    seedDemoContent
                   />
                 </div>
               ) : (
