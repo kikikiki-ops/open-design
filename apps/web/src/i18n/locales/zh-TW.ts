@@ -566,6 +566,9 @@ export const zhTW: Dict = {
   "entry.discordOnlineLabel": "{count} 在線",
   "entry.followXLabel": "在 X 上追蹤 @OpenDesignHQ",
   "entry.followThreadsLabel": "Follow Open Design on Threads",
+  "entry.followInstagramLabel": "在 Instagram 上追蹤 @opendesign.ai",
+  "entry.followLinkedinLabel": "在 LinkedIn 上追蹤 Open Design",
+  "entry.followXiaohongshuLabel": "在小紅書上追蹤 Open Design",
   "entry.youtubeLabel": "Open Design on YouTube",
   "entry.resizeAria": "調整側邊欄寬度",
   "entry.loadingWorkspace": "正在載入工作區…",
@@ -2651,6 +2654,16 @@ export const zhTW: Dict = {
   "designFiles.usefulInfoTip14":
     "滿意的專案可透過「分享」選單儲存為範本，下次直接複用。",
   "designFiles.usefulInfoTip15": "部署後可以直接生成社群分享卡片。",
+  "designFiles.usefulInfoTip16":
+    "在 Threads 上追蹤 @opendesign.ai，看團隊幕後動態。",
+  "designFiles.usefulInfoTip17":
+    "在 Instagram 上追蹤 @opendesign.ai，獲取設計靈感。",
+  "designFiles.usefulInfoTip18":
+    "在 YouTube 上訂閱 Open Design，觀看教學和示範。",
+  "designFiles.usefulInfoTip19":
+    "在 LinkedIn 上追蹤 Open Design，了解產品動態。",
+  "designFiles.usefulInfoTip20":
+    "在小紅書上追蹤 Open Design，獲取技巧和靈感。",
   "quickSwitcher.placeholder": "開啟分頁或檔案…",
   "quickSwitcher.empty": "此專案中沒有檔案",
   "quickSwitcher.noMatches": "無符合項目",

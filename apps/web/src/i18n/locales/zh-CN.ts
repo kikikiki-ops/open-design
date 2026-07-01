@@ -563,6 +563,9 @@ export const zhCN: Dict = {
   "entry.discordOnlineLabel": "{count} 在线",
   "entry.followXLabel": "在 X 上关注 @OpenDesignHQ",
   "entry.followThreadsLabel": "Follow Open Design on Threads",
+  "entry.followInstagramLabel": "在 Instagram 上关注 @opendesign.ai",
+  "entry.followLinkedinLabel": "在 LinkedIn 上关注 Open Design",
+  "entry.followXiaohongshuLabel": "在小红书上关注 Open Design",
   "entry.youtubeLabel": "Open Design on YouTube",
   "entry.resizeAria": "调整侧边栏宽度",
   "entry.loadingWorkspace": "正在加载工作区…",
@@ -2642,6 +2645,16 @@ export const zhCN: Dict = {
   "designFiles.usefulInfoTip14":
     "满意的项目可通过「分享」菜单保存为模板，下次直接复用。",
   "designFiles.usefulInfoTip15": "部署后可以直接生成社媒分享卡片。",
+  "designFiles.usefulInfoTip16":
+    "在 Threads 上关注 @opendesign.ai，看团队幕后动态。",
+  "designFiles.usefulInfoTip17":
+    "在 Instagram 上关注 @opendesign.ai，获取设计灵感。",
+  "designFiles.usefulInfoTip18":
+    "在 YouTube 上订阅 Open Design，观看教程和演示。",
+  "designFiles.usefulInfoTip19":
+    "在 LinkedIn 上关注 Open Design，了解产品动态。",
+  "designFiles.usefulInfoTip20":
+    "在小红书上关注 Open Design，获取技巧和灵感。",
   "quickSwitcher.placeholder": "打开标签页或文件…",
   "quickSwitcher.empty": "此项目中没有文件",
   "quickSwitcher.noMatches": "无匹配项",
