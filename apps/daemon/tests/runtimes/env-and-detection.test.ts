@@ -505,6 +505,37 @@ test('detectAgents includes sanitized install and docs metadata from split runti
   }
 });
 
+test('detectAgents preserves runtime context-management metadata', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'od-agent-context-meta-'));
+  try {
+    await withEnvSnapshot(['PATH', 'OD_AGENT_HOME'], async () => {
+      const bin = join(dir, process.platform === 'win32' ? 'codex.cmd' : 'codex');
+      if (process.platform === 'win32') {
+        writeFileSync(
+          bin,
+          '@echo off\r\nif "%~1"=="--version" echo codex 1.0.0-test& exit /b 0\r\nif "%~1"=="login" echo Logged in& exit /b 0\r\nif "%~1"=="debug" echo gpt-5.5& exit /b 0\r\nexit /b 0\r\n',
+        );
+      } else {
+        writeFileSync(
+          bin,
+          '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "codex 1.0.0-test"; exit 0; fi\nif [ "$1" = "login" ]; then echo "Logged in"; exit 0; fi\nif [ "$1" = "debug" ]; then echo "gpt-5.5"; exit 0; fi\nexit 0\n',
+        );
+        chmodSync(bin, 0o755);
+      }
+      process.env.PATH = dir;
+      process.env.OD_AGENT_HOME = dir;
+
+      const agents = await detectAgents();
+      const detected = agents.find((agent) => agent.id === 'codex');
+
+      assert.equal(detected?.available, true);
+      assert.deepEqual(detected?.contextManagement, { autoCompaction: true });
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 fsTest('detectAgents keeps Kimi available when the installed CLI rejects the legacy acp positional arg', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'od-detect-kimi-modern-'));
   try {

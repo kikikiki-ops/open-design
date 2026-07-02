@@ -2064,28 +2064,35 @@ export function daemonAgentPayloadToPersistedAgentEvent(data) {
     // Prompt-cache counters: Anthropic-style names first, generic fallbacks
     // second (mirrors run-analytics-observability.ts). Persisted so the chat
     // footer can render `in 5.2k (cache 4.1k)` after a reload.
-    const cacheReadTokens =
-      typeof usage.cache_read_input_tokens === 'number'
-        ? usage.cache_read_input_tokens
-        : typeof usage.cache_read_tokens === 'number'
-          ? usage.cache_read_tokens
-          : undefined;
-    const cacheWriteTokens =
-      typeof usage.cache_creation_input_tokens === 'number'
-        ? usage.cache_creation_input_tokens
-        : typeof usage.cache_write_tokens === 'number'
-          ? usage.cache_write_tokens
-          : undefined;
+    const inputTokens = firstUsageNumber(usage, ['input_tokens', 'prompt_tokens']);
+    const outputTokens = firstUsageNumber(usage, ['output_tokens', 'completion_tokens']);
+    const inputTokensEffective = firstUsageNumber(usage, ['input_tokens_effective']);
+    const cacheReadTokens = firstUsageNumber(usage, [
+      'cache_read_input_tokens',
+      'cache_read_tokens',
+      'cached_input_tokens',
+      'cached_read_tokens',
+    ]);
+    const cacheWriteTokens = firstUsageNumber(usage, [
+      'cache_creation_input_tokens',
+      'cache_write_tokens',
+      'cached_write_tokens',
+    ]);
+    const uncachedInputTokens = firstUsageNumber(usage, ['uncached_input_tokens']);
+    const estimatedContextTokens = firstUsageNumber(usage, ['estimated_context_tokens']);
     const costSource =
       data.costSource === 'provider' || data.costSource === 'estimated' || data.costSource === 'unknown'
         ? data.costSource
         : undefined;
     return {
       kind: 'usage',
-      inputTokens: usage.input_tokens,
-      outputTokens: usage.output_tokens,
+      ...(typeof inputTokens === 'number' ? { inputTokens } : {}),
+      ...(typeof inputTokensEffective === 'number' ? { inputTokensEffective } : {}),
+      ...(typeof outputTokens === 'number' ? { outputTokens } : {}),
       ...(typeof cacheReadTokens === 'number' ? { cacheReadTokens } : {}),
       ...(typeof cacheWriteTokens === 'number' ? { cacheWriteTokens } : {}),
+      ...(typeof uncachedInputTokens === 'number' ? { uncachedInputTokens } : {}),
+      ...(typeof estimatedContextTokens === 'number' ? { estimatedContextTokens } : {}),
       ...(typeof data.costUsd === 'number' ? { costUsd: data.costUsd } : {}),
       ...(costSource ? { costSource } : {}),
       ...(typeof data.durationMs === 'number' ? { durationMs: data.durationMs } : {}),
@@ -2142,6 +2149,14 @@ function normalizePersistedToolInput(input) {
     return { ...input, file_path: input.filePath };
   }
   return input;
+}
+
+function firstUsageNumber(usage, keys) {
+  for (const key of keys) {
+    const value = usage?.[key];
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+  }
+  return undefined;
 }
 
 function pinAssistantMessageOnRunCreate(db, run) {

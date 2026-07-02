@@ -70,6 +70,63 @@ describe('buildContextUsageSummary', () => {
     expect(summary.segments.some((segment) => segment.id === 'other')).toBe(true);
   });
 
+  it('attributes large cached prefixes instead of burying them in Other', () => {
+    const messages: ChatMessage[] = [
+      {
+        id: 'user-1',
+        role: 'user',
+        content: '做一个 8 页演示稿',
+      },
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        content: 'Done.',
+        events: [
+          {
+            kind: 'usage',
+            inputTokens: 839000,
+            outputTokens: 14000,
+            cacheReadTokens: 825000,
+          },
+        ],
+      },
+    ];
+    const config: AppConfig = {
+      ...apiConfig,
+      mode: 'daemon',
+      model: '',
+      agentId: 'codex',
+      agentModels: {
+        codex: { model: 'default' },
+      },
+    };
+    const agentsById = new Map<string, AgentInfo>([
+      [
+        'codex',
+        {
+          id: 'codex',
+          name: 'Codex',
+          bin: 'codex',
+          available: true,
+          models: [{ id: 'default', label: 'Default (CLI config)' }],
+          contextManagement: { autoCompaction: true },
+        },
+      ],
+    ]);
+
+    const summary = buildContextUsageSummary({ messages, config, agentsById });
+    const cache = summary.segments.find((segment) => segment.id === 'cache');
+    const other = summary.segments.find((segment) => segment.id === 'other');
+
+    expect(summary.contextWindow).toBe(1000000);
+    expect(summary.contextWindowEstimated).toBe(true);
+    expect(summary.usedTokens).toBe(853000);
+    expect(summary.usedRatio).toBeCloseTo(0.853, 3);
+    expect(summary.warningLevel).toBe('warning');
+    expect(cache?.tokens).toBe(825000);
+    expect(other?.tokens ?? 0).toBeLessThan(20000);
+  });
+
   it('resolves daemon agent model labels and estimates unknown windows conservatively', () => {
     const config: AppConfig = {
       ...apiConfig,
@@ -111,6 +168,112 @@ describe('buildContextUsageSummary', () => {
       contextWindow: 128000,
       contextWindowEstimated: true,
       source: 'estimated',
+      warningLevel: null,
+      autoCompaction: false,
+      autoCompactionStatus: 'idle',
+    });
+  });
+
+  it('marks auto compaction as running while a warning-level agent turn is active', () => {
+    const config: AppConfig = {
+      ...apiConfig,
+      mode: 'daemon',
+      model: '',
+      agentId: 'codex',
+      agentModels: {
+        codex: { model: 'gpt-5.5' },
+      },
+    };
+    const agentsById = new Map<string, AgentInfo>([
+      [
+        'codex',
+        {
+          id: 'codex',
+          name: 'Codex',
+          bin: 'codex',
+          available: true,
+          contextManagement: { autoCompaction: true },
+          models: [{ id: 'gpt-5.5', label: 'GPT-5.5', contextWindow: 128000 }],
+        },
+      ],
+    ]);
+
+    const summary = buildContextUsageSummary({
+      messages: [
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: 'Previous high-context turn.',
+          runStatus: 'succeeded',
+          events: [{ kind: 'usage', inputTokens: 100000, outputTokens: 1000 }],
+        },
+        {
+          id: 'assistant-2',
+          role: 'assistant',
+          content: '',
+          runStatus: 'running',
+        },
+      ],
+      config,
+      agentsById,
+    });
+
+    expect(summary).toMatchObject({
+      autoCompaction: true,
+      autoCompactionStatus: 'running',
+      warningLevel: 'warning',
+    });
+  });
+
+  it('marks auto compaction as completed after provider usage drops from a critical peak', () => {
+    const config: AppConfig = {
+      ...apiConfig,
+      mode: 'daemon',
+      model: '',
+      agentId: 'codex',
+      agentModels: {
+        codex: { model: 'gpt-5.5' },
+      },
+    };
+    const agentsById = new Map<string, AgentInfo>([
+      [
+        'codex',
+        {
+          id: 'codex',
+          name: 'Codex',
+          bin: 'codex',
+          available: true,
+          contextManagement: { autoCompaction: true },
+          models: [{ id: 'gpt-5.5', label: 'GPT-5.5', contextWindow: 128000 }],
+        },
+      ],
+    ]);
+
+    const summary = buildContextUsageSummary({
+      messages: [
+        {
+          id: 'assistant-1',
+          role: 'assistant',
+          content: 'High-context turn.',
+          runStatus: 'succeeded',
+          events: [{ kind: 'usage', inputTokens: 100000, outputTokens: 1000 }],
+        },
+        {
+          id: 'assistant-2',
+          role: 'assistant',
+          content: 'Compacted and continued.',
+          runStatus: 'succeeded',
+          events: [{ kind: 'usage', inputTokens: 52000, outputTokens: 1000 }],
+        },
+      ],
+      config,
+      agentsById,
+    });
+
+    expect(summary).toMatchObject({
+      autoCompaction: true,
+      autoCompactionStatus: 'completed',
+      autoCompactionBeforeTokens: 100000,
       warningLevel: null,
     });
   });

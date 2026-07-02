@@ -107,9 +107,12 @@ export type DaemonAgentPayload =
       type: 'usage';
       usage?: {
         input_tokens?: number;
+        input_tokens_effective?: number;
         output_tokens?: number;
         cache_read_input_tokens?: number;
         cache_creation_input_tokens?: number;
+        uncached_input_tokens?: number;
+        estimated_context_tokens?: number;
       };
       costUsd?: number;
       costSource?: 'provider' | 'estimated' | 'unknown';

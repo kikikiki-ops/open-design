@@ -1583,6 +1583,11 @@
   align-items: flex-end;
   gap: 8px;
 }
+.composer .session-mode-toggle__popover {
+  right: 0;
+  left: auto;
+  flex-direction: row-reverse;
+}
 .session-mode-toggle__menu {
   width: max-content;
   min-width: 168px;
@@ -1704,9 +1709,6 @@
   max-height: min(360px, calc(100vh - 84px));
   overflow-y: auto;
   overscroll-behavior: contain;
-}
-.composer .session-mode-toggle__popover-card {
-  display: none;
 }
 .session-mode-card__head {
   display: flex;

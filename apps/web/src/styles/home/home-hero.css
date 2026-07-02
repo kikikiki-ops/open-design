@@ -954,9 +954,6 @@
   flex-direction: row-reverse;
   align-items: flex-end;
 }
-.home-hero__mode-switcher .session-mode-toggle__popover-card {
-  display: none;
-}
 .home-hero__execution-switcher {
   display: inline-flex;
   min-width: 0;

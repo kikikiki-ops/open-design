@@ -1838,7 +1838,8 @@ export function ChatPane({
     [messages],
   );
   const contextNoticePhase =
-    contextUsage.warningLevel ?? (contextUsage.autoCompactionStatus === 'completed' ? 'auto-compaction-completed' : null);
+    contextUsage.warningLevel ??
+    (contextUsage.autoCompactionStatus === 'completed' ? 'auto-compaction-completed' : null);
   const contextWarningKey = contextNoticePhase
     ? [
         activeConversationId ?? 'no-conversation',

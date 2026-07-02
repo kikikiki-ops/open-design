@@ -12,7 +12,7 @@ describe('SessionModeToggle', () => {
   it('shows only the active mode until the menu is opened', () => {
     render(<SessionModeToggle mode="design" onChange={vi.fn()} />);
 
-    expect(screen.getByTestId('session-mode-trigger').textContent).toContain('Design');
+    expect(screen.getByTestId('session-mode-trigger').getAttribute('aria-label')).toBe('Design mode');
     expect(screen.queryByRole('menu')).toBeNull();
 
     fireEvent.click(screen.getByTestId('session-mode-trigger'));

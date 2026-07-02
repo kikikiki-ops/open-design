@@ -7,6 +7,7 @@ import {
 
 export type ContextUsageSegmentId =
   | 'system'
+  | 'cache'
   | 'tools'
   | 'rules'
   | 'skills'
@@ -70,9 +71,18 @@ const BASE_DESIGN_CONTEXT_TOKENS = 1200;
 
 const WARNING_RATIO = 0.75;
 const CRITICAL_RATIO = 0.9;
+const ESTIMATED_CONTEXT_WINDOW_BUCKETS = [
+  FALLBACK_CONTEXT_WINDOW,
+  200000,
+  256000,
+  400000,
+  1000000,
+  1048576,
+  2000000,
+];
 
 export function buildContextUsageSummary(input: ContextUsageInput): ContextUsageSummary {
-  const model = resolveContextUsageModel(
+  const resolvedModel = resolveContextUsageModel(
     input.config,
     input.agentsById,
     input.catalogContextWindow,
@@ -89,6 +99,16 @@ export function buildContextUsageSummary(input: ContextUsageInput): ContextUsage
     BASE_DESIGN_CONTEXT_TOKENS +
     Math.max(0, contextCounts.designContextCount) * 700;
   const inputConversationTokens = Math.max(0, conversationTokens - outputTokens);
+  const providerContextInputTokens =
+    latestUsage.inputTokensEffective ?? resolveProviderContextInputTokens(latestUsage);
+  const model = {
+    ...resolvedModel,
+    contextWindow: adjustedEstimatedContextWindow(
+      resolvedModel.contextWindow,
+      resolvedModel.contextWindowEstimated,
+      providerContextInputTokens != null ? providerContextInputTokens + outputTokens : null,
+    ),
+  };
 
   const inputSegmentCandidates: ContextUsageSegment[] = [
     { id: 'system', tokens: SYSTEM_PROMPT_TOKENS },
@@ -103,14 +123,18 @@ export function buildContextUsageSummary(input: ContextUsageInput): ContextUsage
   const knownInputSegments = inputSegmentCandidates.filter((segment) => segment.tokens > 0);
 
   const knownInputTokens = sumTokens(knownInputSegments);
-  const providerInputTokens = latestUsage.inputTokens;
   const calibratedInputTokens =
-    providerInputTokens != null ? Math.max(providerInputTokens, knownInputTokens) : knownInputTokens;
-  const otherTokens = Math.max(0, calibratedInputTokens - knownInputTokens);
+    providerContextInputTokens != null
+      ? Math.max(providerContextInputTokens, knownInputTokens)
+      : knownInputTokens;
 
   const segments: ContextUsageSegment[] = [
-    ...knownInputSegments,
-    ...(otherTokens > 0 ? [{ id: 'other' as const, tokens: otherTokens }] : []),
+    ...inputSegmentsForProviderUsage(
+      knownInputSegments,
+      calibratedInputTokens,
+      providerContextInputTokens,
+      latestUsage.cacheReadTokens,
+    ),
     ...(outputTokens > 0 ? [{ id: 'output' as const, tokens: outputTokens }] : []),
   ];
   const usedTokens = Math.min(model.contextWindow, sumTokens(segments));
@@ -126,8 +150,8 @@ export function buildContextUsageSummary(input: ContextUsageInput): ContextUsage
     contextWindowEstimated: model.contextWindowEstimated,
     usedTokens,
     usedRatio,
-    source: providerInputTokens != null ? 'provider' : 'estimated',
-    latestInputTokens: providerInputTokens,
+    source: providerContextInputTokens != null ? 'provider' : 'estimated',
+    latestInputTokens: providerContextInputTokens,
     latestOutputTokens: latestUsage.outputTokens,
     segments: mergeTinySegments(segments),
     warningLevel,
@@ -239,22 +263,22 @@ function modelFromId(
 function summarizeAutoCompaction(
   messages: ChatMessage[],
   model: Pick<ContextUsageSummary, 'contextWindow' | 'autoCompaction'>,
-  latestUsage: { inputTokens: number | null; outputTokens: number | null },
+  latestUsage: LatestUsageTokens,
   usedRatio: number,
 ): { status: ContextAutoCompactionStatus; beforeTokens: number | null } {
   if (!model.autoCompaction) return { status: 'idle', beforeTokens: null };
-  if (hasActiveAssistantRun(messages) && usedRatio >= CRITICAL_RATIO) {
+  if (hasActiveAssistantRun(messages) && usedRatio >= WARNING_RATIO) {
     return { status: 'running', beforeTokens: null };
   }
 
-  const latestInput = latestUsage.inputTokens;
+  const latestInput = latestUsage.inputTokensEffective ?? resolveProviderContextInputTokens(latestUsage);
   if (latestInput == null || model.contextWindow <= 0) {
     return { status: 'idle', beforeTokens: null };
   }
   const priorPeak = priorUsagePeak(messages, latestInput);
   if (
     priorPeak != null &&
-    priorPeak / model.contextWindow >= CRITICAL_RATIO &&
+    priorPeak / model.contextWindow >= WARNING_RATIO &&
     latestInput <= priorPeak * 0.75
   ) {
     return { status: 'completed', beforeTokens: priorPeak };
@@ -286,17 +310,34 @@ function usageInputHistory(messages: ChatMessage[]): number[] {
   for (const message of messages) {
     for (const event of message.events ?? []) {
       if (event?.kind !== 'usage') continue;
-      const value = finitePositive(event.inputTokens);
+      const value =
+        finitePositive(event.inputTokensEffective) ??
+        resolveProviderContextInputTokens({
+          inputTokens: finitePositive(event.inputTokens),
+          inputTokensEffective: null,
+          outputTokens: finitePositive(event.outputTokens),
+          cacheReadTokens: finitePositive(event.cacheReadTokens),
+          cacheWriteTokens: finitePositive(event.cacheWriteTokens),
+          uncachedInputTokens: finitePositive(event.uncachedInputTokens),
+          estimatedContextTokens: finitePositive(event.estimatedContextTokens),
+        });
       if (value != null) inputs.push(value);
     }
   }
   return inputs;
 }
 
-function latestUsageTokens(messages: ChatMessage[]): {
+interface LatestUsageTokens {
   inputTokens: number | null;
+  inputTokensEffective: number | null;
   outputTokens: number | null;
-} {
+  cacheReadTokens: number | null;
+  cacheWriteTokens: number | null;
+  uncachedInputTokens: number | null;
+  estimatedContextTokens: number | null;
+}
+
+function latestUsageTokens(messages: ChatMessage[]): LatestUsageTokens {
   for (let mi = messages.length - 1; mi >= 0; mi -= 1) {
     const events = messages[mi]?.events ?? [];
     for (let ei = events.length - 1; ei >= 0; ei -= 1) {
@@ -304,11 +345,97 @@ function latestUsageTokens(messages: ChatMessage[]): {
       if (event?.kind !== 'usage') continue;
       return {
         inputTokens: finitePositive(event.inputTokens),
+        inputTokensEffective: finitePositive(event.inputTokensEffective),
         outputTokens: finitePositive(event.outputTokens),
+        cacheReadTokens: finitePositive(event.cacheReadTokens),
+        cacheWriteTokens: finitePositive(event.cacheWriteTokens),
+        uncachedInputTokens: finitePositive(event.uncachedInputTokens),
+        estimatedContextTokens: finitePositive(event.estimatedContextTokens),
       };
     }
   }
-  return { inputTokens: null, outputTokens: null };
+  return {
+    inputTokens: null,
+    inputTokensEffective: null,
+    outputTokens: null,
+    cacheReadTokens: null,
+    cacheWriteTokens: null,
+    uncachedInputTokens: null,
+    estimatedContextTokens: null,
+  };
+}
+
+function resolveProviderContextInputTokens(usage: LatestUsageTokens): number | null {
+  if (usage.inputTokens == null) return null;
+  const cacheRead = usage.cacheReadTokens ?? 0;
+  const cacheWrite = usage.cacheWriteTokens ?? 0;
+  if (cacheRead > usage.inputTokens) {
+    return usage.inputTokens + cacheRead + cacheWrite;
+  }
+  return usage.inputTokens;
+}
+
+function adjustedEstimatedContextWindow(
+  contextWindow: number,
+  estimated: boolean,
+  observedFootprint: number | null,
+): number {
+  if (!estimated || observedFootprint == null || observedFootprint <= contextWindow) {
+    return contextWindow;
+  }
+  const bucket = ESTIMATED_CONTEXT_WINDOW_BUCKETS.find((candidate) => candidate >= observedFootprint);
+  if (bucket != null) return bucket;
+  return Math.ceil(observedFootprint / 100000) * 100000;
+}
+
+function inputSegmentsForProviderUsage(
+  knownInputSegments: ContextUsageSegment[],
+  calibratedInputTokens: number,
+  providerContextInputTokens: number | null,
+  cacheReadTokens: number | null,
+): ContextUsageSegment[] {
+  if (providerContextInputTokens == null) {
+    const knownInputTokens = sumTokens(knownInputSegments);
+    const otherTokens = Math.max(0, calibratedInputTokens - knownInputTokens);
+    return [
+      ...knownInputSegments,
+      ...(otherTokens > 0 ? [{ id: 'other' as const, tokens: otherTokens }] : []),
+    ];
+  }
+
+  const cacheTokens = Math.min(providerContextInputTokens, cacheReadTokens ?? 0);
+  const nonCacheBudget = Math.max(0, providerContextInputTokens - cacheTokens);
+  const fittedKnownSegments = fitSegmentsToBudget(knownInputSegments, nonCacheBudget);
+  const otherTokens = Math.max(0, nonCacheBudget - sumTokens(fittedKnownSegments));
+  return [
+    ...(cacheTokens > 0 ? [{ id: 'cache' as const, tokens: cacheTokens }] : []),
+    ...fittedKnownSegments,
+    ...(otherTokens > 0 ? [{ id: 'other' as const, tokens: otherTokens }] : []),
+  ];
+}
+
+function fitSegmentsToBudget(
+  segments: ContextUsageSegment[],
+  budget: number,
+): ContextUsageSegment[] {
+  if (budget <= 0) return [];
+  const total = sumTokens(segments);
+  if (total <= budget) return segments;
+  let allocated = 0;
+  return segments
+    .map((segment, index) => {
+      const remainingSegments = segments.length - index - 1;
+      const remainingBudget = Math.max(0, budget - allocated);
+      const tokens = remainingSegments === 0
+        ? remainingBudget
+        : Math.min(
+            remainingBudget,
+            Math.max(1, Math.round((segment.tokens / total) * budget)),
+          );
+      allocated += tokens;
+      return { ...segment, tokens };
+    })
+    .filter((segment) => segment.tokens > 0);
 }
 
 function collectRunContextCounts(input: ContextUsageInput): {

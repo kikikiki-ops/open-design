@@ -5,6 +5,7 @@ const homeHeroCss = readFileSync(
   new URL('../../src/styles/home/home-hero.css', import.meta.url),
   'utf8',
 );
+const chatCss = readFileSync(new URL('../../src/styles/chat.css', import.meta.url), 'utf8');
 
 function cssDeclarations(selector: string): string {
   const blocks: string[] = [];
@@ -27,6 +28,20 @@ function ruleValue(block: string, property: string): string {
 }
 
 describe('HomeHero compact composer controls', () => {
+  it('keeps the session-mode hover detail card visible in home and chat composers', () => {
+    expect(homeHeroCss).not.toMatch(
+      /\.home-hero__mode-switcher\s+\.session-mode-toggle__popover-card\s*\{[^}]*display:\s*none\b/s,
+    );
+    expect(chatCss).not.toMatch(
+      /\.composer\s+\.session-mode-toggle__popover-card\s*\{[^}]*display:\s*none\b/s,
+    );
+
+    const chatPopover = cssDeclarationsFrom(chatCss, '.composer .session-mode-toggle__popover');
+    expect(ruleValue(chatPopover, 'right')).toBe('0');
+    expect(ruleValue(chatPopover, 'left')).toBe('auto');
+    expect(ruleValue(chatPopover, 'flex-direction')).toBe('row-reverse');
+  });
+
   it('keeps the floating @ picker shell stable while result tabs change', () => {
     const floatingPicker = cssDeclarations(
       '.caret-floating-layer .home-hero__plugin-picker--floating',
@@ -69,3 +84,16 @@ describe('HomeHero compact composer controls', () => {
     expect(ruleValue(templateSearchFocus, 'box-shadow')).toBe('none');
   });
 });
+
+function cssDeclarationsFrom(css: string, selector: string): string {
+  const blocks: string[] = [];
+  const rulePattern = /([^{}]+)\{([^}]*)\}/g;
+  const cssWithoutComments = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  let match: RegExpExecArray | null;
+  while ((match = rulePattern.exec(cssWithoutComments)) !== null) {
+    const selectors = (match[1] ?? '').split(',').map((item) => item.trim());
+    if (selectors.includes(selector)) blocks.push(match[2] ?? '');
+  }
+  if (blocks.length === 0) throw new Error(`Missing CSS block for ${selector}`);
+  return blocks.join('\n');
+}

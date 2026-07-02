@@ -381,6 +381,14 @@ function readNumberField(record: Record<string, unknown> | null, key: string): n
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+function readFirstNumberField(record: Record<string, unknown> | null, keys: string[]): number | undefined {
+  for (const key of keys) {
+    const value = readNumberField(record, key);
+    if (value != null) return value;
+  }
+  return undefined;
+}
+
 function readBooleanField(record: Record<string, unknown> | null, key: string): boolean | null {
   const value = record?.[key];
   return typeof value === 'boolean' ? value : null;
@@ -1348,11 +1356,27 @@ function translateAgentEvent(data: DaemonAgentPayload): AgentEvent | null {
     };
   }
   if (t === 'usage') {
-    const usage = (data.usage ?? {}) as Record<string, number>;
+    const usage = isRecord(data.usage) ? data.usage : null;
+    const cacheReadTokens = readFirstNumberField(usage, [
+      'cache_read_input_tokens',
+      'cache_read_tokens',
+      'cached_input_tokens',
+      'cached_read_tokens',
+    ]);
+    const cacheWriteTokens = readFirstNumberField(usage, [
+      'cache_creation_input_tokens',
+      'cache_write_tokens',
+      'cached_write_tokens',
+    ]);
     return {
       kind: 'usage',
-      inputTokens: usage.input_tokens,
-      outputTokens: usage.output_tokens,
+      inputTokens: readFirstNumberField(usage, ['input_tokens', 'prompt_tokens']),
+      inputTokensEffective: readFirstNumberField(usage, ['input_tokens_effective']),
+      outputTokens: readFirstNumberField(usage, ['output_tokens', 'completion_tokens']),
+      cacheReadTokens,
+      cacheWriteTokens,
+      uncachedInputTokens: readFirstNumberField(usage, ['uncached_input_tokens']),
+      estimatedContextTokens: readFirstNumberField(usage, ['estimated_context_tokens']),
       costUsd: typeof data.costUsd === 'number' ? data.costUsd : undefined,
       durationMs: typeof data.durationMs === 'number' ? data.durationMs : undefined,
     };

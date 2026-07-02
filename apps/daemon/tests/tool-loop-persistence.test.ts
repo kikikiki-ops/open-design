@@ -13,6 +13,16 @@ import {
 // event into a stored status entry, mirroring the live mapping.
 
 type PersistedStatus = { kind: string; label: string; detail: string };
+type PersistedUsage = {
+  kind: 'usage';
+  inputTokens?: number;
+  inputTokensEffective?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  uncachedInputTokens?: number;
+  estimatedContextTokens?: number;
+};
 
 // The mapper is JS-style untyped (returns a wide union | null); narrow to the
 // status shape these cases produce so the assertions read cleanly.
@@ -97,6 +107,34 @@ describe('daemonAgentPayloadToPersistedAgentEvent — diagnostic', () => {
         keys: ['content', 'sessionUpdate'],
         hasText: true,
       },
+    });
+  });
+});
+
+describe('daemonAgentPayloadToPersistedAgentEvent — usage', () => {
+  it('persists prompt cache aliases for context and footer replay', () => {
+    const persisted = daemonAgentPayloadToPersistedAgentEvent({
+      type: 'usage',
+      usage: {
+        input_tokens: 839000,
+        input_tokens_effective: 839000,
+        output_tokens: 14000,
+        cached_input_tokens: 825000,
+        cached_write_tokens: 1000,
+        uncached_input_tokens: 14000,
+        estimated_context_tokens: 825000,
+      },
+    }) as PersistedUsage | null;
+
+    expect(persisted).toMatchObject({
+      kind: 'usage',
+      inputTokens: 839000,
+      inputTokensEffective: 839000,
+      outputTokens: 14000,
+      cacheReadTokens: 825000,
+      cacheWriteTokens: 1000,
+      uncachedInputTokens: 14000,
+      estimatedContextTokens: 825000,
     });
   });
 });

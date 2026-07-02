@@ -470,9 +470,12 @@ export type PersistedAgentEvent =
   | {
       kind: 'usage';
       inputTokens?: number;
+      inputTokensEffective?: number;
       outputTokens?: number;
       cacheReadTokens?: number;
       cacheWriteTokens?: number;
+      uncachedInputTokens?: number;
+      estimatedContextTokens?: number;
       costUsd?: number;
       costSource?: UsageCostSource;
       durationMs?: number;
