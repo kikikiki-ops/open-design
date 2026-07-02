@@ -71,6 +71,10 @@ import type {
   AmrAuthResultProps,
   AmrEntryClickProps,
   RunFailedToastSurfaceViewProps,
+  HomeRecommendationClickProps,
+  HomeRecommendationSurfaceViewProps,
+  StudioOnboardingHintClickProps,
+  StudioOnboardingHintSurfaceViewProps,
   ChatPanelResourcesPopoverClickProps,
   ChatPanelMessageQueueClickProps,
   FileManagerClickProps,
@@ -123,6 +127,8 @@ import type {
   OnboardingClickProps,
   OnboardingRuntimeScanResultProps,
   OnboardingCompleteResultProps,
+  OnboardingFirstPromptSentProps,
+  OnboardingFirstGenerationCompletedProps,
   DesignSystemSourceIngestResultProps,
   DesignSystemCreateResultProps,
   DesignSystemReviewResultProps,
@@ -232,6 +238,36 @@ export function trackQuestionsFormSurfaceView(
 export function trackRunFailedToastGoAmrClick(
   track: Track,
   props: RunFailedToastClickProps,
+): void {
+  send(track, 'ui_click', props);
+}
+
+// Personalized first-run recommendation on Home (spec §7).
+export function trackHomeRecommendationSurfaceView(
+  track: Track,
+  props: HomeRecommendationSurfaceViewProps,
+): void {
+  send(track, 'surface_view', props);
+}
+
+export function trackHomeRecommendationClick(
+  track: Track,
+  props: HomeRecommendationClickProps,
+): void {
+  send(track, 'ui_click', props);
+}
+
+// First-generation Studio hint (spec §8.3).
+export function trackStudioOnboardingHintSurfaceView(
+  track: Track,
+  props: StudioOnboardingHintSurfaceViewProps,
+): void {
+  send(track, 'surface_view', props);
+}
+
+export function trackStudioOnboardingHintClick(
+  track: Track,
+  props: StudioOnboardingHintClickProps,
 ): void {
   send(track, 'ui_click', props);
 }
@@ -1016,6 +1052,21 @@ export function trackOnboardingCompleteResult(
   props: OnboardingCompleteResultProps,
 ): void {
   send(track, 'onboarding_complete_result', props);
+}
+
+// First-generation funnel (spec §11.1).
+export function trackOnboardingFirstPromptSent(
+  track: Track,
+  props: OnboardingFirstPromptSentProps,
+): void {
+  send(track, 'onboarding_first_prompt_sent', props);
+}
+
+export function trackOnboardingFirstGenerationCompleted(
+  track: Track,
+  props: OnboardingFirstGenerationCompletedProps,
+): void {
+  send(track, 'onboarding_first_generation_completed', props);
 }
 
 // ---- Design-system lifecycle ---------------------------------------------

@@ -107,6 +107,8 @@ import type { PluginUseAction } from './plugins-home/useActions';
 import { examplePresetSeedPrompt } from './plugins-home/presetSeedPrompt';
 import { localizePluginDescription } from './plugins-home/localization';
 import { RecentProjectsStrip } from './RecentProjectsStrip';
+import { RecommendedStartRegion } from './RecommendedStartRegion';
+import type { Recommendation } from '../onboarding/recommendation';
 import { AnimatePresence } from 'motion/react';
 
 export interface ActivePlugin {
@@ -233,6 +235,15 @@ interface Props {
   skillsLoading?: boolean;
   connectors?: ConnectorDetail[];
   promptTemplates?: PromptTemplateSummary[];
+  // Personalized first-run starting point (spec §7). Null unless the user just
+  // finished the About-you survey this session; EntryShell owns the state.
+  recommendation?: Recommendation | null;
+  onRecommendationStart?: (input: {
+    name: string;
+    prompt: string;
+    metadata: ProjectMetadata;
+  }) => void;
+  onRecommendationDismiss?: () => void;
   executionSwitcher?: ReactNode;
 }
 
@@ -303,6 +314,9 @@ export function HomeView({
   skillsLoading = false,
   connectors = EMPTY_CONNECTORS,
   promptTemplates = EMPTY_PROMPT_TEMPLATES,
+  recommendation = null,
+  onRecommendationStart,
+  onRecommendationDismiss,
   executionSwitcher,
 }: Props) {
   const { locale, t } = useI18n();
@@ -2084,6 +2098,14 @@ export function HomeView({
         }}
         executionSwitcher={executionSwitcher}
       />
+
+      {recommendation && onRecommendationStart && onRecommendationDismiss ? (
+        <RecommendedStartRegion
+          recommendation={recommendation}
+          onStart={onRecommendationStart}
+          onDismiss={onRecommendationDismiss}
+        />
+      ) : null}
 
       <RecentProjectsStrip
         projects={projects}

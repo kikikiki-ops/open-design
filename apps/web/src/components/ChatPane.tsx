@@ -894,6 +894,17 @@ export function ChatPane({
   const historyWrapRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<ChatComposerHandle | null>(null);
   const composerSlotRef = useRef<HTMLDivElement | null>(null);
+  // The generic quick-start cards only make sense on a truly empty composer.
+  // When it arrives pre-seeded with a first request — e.g. from the Home
+  // personalized recommendation — the user already has a concrete starting
+  // point and the cards would compete with it (spec §8.5: "已带第一句需求 →
+  // 不展示通用快速开始卡片"; "用户清空 composer 后可以展示"). Track the composer's
+  // ACTUAL emptiness (it can also carry a restored/persisted draft) via
+  // ChatComposer's onDraftEmptyChange; seed the initial value from initialDraft
+  // so the first paint is already correct in the common case.
+  const [composerEmpty, setComposerEmpty] = useState(
+    () => !(typeof initialDraft === 'string' && initialDraft.trim().length > 0),
+  );
   const composerLayerRef = useRef<HTMLDivElement | null>(null);
   const queuedSendStripRef = useRef<HTMLDivElement | null>(null);
   const didInitialScrollRef = useRef(false);
@@ -1956,6 +1967,7 @@ export function ChatPane({
       composerPlaceholder={composerPlaceholder}
       placeholderScenarios={composerPlaceholderScenarios}
       draftStorageKey={composerDraftStorageKey}
+      onDraftEmptyChange={setComposerEmpty}
       onEnsureProject={onEnsureProject}
       commentAttachments={commentsToAttachments(attachedComments)}
       onRemoveCommentAttachment={onDetachComment}
@@ -2207,6 +2219,7 @@ export function ChatPane({
                           {t('chat.startTitle')}
                         </span>
                       </div>
+                      {composerEmpty ? (
                       <div className="chat-examples" role="list">
                         {pickStarters(projectMetadata, t).map((ex, i) => (
                           <button
@@ -2241,6 +2254,7 @@ export function ChatPane({
                           </button>
                         ))}
                       </div>
+                      ) : null}
                       {connectRepoNeeded ? (
                         <div className="chat-connect-repo" role="note">
                           <span className="chat-connect-repo-icon" aria-hidden>

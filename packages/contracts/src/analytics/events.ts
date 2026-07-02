@@ -63,6 +63,12 @@ export type AnalyticsEventName =
   // capture lifecycle moments that don't fit a click or a view.
   | 'onboarding_runtime_scan_result'
   | 'onboarding_complete_result'
+  // First-generation funnel (spec §11.1). Fire in Studio when the user, having
+  // arrived from the Home recommendation, actually sends their first request
+  // and when that first generation completes — the send-through and
+  // completion rates the onboarding acceptance criteria track.
+  | 'onboarding_first_prompt_sent'
+  | 'onboarding_first_generation_completed'
   // Design-system lifecycle. Clicks + page_views inside DS surfaces
   // reuse `ui_click` / `page_view`; the five names below capture
   // ingest / create / review / status / picker-apply moments.
@@ -621,6 +627,17 @@ export type TrackingOnboardingDiscoverySource = string;
 // force a contract bump.
 export type TrackingOnboardingRole = string;
 
+// The product bucket a personalized Home recommendation resolved to. Mirrors
+// the `ProductType` union produced by the web recommendation mapping
+// (`apps/web/src/onboarding/recommendation.ts`). Kept as a closed literal
+// union — unlike the open survey strings above — because these four buckets
+// are defined by the mapping, not by the user-extensible survey catalogue.
+export type TrackingOnboardingProductType =
+  | 'product_ui'
+  | 'marketing'
+  | 'internal_tool'
+  | 'general';
+
 export interface OnboardingPageViewProps {
   page_name: 'onboarding';
   area: TrackingOnboardingArea;
@@ -751,6 +768,26 @@ export interface OnboardingCompleteResultProps {
   organization_size?: TrackingOnboardingOrganizationSize;
   use_cases?: TrackingOnboardingUseCase[];
   discovery_source?: TrackingOnboardingDiscoverySource;
+}
+
+// Fired once, in Studio, when the user sends the first request in a project
+// they started from the Home recommendation. `has_prefilled_prompt` records
+// whether the composer was still carrying the recommended text at send time
+// (vs the user having cleared/rewritten it). Together with the recommendation
+// `enter_studio` click this gives the send-through rate.
+export interface OnboardingFirstPromptSentProps {
+  entry_source: 'home_recommendation';
+  product_type: TrackingOnboardingProductType;
+  recommendation_id: string;
+  has_prefilled_prompt: boolean;
+}
+
+// Fired once when that first generation completes successfully — the
+// completion rate the acceptance criteria track.
+export interface OnboardingFirstGenerationCompletedProps {
+  entry_source: 'home_recommendation';
+  product_type: TrackingOnboardingProductType;
+  recommendation_id: string;
 }
 
 // --- Design systems page_view (multi-surface) ---
@@ -1331,6 +1368,34 @@ export interface HomeChatComposerClickProps {
   // For `example_prompt` cards backed by a plugin preset: which preset.
   plugin_id?: string;
   plugin_type?: string;
+}
+
+// Personalized first-run recommendation on Home (spec §7). One card, three
+// actions: `enter_studio` (accept → open Studio with the first request
+// pre-filled), `change` (换一个 → cycle to another starter in the same path),
+// `browse_all` (浏览全部类型 → abandon the recommendation for the generic
+// entry). `recommendation_id` is the stable starter id; `role` / `use_cases`
+// echo the survey answers that produced the recommendation.
+export interface HomeRecommendationClickProps {
+  page_name: 'home';
+  area: 'onboarding_recommendation';
+  element: 'enter_studio' | 'change' | 'browse_all';
+  product_type: TrackingOnboardingProductType;
+  recommendation_id: string;
+  role?: TrackingOnboardingRole;
+  use_cases?: TrackingOnboardingUseCase[];
+}
+
+// One-time first-generation hint in Studio (spec §8.3). A single lightweight
+// note shown when a new user's first previewable artifact appears, pointing
+// them at view / edit / export. `open_artifact` = user acted on it; `dismiss` =
+// user closed it. `hint_type` is fixed today but kept as a field so a future
+// first-run hint can reuse the shape.
+export interface StudioOnboardingHintClickProps {
+  page_name: 'chat_panel';
+  area: 'onboarding_first_artifact_hint';
+  element: 'open_artifact' | 'dismiss';
+  hint_type: 'view_artifact';
 }
 
 export interface UpdateIndicatorClickProps {
@@ -2526,6 +2591,8 @@ export type UiClickProps =
   | ExecutionSettingsPopoverClickProps
   | SettingsPopoverClickProps
   | HomeChatComposerClickProps
+  | HomeRecommendationClickProps
+  | StudioOnboardingHintClickProps
   | UpdateIndicatorClickProps
   | NewProjectModalTabClickProps
   | NewProjectModalElementClickProps
@@ -2716,8 +2783,29 @@ export interface UpdatePromptSurfaceViewProps {
   app_version_after?: string;
 }
 
+// Impression of the personalized first-run recommendation card on Home. Fires
+// once per exposure so the funnel can divide `enter_studio` / `change` /
+// `browse_all` clicks by how often the recommendation was actually seen.
+export interface HomeRecommendationSurfaceViewProps {
+  page_name: 'home';
+  area: 'onboarding_recommendation';
+  product_type: TrackingOnboardingProductType;
+  recommendation_id: string;
+  role?: TrackingOnboardingRole;
+  use_cases?: TrackingOnboardingUseCase[];
+}
+
+// Impression of the one-time first-generation hint in Studio (spec §8.3).
+export interface StudioOnboardingHintSurfaceViewProps {
+  page_name: 'chat_panel';
+  area: 'onboarding_first_artifact_hint';
+  hint_type: 'view_artifact';
+}
+
 export type SurfaceViewProps =
   | RunFailedToastSurfaceViewProps
+  | HomeRecommendationSurfaceViewProps
+  | StudioOnboardingHintSurfaceViewProps
   | HelpPopoverSurfaceViewProps
   | SettingsPopoverSurfaceViewProps
   | NewProjectModalSurfaceViewProps
@@ -3393,6 +3481,11 @@ export type AnalyticsEventPayload =
   | { event: 'amr_auth_result'; props: AmrAuthResultProps }
   | { event: 'onboarding_runtime_scan_result'; props: OnboardingRuntimeScanResultProps }
   | { event: 'onboarding_complete_result'; props: OnboardingCompleteResultProps }
+  | { event: 'onboarding_first_prompt_sent'; props: OnboardingFirstPromptSentProps }
+  | {
+      event: 'onboarding_first_generation_completed';
+      props: OnboardingFirstGenerationCompletedProps;
+    }
   | {
       event: 'design_system_source_ingest_result';
       props: DesignSystemSourceIngestResultProps;

@@ -83,6 +83,8 @@ import {
   trackPageView,
   trackRunCreated,
   trackRunFinished,
+  trackOnboardingFirstPromptSent,
+  trackOnboardingFirstGenerationCompleted,
 } from '../analytics/events';
 import {
   buildByokRunCreatedProps,
@@ -238,6 +240,10 @@ import { SHARE_TO_COMMUNITY_PROMPT } from './share-to-community/shareToCommunity
 import { CenteredLoader } from './Loading';
 import type { SettingsSection } from './SettingsDialog';
 import { Toast } from './Toast';
+import {
+  consumePendingOnboardingEntry,
+  type OnboardingEntry,
+} from '../onboarding/onboarding-entry';
 import { BrandReadyPrompt } from './BrandReadyPrompt';
 import { useDesignMdState } from '../hooks/useDesignMdState';
 import { useFinalizeProject } from '../hooks/useFinalizeProject';
@@ -1210,6 +1216,18 @@ export function ProjectView({
 }: Props) {
   const { locale, t } = useI18n();
   const analytics = useAnalytics();
+  // Onboarding first-generation funnel (spec §11.1). Consume the pending entry
+  // (set by the Home recommendation) exactly once on mount; the refs guard the
+  // two lifecycle events so each fires only for the genuine first send / first
+  // successful generation of a recommendation-started project.
+  const onboardingEntryInitRef = useRef(false);
+  const onboardingEntryRef = useRef<OnboardingEntry | null>(null);
+  if (!onboardingEntryInitRef.current) {
+    onboardingEntryInitRef.current = true;
+    onboardingEntryRef.current = consumePendingOnboardingEntry();
+  }
+  const onboardingFirstPromptSentRef = useRef(false);
+  const onboardingFirstGenDoneRef = useRef(false);
   const iframeKeepAlivePool = useIframeKeepAlivePool();
   const handleThemeChange = onThemeChange ?? (() => {});
   const projectDetail = useProjectDetail(project.id);
@@ -4301,6 +4319,24 @@ export function ProjectView({
         attachments.length === 0 &&
         commentAttachments.length === 0
       ) return false;
+      // First genuine send in a recommendation-started project — the
+      // send-through half of the onboarding funnel. Fires once, on the first
+      // message of the conversation (not retries).
+      if (
+        onboardingEntryRef.current &&
+        !onboardingFirstPromptSentRef.current &&
+        !retryTarget &&
+        historyBase.length === 0
+      ) {
+        onboardingFirstPromptSentRef.current = true;
+        const entry = onboardingEntryRef.current;
+        trackOnboardingFirstPromptSent(analytics.track, {
+          entry_source: entry.source,
+          product_type: entry.productType,
+          recommendation_id: entry.recommendationId,
+          has_prefilled_prompt: true,
+        });
+      }
       const effectiveAttachments = mergeChatAttachments(
         attachments,
         ...commentAttachments.map((attachment) =>
@@ -4821,6 +4857,22 @@ export function ProjectView({
             cancelController,
           );
           if (ownsCurrentRun) updateConversationLatestRun(finalRunStatus ?? 'succeeded', endedAt);
+          // Completion half of the onboarding funnel: the first successful
+          // generation in a recommendation-started project. Fires once.
+          if (
+            ownsCurrentRun &&
+            onboardingEntryRef.current &&
+            !onboardingFirstGenDoneRef.current &&
+            finalRunStatus === 'succeeded'
+          ) {
+            onboardingFirstGenDoneRef.current = true;
+            const entry = onboardingEntryRef.current;
+            trackOnboardingFirstGenerationCompleted(analytics.track, {
+              entry_source: entry.source,
+              product_type: entry.productType,
+              recommendation_id: entry.recommendationId,
+            });
+          }
           // Refetch the file list directly (rather than just bumping the
           // refresh signal) so we can diff against the pre-turn snapshot
           // and attach the new files to the assistant message as download

@@ -1,0 +1,121 @@
+/* Compact one-row recommendation strip. Sits between the Home hero and the
+   recent-projects rail; deliberately lighter than a full card so it doesn't
+   compete with the hero input for first-screen attention. */
+.root {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0 8px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent-tint) 40%, var(--bg-panel));
+  animation: recommendation-in 200ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+@keyframes recommendation-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root {
+    animation: none;
+  }
+}
+
+.icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--accent-strong);
+}
+
+/* Title + subline stack; takes the remaining width and can wrap on narrow
+   layouts without pushing the actions off-row. */
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 160px;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.desc {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-contrast, #fff);
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    background 140ms cubic-bezier(0.23, 1, 0.32, 1),
+    transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.primary:hover {
+  background: var(--accent-strong);
+}
+
+.primary:active {
+  transform: translateY(1px);
+}
+
+/* "Try another" — quiet text action, no chrome. */
+.change {
+  flex: 0 0 auto;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.change:hover {
+  color: var(--accent-strong);
+}
+
+/* "Browse all types" — quietest action, trailing edge. */
+.tertiary {
+  flex: 0 0 auto;
+  padding: 6px 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.tertiary:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
