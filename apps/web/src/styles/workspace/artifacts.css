@@ -820,6 +820,24 @@
   font-size: 12px;
   line-height: 1.4;
 }
+.media-provider-docs-link {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  color: var(--text-muted);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px);
+  transition: color 120ms, border-color 120ms, background 120ms;
+}
+.media-provider-docs-link:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--bg-subtle);
+}
 /*
  * "Coming soon" drawer under the media provider list. We render the
  * roadmap providers as a denser, read-only list rather than the same

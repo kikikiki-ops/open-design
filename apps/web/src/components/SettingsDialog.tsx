@@ -6742,10 +6742,11 @@ function MediaProvidersSection({
                 href={sanitizeHttpsUrl(activeProvider.docsUrl) ?? undefined}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="ghost-link"
+                className="media-provider-docs-link"
+                title={t('settings.agentInstall.docs')}
+                aria-label={t('settings.agentInstall.docs')}
               >
-                {t('settings.agentInstall.docs')}
-                <Icon name="external-link" size={11} />
+                <Icon name="external-link" size={16} />
               </a>
             ) : null}
           </div>
