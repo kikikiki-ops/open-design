@@ -1,5 +1,6 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { Icon } from './Icon';
+import { Toast } from './Toast';
 
 type PluginCapability = 'Connector' | 'MCP' | 'Skill';
 type PluginSource = 'Official' | 'Workspace' | 'Personal';
@@ -453,6 +454,25 @@ export function PluginMarketplaceDemo({ onTryPlugin }: PluginMarketplaceDemoProp
   const [categoryFilter, setCategoryFilter] = useState<string>(ALL_CATEGORY);
   const [query, setQuery] = useState('');
   const [menuId, setMenuId] = useState<string | null>(null);
+  // Demo-local sharing state: personal plugins/skills flipped to team-shared
+  // via the card menu. Pure front-end — mirrors PluginCard's 私有/共享 toggle.
+  const [sharedIds, setSharedIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [shareToast, setShareToast] = useState<string | null>(null);
+  const isSharedToTeam = (id: string) => sharedIds.has(id);
+  function shareToTeam(id: string, name: string) {
+    setSharedIds((prev) => new Set(prev).add(id));
+    setMenuId(null);
+    setShareToast(`已将「${name}」共享给团队，团队成员即可使用`);
+  }
+  function makePrivate(id: string, name: string) {
+    setSharedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    setMenuId(null);
+    setShareToast(`已将「${name}」设为私有`);
+  }
   const [detailPlugin, setDetailPlugin] = useState<PluginDemo | null>(null);
   const [detailSkill, setDetailSkill] = useState<SkillDemo | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -676,7 +696,10 @@ export function PluginMarketplaceDemo({ onTryPlugin }: PluginMarketplaceDemoProp
                         <span className="plugin-marketplace__row-main">
                           <span className="plugin-marketplace__name-row">
                             <strong>{plugin.name}</strong>
-                            {plugin.source === 'Workspace' ? (
+                            {/* Badge only where shared/private mix (个人的 tab):
+                                on the 团队 tab every card is shared, so a badge
+                                there is redundant noise. */}
+                            {plugin.source === 'Personal' && isSharedToTeam(plugin.id) ? (
                               <span className="plugin-marketplace__team-badge">
                                 <Icon name="users" size={11} />
                                 团队共享
@@ -718,17 +741,31 @@ export function PluginMarketplaceDemo({ onTryPlugin }: PluginMarketplaceDemoProp
                             {menuId === plugin.id ? (
                               <span className="plugin-marketplace__menu" role="menu">
                                 {plugin.source === 'Personal' ? (
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      setMenuId(null);
-                                    }}
-                                  >
-                                    <Icon name="users" size={14} />
-                                    转为团队共享
-                                  </button>
+                                  isSharedToTeam(plugin.id) ? (
+                                    <button
+                                      type="button"
+                                      role="menuitem"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        makePrivate(plugin.id, plugin.name);
+                                      }}
+                                    >
+                                      <Icon name="eye-off" size={14} />
+                                      设为私有
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      role="menuitem"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        shareToTeam(plugin.id, plugin.name);
+                                      }}
+                                    >
+                                      <Icon name="users" size={14} />
+                                      转为团队共享
+                                    </button>
+                                  )
                                 ) : null}
                                 <button type="button" role="menuitem">
                                   <Icon name="trash" size={14} />
@@ -778,7 +815,7 @@ export function PluginMarketplaceDemo({ onTryPlugin }: PluginMarketplaceDemoProp
                   <span className="plugin-marketplace__row-main">
                     <span className="plugin-marketplace__name-row">
                       <strong>{skill.name}</strong>
-                      {skill.source === 'Workspace' ? (
+                      {skill.source === 'Personal' && isSharedToTeam(skill.id) ? (
                         <span className="plugin-marketplace__team-badge">
                           <Icon name="users" size={11} />
                           团队共享
@@ -816,17 +853,31 @@ export function PluginMarketplaceDemo({ onTryPlugin }: PluginMarketplaceDemoProp
                       {menuId === skill.id ? (
                         <span className="plugin-marketplace__menu" role="menu">
                           {skill.source === 'Personal' ? (
-                            <button
-                              type="button"
-                              role="menuitem"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setMenuId(null);
-                              }}
-                            >
-                              <Icon name="users" size={14} />
-                              转为团队共享
-                            </button>
+                            isSharedToTeam(skill.id) ? (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  makePrivate(skill.id, skill.name);
+                                }}
+                              >
+                                <Icon name="eye-off" size={14} />
+                                设为私有
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  shareToTeam(skill.id, skill.name);
+                                }}
+                              >
+                                <Icon name="users" size={14} />
+                                转为团队共享
+                              </button>
+                            )
                           ) : null}
                           <button
                             type="button"
@@ -932,6 +983,13 @@ export function PluginMarketplaceDemo({ onTryPlugin }: PluginMarketplaceDemoProp
             </div>
           </section>
         </div>
+      ) : null}
+      {shareToast ? (
+        <Toast
+          message={shareToast}
+          tone="success"
+          onDismiss={() => setShareToast(null)}
+        />
       ) : null}
     </section>
   );
