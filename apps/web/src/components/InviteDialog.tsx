@@ -84,37 +84,39 @@ export function InviteDialog({ open, onClose, freePlan = false, onSubmit, canAss
               {canAssignRoles ? '分配角色' : '默认身份'}
             </span>
           </div>
-          {rows.map((row, i) => (
-            <div className="entry-invite__fields" key={i}>
-              <input
-                className="entry-invite__input"
-                placeholder="输入电子邮件地址……"
-                value={row.email}
-                onChange={(e) => updateRow(i, { email: e.target.value })}
-              />
-              <select
-                className="entry-invite__role"
-                value={canAssignRoles ? row.role : DEFAULT_ROLE}
-                onChange={(e) => updateRow(i, { role: e.target.value })}
-                disabled={!canAssignRoles}
-                aria-label={canAssignRoles ? '分配角色' : '默认身份'}
-              >
-                <option value="管理员">管理员</option>
-                <option value={DEFAULT_ROLE}>团队成员</option>
-                <option value="查看者">查看者</option>
-              </select>
-              {rows.length > 1 ? (
-                <button
-                  type="button"
-                  className="entry-invite__row-remove"
-                  onClick={() => removeRow(i)}
-                  aria-label="移除"
+          <div className="entry-invite__rows">
+            {rows.map((row, i) => (
+              <div className="entry-invite__fields" key={i}>
+                <input
+                  className="entry-invite__input"
+                  placeholder="输入电子邮件地址……"
+                  value={row.email}
+                  onChange={(e) => updateRow(i, { email: e.target.value })}
+                />
+                <select
+                  className="entry-invite__role"
+                  value={canAssignRoles ? row.role : DEFAULT_ROLE}
+                  onChange={(e) => updateRow(i, { role: e.target.value })}
+                  disabled={!canAssignRoles}
+                  aria-label={canAssignRoles ? '分配角色' : '默认身份'}
                 >
-                  <Icon name="close" size={15} />
-                </button>
-              ) : null}
-            </div>
-          ))}
+                  <option value="管理员">管理员</option>
+                  <option value={DEFAULT_ROLE}>团队成员</option>
+                  <option value="查看者">查看者</option>
+                </select>
+                {rows.length > 1 ? (
+                  <button
+                    type="button"
+                    className="entry-invite__row-remove"
+                    onClick={() => removeRow(i)}
+                    aria-label="移除"
+                  >
+                    <Icon name="close" size={15} />
+                  </button>
+                ) : null}
+              </div>
+            ))}
+          </div>
           <button type="button" className="entry-invite__add-row" onClick={addRow}>
             <Icon name="plus" size={14} /> 添加成员
           </button>

@@ -5715,12 +5715,15 @@
 .entry-invite__role {
   flex: 0 0 96px;
   align-self: flex-start;
-  padding: 9px 10px;
+  /* Right padding leaves room for the global <select> chevron; use
+     background-color (not the `background` shorthand) so that chevron
+     image from primitives.css survives. */
+  padding: 9px 30px 9px 10px;
   font: inherit;
   font-size: 13px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm, 8px);
-  background: var(--bg);
+  background-color: var(--bg);
   color: var(--text);
   cursor: pointer;
 }
@@ -5862,10 +5865,27 @@
 .entry-invite__form {
   flex: 1 1 0;
   min-width: 0;
+  /* min-height:0 lets the form shrink inside the height-capped panel so its
+     inner scroll regions take over instead of the dialog growing unbounded. */
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 18px;
   padding: 36px 40px;
+  overflow-y: auto;
+}
+/* The invite rows scroll within a capped region so adding many members can't
+   grow the dialog past the viewport; the header labels and submit stay put. */
+.entry-invite__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: min(42vh, 320px);
+  overflow-y: auto;
+  /* Negative margin + padding give the input focus ring room so overflow
+     clipping doesn't shave it. */
+  margin: 0 -4px;
+  padding: 2px 4px;
 }
 .entry-invite__teamsize {
   margin: -8px 0 0;
@@ -5932,7 +5952,7 @@
 .entry-invite__panel--split .entry-invite__role {
   flex: 0 0 150px;
   width: auto;
-  padding: 11px 13px;
+  padding: 11px 34px 11px 13px;
 }
 .entry-invite__collapse {
   display: flex;
