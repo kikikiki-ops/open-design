@@ -33,6 +33,10 @@ od:
 
 把"复刻一个网站"做成可重复的流程。在 Open Design 中，默认在当前项目目录工作：`NOTES.md`、`RECON/`、`CLONE_REPORT.md`、`CLONE_AUDIT.md` 和最终可预览的 `index.html` 都应写在当前项目内，除非用户明确指定外部工作目录。
 
+**Open Design 环境准备（跑任何 `scripts/` 前先看）**：
+- 本 skill 的脚本会被 stage 到项目内 `.od-skills/<插件目录>/scripts/`（skill 前言里有确切路径）。文中命令写的 `node scripts/xxx.mjs` 按该路径解析，例如 `node .od-skills/<插件目录>/scripts/recon-site.mjs ...`；`RECON/`、`assets/` 等产物仍写到项目根。
+- 脚本依赖 Playwright。首次在项目里跑之前执行一次 `npm install -D playwright`（在项目根）；本机装有 Chrome 时脚本会自动走 `channel:"chrome"`，无需再下浏览器，否则补一句 `npx playwright install chromium`。**不许因为"环境没配好"就跳过脚本改为目测**——装依赖只要一分钟。
+
 ## 头号铁律：真源码至上，绝不信 AI 推测的代码
 
 > 任何 AI 生成的"复刻分析/施工图"，**正文的概念骨架可以参考，但里面的可执行代码块默认全是臆造的**，必须逐行用真源码核对，否则照抄必崩。
