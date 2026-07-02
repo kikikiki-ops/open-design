@@ -5,7 +5,6 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -215,11 +214,6 @@ interface Props {
   composerPlaceholder?: string;
   placeholderScenarios?: ReadonlyArray<PlaceholderScenario>;
   draftStorageKey?: string;
-  // Fires whenever the draft's empty/non-empty state changes (and once on
-  // mount). Lets the parent react to the ACTUAL composer content — from an
-  // initial seed, a restored/persisted draft, or the user clearing it —
-  // rather than guessing from the initialDraft prop alone.
-  onDraftEmptyChange?: (isEmpty: boolean) => void;
   // Lazy ensure — the composer calls this before its first upload, so the
   // project folder exists on disk before files land in it. Returns the
   // project id when ready.
@@ -399,7 +393,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       composerPlaceholder,
       placeholderScenarios = [],
       draftStorageKey,
-      onDraftEmptyChange,
       onEnsureProject,
       commentAttachments = [],
       onRemoveCommentAttachment,
@@ -698,13 +691,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
     useEffect(() => {
       saveComposerDraft(draftStorageKey, draft);
     }, [draftStorageKey, draft]);
-
-    // Report empty/non-empty to the parent. useLayoutEffect so it settles
-    // before paint — a card gated on this won't flash on first render when the
-    // composer mounts with a seeded/restored draft.
-    useLayoutEffect(() => {
-      onDraftEmptyChange?.(draft.trim().length === 0);
-    }, [draft, onDraftEmptyChange]);
 
     useEffect(() => {
       if (previousWorkspaceContextIdRef.current === activeWorkspaceContextId) return;

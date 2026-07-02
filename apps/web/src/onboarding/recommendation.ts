@@ -155,6 +155,15 @@ export function buildRecommendation(input: RecommendationInput): Recommendation 
 }
 
 /**
+ * All starter options for a product path, in catalog order. Used by Studio's
+ * empty-conversation starter templates so a recommendation-started project
+ * offers the same path's alternatives as one-click composer replacements.
+ */
+export function startersForProduct(productType: ProductType): readonly StarterOption[] {
+  return STARTERS_BY_PRODUCT[productType];
+}
+
+/**
  * The next starter option to show when the user clicks "换一个". Cycles within
  * the same product path and wraps around; returns the sole option unchanged
  * when the path has only one. Pure so the region can stay stateless beyond the

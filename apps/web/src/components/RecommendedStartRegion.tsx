@@ -13,56 +13,9 @@ import {
   type Recommendation,
 } from '../onboarding/recommendation';
 import { stashPendingOnboardingEntry } from '../onboarding/onboarding-entry';
+import { starterCopyFor } from '../onboarding/starter-copy';
 import { Icon } from './Icon';
 import styles from './RecommendedStartRegion.module.css';
-
-type DictKey = Parameters<ReturnType<typeof useT>>[0];
-
-// Per-starter copy. Keys are literal `DictKey`s (validated against the i18n
-// Dict), so a missing translation is a typecheck error rather than a runtime
-// blank. Keyed by the stable starter id from the recommendation mapping.
-const STARTER_COPY = {
-  product_ui_prototype: {
-    title: 'home.starter.product_ui_prototype.title',
-    desc: 'home.starter.product_ui_prototype.desc',
-    firstPrompt: 'home.starter.product_ui_prototype.firstPrompt',
-  },
-  product_ui_component: {
-    title: 'home.starter.product_ui_component.title',
-    desc: 'home.starter.product_ui_component.desc',
-    firstPrompt: 'home.starter.product_ui_component.firstPrompt',
-  },
-  product_ui_lowfi: {
-    title: 'home.starter.product_ui_lowfi.title',
-    desc: 'home.starter.product_ui_lowfi.desc',
-    firstPrompt: 'home.starter.product_ui_lowfi.firstPrompt',
-  },
-  marketing_landing: {
-    title: 'home.starter.marketing_landing.title',
-    desc: 'home.starter.marketing_landing.desc',
-    firstPrompt: 'home.starter.marketing_landing.firstPrompt',
-  },
-  marketing_multivariant: {
-    title: 'home.starter.marketing_multivariant.title',
-    desc: 'home.starter.marketing_multivariant.desc',
-    firstPrompt: 'home.starter.marketing_multivariant.firstPrompt',
-  },
-  internal_dashboard: {
-    title: 'home.starter.internal_dashboard.title',
-    desc: 'home.starter.internal_dashboard.desc',
-    firstPrompt: 'home.starter.internal_dashboard.firstPrompt',
-  },
-  internal_report: {
-    title: 'home.starter.internal_report.title',
-    desc: 'home.starter.internal_report.desc',
-    firstPrompt: 'home.starter.internal_report.firstPrompt',
-  },
-  general_menu: {
-    title: 'home.starter.general_menu.title',
-    desc: 'home.starter.general_menu.desc',
-    firstPrompt: 'home.starter.general_menu.firstPrompt',
-  },
-} satisfies Record<string, { title: DictKey; desc: DictKey; firstPrompt: DictKey }>;
 
 // Product bucket → the project kind used at creation. Concrete paths seed a web
 // prototype pipeline; the general fallback uses `other`, which routes through
@@ -123,8 +76,7 @@ export function RecommendedStartRegion({ recommendation, onStart, onDismiss }: P
     });
   }, [analytics.track, productType, recommendation.primary.id, recommendation.role, recommendation.useCases]);
 
-  const copy =
-    STARTER_COPY[current.id as keyof typeof STARTER_COPY] ?? STARTER_COPY.general_menu;
+  const copy = starterCopyFor(current.id);
   const firstPrompt = t(copy.firstPrompt);
 
   function fireClick(element: 'enter_studio' | 'change' | 'browse_all', recommendationId: string) {
