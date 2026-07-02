@@ -1553,8 +1553,12 @@
 }
 .session-mode-toggle__trigger {
   height: 32px;
-  max-width: 132px;
-  padding: 0 8px;
+  width: 44px;
+  min-width: 44px;
+  max-width: 44px;
+  justify-content: center;
+  gap: 3px;
+  padding: 0;
   border-radius: var(--radius);
   box-shadow: var(--shadow-xs);
 }
@@ -1825,16 +1829,17 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 0;
   flex-shrink: 0;
   white-space: nowrap;
-  min-width: 0;
+  width: 40px;
+  min-width: 40px;
   height: 32px;
   background: var(--accent);
   border: 1px solid var(--accent);
   color: white;
   font-weight: 650;
-  padding: 0 11px;
+  padding: 0;
   font-size: 12.5px;
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-xs);

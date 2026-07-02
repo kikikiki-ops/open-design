@@ -83,6 +83,7 @@ import {
   didRunCreateDesignSystemFile,
   runAskedUserQuestion,
 } from '../runtimes/run-artifacts.js';
+import { recordUsageLedgerOnRunEnd } from '../usage-ledger.js';
 
 type SqliteDb = Database.Database;
 type JsonRecord = Record<string, unknown>;
@@ -677,6 +678,12 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
       });
     }
     reconcileAssistantMessageOnRunEnd(db, design.runs, run);
+    // L2 usage ledger: one SUM-able row per finished run, same-source with
+    // the Langfuse usage scan (see usage-ledger.ts).
+    recordUsageLedgerOnRunEnd(db, design.runs, run, {
+      model: meta.model,
+      sessionMode: meta.sessionMode,
+    });
     if (run.projectId && run.conversationId) {
       try {
         const project = toProjectRecord(getProject(db, run.projectId));
@@ -1428,5 +1435,11 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
     const run = design.runs.create(meta);
     design.runs.stream(run, req, res);
     design.runs.start(run, () => startChatRun(meta, run));
+    // L2 usage ledger: mirror of the POST /api/runs hook so legacy SSE chat
+    // runs are billed/aggregated identically.
+    recordUsageLedgerOnRunEnd(db, design.runs, run, {
+      model: requestBody.model,
+      sessionMode: requestBody.sessionMode,
+    });
   });
 }

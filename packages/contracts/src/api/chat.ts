@@ -14,6 +14,7 @@ import type { MediaExecutionPolicy } from './media.js';
 import type { AppliedPluginSnapshot } from '../plugins/apply.js';
 import type { McpAuthMode, McpServerConfig, McpTransport } from './mcp';
 import type { TrackingRuntimeType } from '../analytics/public-params.js';
+import type { UsageCostSource } from './usage.js';
 
 export type ChatRole = 'user' | 'assistant';
 export type ChatSessionMode = 'design' | 'chat' | 'plan';
@@ -461,7 +462,21 @@ export type PersistedAgentEvent =
       confidence?: number;
       draftPath?: string | null;
     }
-  | { kind: 'usage'; inputTokens?: number; outputTokens?: number; costUsd?: number; durationMs?: number }
+  // Run-level usage rollup. `cacheReadTokens`/`cacheWriteTokens` are present
+  // only when the runtime reported prompt-cache counters. `costSource` marks
+  // whether `costUsd` was provider-reported or catalog-estimated; estimated
+  // costs render with a `≈` prefix in the UI. All fields optional for
+  // backward compatibility with rows persisted before they existed.
+  | {
+      kind: 'usage';
+      inputTokens?: number;
+      outputTokens?: number;
+      cacheReadTokens?: number;
+      cacheWriteTokens?: number;
+      costUsd?: number;
+      costSource?: UsageCostSource;
+      durationMs?: number;
+    }
   | { kind: 'raw'; line: string };
 
 export interface ChatMessage {

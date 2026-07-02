@@ -1,0 +1,185 @@
+/* ModelInfoCard — hover/focus details card for an AgentModelOption.
+   Rendered inside a fixed-position floating wrapper (.cardFloat) that the
+   ModelInfoTrigger portals onto document.body, mirroring the positioning
+   pattern of the searchable model-select popover. */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: left;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.title {
+  font-size: 12.5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.description {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.noDetails {
+  margin: 0;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.deprecated {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: var(--radius);
+  background: #fdf0e2;
+  color: #9a5b1e;
+  font-weight: 500;
+}
+
+.meta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.metaRow {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tag {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 10.5px;
+}
+
+.recommended {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.recommendedLabel {
+  color: var(--text-muted);
+  margin-right: 2px;
+}
+
+.modeChip {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--accent-tint);
+  color: var(--accent-strong);
+  font-size: 10.5px;
+  font-weight: 500;
+}
+
+/* Speed-tier badge — subtle, light-theme-friendly tints per tier. */
+.speedBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.speedFast {
+  background: #e5f6ec;
+  color: #157347;
+}
+
+.speedBalanced {
+  background: #e8f0fc;
+  color: #2b5cb8;
+}
+
+.speedPowerful {
+  background: #f3ecfc;
+  color: #7a3cbd;
+}
+
+/* Info affordance (used with the shared Button primitive, size="icon").
+   `button.infoTrigger` outranks the primitive's single-class base styles
+   regardless of bundle order. */
+button.infoTrigger {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  border-radius: 999px;
+  color: var(--text-muted);
+}
+
+button.infoTrigger:hover:not(:disabled) {
+  background: var(--bg-subtle);
+  color: var(--text);
+}
+
+button.infoTrigger:focus-visible {
+  color: var(--text);
+}
+
+/* Floating wrapper. Enter ~200ms / exit ~140ms, shared ease-out curve; the
+   trigger keeps the node mounted through the exit transition before
+   unmounting, and never animates from scale(0). */
+.cardFloat {
+  position: fixed;
+  z-index: 3000;
+  pointer-events: none;
+  overflow-y: auto;
+  opacity: 0;
+  transform: translateY(4px) scale(0.96);
+  transform-origin: top left;
+  transition:
+    opacity 140ms cubic-bezier(0.23, 1, 0.32, 1),
+    transform 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.cardFloatVisible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition-duration: 200ms;
+}
+
+/* Inline layout helper for rows that show a label + badge + info trigger
+   (e.g. the InlineModelSwitcher "Model" row label). */
+.labelRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

@@ -706,10 +706,14 @@ exit 0
       assert.equal(amrAgent.path, fakeVela);
       assert.equal(amrAgent.version, 'vela custom-live');
       assert.equal(amrAgent.modelsSource, 'live');
-      assert.deepEqual(amrAgent.models, [
-        { id: 'deepseek-v4-flash', label: 'deepseek-v4-flash' },
-        { id: 'glm-5', label: 'glm-5' },
-      ]);
+      // Surfaced options are catalog-enriched, so compare identity fields only.
+      assert.deepEqual(
+        amrAgent.models.map(({ id, label }) => ({ id, label })),
+        [
+          { id: 'deepseek-v4-flash', label: 'deepseek-v4-flash' },
+          { id: 'glm-5', label: 'glm-5' },
+        ],
+      );
       assert.equal(amrAgent.models.some((model) => model.id === 'default'), false);
       assert.equal(amrAgent.models.some((model) => model.id === 'gpt-5.4-mini'), false);
     });
@@ -771,9 +775,11 @@ exit 0
       const amrAgent = agents.find((agent) => agent.id === 'amr');
 
       assert.ok(amrAgent);
-      assert.deepEqual(amrAgent.models, [
-        { id: 'deepseek-v4-flash', label: 'deepseek-v4-flash' },
-      ]);
+      // Surfaced options are catalog-enriched, so compare identity fields only.
+      assert.deepEqual(
+        amrAgent.models.map(({ id, label }) => ({ id, label })),
+        [{ id: 'deepseek-v4-flash', label: 'deepseek-v4-flash' }],
+      );
       assert.deepEqual(getRememberedLiveModels('amr', 'prod'), [
         { id: 'deepseek-v4-flash', label: 'deepseek-v4-flash' },
       ]);

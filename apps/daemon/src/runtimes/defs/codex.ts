@@ -74,6 +74,7 @@ export const codexAgentDef = {
       args: ['login', 'status'],
       timeoutMs: 5000,
     },
+    contextManagement: { autoCompaction: true },
     fallbackModels: [
       DEFAULT_MODEL_OPTION,
       { id: 'gpt-5.5', label: 'gpt-5.5' },

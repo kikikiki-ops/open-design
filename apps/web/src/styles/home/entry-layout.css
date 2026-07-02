@@ -1759,6 +1759,25 @@
   font-size: 12.5px;
   line-height: 1.35;
 }
+/* Row wrapper for option + model-info affordance (the info trigger cannot
+   nest inside the option <button>, so they sit side by side). */
+.model-select-searchable__option-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.model-select-searchable__option-row > .model-select-searchable__option {
+  flex: 1;
+  min-width: 0;
+}
+.model-select-searchable__option-badge {
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.model-select-searchable__option-info {
+  flex: none;
+  margin-right: 2px;
+}
 .model-select-searchable__option-meta {
   font-size: 11px;
   color: var(--text-muted);

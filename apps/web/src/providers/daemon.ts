@@ -24,10 +24,14 @@ import type {
   DaemonAgentPayload,
   AmrModelsResponse,
   AmrWalletSnapshot,
+  ConversationUsageResponse,
   MediaExecutionPolicy,
   ResearchOptions,
   RunContextSelection,
   SseErrorPayload,
+  UsageGroupBy,
+  UsageRange,
+  UsageSummaryResponse,
 } from '@open-design/contracts';
 import type { StreamHandlers } from './anthropic';
 
@@ -830,6 +834,43 @@ export async function fetchAmrModels(): Promise<AmrModelsResponse | null> {
     const resp = await fetch('/api/amr/models', { cache: 'no-store' });
     if (!resp.ok) return null;
     return (await resp.json()) as AmrModelsResponse;
+  } catch {
+    return null;
+  }
+}
+
+// Usage ledger reads (Settings → Usage dashboard + the per-conversation cost
+// chip). Both endpoints aggregate the daemon's usage_ledger rows; `null`
+// means unavailable (daemon offline, endpoint missing) and callers should
+// render their empty/error state rather than throwing.
+export async function fetchUsageSummary(
+  options: { range?: UsageRange; groupBy?: UsageGroupBy } = {},
+): Promise<UsageSummaryResponse | null> {
+  try {
+    const qs = new URLSearchParams();
+    if (options.range) qs.set('range', options.range);
+    if (options.groupBy) qs.set('groupBy', options.groupBy);
+    const query = qs.toString();
+    const resp = await fetch(`/api/usage/summary${query ? `?${query}` : ''}`, {
+      cache: 'no-store',
+    });
+    if (!resp.ok) return null;
+    return (await resp.json()) as UsageSummaryResponse;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchConversationUsage(
+  conversationId: string,
+): Promise<ConversationUsageResponse | null> {
+  try {
+    const resp = await fetch(
+      `/api/usage/conversations/${encodeURIComponent(conversationId)}`,
+      { cache: 'no-store' },
+    );
+    if (!resp.ok) return null;
+    return (await resp.json()) as ConversationUsageResponse;
   } catch {
     return null;
   }

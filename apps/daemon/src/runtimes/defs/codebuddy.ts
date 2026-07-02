@@ -59,6 +59,7 @@ export const codebuddyAgentDef = {
       '--include-partial-messages': 'partialMessages',
       '--add-dir': 'addDir',
     },
+    contextManagement: { autoCompaction: true },
     fallbackModels: CODEBUDDY_FALLBACK_MODELS,
     // Codebuddy CLI does not ship a `models` subcommand; the supported model
     // ids are advertised in `--help` output. Fallback list above covers the

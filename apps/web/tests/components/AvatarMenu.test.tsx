@@ -61,7 +61,7 @@ type AgentModelChangeHandler = (
   choice: { model?: string; reasoning?: string },
 ) => void;
 type VoidHandler = () => void;
-type OpenSettingsHandler = (section?: 'execution') => void;
+type OpenSettingsHandler = (section?: 'execution' | 'usage') => void;
 
 function renderMenu({
   config = baseConfig,

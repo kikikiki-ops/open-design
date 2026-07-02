@@ -40,7 +40,7 @@ interface Props {
   ) => void;
   onApiModelChange?: (model: string) => void;
   providerModelsCache?: Record<string, ProviderModelOption[]>;
-  onOpenSettings: (section?: 'execution') => void;
+  onOpenSettings: (section?: 'execution' | 'usage') => void;
   onRefreshAgents: () => void;
   onBack?: () => void;
   placement?: 'down' | 'up';
@@ -420,24 +420,35 @@ export function AvatarMenu({
                 // plus Upgrade and Console actions, so it is a container rather
                 // than a single select button (which can't nest buttons/links).
                 if (a.id === 'amr') {
+                  const selectAmr = () => {
+                    recordAmrEntry(
+                      analytics.track,
+                      'avatar_amr_agent_card',
+                      new Date(),
+                      { metricsConsent: config.telemetry?.metrics === true },
+                    );
+                    onAgentChange('amr');
+                  };
                   return (
                     <div
                       key={a.id}
                       className={`avatar-item avatar-amr-row${selected ? ' active' : ''}`}
                       data-testid={`avatar-agent-option-${a.id}`}
                     >
-                      <button
-                        type="button"
+                      {/* div-with-button-role rather than <button>: the
+                          plan+balance subtitle inside is itself a real button
+                          (→ Settings · Usage), and buttons can't nest. */}
+                      <div
+                        role="button"
+                        tabIndex={0}
                         className="avatar-amr-row__select"
                         aria-current={selected ? 'true' : undefined}
-                        onClick={() => {
-                          recordAmrEntry(
-                            analytics.track,
-                            'avatar_amr_agent_card',
-                            new Date(),
-                            { metricsConsent: config.telemetry?.metrics === true },
-                          );
-                          onAgentChange('amr');
+                        onClick={selectAmr}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            selectAmr();
+                          }
                         }}
                       >
                         <AgentIcon id="amr" size={24} />
@@ -449,7 +460,18 @@ export function AvatarMenu({
                             <PlanBadge plan={amrPlanDisplay} size="md" />
                           </span>
                           {amrBalanceLabel ? (
-                            <span className="avatar-amr-row__subtitle">
+                            <button
+                              type="button"
+                              className="avatar-amr-row__subtitle avatar-amr-row__usage-link"
+                              title={t('usagePanel.avatarOpenUsage')}
+                              aria-label={t('usagePanel.avatarOpenUsage')}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setOpen(false);
+                                onOpenSettings('usage');
+                              }}
+                              onKeyDown={(event) => event.stopPropagation()}
+                            >
                               <span className="avatar-amr-row__stat">
                                 <span className="avatar-amr-row__stat-label">
                                   {t('settings.amrBalance')}
@@ -458,10 +480,15 @@ export function AvatarMenu({
                                   {amrBalanceLabel}
                                 </span>
                               </span>
-                            </span>
+                              <RemixIcon
+                                name="arrow-right-s-line"
+                                size={13}
+                                className="avatar-amr-row__usage-caret"
+                              />
+                            </button>
                           ) : null}
                         </span>
-                      </button>
+                      </div>
                       {amrCanUpgrade ? (
                         <a
                           className="avatar-amr-row__upgrade"

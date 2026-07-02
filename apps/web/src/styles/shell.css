@@ -1194,6 +1194,40 @@
   gap: 2px 14px;
   min-width: 0;
 }
+/* The plan+balance subtitle doubles as the entry point to Settings · Usage.
+   It's a real <button> nested in the row's role="button" select area, so it
+   resets the global button chrome and signals interactivity on hover only. */
+.avatar-amr-row__usage-link {
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.avatar-amr-row__usage-link:hover:not(:disabled) {
+  background: transparent;
+}
+.avatar-amr-row__usage-link:hover .avatar-amr-row__stat-value {
+  color: var(--accent-strong);
+}
+.avatar-amr-row__usage-caret {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  opacity: 0;
+  transform: translateX(-2px);
+  transition:
+    opacity 200ms cubic-bezier(0.23, 1, 0.32, 1),
+    transform 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.avatar-amr-row__usage-link:hover .avatar-amr-row__usage-caret,
+.avatar-amr-row__usage-link:focus-visible .avatar-amr-row__usage-caret {
+  opacity: 1;
+  transform: translateX(0);
+}
 .avatar-amr-row__stat {
   display: inline-flex;
   align-items: baseline;

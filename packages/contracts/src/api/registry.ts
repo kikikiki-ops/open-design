@@ -1,6 +1,48 @@
+/**
+ * Rough latency/capability class of a model, rendered as a badge in the
+ * model pickers. 'fast' = small/cheap models suited to short chat turns,
+ * 'balanced' = mid-tier default, 'powerful' = frontier-class models for
+ * heavy design/plan work.
+ */
+export type ModelSpeedTier = 'fast' | 'balanced' | 'powerful';
+
+/**
+ * Per-1M-token list pricing. Values are catalog list prices, used for the
+ * hover card and for estimating run cost when a runtime does not report
+ * `costUsd` itself; estimated costs are always rendered with a `≈` prefix.
+ */
+export interface ModelPricing {
+  inputPer1M?: number;
+  outputPer1M?: number;
+  cacheReadPer1M?: number;
+  currency?: 'USD';
+}
+
 export interface AgentModelOption {
   id: string;
   label: string;
+  /**
+   * One-line human description ("Anthropic's frontier model, great for
+   * difficult tasks"). For catalog-known models this is an English string
+   * maintained in the daemon model catalog; provider-supplied descriptions
+   * pass through verbatim.
+   */
+  description?: string;
+  /** Total context window in tokens (e.g. 200000). */
+  contextWindow?: number;
+  /** Max output tokens per response, when known. */
+  maxOutputTokens?: number;
+  pricing?: ModelPricing;
+  speedTier?: ModelSpeedTier;
+  /** Capability tags, e.g. ['vision', 'reasoning', 'long-context']. */
+  tags?: string[];
+  /**
+   * Session modes this model is a good default for. Values align with
+   * `ChatSessionMode` ('chat' | 'plan' | 'design').
+   */
+  recommendedFor?: string[];
+  /** True when the vendor has deprecated or scheduled EOL for this model. */
+  deprecated?: boolean;
 }
 
 /**
@@ -75,6 +117,16 @@ export interface AgentDiagnostic {
   fixActions?: AgentFixIntent[];
 }
 
+export interface AgentContextManagement {
+  /**
+   * The runtime can compact/summarize its own conversation context when it
+   * approaches the model window. High-usage UI should explain that usage may
+   * drop after compaction instead of treating the window as a hard manual-only
+   * boundary.
+   */
+  autoCompaction?: boolean;
+}
+
 export interface AgentInfo {
   id: string;
   name: string;
@@ -110,6 +162,7 @@ export interface AgentInfo {
     | 'claude-mcp-json'
     | 'acp-merge'
     | 'opencode-env-content';
+  contextManagement?: AgentContextManagement;
   /**
    * When `false`, the Settings model picker hides the "Custom (fill below)"
    * option and the free-text input. Use this for agents whose CLI doesn't

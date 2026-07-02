@@ -40,6 +40,7 @@ const XIAOHONGSHU_URL =
 
 export type EntrySettingsSection =
   | 'execution'
+  | 'usage'
   | 'media'
   | 'composio'
   | 'orbit'
@@ -536,6 +537,30 @@ export function EntrySettingsMenu({
           </a>
 
           <div className="entry-settings-menu__divider" aria-hidden />
+
+          <button
+            type="button"
+            className="entry-settings-menu__item"
+            data-testid="entry-settings-open-usage"
+            role="menuitem"
+            onClick={() => {
+              trackSettingsPopoverClick(analytics.track, {
+                page_name: pageName,
+                area: 'settings_popover',
+                element: 'open_usage',
+              });
+              setOpen(false);
+              onOpenSettings('usage');
+            }}
+          >
+            <span className="entry-settings-menu__item-icon" aria-hidden>
+              <Icon name="kanban" size={14} />
+            </span>
+            <span>{t('usagePanel.navTitle')}</span>
+            <span className="entry-settings-menu__item-meta">
+              {t('usagePanel.navHint')}
+            </span>
+          </button>
 
           <button
             type="button"

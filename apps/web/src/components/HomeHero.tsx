@@ -1692,7 +1692,6 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
               aria-busy={submitting}
             >
               <Icon name="send" size={13} />
-              <span>{submitting ? t('chat.comments.sending') : t('chat.send')}</span>
             </button>
           </div>
         </div>

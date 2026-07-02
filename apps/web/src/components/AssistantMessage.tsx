@@ -56,6 +56,7 @@ import { copyToClipboard } from "../lib/copy-to-clipboard";
 import { useT } from "../i18n";
 import { deriveFileOps, type FileOpEntry } from "../runtime/file-ops";
 import { dedupeToolUsesById } from "../runtime/tool-events";
+import { formatTokenCountCompact } from "../runtime/usage-client";
 import {
   isTodoWriteToolName,
   unfinishedTodosFromEvents,
@@ -1432,7 +1433,49 @@ function AssistantFooter({
     usage.costUsd > 0
       ? usage.costUsd.toFixed(4)
       : "";
-  const costLabel = formattedCost && formattedCost !== "0.0000" ? ` · $${formattedCost}` : "";
+  // Catalog-estimated costs (no provider-reported cost) render as `≈$` so a
+  // best-effort number is never mistaken for a billed one.
+  const costApproxPrefix = usage?.costSource === "estimated" ? "≈" : "";
+  const costLabel =
+    formattedCost && formattedCost !== "0.0000"
+      ? ` · ${costApproxPrefix}$${formattedCost}`
+      : "";
+  // Token summary: with input tokens present the footer reads
+  // `in 5.2k (cache 4.1k) · out 1.8k`; without them it keeps the legacy
+  // output-only wording. Cache reads only show when the runtime reported them.
+  const footerInputTokens =
+    typeof usage?.inputTokens === "number" &&
+    Number.isFinite(usage.inputTokens) &&
+    usage.inputTokens > 0
+      ? usage.inputTokens
+      : null;
+  const footerCacheReadTokens =
+    typeof usage?.cacheReadTokens === "number" &&
+    Number.isFinite(usage.cacheReadTokens) &&
+    usage.cacheReadTokens > 0
+      ? usage.cacheReadTokens
+      : null;
+  const tokensLabel =
+    footerInputTokens != null
+      ? ` · ${
+          footerCacheReadTokens != null
+            ? t("chatUsage.inTokensWithCache", {
+                n: formatTokenCountCompact(footerInputTokens),
+                cache: formatTokenCountCompact(footerCacheReadTokens),
+              })
+            : t("chatUsage.inTokens", {
+                n: formatTokenCountCompact(footerInputTokens),
+              })
+        }${
+          usage?.outputTokens != null
+            ? ` · ${t("chatUsage.outTokens", {
+                n: formatTokenCountCompact(usage.outputTokens),
+              })}`
+            : ""
+        }`
+      : usage?.outputTokens != null
+        ? ` · ${t("assistant.outTokens", { n: usage.outputTokens })}`
+        : "";
   if (
     !forceVisible &&
     !streaming &&
@@ -1467,9 +1510,7 @@ function AssistantFooter({
       </span>
       <span className="assistant-stats">
         {elapsed}
-        {usage?.outputTokens != null
-          ? ` · ${t("assistant.outTokens", { n: usage.outputTokens })}`
-          : ""}
+        {tokensLabel}
         {costLabel}
       </span>
       {copyMarkdown || onFork || feedbackControls ? (

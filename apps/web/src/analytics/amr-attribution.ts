@@ -49,6 +49,7 @@ const ENTRY_PAGE_BY_SOURCE: Record<TrackingAmrEntrySource, TrackingPageName> = {
   inline_amr_upgrade: 'chat_panel',
   avatar_amr_upgrade: 'chat_panel',
   avatar_amr_agent_card: 'chat_panel',
+  usage_panel: 'settings',
 };
 
 const ONBOARDING_PROFILE_SYNC_SOURCES: readonly TrackingAmrEntrySource[] = [

@@ -1,0 +1,359 @@
+/* Settings → Usage dashboard. Owned by UsagePanel.tsx.
+   Bars are pure CSS widths; motion follows the repo animation rules
+   (ease-out cubic-bezier(0.23, 1, 0.32, 1), enter ~200ms). */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  animation: panelIn 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@keyframes panelIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.rangeSwitch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--bg-subtle);
+}
+
+.rangeBtn {
+  margin: 0;
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background-color 200ms cubic-bezier(0.23, 1, 0.32, 1),
+    color 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.rangeBtn:hover {
+  color: var(--text-strong);
+}
+
+.rangeBtnActive {
+  background: var(--bg-panel);
+  color: var(--text-strong);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.bigNumbers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.bigNumber {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: var(--bg-panel);
+  min-width: 0;
+}
+
+.bigNumberLabel {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.bigNumberValue {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.bigNumberHint {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-height: 14px;
+}
+
+/* Stays mounted; fades in when there is a savings figure so the header does
+   not jump (repo rule: keep conditional elements mounted, toggle a class). */
+.cacheSavings {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -6px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: opacity 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.cacheSavingsVisible {
+  opacity: 1;
+}
+
+/* Open Design Cloud block (signed-in balance / signed-out promo). */
+.amrCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-panel) 88%, var(--accent-tint));
+}
+
+.amrCardMain {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.amrCardTitle {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-strong);
+}
+
+.amrBalanceValue {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.amrBalanceLabel {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.amrCardActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.amrActionPrimary,
+.amrActionPrimary:visited {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    transform 200ms cubic-bezier(0.23, 1, 0.32, 1),
+    filter 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.amrActionPrimary:hover {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+}
+
+.amrActionSecondary,
+.amrActionSecondary:visited {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--text-muted);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.amrActionSecondary:hover {
+  color: var(--text-strong);
+}
+
+.amrPromo {
+  background: var(--bg-panel);
+}
+
+.amrChips {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.amrChip {
+  padding: 1px 7px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  font-size: 10px;
+  font-weight: 550;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.amrPromoBody {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.amrLoginPill {
+  flex: 0 0 auto;
+}
+
+/* Breakdown group-by tabs. */
+.groupTabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.groupTab {
+  margin: 0;
+  padding: 6px 10px 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 550;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    color 200ms cubic-bezier(0.23, 1, 0.32, 1),
+    border-color 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.groupTab:hover {
+  color: var(--text-strong);
+  background: transparent;
+}
+
+.groupTabActive {
+  color: var(--text-strong);
+  border-bottom-color: var(--accent);
+}
+
+.stateRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 2px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.emptyState {
+  margin: 0;
+  padding: 18px 2px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+/* Horizontal bar rows (pure CSS widths). */
+.bucketList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 2px 0 6px;
+  list-style: none;
+}
+
+.bucketRow {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.bucketMeta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.bucketLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--text-strong);
+}
+
+.bucketStats {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.bucketCost {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--text-strong);
+}
+
+.bucketTokens,
+.bucketRuns {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.bucketBarTrack {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--bg-subtle);
+  overflow: hidden;
+}
+
+.bucketBarFill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}

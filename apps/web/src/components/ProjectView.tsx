@@ -7547,12 +7547,14 @@ export function ProjectView({
               forkingMessageId={forkingMessageId}
               onNewConversation={handleNewConversation}
               newConversationDisabled={newConversationDisabled}
+              onAgentModelChange={onAgentModelChange}
               conversations={conversations}
               activeConversationId={activeConversationId}
               messagesConversationId={messagesConversationId}
               onSelectConversation={handleSelectConversation}
               onDeleteConversation={handleDeleteConversation}
               config={config}
+              agentsById={agentsById}
               onOpenSettings={onOpenSettings}
               showByokRecoveryAction={
                 config.mode === 'api' &&

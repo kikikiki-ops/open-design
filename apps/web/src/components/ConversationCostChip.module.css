@@ -1,0 +1,161 @@
+/* ConversationCostChip — composer-footer chip + per-model breakdown popover.
+   Visual language mirrors ContextUsagePanel's trigger/panel so the two
+   footer controls read as one family. */
+
+.root {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.trigger {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    background-color 140ms var(--ease-out),
+    border-color 140ms var(--ease-out),
+    color 140ms var(--ease-out);
+}
+
+.trigger:hover,
+.trigger:focus-visible {
+  outline: none;
+  color: var(--text);
+  background: var(--bg-subtle);
+  border-color: var(--border-strong);
+}
+
+.triggerText {
+  font-variant-numeric: tabular-nums;
+}
+
+.popover {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 95;
+  width: min(300px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-panel);
+  color: var(--text);
+  box-shadow:
+    0 1px 2px color-mix(in srgb, #000 10%, transparent),
+    0 18px 44px -18px color-mix(in srgb, #000 36%, transparent);
+  animation: costPopoverIn 200ms var(--ease-out);
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-strong);
+  line-height: 1.25;
+}
+
+.runs {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.totalLine {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.totalValue {
+  font-variant-numeric: tabular-nums;
+}
+
+.modelList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.modelRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name cost'
+    'tokens cost';
+  column-gap: 10px;
+  align-items: center;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.modelName {
+  grid-area: name;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.modelTokens {
+  grid-area: tokens;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.modelCost {
+  grid-area: cost;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.empty,
+.hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-muted);
+}
+
+@keyframes costPopoverIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}

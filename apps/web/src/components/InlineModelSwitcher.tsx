@@ -65,6 +65,12 @@ import {
 } from './amrLoginPolling';
 import { orderAgentsWithOpenDesignFirst } from './agentOrdering';
 import { normalizeAgentModelChoice } from './agentModelSelection';
+import {
+  ModelInfoTrigger,
+  ModelSpeedBadge,
+  modelHasDetails,
+} from './ModelInfoCard';
+import modelCardStyles from './ModelInfoCard.module.css';
 import { SearchableModelSelect } from './modelOptions';
 import {
   mergeProviderModelOptions,
@@ -429,8 +435,9 @@ export function InlineModelSwitcher({
     onAgentModelChange,
   ]);
 
-  const currentModelLabel =
-    currentAgent?.models?.find((m) => m.id === currentModelId)?.label ?? null;
+  const currentModelOption =
+    currentAgent?.models?.find((m) => m.id === currentModelId) ?? null;
+  const currentModelLabel = currentModelOption?.label ?? null;
   const amrLoggedIn = amrStatus?.loggedIn === true;
 
   useEffect(() => {
@@ -588,9 +595,10 @@ export function InlineModelSwitcher({
     () => apiModelOptions.map((model) => model.id),
     [apiModelOptions],
   );
-  const apiModelChoices = useMemo(
-    () => apiModelOptions.map((model) => ({ id: model.id, label: model.label })),
-    [apiModelOptions],
+  const currentApiModelOption = useMemo(
+    () =>
+      apiModelOptions.find((model) => model.id === config.model.trim()) ?? null,
+    [apiModelOptions, config.model],
   );
 
   // Chip text — keep it tight so the pill doesn't wrap on small viewports.
@@ -948,8 +956,19 @@ export function InlineModelSwitcher({
               currentAgent.models &&
               currentAgent.models.length > 0 ? (
                 <div className="inline-switcher__row">
-                  <span className="inline-switcher__label">
+                  <span
+                    className={`inline-switcher__label ${modelCardStyles.labelRow}`}
+                  >
                     {t('inlineSwitcher.modelLabel')}
+                    {currentModelOption?.speedTier ? (
+                      <ModelSpeedBadge tier={currentModelOption.speedTier} />
+                    ) : null}
+                    {currentModelOption && modelHasDetails(currentModelOption) ? (
+                      <ModelInfoTrigger
+                        model={currentModelOption}
+                        data-testid="inline-model-switcher-agent-model-info"
+                      />
+                    ) : null}
                   </span>
                   <SearchableModelSelect
                     className="inline-switcher__select"
@@ -1030,8 +1049,20 @@ export function InlineModelSwitcher({
               </div>
 
               <div className="inline-switcher__row">
-                <span className="inline-switcher__label">
+                <span
+                  className={`inline-switcher__label ${modelCardStyles.labelRow}`}
+                >
                   {t('inlineSwitcher.modelLabel')}
+                  {currentApiModelOption?.speedTier ? (
+                    <ModelSpeedBadge tier={currentApiModelOption.speedTier} />
+                  ) : null}
+                  {currentApiModelOption &&
+                  modelHasDetails(currentApiModelOption) ? (
+                    <ModelInfoTrigger
+                      model={currentApiModelOption}
+                      data-testid="inline-model-switcher-api-model-info"
+                    />
+                  ) : null}
                 </span>
                 {apiModelOptions.length > 0 ? (
                   <SearchableModelSelect
@@ -1041,7 +1072,7 @@ export function InlineModelSwitcher({
                     popoverTestId="inline-model-switcher-api-model-popover"
                     searchPlaceholder={t('designs.searchPlaceholder')}
                     aria-label={t('inlineSwitcher.modelLabel')}
-                    models={apiModelChoices}
+                    models={apiModelOptions}
                     value={config.model}
                     onChange={(nextValue) => {
                       trackExecutionSettingsPopoverClick(analytics.track, {

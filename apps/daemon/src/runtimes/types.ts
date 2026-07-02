@@ -1,5 +1,5 @@
 import type { ExecFileOptions } from 'node:child_process';
-import type { AgentDiagnostic } from '@open-design/contracts';
+import type { AgentContextManagement, AgentDiagnostic, AgentModelOption } from '@open-design/contracts';
 
 export type { AgentDiagnostic } from '@open-design/contracts';
 
@@ -172,6 +172,7 @@ export type RuntimeAgentDef = {
   // `session/set_model` and rejects free-form ids). Defaults to allowing
   // custom input (undefined === true) so most adapters keep today's UX.
   supportsCustomModel?: boolean;
+  contextManagement?: AgentContextManagement;
   // When `true`, the daemon trusts this adapter's CLI to carry its own
   // multi-turn conversation memory across spawn invocations (today only
   // `agy -c`). The chat composer skips the rendered web transcript on
@@ -258,7 +259,10 @@ export type DetectedAgent = Omit<
   | 'inactivityTimeoutMs'
   | 'authProbe'
 > & {
-  models: RuntimeModelOption[];
+  // Enriched via the model catalog (../model-catalog.ts) before surfacing,
+  // so the /api/agents payload matches the AgentInfo contract's optional
+  // description/context/pricing metadata, not just bare {id,label}.
+  models: AgentModelOption[];
   modelsSource: RuntimeModelSource;
   available: boolean;
   authStatus?: 'ok' | 'missing' | 'unknown';

@@ -27,6 +27,7 @@ export const claudeAgentDef = {
       args: ['auth', 'status'],
       timeoutMs: 5000,
     },
+    contextManagement: { autoCompaction: true },
     helpArgs: ['-p', '--help'],
     capabilityFlags: {
       // Flag string -> capability key. After probing `--help`, we set

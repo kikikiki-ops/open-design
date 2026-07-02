@@ -9,6 +9,7 @@ import type {
 } from '@open-design/contracts/api/providerModels';
 import { isLoopbackApiHost } from '@open-design/contracts/api/connectionTest';
 import { redactSecrets, validateBaseUrlResolved } from '../connectionTest.js';
+import { enrichModelOptions } from '../model-catalog.js';
 import { googleProviderModelsUrl, normalizeGoogleModelId } from './google-models.js';
 import { aihubmixHeaders, aihubmixCatalogUrl, parseAIHubMixCatalog } from './aihubmix.js';
 
@@ -87,7 +88,9 @@ function uniqueModels(models: ProviderModelOption[]): ProviderModelOption[] {
     const id = model.id.trim();
     if (!id || seen.has(id)) continue;
     seen.add(id);
-    out.push({ id, label: model.label.trim() || id });
+    // Spread first: provider-supplied metadata (description, contextWindow,
+    // maxOutputTokens, …) must survive dedupe instead of being rebuilt away.
+    out.push({ ...model, id, label: model.label.trim() || id });
   }
   return out.sort((a, b) => a.id.localeCompare(b.id));
 }
@@ -175,13 +178,34 @@ function extractGoogleModels(data: unknown): ProviderModelOption[] {
       .filter(supportsGoogleGenerateContent)
       .map((item) => {
         const obj = item && typeof item === 'object'
-          ? item as { name?: unknown; baseModelId?: unknown; displayName?: unknown }
+          ? item as {
+              name?: unknown;
+              baseModelId?: unknown;
+              displayName?: unknown;
+              description?: unknown;
+              inputTokenLimit?: unknown;
+              outputTokenLimit?: unknown;
+            }
           : null;
         const id = googleModelId(obj?.name, obj?.baseModelId);
+        if (!id) return null;
         const label = typeof obj?.displayName === 'string' && obj.displayName.trim()
           ? obj.displayName
           : id;
-        return id ? { id, label } : null;
+        // Google's ListModels payload already carries model-card metadata —
+        // keep it instead of flattening to {id,label} (remote data wins over
+        // the local catalog during enrichment).
+        const option: ProviderModelOption = { id, label };
+        if (typeof obj?.description === 'string' && obj.description.trim()) {
+          option.description = obj.description.trim();
+        }
+        if (typeof obj?.inputTokenLimit === 'number' && obj.inputTokenLimit > 0) {
+          option.contextWindow = obj.inputTokenLimit;
+        }
+        if (typeof obj?.outputTokenLimit === 'number' && obj.outputTokenLimit > 0) {
+          option.maxOutputTokens = obj.outputTokenLimit;
+        }
+        return option;
       })
       .filter((item): item is ProviderModelOption => item != null),
   );
@@ -270,7 +294,7 @@ export async function listProviderModels(
       ok: true,
       kind: 'success',
       latencyMs: Date.now() - start,
-      models: BEDROCK_MODEL_OPTIONS,
+      models: enrichModelOptions(BEDROCK_MODEL_OPTIONS),
       detail: 'AWS Bedrock uses a static seed until AWS credential-backed discovery is available.',
     };
   }
@@ -337,7 +361,9 @@ export async function listProviderModels(
       };
     }
 
-    const models = extractModels(input.protocol, data);
+    // Fill catalog metadata (description/context/pricing/speed) for models we
+    // recognize; anything the provider payload already supplied stays as-is.
+    const models = enrichModelOptions(extractModels(input.protocol, data));
     console.log(
       `[provider:models] ${input.protocol} ${validated.parsed.hostname} → ${models.length} models in ${latencyMs}ms`,
     );

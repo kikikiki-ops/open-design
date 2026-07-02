@@ -303,7 +303,6 @@ export function SessionModeToggle({ mode, onChange, disabled = false }: Props) {
         }}
       >
         <Icon name={active.icon} size={13} />
-        <span className="session-mode-toggle__label">{active.label}</span>
         <Icon name="chevron-down" size={12} />
       </button>
       {open ? (

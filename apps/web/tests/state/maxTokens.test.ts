@@ -3,9 +3,12 @@ import { describe, expect, it } from 'vitest';
 import litellmData from '../../src/state/litellm-models.json';
 import {
   effectiveMaxTokens,
+  FALLBACK_CONTEXT_WINDOW,
   FALLBACK_MAX_TOKENS,
+  hasModelContextWindow,
   MAX_MAX_TOKENS,
   MIN_MAX_TOKENS,
+  modelContextWindowDefault,
   modelMaxTokensDefault,
 } from '../../src/state/maxTokens';
 
@@ -37,6 +40,25 @@ describe('modelMaxTokensDefault', () => {
   it('returns FALLBACK_MAX_TOKENS for unknown ids', () => {
     expect(modelMaxTokensDefault('definitely-not-a-real-model-x9z')).toBe(FALLBACK_MAX_TOKENS);
     expect(FALLBACK_MAX_TOKENS).toBe(8192);
+  });
+});
+
+describe('modelContextWindowDefault', () => {
+  it('normalizes provider prefixes and model effort suffixes', () => {
+    expect(modelContextWindowDefault('openai/gpt-5.5-medium')).toBe(128000);
+    expect(modelContextWindowDefault('GPT-5.5 High')).toBe(128000);
+    expect(hasModelContextWindow('openai/gpt-5.5-medium')).toBe(true);
+  });
+
+  it('keeps context windows separate from output caps', () => {
+    expect(modelMaxTokensDefault('claude-sonnet-4-5')).toBe(64000);
+    expect(modelContextWindowDefault('claude-sonnet-4-5')).toBe(200000);
+  });
+
+  it('uses a wider context-window fallback without changing max_tokens fallback', () => {
+    expect(modelContextWindowDefault('definitely-not-a-real-model-x9z')).toBe(FALLBACK_CONTEXT_WINDOW);
+    expect(modelMaxTokensDefault('definitely-not-a-real-model-x9z')).toBe(FALLBACK_MAX_TOKENS);
+    expect(hasModelContextWindow('definitely-not-a-real-model-x9z')).toBe(false);
   });
 });
 

@@ -11,6 +11,7 @@ import litellmData from './litellm-models.json';
 // Anything LiteLLM doesn't track (or where its value is wrong for our
 // usage) goes in OVERRIDES; unknown models fall through to FALLBACK.
 export const FALLBACK_MAX_TOKENS = 8192;
+export const FALLBACK_CONTEXT_WINDOW = 128000;
 
 // Bounds the user can express via the Settings override. Source of truth
 // for both the UI input attributes and runtime validation in
@@ -76,8 +77,60 @@ const OVERRIDES: Record<string, number> = {
   'rnj-1:8b': 131072,
 };
 
+// Per-model context window for the context-usage panel. Keep this separate
+// from the output-cap data above: `max_tokens` controls completion length,
+// while context windows describe total prompt + completion budget.
+const CONTEXT_WINDOW_OVERRIDES: Record<string, number> = {
+  'claude-haiku-4-5': 200000,
+  'claude-opus-4-5': 200000,
+  'claude-sonnet-4-5': 200000,
+  'deepseek-v4-flash': 384000,
+  'deepseek-v4-pro': 384000,
+  'gpt-5.5': 128000,
+  'gpt-5.5-2026-04-23': 128000,
+  'mimo-v2.5-pro': 32768,
+};
+
+function modelLookupCandidates(model: string): string[] {
+  const trimmed = model.trim();
+  if (!trimmed) return [];
+  const lower = trimmed.toLowerCase();
+  const withoutProvider = lower.includes('/') ? lower.split('/').at(-1) ?? lower : lower;
+  const withoutEffortSuffix = withoutProvider.replace(/(?:[\s_-](?:low|medium|high|xhigh|max))$/i, '');
+  return Array.from(new Set([
+    trimmed,
+    lower,
+    withoutProvider,
+    withoutEffortSuffix,
+  ].filter(Boolean)));
+}
+
+function lookupModelMaxTokens(model: string): number | undefined {
+  for (const candidate of modelLookupCandidates(model)) {
+    const value = OVERRIDES[candidate] ?? LITELLM_MODELS[candidate];
+    if (typeof value === 'number') return value;
+  }
+  return undefined;
+}
+
+function lookupModelContextWindow(model: string): number | undefined {
+  for (const candidate of modelLookupCandidates(model)) {
+    const value = CONTEXT_WINDOW_OVERRIDES[candidate];
+    if (typeof value === 'number') return value;
+  }
+  return undefined;
+}
+
+export function hasModelContextWindow(model: string): boolean {
+  return lookupModelContextWindow(model) !== undefined;
+}
+
+export function modelContextWindowDefault(model: string): number {
+  return lookupModelContextWindow(model) ?? FALLBACK_CONTEXT_WINDOW;
+}
+
 export function modelMaxTokensDefault(model: string): number {
-  return OVERRIDES[model] ?? LITELLM_MODELS[model] ?? FALLBACK_MAX_TOKENS;
+  return lookupModelMaxTokens(model) ?? FALLBACK_MAX_TOKENS;
 }
 
 function isValidOverride(value: number | undefined): value is number {

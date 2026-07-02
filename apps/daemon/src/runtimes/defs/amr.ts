@@ -315,6 +315,7 @@ export const amrAgentDef = {
   bin: 'vela',
   versionArgs: ['--version'],
   fetchModels: fetchVelaRemoteModelsWithRetry,
+  contextManagement: { autoCompaction: true },
   // Fail closed when Vela's live catalog is unavailable. Stale static
   // fallbacks let users select models that link/opencode no longer accepts.
   fallbackModels: [] as RuntimeModelOption[],

@@ -34,6 +34,7 @@ import {
   clearVelaWalletSnapshotCache,
   velaWalletSnapshotReader,
 } from '../integrations/vela-wallet.js';
+import { enrichModelOptions } from '../model-catalog.js';
 import { amrModelLoadingCache } from '../runtimes/amr-model-cache.js';
 import {
   fetchVelaBillingSummary,
@@ -232,7 +233,9 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
         fetchPreset: () => fetchVelaPresetModels(probe.launchPath, probe.env),
         fetchRemote: () => fetchVelaRemoteModelsWithRetry(probe.launchPath, probe.env),
       });
-      res.json(response);
+      // Catalog enrichment fills missing model-card metadata only; any
+      // fields the remote AMR catalog starts reporting win automatically.
+      res.json({ ...response, models: enrichModelOptions(response.models) });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
     }

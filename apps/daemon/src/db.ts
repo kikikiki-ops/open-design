@@ -250,6 +250,36 @@ function migrate(db: SqliteDb): void {
 
     CREATE INDEX IF NOT EXISTS idx_routine_runs_routine
       ON routine_runs(routine_id, started_at DESC);
+
+    -- L2 usage ledger (model/cost/usage transparency spec): exactly one row
+    -- per finished agent run, written by usage-ledger.ts from the same
+    -- run-event scan that feeds Langfuse analytics. This is the SUM-able
+    -- source behind /api/usage/* and \`od usage\`; usage embedded in
+    -- messages.events_json remains the per-message display source only.
+    CREATE TABLE IF NOT EXISTS usage_ledger (
+      id TEXT PRIMARY KEY,
+      project_id TEXT,
+      conversation_id TEXT,
+      message_id TEXT,
+      agent_id TEXT NOT NULL,
+      model TEXT,
+      mode TEXT,
+      exec_mode TEXT,
+      input_tokens INTEGER,
+      output_tokens INTEGER,
+      cache_read_tokens INTEGER,
+      cache_write_tokens INTEGER,
+      cost_usd REAL,
+      cost_source TEXT,
+      duration_ms INTEGER,
+      artifact_count INTEGER,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_usage_ledger_time
+      ON usage_ledger(created_at);
+    CREATE INDEX IF NOT EXISTS idx_usage_ledger_conv
+      ON usage_ledger(conversation_id);
   `);
   // Forward-compatible column add for databases created before metadata_json.
   // SQLite has no IF NOT EXISTS for ALTER, so we check pragma_table_info.
@@ -2232,6 +2262,235 @@ export function listTabs(db: SqliteDb, projectId: string) {
     active: active ? active.name : null,
     hasSavedState: rows.length > 0 || Boolean(state),
     updatedAt: state ? Number(state.updatedAt ?? Date.now()) : undefined,
+  };
+}
+
+// ---------- usage ledger ----------
+
+export type UsageLedgerCostSource = 'provider' | 'estimated' | 'unknown';
+
+export type UsageLedgerGroupBy =
+  | 'day'
+  | 'model'
+  | 'agent'
+  | 'project'
+  | 'conversation';
+
+export interface UsageLedgerRowInput {
+  id?: string;
+  projectId?: string | null;
+  conversationId?: string | null;
+  messageId?: string | null;
+  agentId: string;
+  model?: string | null;
+  mode?: string | null;
+  execMode?: string | null;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  cacheReadTokens?: number | null;
+  cacheWriteTokens?: number | null;
+  costUsd?: number | null;
+  costSource?: UsageLedgerCostSource;
+  durationMs?: number | null;
+  artifactCount?: number | null;
+  createdAt?: number;
+}
+
+/** Inclusive unix-ms window over usage_ledger.created_at. */
+export interface UsageLedgerWindow {
+  since: number;
+  until: number;
+  /** Restrict the aggregation to one conversation (conversation rollup). */
+  conversationId?: string;
+}
+
+export interface UsageLedgerBucketRow {
+  key: string;
+  label: string | null;
+  runs: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  /** Provider-reported cost sum (cost_source = 'provider'). */
+  costUsd: number;
+  /** Catalog-estimated cost sum (cost_source = 'estimated'). */
+  estimatedCostUsd: number;
+  durationMs: number;
+}
+
+export interface UsageLedgerTotalsRow {
+  runs: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  costUsd: number;
+  estimatedCostUsd: number;
+  durationMs: number;
+  /** Count of rows that carried a cache_read counter at all. */
+  cacheRows: number;
+  /** SUM(input_tokens) over rows that carried a cache_read counter. */
+  cacheRowsInputTokens: number;
+  /** SUM(cache_read_tokens) over rows that carried a cache_read counter. */
+  cacheRowsReadTokens: number;
+}
+
+function ledgerInt(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.round(value))
+    : null;
+}
+
+export function insertUsageLedgerRow(db: SqliteDb, input: UsageLedgerRowInput): void {
+  db.prepare(
+    `INSERT INTO usage_ledger
+       (id, project_id, conversation_id, message_id, agent_id, model, mode,
+        exec_mode, input_tokens, output_tokens, cache_read_tokens,
+        cache_write_tokens, cost_usd, cost_source, duration_ms,
+        artifact_count, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    input.id ?? randomUUID(),
+    input.projectId ?? null,
+    input.conversationId ?? null,
+    input.messageId ?? null,
+    input.agentId,
+    input.model ?? null,
+    input.mode ?? null,
+    input.execMode ?? null,
+    ledgerInt(input.inputTokens),
+    ledgerInt(input.outputTokens),
+    ledgerInt(input.cacheReadTokens),
+    ledgerInt(input.cacheWriteTokens),
+    typeof input.costUsd === 'number' && Number.isFinite(input.costUsd)
+      ? Math.max(0, input.costUsd)
+      : null,
+    input.costSource ?? 'unknown',
+    ledgerInt(input.durationMs),
+    ledgerInt(input.artifactCount),
+    typeof input.createdAt === 'number' && Number.isFinite(input.createdAt)
+      ? input.createdAt
+      : Date.now(),
+  );
+}
+
+// Group-key / label expressions per bucket dimension. 'day' buckets by the
+// daemon machine's local calendar day so "today" matches what the user sees.
+const USAGE_LEDGER_GROUP_SQL: Record<
+  UsageLedgerGroupBy,
+  { key: string; label: string; join: string }
+> = {
+  day: {
+    key: `strftime('%Y-%m-%d', u.created_at / 1000, 'unixepoch', 'localtime')`,
+    label: 'NULL',
+    join: '',
+  },
+  model: {
+    key: `COALESCE(NULLIF(u.model, ''), 'unknown')`,
+    label: 'NULL',
+    join: '',
+  },
+  agent: {
+    key: `COALESCE(NULLIF(u.agent_id, ''), 'unknown')`,
+    label: 'NULL',
+    join: '',
+  },
+  project: {
+    key: `COALESCE(u.project_id, '')`,
+    label: 'MAX(p.name)',
+    join: 'LEFT JOIN projects p ON p.id = u.project_id',
+  },
+  conversation: {
+    key: `COALESCE(u.conversation_id, '')`,
+    label: 'MAX(c.title)',
+    join: 'LEFT JOIN conversations c ON c.id = u.conversation_id',
+  },
+};
+
+const USAGE_LEDGER_SUM_COLS = `
+  COUNT(*) AS runs,
+  COALESCE(SUM(COALESCE(u.input_tokens, 0)), 0) AS inputTokens,
+  COALESCE(SUM(COALESCE(u.output_tokens, 0)), 0) AS outputTokens,
+  COALESCE(SUM(COALESCE(u.cache_read_tokens, 0)), 0) AS cacheReadTokens,
+  COALESCE(SUM(COALESCE(u.cache_write_tokens, 0)), 0) AS cacheWriteTokens,
+  COALESCE(SUM(CASE WHEN u.cost_source = 'provider' THEN COALESCE(u.cost_usd, 0) ELSE 0 END), 0) AS costUsd,
+  COALESCE(SUM(CASE WHEN u.cost_source = 'estimated' THEN COALESCE(u.cost_usd, 0) ELSE 0 END), 0) AS estimatedCostUsd,
+  COALESCE(SUM(COALESCE(u.duration_ms, 0)), 0) AS durationMs`;
+
+function usageLedgerWhere(window: UsageLedgerWindow): { sql: string; params: unknown[] } {
+  const clauses = ['u.created_at >= ?', 'u.created_at <= ?'];
+  const params: unknown[] = [window.since, window.until];
+  if (window.conversationId) {
+    clauses.push('u.conversation_id = ?');
+    params.push(window.conversationId);
+  }
+  return { sql: clauses.join(' AND '), params };
+}
+
+export function aggregateUsageLedger(
+  db: SqliteDb,
+  groupBy: UsageLedgerGroupBy,
+  window: UsageLedgerWindow,
+): UsageLedgerBucketRow[] {
+  const group = USAGE_LEDGER_GROUP_SQL[groupBy];
+  const where = usageLedgerWhere(window);
+  const order = groupBy === 'day'
+    ? 'ORDER BY key ASC'
+    : 'ORDER BY (costUsd + estimatedCostUsd) DESC, runs DESC, key ASC';
+  const result = db
+    .prepare(
+      `SELECT ${group.key} AS key,
+              ${group.label} AS label,
+              ${USAGE_LEDGER_SUM_COLS}
+         FROM usage_ledger u
+         ${group.join}
+        WHERE ${where.sql}
+        GROUP BY key
+        ${order}`,
+    )
+    .all(...where.params) as DbRow[];
+  return result.map((row) => ({
+    key: String(row.key ?? ''),
+    label: typeof row.label === 'string' && row.label ? row.label : null,
+    runs: Number(row.runs ?? 0),
+    inputTokens: Number(row.inputTokens ?? 0),
+    outputTokens: Number(row.outputTokens ?? 0),
+    cacheReadTokens: Number(row.cacheReadTokens ?? 0),
+    cacheWriteTokens: Number(row.cacheWriteTokens ?? 0),
+    costUsd: Number(row.costUsd ?? 0),
+    estimatedCostUsd: Number(row.estimatedCostUsd ?? 0),
+    durationMs: Number(row.durationMs ?? 0),
+  }));
+}
+
+export function totalizeUsageLedger(
+  db: SqliteDb,
+  window: UsageLedgerWindow,
+): UsageLedgerTotalsRow {
+  const where = usageLedgerWhere(window);
+  const row = db
+    .prepare(
+      `SELECT ${USAGE_LEDGER_SUM_COLS},
+              COALESCE(SUM(CASE WHEN u.cache_read_tokens IS NOT NULL THEN 1 ELSE 0 END), 0) AS cacheRows,
+              COALESCE(SUM(CASE WHEN u.cache_read_tokens IS NOT NULL THEN COALESCE(u.input_tokens, 0) ELSE 0 END), 0) AS cacheRowsInputTokens,
+              COALESCE(SUM(CASE WHEN u.cache_read_tokens IS NOT NULL THEN u.cache_read_tokens ELSE 0 END), 0) AS cacheRowsReadTokens
+         FROM usage_ledger u
+        WHERE ${where.sql}`,
+    )
+    .get(...where.params) as DbRow | undefined;
+  return {
+    runs: Number(row?.runs ?? 0),
+    inputTokens: Number(row?.inputTokens ?? 0),
+    outputTokens: Number(row?.outputTokens ?? 0),
+    cacheReadTokens: Number(row?.cacheReadTokens ?? 0),
+    cacheWriteTokens: Number(row?.cacheWriteTokens ?? 0),
+    costUsd: Number(row?.costUsd ?? 0),
+    estimatedCostUsd: Number(row?.estimatedCostUsd ?? 0),
+    durationMs: Number(row?.durationMs ?? 0),
+    cacheRows: Number(row?.cacheRows ?? 0),
+    cacheRowsInputTokens: Number(row?.cacheRowsInputTokens ?? 0),
+    cacheRowsReadTokens: Number(row?.cacheRowsReadTokens ?? 0),
   };
 }
 

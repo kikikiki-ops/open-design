@@ -2646,12 +2646,12 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
               </div>
             ) : null}
             {leadingAccessory}
-            <span className="composer-spacer" />
-            {footerAccessory}
             <SessionModeToggle
               mode={sessionMode}
               onChange={onSessionModeChange}
             />
+            <span className="composer-spacer" />
+            {footerAccessory}
             {showStopButton ? (
               <button
                 type="button"
@@ -2662,7 +2662,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
                 aria-label={t('chat.stop')}
               >
                 <Icon name="stop" size={16} />
-                <span>{t('chat.stop')}</span>
               </button>
             ) : null}
             {showSendButton ? (
@@ -2684,7 +2683,6 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
                 data-tooltip={t('chat.send')}
               >
                 <Icon name="send" size={16} />
-                <span>{t('chat.send')}</span>
               </button>
             ) : null}
           </div>

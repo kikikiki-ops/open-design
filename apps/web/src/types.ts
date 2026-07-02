@@ -2,6 +2,7 @@ import type {
   AgentInfo,
   AgentDiagnostic,
   AgentFixIntent,
+  AgentModelOption,
   AgentCliEnvPrefs,
   AgentCliEnvIntentPrefs,
   AgentModelPrefs,
@@ -518,10 +519,10 @@ export interface ExamplePreview {
   html: string;
 }
 
-export interface AgentModelOption {
-  id: string;
-  label: string;
-}
+// The enriched catalog shape (description / contextWindow / pricing /
+// speedTier / tags / recommendedFor / deprecated) comes from contracts;
+// every field beyond id/label is optional so bare models keep working.
+export type { AgentModelOption };
 
 export type Surface = 'web' | 'image' | 'video' | 'audio';
 

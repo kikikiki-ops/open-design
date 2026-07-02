@@ -8,6 +8,7 @@ import {
 import { applyAgentLaunchEnv, resolveAgentLaunch } from './launch.js';
 import { spawnEnvForAgent } from './env.js';
 import { probeAgentAuthStatus } from './auth.js';
+import { enrichModelOptions } from '../model-catalog.js';
 import { agentCapabilities } from './capabilities.js';
 import { installMetaForAgent } from './metadata.js';
 import { resolveAmrProfile } from '../integrations/vela.js';
@@ -151,7 +152,7 @@ function unavailableAgent(
 ): DetectedAgent {
   return {
     ...stripFns(def),
-    models: def.fallbackModels ?? [DEFAULT_MODEL_OPTION],
+    models: enrichModelOptions(def.fallbackModels ?? [DEFAULT_MODEL_OPTION]),
     modelsSource: 'fallback',
     available: false,
     ...(diagnostics.length > 0 ? { diagnostics } : {}),
@@ -240,7 +241,11 @@ async function probe(
   const authDiagnostic = auth ? buildAuthDiagnostic(def, auth) : null;
   return {
     ...stripFns(def),
-    models: surfacedModelResult.models,
+    // Catalog enrichment happens here — the single place every /api/agents
+    // consumer (batch + SSE stream) receives its model list — so bare
+    // {id,label} options from fallbackModels / listModels / fetchModels all
+    // gain description/context/pricing metadata without touching adapters.
+    models: enrichModelOptions(surfacedModelResult.models),
     modelsSource: surfacedModelResult.source,
     available: true,
     path: launch.selectedPath,

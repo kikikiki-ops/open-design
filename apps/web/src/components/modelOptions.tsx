@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom';
 import { forwardRef, useEffect, useLayoutEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { AgentModelOption } from '../types';
+import { ModelInfoTrigger, ModelSpeedBadge, modelHasDetails } from './ModelInfoCard';
 
 export function renderModelOptions(models: AgentModelOption[]) {
   const groups = new Map<string, AgentModelOption[]>();
@@ -271,20 +272,40 @@ export const SearchableModelSelect = forwardRef<
                 {filteredOptions.map((option) => {
                   const active = option.id === value;
                   return (
-                    <button
+                    <div
                       key={option.id}
-                      type="button"
-                      role="option"
-                      aria-selected={active}
-                      className={`model-select-searchable__option${active ? ' is-active' : ''}`}
-                      data-selected={active ? 'true' : undefined}
-                      onClick={() => {
-                        onChange(option.id);
-                        setOpen(false);
-                      }}
+                      className="model-select-searchable__option-row"
+                      role="presentation"
                     >
-                      <span className="model-select-searchable__option-label">{option.label}</span>
-                    </button>
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={active}
+                        className={`model-select-searchable__option${active ? ' is-active' : ''}`}
+                        data-selected={active ? 'true' : undefined}
+                        onClick={() => {
+                          onChange(option.id);
+                          setOpen(false);
+                        }}
+                      >
+                        <span className="model-select-searchable__option-label">
+                          {option.label}
+                          {option.speedTier ? (
+                            <ModelSpeedBadge
+                              tier={option.speedTier}
+                              className="model-select-searchable__option-badge"
+                            />
+                          ) : null}
+                        </span>
+                      </button>
+                      {modelHasDetails(option) ? (
+                        <ModelInfoTrigger
+                          model={option}
+                          className="model-select-searchable__option-info"
+                          data-testid={`model-info-trigger-${option.id}`}
+                        />
+                      ) : null}
+                    </div>
                   );
                 })}
                 {filteredOptions.length === 0 ? (

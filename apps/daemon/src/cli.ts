@@ -300,6 +300,15 @@ const PLUGIN_LIST_BOOLEAN_FLAGS = new Set([
   ...PLUGIN_BOOLEAN_FLAGS,
   'bundled', 'no-bundled',
 ]);
+// `od usage …` mirrors the Settings → Usage panel over GET /api/usage/summary
+// (usage_ledger aggregation). Hoisted with the other dispatch-touched flag
+// sets because runUsage is reachable through the top-of-file SUBCOMMAND_MAP
+// dispatch, which runs during module evaluation — a const declared further
+// down would still be in TDZ.
+const USAGE_STRING_FLAGS = new Set(['daemon-url', 'range', 'group-by']);
+const USAGE_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
+const USAGE_CLI_RANGES = ['today', '7d', '30d'];
+const USAGE_CLI_GROUP_BYS = ['day', 'model', 'agent', 'project', 'conversation'];
 
 const SUBCOMMAND_MAP = {
   artifacts: runArtifacts,
@@ -335,6 +344,7 @@ const SUBCOMMAND_MAP = {
   config: runConfig,
   library: runLibrary,
   figma: runFigma,
+  usage: runUsage,
 };
 
 const EXPORT_STRING_FLAGS = new Set([
@@ -584,6 +594,10 @@ function printRootHelp() {
       (no model/agent calls). Mirrors the web Download menu; rasterization uses
       the desktop runtime's bundled Chromium.
 
+  od usage [--range today|7d|30d] [--group-by day|model|agent|project|conversation] [--json]
+      Aggregate model usage and cost from the local usage ledger (one row per
+      finished agent run). Same numbers as the Settings → Usage panel.
+
   "$OD_NODE_BIN" "$OD_BIN" tools ...
       Recommended agent-runtime form; avoids relying on user PATH for od or node.
 
@@ -612,6 +626,135 @@ What the daemon does:
   * proxies messages (text + images) to the selected agent via child-process spawn
   * exposes /api/projects/:id/media/generate — the unified image/video/audio
      dispatcher that the agent calls via \`od media generate\`.`);
+}
+
+// ---------------------------------------------------------------------------
+// Subcommand: od usage …
+// ---------------------------------------------------------------------------
+
+function printUsageCommandHelp() {
+  console.log(`Usage:
+  od usage [--range today|7d|30d] [--group-by day|model|agent|project|conversation] [--json]
+
+Aggregated model usage and cost from the local usage ledger (one row per
+finished agent run). Mirrors GET /api/usage/summary — the same endpoint the
+Settings → Usage panel reads, so the numbers always match the UI.
+
+Options:
+  --range <r>          Time window: today | 7d | 30d (default: 7d).
+  --group-by <g>       Bucket key: day | model | agent | project | conversation
+                       (default: model).
+  --json               Print the raw UsageSummaryResponse JSON.
+  --daemon-url <url>   Open Design daemon HTTP base.
+
+Costs marked with ≈ are estimated from catalog pricing (the provider did not
+report a cost for those runs); unmarked costs are provider-reported.`);
+}
+
+async function runUsage(args) {
+  if (args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
+    printUsageCommandHelp();
+    process.exit(0);
+  }
+  let flags;
+  try {
+    flags = parseFlags(args, { string: USAGE_STRING_FLAGS, boolean: USAGE_BOOLEAN_FLAGS });
+  } catch (err) {
+    console.error(err.message);
+    process.exit(2);
+  }
+  const range = flags.range ?? '7d';
+  if (!USAGE_CLI_RANGES.includes(range)) {
+    console.error(`invalid --range: ${range} (expected ${USAGE_CLI_RANGES.join(' | ')})`);
+    process.exit(2);
+  }
+  const groupBy = flags['group-by'] ?? 'model';
+  if (!USAGE_CLI_GROUP_BYS.includes(groupBy)) {
+    console.error(`invalid --group-by: ${groupBy} (expected ${USAGE_CLI_GROUP_BYS.join(' | ')})`);
+    process.exit(2);
+  }
+  const base = await cliDaemonBaseUrl(flags);
+  let resp;
+  try {
+    resp = await fetch(
+      `${base}/api/usage/summary?range=${encodeURIComponent(range)}&groupBy=${encodeURIComponent(groupBy)}`,
+    );
+  } catch (err) {
+    surfaceFetchError(err, base);
+    process.exit(3);
+  }
+  if (!resp.ok) return structuredHttpFailure(resp);
+  const summary = await resp.json();
+  if (flags.json) {
+    return process.stdout.write(JSON.stringify(summary, null, 2) + '\n');
+  }
+  printUsageSummaryTable(summary, { range, groupBy });
+}
+
+function formatUsageTokens(value) {
+  const n = Number(value) || 0;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
+// Combined cost cell: provider-reported + estimated, prefixed with ≈ when any
+// estimated portion is present. '—' when the bucket carried no cost at all.
+function formatUsageCost(costUsd, estimatedCostUsd) {
+  const provider = Number(costUsd) || 0;
+  const estimated = Number(estimatedCostUsd) || 0;
+  const total = provider + estimated;
+  if (total <= 0) return '—';
+  return `${estimated > 0 ? '≈' : ''}$${total.toFixed(4)}`;
+}
+
+function usageRangeLabel(range) {
+  if (range === 'today') return 'today';
+  if (range === '30d') return 'last 30 days';
+  return 'last 7 days';
+}
+
+function printUsageSummaryTable(summary, { range, groupBy }) {
+  const buckets = Array.isArray(summary?.buckets) ? summary.buckets : [];
+  const totals = summary?.totals ?? {};
+  const headers = [groupBy.toUpperCase(), 'RUNS', 'IN', 'OUT', 'CACHE', 'COST'];
+  const rows = buckets.map((bucket) => [
+    String(bucket.label || bucket.key || '—'),
+    String(bucket.runs ?? 0),
+    formatUsageTokens(bucket.inputTokens),
+    formatUsageTokens(bucket.outputTokens),
+    formatUsageTokens(bucket.cacheReadTokens),
+    formatUsageCost(bucket.costUsd, bucket.estimatedCostUsd),
+  ]);
+  const widths = headers.map((header, i) =>
+    Math.max(header.length, ...rows.map((row) => row[i].length)),
+  );
+  const renderRow = (cells) =>
+    cells
+      .map((cell, i) => (i === 0 ? cell.padEnd(widths[i]) : cell.padStart(widths[i])))
+      .join('  ');
+  console.log(`Usage · ${usageRangeLabel(range)} · by ${groupBy}\n`);
+  console.log(renderRow(headers));
+  for (const row of rows) console.log(renderRow(row));
+  if (rows.length === 0) console.log('(no usage recorded in this window)');
+  const totalParts = [
+    `${totals.runs ?? 0} runs`,
+    `in ${formatUsageTokens(totals.inputTokens)}`,
+    `out ${formatUsageTokens(totals.outputTokens)}`,
+    `cache ${formatUsageTokens(totals.cacheReadTokens)}`,
+    formatUsageCost(totals.costUsd, totals.estimatedCostUsd),
+  ];
+  if (typeof totals.cacheHitRatio === 'number') {
+    totalParts.push(`cache hit ${(totals.cacheHitRatio * 100).toFixed(0)}%`);
+  }
+  if (typeof totals.cacheSavingsUsd === 'number' && totals.cacheSavingsUsd > 0) {
+    totalParts.push(`saved ≈$${totals.cacheSavingsUsd.toFixed(4)}`);
+  }
+  console.log('');
+  console.log(`Total  ${totalParts.join(' · ')}`);
+  if ((Number(totals.estimatedCostUsd) || 0) > 0) {
+    console.log('≈ = estimated from catalog pricing (provider did not report cost)');
+  }
 }
 
 // ---------------------------------------------------------------------------

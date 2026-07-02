@@ -170,7 +170,10 @@ export type TrackingAmrEntrySource =
   | 'settings_amr_upgrade'
   | 'inline_amr_upgrade'
   | 'avatar_amr_upgrade'
-  | 'avatar_amr_agent_card';
+  | 'avatar_amr_agent_card'
+  // Settings → Usage dashboard: the signed-out promo card's sign-in flow and
+  // the signed-in Recharge / Manage wallet links.
+  | 'usage_panel';
 
 export interface AmrEntryAttribution {
   entryId: string;
@@ -1251,6 +1254,9 @@ export interface SettingsPopoverClickProps {
     | 'follow_instagram'
     | 'follow_linkedin'
     | 'follow_xiaohongshu'
+    // The "Usage" row above the Settings entry — opens Settings on the
+    // Usage dashboard section.
+    | 'open_usage'
     | 'open_settings';
   // element=language_select → snake_cased locale (e.g. en, zh_cn, pt_br);
   // element=appearance → system | light | dark.
@@ -2373,6 +2379,7 @@ export type TrackingSettingsArea =
   | 'design_systems'
   | 'project_locations'
   | 'privacy'
+  | 'usage'
   | 'about';
 
 export interface SettingsSidebarClickProps {
@@ -3685,6 +3692,8 @@ export function settingsSectionToTracking(
       return 'project_locations';
     case 'memory':
       return 'memory';
+    case 'usage':
+      return 'usage';
     case 'privacy':
       return 'privacy';
     case 'notifications':

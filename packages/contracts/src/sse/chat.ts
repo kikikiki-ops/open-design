@@ -99,7 +99,22 @@ export type DaemonAgentPayload =
    */
   | { type: 'tool_input_delta'; id: string; name: string; delta: string }
   | { type: 'tool_result'; toolUseId: string; content: string; isError?: boolean }
-  | { type: 'usage'; usage?: { input_tokens?: number; output_tokens?: number }; costUsd?: number; durationMs?: number }
+  // Usage counters use provider snake_case field names verbatim; the cache
+  // fields are present only when the runtime reports prompt-cache counters.
+  // `costSource` distinguishes provider-reported cost from a daemon
+  // catalog-estimated one (the UI renders estimated costs as `≈$`).
+  | {
+      type: 'usage';
+      usage?: {
+        input_tokens?: number;
+        output_tokens?: number;
+        cache_read_input_tokens?: number;
+        cache_creation_input_tokens?: number;
+      };
+      costUsd?: number;
+      costSource?: 'provider' | 'estimated' | 'unknown';
+      durationMs?: number;
+    }
   | { type: 'fabricated_role_marker'; marker: string; messageId?: string }
   // The agent is stuck repeating failing tool calls (see tool-loop-guard.ts).
   // `action: 'warn'` is an early heads-up the run may be looping; `'halt'` means

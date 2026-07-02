@@ -18,6 +18,7 @@ export const opencodeAgentDef = {
       parse: parseLineSeparatedModels,
       timeoutMs: 15_000,
     },
+    contextManagement: { autoCompaction: true },
     fallbackModels: [
       DEFAULT_MODEL_OPTION,
       {

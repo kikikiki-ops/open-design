@@ -163,6 +163,7 @@ export function SideChatTab({
           onNewConversation={onNewConversation}
           researchAvailable={config.mode === 'daemon'}
           config={config}
+          agentsById={agentsById}
         />
       </div>
     </div>

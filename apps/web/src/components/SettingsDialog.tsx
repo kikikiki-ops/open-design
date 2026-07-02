@@ -58,6 +58,7 @@ import {
   amrProfileBadgeLabel,
 } from '../runtime/amr-guidance';
 import { ExportDiagnosticsRow } from './ExportDiagnosticsButton';
+import { UsagePanel } from './UsagePanel';
 import { Icon } from './Icon';
 import {
   CUSTOM_MODEL_SENTINEL,
@@ -188,6 +189,7 @@ import {
 
 export type SettingsSection =
   | 'execution'
+  | 'usage'
   | 'instructions'
   | 'media'
   | 'composio'
@@ -3511,6 +3513,10 @@ export function SettingsDialog({
   // not twice (heading + tab).
   const sectionHeader: Record<SettingsSection, { title: string; subtitle: string }> = {
     execution: { title: t('settings.title'), subtitle: t('settings.subtitle') },
+    usage: {
+      title: t('usagePanel.navTitle'),
+      subtitle: t('usagePanel.subtitle'),
+    },
     instructions: {
       title: t('settings.instructionsTitle'),
       subtitle: t('settings.instructionsSubtitle'),
@@ -3913,6 +3919,18 @@ export function SettingsDialog({
               <span>
                 <strong>{t('settings.envConfigure')}</strong>
                 <small>{`${t('settings.localCli')} / ${t('settings.modeApiMeta')}`}</small>
+              </span>
+            </button>
+            <button
+              type="button"
+              className={`settings-nav-item${activeSection === 'usage' ? ' active' : ''}`}
+              onClick={() => setActiveSection('usage')}
+              data-testid="settings-nav-usage"
+            >
+              <Icon name="kanban" size={18} />
+              <span>
+                <strong>{t('usagePanel.navTitle')}</strong>
+                <small>{t('usagePanel.navHint')}</small>
               </span>
             </button>
             <button
@@ -5336,6 +5354,13 @@ export function SettingsDialog({
             </section>
           )}
             </>
+          ) : null}
+
+          {activeSection === 'usage' ? (
+            <UsagePanel
+              metricsConsent={cfg.telemetry?.metrics === true}
+              installationId={cfg.installationId}
+            />
           ) : null}
 
           {activeSection === 'media' ? (

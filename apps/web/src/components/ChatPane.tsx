@@ -41,7 +41,7 @@ import {
   isDesignSystemWorkspacePrompt,
 } from '../design-system-auto-prompt';
 import { isTodoWriteToolName, latestTodoWriteInputForPinnedCard } from '../runtime/todos';
-import type { AppConfig, ChatAttachment, ChatCommentAttachment, ChatMessage, ChatMessageFeedbackChange, Conversation, DesignSystemSummary, PreviewComment, Project, ProjectFile, ProjectMetadata, SkillSummary } from '../types';
+import type { AgentInfo, AppConfig, ChatAttachment, ChatCommentAttachment, ChatMessage, ChatMessageFeedbackChange, Conversation, DesignSystemSummary, PreviewComment, Project, ProjectFile, ProjectMetadata, SkillSummary } from '../types';
 import { agentDisplayName } from '../utils/agentLabels';
 import { commentTargetDisplayName, commentsToAttachments, simplePositionLabel } from '../comments';
 import { AssistantMessage, type QuestionFormOpenRequest } from './AssistantMessage';
@@ -74,6 +74,10 @@ import { Icon, type IconName } from './Icon';
 import { repoConnectCopy } from './design-system-github-evidence';
 import { isRenderableSketchJson, SketchPreview } from './SketchPreview';
 import type { SettingsSection } from './SettingsDialog';
+import { buildContextUsageSummary } from '../runtime/context-usage';
+import { ContextUsageControl, ContextUsageWarning } from './ContextUsagePanel';
+import { ConversationCostChip } from './ConversationCostChip';
+import { AdvisorBanner } from './AdvisorBanner';
 
 type TranslateFn = (key: keyof Dict, vars?: Record<string, string | number>) => string;
 
@@ -522,6 +526,13 @@ interface Props {
   // Header "+" button — kicks off ProjectView's create-conversation flow.
   onNewConversation?: () => void;
   newConversationDisabled?: boolean;
+  // Advisor nudges (T2/T3 model-mismatch banners) switch models through the
+  // same pref-update path InlineModelSwitcher uses (App.handleAgentModelChange).
+  // Optional so test mounts don't need it; the switch nudges no-op without it.
+  onAgentModelChange?: (
+    agentId: string,
+    choice: { model?: string; reasoning?: string },
+  ) => void;
   // Conversation list that used to live in the topbar. The chat tab now
   // owns the list so users can browse + switch conversations without
   // leaving the pane.
@@ -647,6 +658,7 @@ interface Props {
   projectHeader?: ReactNode;
   designSystemPicker?: ReactNode;
   config?: AppConfig;
+  agentsById?: Map<string, AgentInfo>;
 }
 
 const AMR_PROFILE_ENV_KEY = 'OPEN_DESIGN_AMR_PROFILE';
@@ -799,6 +811,7 @@ export function ChatPane({
   forkingMessageId = null,
   onNewConversation,
   newConversationDisabled = false,
+  onAgentModelChange,
   conversations,
   activeConversationId,
   messagesConversationId = null,
@@ -861,6 +874,7 @@ export function ChatPane({
   projectHeader,
   designSystemPicker,
   config,
+  agentsById,
 }: Props) {
   const t = useT();
   const analytics = useAnalytics();
@@ -1076,6 +1090,7 @@ export function ChatPane({
   const [showConvList, setShowConvList] = useState(false);
   const [conversationSearch, setConversationSearch] = useState('');
   const deferredConversationSearch = useDeferredValue(conversationSearch);
+  const [dismissedContextWarningKey, setDismissedContextWarningKey] = useState<string | null>(null);
   const [scrolledFromBottom, setScrolledFromBottom] = useState(false);
   const [chatLogScrollable, setChatLogScrollable] = useState(false);
   const [chatLogScrolling, setChatLogScrolling] = useState(false);
@@ -1788,6 +1803,53 @@ export function ChatPane({
     () => filterConversations(conversations, deferredConversationSearch, t),
     [conversations, deferredConversationSearch, t],
   );
+  const contextUsage = useMemo(
+    () => buildContextUsageSummary({
+      messages,
+      config,
+      agentsById,
+      currentSkillId,
+      hasActiveDesignSystem,
+      activeWorkspaceContext,
+      activePluginId: activePluginSnapshot?.pluginId ?? null,
+    }),
+    [
+      activePluginSnapshot?.pluginId,
+      activeWorkspaceContext,
+      agentsById,
+      config,
+      currentSkillId,
+      hasActiveDesignSystem,
+      messages,
+    ],
+  );
+  // Refresh signal for the conversation cost chip: bumps once per run that
+  // reaches a terminal status, so the chip refetches the usage ledger exactly
+  // when new rows can exist (mount + run completion — never on an interval).
+  const completedRunCount = useMemo(
+    () =>
+      messages.reduce(
+        (count, message) =>
+          message.role === 'assistant' && isTerminalRunStatus(message.runStatus)
+            ? count + 1
+            : count,
+        0,
+      ),
+    [messages],
+  );
+  const contextNoticePhase =
+    contextUsage.warningLevel ?? (contextUsage.autoCompactionStatus === 'completed' ? 'auto-compaction-completed' : null);
+  const contextWarningKey = contextNoticePhase
+    ? [
+        activeConversationId ?? 'no-conversation',
+        contextNoticePhase,
+        contextUsage.autoCompactionStatus,
+        contextUsage.contextWindow,
+        contextUsage.autoCompactionBeforeTokens ?? 'none',
+      ].join(':')
+    : null;
+  const showContextWarning =
+    contextWarningKey != null && dismissedContextWarningKey !== contextWarningKey;
 
   function resetTailSpacer() {
     const s = tailSpacerRef.current;
@@ -2002,8 +2064,21 @@ export function ChatPane({
       currentSkillId={currentSkillId}
       onProjectSkillChange={onProjectSkillChange}
       pinnedPluginId={activePluginSnapshot?.pluginId ?? null}
-      footerAccessory={composerFooterAccessory}
-      leadingAccessory={composerLeadingAccessory}
+      footerAccessory={
+        <>
+          <ConversationCostChip
+            conversationId={activeConversationId}
+            refreshSignal={completedRunCount}
+          />
+          <ContextUsageControl summary={contextUsage} t={t} />
+        </>
+      }
+      leadingAccessory={
+        <>
+          {composerLeadingAccessory}
+          {composerFooterAccessory}
+        </>
+      }
       currentDesignSystemId={currentDesignSystemId}
       onActiveDesignSystemChange={onActiveDesignSystemChange}
       onShowToast={onShowToast}
@@ -2315,6 +2390,15 @@ export function ChatPane({
                 onOpenQuestions={onOpenQuestions}
                 scrollContainerRef={logRef}
               />
+              {showContextWarning && contextWarningKey ? (
+                <ContextUsageWarning
+                  summary={contextUsage}
+                  t={t}
+                  onNewConversation={onNewConversation}
+                  newConversationDisabled={newConversationDisabled}
+                  onContinue={() => setDismissedContextWarningKey(contextWarningKey)}
+                />
+              ) : null}
               {displayError ? (
                 <div className="run-error" data-tone={runErrorTone}>
                   {/* ① type title + ② detail */}
@@ -2593,6 +2677,21 @@ export function ChatPane({
                   onSendQueuedNow(id);
                 }
               : undefined}
+          />
+          {/* Advisor nudge slot — lives OUTSIDE .chat-log, directly above the
+              composer, mirroring how pinned pane-level slots are mounted. The
+              slot element stays mounted; AdvisorBanner toggles a class for
+              its enter/exit transitions. */}
+          <AdvisorBanner
+            conversationId={activeConversationId}
+            sessionMode={sessionMode}
+            contextUsage={contextUsage}
+            messages={messages}
+            config={config}
+            agentsById={agentsById}
+            onNewConversation={onNewConversation}
+            newConversationDisabled={newConversationDisabled}
+            onAgentModelChange={onAgentModelChange}
           />
           <div
             className="chat-composer-slot"

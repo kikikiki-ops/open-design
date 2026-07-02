@@ -38,6 +38,7 @@ const AMR_ENTRY_SOURCES: ReadonlySet<TrackingAmrEntrySource> = new Set([
   'inline_amr_upgrade',
   'avatar_amr_upgrade',
   'avatar_amr_agent_card',
+  'usage_panel',
 ]);
 
 const AMR_ONBOARDING_PROFILE_SOURCES: ReadonlySet<TrackingAmrEntrySource> = new Set([
@@ -81,6 +82,8 @@ const AMR_ENTRY_SOURCE_PAGE_BY_SOURCE: Record<
   inline_amr_upgrade: 'chat_panel',
   avatar_amr_upgrade: 'chat_panel',
   avatar_amr_agent_card: 'chat_panel',
+  // Usage & billing panel AMR area (Settings → Usage).
+  usage_panel: 'settings',
 };
 
 const AMR_ANALYTICS_EVENTS_URL =

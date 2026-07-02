@@ -546,6 +546,8 @@ import { registerDeployRoutes, registerDeploymentCheckRoutes } from './routes/de
 import { registerMediaRoutes } from './routes/media.js';
 import { registerProjectRoutes, registerProjectArtifactRoutes, registerProjectFileRoutes, registerProjectUploadRoutes } from './routes/project/index.js';
 import { registerVelaRoutes } from './routes/vela.js';
+import { registerUsageRoutes } from './routes/usage.js';
+import { recordUsageLedgerOnRunEnd } from './usage-ledger.js';
 import { registerFinalizeRoutes, registerImportRoutes, registerProjectExportRoutes } from './import-export-routes.js';
 import { registerHandoffRoutes } from './routes/handoff.js';
 import { EmptyTranscriptError, synthesizeHandoffPrompt } from './handoff-design.js';
@@ -2059,11 +2061,33 @@ export function daemonAgentPayloadToPersistedAgentEvent(data) {
   }
   if (type === 'usage') {
     const usage = data.usage && typeof data.usage === 'object' ? data.usage : {};
+    // Prompt-cache counters: Anthropic-style names first, generic fallbacks
+    // second (mirrors run-analytics-observability.ts). Persisted so the chat
+    // footer can render `in 5.2k (cache 4.1k)` after a reload.
+    const cacheReadTokens =
+      typeof usage.cache_read_input_tokens === 'number'
+        ? usage.cache_read_input_tokens
+        : typeof usage.cache_read_tokens === 'number'
+          ? usage.cache_read_tokens
+          : undefined;
+    const cacheWriteTokens =
+      typeof usage.cache_creation_input_tokens === 'number'
+        ? usage.cache_creation_input_tokens
+        : typeof usage.cache_write_tokens === 'number'
+          ? usage.cache_write_tokens
+          : undefined;
+    const costSource =
+      data.costSource === 'provider' || data.costSource === 'estimated' || data.costSource === 'unknown'
+        ? data.costSource
+        : undefined;
     return {
       kind: 'usage',
       inputTokens: usage.input_tokens,
       outputTokens: usage.output_tokens,
+      ...(typeof cacheReadTokens === 'number' ? { cacheReadTokens } : {}),
+      ...(typeof cacheWriteTokens === 'number' ? { cacheWriteTokens } : {}),
       ...(typeof data.costUsd === 'number' ? { costUsd: data.costUsd } : {}),
+      ...(costSource ? { costSource } : {}),
       ...(typeof data.durationMs === 'number' ? { durationMs: data.durationMs } : {}),
     };
   }
@@ -4424,6 +4448,11 @@ export async function startServer({
     http: { getPublicBaseUrl },
     env: process.env,
   });
+
+  // /api/usage/* — aggregation over the usage_ledger rows that
+  // recordUsageLedgerOnRunEnd writes at every run-creation site. Consumed by
+  // the Settings → Usage panel and `od usage`.
+  registerUsageRoutes(app, { db });
 
   const pluginRouteHelpers = {
     PLUGIN_PREVIEWS_DIR,
@@ -8791,6 +8820,7 @@ export async function startServer({
         'Keep connector credentials and OD_TOOL_TOKEN private; never print or persist secrets.',
       ].join('\n'),
     }, run));
+    recordUsageLedgerOnRunEnd(db, design.runs, run, { model: modelPrefs.model ?? null });
 
     const completion = (async () => {
       const finalStatus = await design.runs.wait(run);
@@ -9097,6 +9127,9 @@ export async function startServer({
           'Do not ask follow-up questions, do not emit <question-form>, and do not wait for user input. Pick reasonable defaults and finish the task.',
         ].join('\n'),
       }, run));
+      // Armed inside start() so a routine whose durable slot was lost (run
+      // dropped, never started) records nothing in the usage ledger.
+      recordUsageLedgerOnRunEnd(db, design.runs, run, { model: modelPrefs.model ?? null });
     };
 
     // Tear-down for the case where the durable routine_run row was never
