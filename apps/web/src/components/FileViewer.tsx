@@ -9239,7 +9239,11 @@ function HtmlViewer({
         </div>
       ) : (
         <div className="speaker-notes-preview">
-          {activeSpeakerNote.trim() ? activeSpeakerNote : t('fileViewer.speakerNotesEmpty')}
+          {activeSpeakerNote.trim() ? (
+            activeSpeakerNote
+          ) : (
+            <span className="speaker-notes-empty">{t('fileViewer.speakerNotesEmpty')}</span>
+          )}
           {speakerNotesStatus === 'saved' ? (
             <span className="speaker-notes-status saved">{t('fileViewer.speakerNotesSaved')}</span>
           ) : null}
@@ -9266,7 +9270,7 @@ function HtmlViewer({
               data-tooltip-placement="bottom"
               onClick={() => setDeckThumbnailsCollapsed((value) => !value)}
             >
-              <Icon name="slides" size={15} />
+              <Icon name="panel-left" size={15} />
             </button>
           ) : null}
           <button

@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -119,7 +120,12 @@ import { buildLauncherActions, type LauncherContext } from './workspace/tab-laun
 import { SideChatTab, type ActiveConversationChatState } from './workspace/SideChatTab';
 import { TerminalViewer } from './workspace/TerminalViewer';
 import { CURATED_PLUGIN_IDS_BY_CHIP, curatedPluginPriority } from './plugins-home/curatedPriority';
-import { extractCategories } from './plugins-home/facets';
+import {
+  extractCategories,
+  extractSubcategories,
+  buildSubcategoryCatalog,
+  type FacetOption,
+} from './plugins-home/facets';
 import { localizePluginDescription, localizePluginTitle } from './plugins-home/localization';
 import { inferPluginPreview, type PluginPreviewSpec } from './plugins-home/preview';
 import { useInView } from './plugins-home/useInView';
@@ -966,7 +972,6 @@ const PROJECT_PAGE_PRESET_FILE_BASE_NAMES = new Set(
   PROJECT_PAGE_PRESETS.map((preset) => preset.fileBaseName.toLowerCase()),
 );
 const PROJECT_PAGE_CATEGORY_ORDER: ProjectPageCategoryId[] = [
-  'recommended',
   'prototype',
   'liveArtifact',
   'slides',
@@ -994,7 +999,6 @@ const PROJECT_PAGE_CATEGORIES: Array<{
   icon: IconName;
   labelKey: keyof Dict;
 }> = [
-  { id: 'recommended', icon: 'grid', labelKey: 'settings.onboardingRecommended' },
   { id: 'slides', icon: 'present', labelKey: 'homeHero.chip.deck' },
   { id: 'prototype', icon: 'layout', labelKey: 'homeHero.chip.prototype' },
   { id: 'wireframe', icon: 'grid', labelKey: 'homeHero.chip.wireframe' },
@@ -1006,6 +1010,15 @@ const PROJECT_PAGE_CATEGORIES: Array<{
   { id: 'audio', icon: 'volume', labelKey: 'homeHero.chip.audio' },
   { id: 'liveArtifact', icon: 'kanban', labelKey: 'homeHero.chip.liveArtifact' },
 ];
+// Page categories that map onto a plugins-home facet primary with a meaningful
+// sub-category taxonomy (Prototype / Slides / Image / Video). Other kinds stay
+// flat — selecting them shows no second-level filter row.
+const PAGE_KIND_TO_FACET_SLUG: Partial<Record<ProjectPageKind, string>> = {
+  slides: 'deck',
+  prototype: 'prototype',
+  image: 'image',
+  video: 'video',
+};
 type TabDropEdge = 'before' | 'after';
 type BrowserWorkspaceTab = ProjectBrowserWorkspaceTab;
 export interface BrowserOpenRequest {
@@ -1344,7 +1357,7 @@ export function FileWorkspace({
   const [pageCreatorOpen, setPageCreatorOpen] = useState(false);
   const [pageCreatorQuery, setPageCreatorQuery] = useState('');
   const [pageCreatorCategory, setPageCreatorCategory] =
-    useState<ProjectPageCategoryId>('recommended');
+    useState<ProjectPageCategoryId>('slides');
   const [pageCreatorPreviewId, setPageCreatorPreviewId] =
     useState<ProjectPagePresetId>(() => defaultPagePresetId(projectKind));
   const [pageCreating, setPageCreating] = useState(false);
@@ -1463,7 +1476,7 @@ export function FileWorkspace({
   );
 
   useEffect(() => {
-    setPageCreatorCategory('recommended');
+    setPageCreatorCategory('slides');
     setPageCreatorPreviewId(defaultPagePresetId(projectKind));
   }, [projectId, projectKind]);
 
@@ -2560,7 +2573,7 @@ export function FileWorkspace({
       setPageCreatorOpen(false);
       setPagesMenuOpen(false);
       setPageCreatorQuery('');
-      setPageCreatorCategory('recommended');
+      setPageCreatorCategory('slides');
       await onRefreshFiles();
       await refreshProjectFolders();
       openFile(file.name, { forcePersist: true });
@@ -5902,6 +5915,11 @@ function pagePresetSourceLabel(preset: ProjectPagePreset, t: TranslateFn): strin
   return preset.source === 'blank' ? t('workspace.newBlankPage') : t('pluginsHome.title');
 }
 
+function pageCategoryLabel(kind: ProjectPageKind, t: TranslateFn): string {
+  const item = PROJECT_PAGE_CATEGORIES.find((category) => category.id === kind);
+  return item ? t(item.labelKey) : kind;
+}
+
 function projectPageKindForCommunityPlugin(record: InstalledPluginRecord): ProjectPageKind | null {
   for (const [chipId, pageKind] of Object.entries(COMMUNITY_PLUGIN_CHIP_TO_PAGE_KIND)) {
     const ids = (CURATED_PLUGIN_IDS_BY_CHIP as Record<string, readonly string[] | undefined>)[chipId];
@@ -7021,26 +7039,79 @@ function PageCreatorDialog({
   onClose: () => void;
 }) {
   const [modalPreviewId, setModalPreviewId] = useState<ProjectPagePresetId | null>(null);
+  const [subcategory, setSubcategory] = useState<string | null>(null);
   useEffect(() => {
     if (!open) setModalPreviewId(null);
   }, [open]);
+  // A sub-category filter is scoped to one big category; clear it whenever the
+  // active category changes or the dialog reopens.
+  useEffect(() => {
+    setSubcategory(null);
+  }, [category, open]);
+  // Keep the search box instantly responsive while deferring the heavy
+  // (iframe-laden) grid re-render, so typing never blocks and results settle in
+  // smoothly instead of janking on every keystroke.
+  const deferredQuery = useDeferredValue(query);
 
   if (!open) return null;
 
-  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const normalizedQuery = deferredQuery.trim().toLocaleLowerCase();
+  const searchPending = query !== deferredQuery;
+  // Facet slug for the active category (only Slides / Prototype / Image / Video
+  // carry a sub-category taxonomy). Undefined for flat categories.
+  const activeFacetSlug =
+    PAGE_KIND_TO_FACET_SLUG[category as ProjectPageKind] ?? undefined;
+  // Sub-category catalog (with counts + labels) built once from every preset's
+  // backing plugin, so both the chip row and per-card tags share one source.
+  const allPresetPlugins = presets
+    .map((preset) => preset.plugin)
+    .filter((record): record is InstalledPluginRecord => Boolean(record));
+  const subcategoryCatalog = buildSubcategoryCatalog(allPresetPlugins);
+  const subcategoryLabelBySlug = new Map<string, string>();
+  for (const options of Object.values(subcategoryCatalog)) {
+    for (const option of options) subcategoryLabelBySlug.set(option.slug, option.label);
+  }
+  const subcategoryOptions: FacetOption[] = activeFacetSlug
+    ? (subcategoryCatalog[activeFacetSlug] ?? []).filter((option) => option.count > 0)
+    : [];
+  const showSubcategoryRow = !normalizedQuery && subcategoryOptions.length > 0;
+  const activeCategoryAllCount = presets.filter(
+    (preset) => pagePresetMatchesCategory(preset, category) && preset.source !== 'blank',
+  ).length;
+  // Resolve the tag shown on a card: the plugin's sub-category (e.g.
+  // "Landing / marketing"), falling back to the preset's own category label so
+  // no card just reads "Community".
+  const presetTagLabel = (preset: ProjectPagePreset): string => {
+    const slug = PAGE_KIND_TO_FACET_SLUG[preset.category];
+    if (slug && preset.plugin) {
+      const sub = extractSubcategories(preset.plugin, slug)[0];
+      const label = sub ? subcategoryLabelBySlug.get(sub) : undefined;
+      if (label) return label;
+    }
+    return pageCategoryLabel(preset.category, t);
+  };
   const filteredPresets = presets.filter((preset) => {
-    const title = pagePresetTitle(preset, t, locale);
-    const description = pagePresetDescription(preset, t, locale);
-    const haystack = [
-      preset.id,
-      preset.fileBaseName,
-      preset.category,
-      pagePresetSourceLabel(preset, t),
-      title,
-      description,
-    ].join(' ').toLocaleLowerCase();
-    if (normalizedQuery) return haystack.includes(normalizedQuery);
-    return pagePresetMatchesCategory(preset, category);
+    if (normalizedQuery) {
+      const title = pagePresetTitle(preset, t, locale);
+      const description = pagePresetDescription(preset, t, locale);
+      const haystack = [
+        preset.id,
+        preset.fileBaseName,
+        preset.category,
+        pagePresetSourceLabel(preset, t),
+        presetTagLabel(preset),
+        title,
+        description,
+      ].join(' ').toLocaleLowerCase();
+      return haystack.includes(normalizedQuery);
+    }
+    if (!pagePresetMatchesCategory(preset, category)) return false;
+    if (subcategory && activeFacetSlug) {
+      // The blank card is a category-level action, not a sub-category template.
+      if (preset.source === 'blank' || !preset.plugin) return false;
+      return extractSubcategories(preset.plugin, activeFacetSlug).includes(subcategory);
+    }
+    return true;
   });
   const categoryCounts = new Map<ProjectPageCategoryId, number>(
     PROJECT_PAGE_CATEGORIES.map((item) => [
@@ -7125,7 +7196,47 @@ function PageCreatorDialog({
             ))}
           </aside>
           <div className="page-creator-main">
-            <div className="page-creator-grid" role="list">
+            {showSubcategoryRow ? (
+              <div
+                className="page-creator-subcats"
+                role="tablist"
+                aria-label={t('pluginsHome.subcategoryFilterAria', {
+                  label: pageCategoryLabel(category as ProjectPageKind, t),
+                })}
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={subcategory === null}
+                  className={`page-creator-subcat${subcategory === null ? ' active' : ''}`}
+                  onClick={() => setSubcategory(null)}
+                >
+                  <span>
+                    {t('pluginsHome.allCategory', {
+                      label: pageCategoryLabel(category as ProjectPageKind, t),
+                    })}
+                  </span>
+                  <span className="page-creator-subcat-count">{activeCategoryAllCount}</span>
+                </button>
+                {subcategoryOptions.map((option) => (
+                  <button
+                    key={option.slug}
+                    type="button"
+                    role="tab"
+                    aria-selected={subcategory === option.slug}
+                    className={`page-creator-subcat${subcategory === option.slug ? ' active' : ''}`}
+                    onClick={() => setSubcategory(option.slug)}
+                  >
+                    <span>{option.label}</span>
+                    <span className="page-creator-subcat-count">{option.count}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <div
+              className={`page-creator-grid${searchPending ? ' is-pending' : ''}`}
+              role="list"
+            >
               {filteredPresets.length === 0 ? (
                 <p className="page-creator-empty">{t('workspace.pageCreatorEmpty')}</p>
               ) : (
@@ -7133,14 +7244,40 @@ function PageCreatorDialog({
                   const title = pagePresetTitle(preset, t, locale);
                   const description = pagePresetDescription(preset, t, locale);
                   const sourceLabel = pagePresetSourceLabel(preset, t);
+                  const isBlank = preset.source === 'blank';
+                  const cardClassName = [
+                    'page-creator-card',
+                    `page-creator-card--${preset.source}`,
+                    previewPreset.id === preset.id ? 'active' : '',
+                  ].filter(Boolean).join(' ');
+                  if (isBlank) {
+                    return (
+                      <article
+                        key={preset.id}
+                        className={cardClassName}
+                        role="listitem"
+                        onMouseEnter={() => onPreviewChange(preset.id)}
+                        onFocus={() => onPreviewChange(preset.id)}
+                      >
+                        <button
+                          type="button"
+                          className="page-creator-blank-card"
+                          onClick={() => onCreate(preset.id)}
+                          disabled={creating}
+                        >
+                          <span className="page-creator-blank-plus">
+                            <Icon name="plus" size={24} />
+                          </span>
+                          <span className="page-creator-blank-title">{sourceLabel}</span>
+                          <span className="page-creator-blank-hint">{description}</span>
+                        </button>
+                      </article>
+                    );
+                  }
                   return (
                     <article
                       key={preset.id}
-                      className={[
-                        'page-creator-card',
-                        `page-creator-card--${preset.source}`,
-                        previewPreset.id === preset.id ? 'active' : '',
-                      ].filter(Boolean).join(' ')}
+                      className={cardClassName}
                       role="listitem"
                       onMouseEnter={() => onPreviewChange(preset.id)}
                       onFocus={() => onPreviewChange(preset.id)}
@@ -7153,8 +7290,8 @@ function PageCreatorDialog({
                           sourceLabel={sourceLabel}
                         />
                         <span className="page-creator-card-copy">
-                          <span className={`page-creator-source page-creator-source--${preset.source}`}>
-                            {sourceLabel}
+                          <span className="page-creator-source">
+                            {presetTagLabel(preset)}
                           </span>
                           <strong>
                             <Icon name={preset.icon} size={14} />

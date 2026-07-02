@@ -1092,6 +1092,11 @@
   font-size: 13px;
   line-height: 1.55;
 }
+/* Empty state reads as a quiet placeholder, not authored copy. */
+.speaker-notes-empty {
+  color: var(--text-faint);
+  font-style: italic;
+}
 .speaker-notes-editor {
   padding: 0;
 }

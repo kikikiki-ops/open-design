@@ -172,4 +172,37 @@ describe('speaker notes HTML helpers', () => {
     expect(html).not.toContain('<label class="edit-toggle"');
     expect(html).not.toContain('type="checkbox" id="edit"');
   });
+
+  it('pins the previous filmstrip cell to the left column and next to the right', () => {
+    // The first slide has no previous and the last has no next; each cell must
+    // keep its own column so "Next" always reads on the right, not collapsed
+    // into column 1 when its sibling is hidden.
+    const html = buildSpeakerNotesPresenterHtml({
+      previewHtml: '<!doctype html><html><head></head><body>slide</body></html>',
+      title: 'Deck',
+      projectId: 'project-1',
+      fileName: 'deck.html',
+      notes: ['Intro'],
+      initialSlideIndex: 0,
+      slideCount: 3,
+      labels: {
+        title: 'Speaker notes',
+        edit: 'Edit',
+        save: 'Save notes',
+        pause: 'Pause',
+        resume: 'Resume',
+        reset: 'Reset',
+        previous: 'Previous',
+        next: 'Next',
+        empty: 'Empty',
+        slide: 'Slide {current} / {total}',
+      },
+    });
+
+    expect(html).toContain('#previous-section { grid-column: 1; }');
+    expect(html).toContain('#next-section { grid-column: 2; }');
+    // The markup order must keep previous before next so the pinning above
+    // matches the DOM the presenter script drives.
+    expect(html.indexOf('id="previous-section"')).toBeLessThan(html.indexOf('id="next-section"'));
+  });
 });

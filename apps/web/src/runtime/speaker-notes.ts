@@ -135,6 +135,12 @@ export function buildSpeakerNotesPresenterHtml(options: {
     iframe { display: block; width: 100%; height: 100%; border: 0; background: white; pointer-events: none; }
     .filmstrip { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; min-height: 168px; }
     .filmstrip section { min-width: 0; cursor: pointer; }
+    /* Pin each cell to its own column so "Previous" always sits on the left and
+       "Next" always sits on the right, even when the other end is hidden (first
+       slide has no previous, last slide has no next). Without explicit columns,
+       hiding one cell would let the remaining one collapse into column 1. */
+    #previous-section { grid-column: 1; }
+    #next-section { grid-column: 2; }
     .filmstrip section[hidden] { display: none; }
     .thumb-label { color: #8f8f8f; font-size: 13px; font-weight: 700; margin-bottom: 6px; }
     .thumb-frame { height: 160px; border: 1px solid #2f2f2f; border-radius: 8px; overflow: hidden; background: #101010; transition: border-color 140ms cubic-bezier(0.23, 1, 0.32, 1); }

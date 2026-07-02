@@ -1893,8 +1893,64 @@
   font: inherit;
   font-size: 13px;
 }
+/* Cancel the shared primitives.css `input:focus` blue halo (border + ring);
+   the pill itself carries the accent focus treatment via :focus-within. */
+.page-creator-search input:focus,
+.page-creator-search input:focus-visible {
+  outline: none;
+  border-color: transparent;
+  box-shadow: none;
+}
 .page-creator-search input::placeholder {
   color: var(--text-faint);
+}
+/* Second-level sub-category filter row (Slides / Prototype / Image / Video). */
+.page-creator-subcats {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 1px 2px 2px 1px;
+}
+.page-creator-subcat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 550;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color 120ms var(--ease-out),
+    background 120ms var(--ease-out),
+    color 120ms var(--ease-out);
+}
+.page-creator-subcat:hover {
+  border-color: color-mix(in srgb, var(--border) 45%, var(--text-faint));
+  color: var(--text);
+}
+.page-creator-subcat.active {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-contrast, #fff);
+}
+.page-creator-subcat-count {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--text-faint);
+}
+.page-creator-subcat:hover .page-creator-subcat-count {
+  color: var(--text-muted);
+}
+.page-creator-subcat.active .page-creator-subcat-count {
+  color: color-mix(in srgb, var(--accent-contrast, #fff) 78%, transparent);
 }
 .page-creator-grid {
   flex: 1 1 auto;
@@ -1906,6 +1962,13 @@
   gap: 14px;
   overflow-y: auto;
   padding: 2px 2px 6px 1px;
+  transition: opacity 160ms var(--ease-out);
+}
+/* While the deferred search query settles, dim the (heavy) grid so results
+   fade rather than snap in. */
+.page-creator-grid.is-pending {
+  opacity: 0.5;
+  pointer-events: none;
 }
 .page-creator-card {
   position: relative;
@@ -1918,6 +1981,14 @@
     border-color 120ms var(--ease-out),
     box-shadow 120ms var(--ease-out),
     transform 120ms var(--ease-out);
+  /* Newly-mounted cards (category switch / search) fade+rise in; `backwards`
+     holds the start frame before paint and reverts to base after, so the
+     :hover lift keeps working. */
+  animation: page-creator-card-in 240ms var(--ease-out) backwards;
+}
+@keyframes page-creator-card-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 .page-creator-card:hover {
   border-color: color-mix(in srgb, var(--border) 55%, var(--text-faint));
@@ -2006,6 +2077,63 @@
   background: color-mix(in srgb, var(--accent) 8%, var(--bg-panel));
   color: var(--accent);
 }
+/* Blank-page card: a pure "start from scratch" action, visually distinct from
+   the template cards — dashed accent frame, big centered +, no thumbnail/badge. */
+.page-creator-card--blank {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  background: color-mix(in srgb, var(--accent) 4%, var(--bg-panel));
+}
+.page-creator-card--blank:hover {
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
+  background: color-mix(in srgb, var(--accent) 7%, var(--bg-panel));
+  box-shadow: 0 6px 20px -12px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.page-creator-blank-card {
+  width: 100%;
+  height: 100%;
+  min-height: 208px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px 18px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: center;
+  cursor: pointer;
+}
+.page-creator-blank-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+.page-creator-blank-card .page-creator-blank-plus {
+  width: 56px;
+  height: 56px;
+  border-width: 1.5px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-panel));
+  transition:
+    transform 160ms var(--ease-out),
+    background 160ms var(--ease-out);
+}
+.page-creator-card--blank:hover .page-creator-blank-plus {
+  transform: scale(1.06);
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg-panel));
+}
+.page-creator-blank-title {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+.page-creator-blank-hint {
+  max-width: 92%;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
 .page-creator-card-copy {
   min-width: 0;
   display: flex;
@@ -2029,15 +2157,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.page-creator-source--community {
-  background: color-mix(in srgb, var(--accent) 12%, var(--bg-panel));
-  color: var(--accent);
-}
-/* Blank cards already label themselves inside the thumbnail; drop the
-   duplicate source badge so the only copy below is the category title. */
-.page-creator-card--blank .page-creator-source {
-  display: none;
-}
 .page-creator-card-copy strong {
   display: flex;
   align-items: center;
@@ -2047,7 +2166,9 @@
   font-size: 13px;
   line-height: 1.25;
 }
-.page-creator-card-copy span {
+/* Description only — must NOT match the sub-category tag span, or the tag
+   inherits the 2-line clamp + 34px min-height and floats in dead space. */
+.page-creator-card-copy > span:not(.page-creator-source) {
   display: -webkit-box;
   min-height: 34px;
   overflow: hidden;
