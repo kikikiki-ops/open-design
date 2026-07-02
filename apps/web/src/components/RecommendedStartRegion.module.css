@@ -106,8 +106,10 @@
 
 .change:hover:not(:disabled) {
   /* Specificity-matches the global button:hover rule (see .primary above);
-     a soft white wash instead of its gray --bg-subtle fill. */
-  color: var(--accent-strong);
+     a soft white wash instead of its gray --bg-subtle fill. Same hover
+     treatment as .tertiary — the two text actions are peers, only their
+     resting text color separates them. */
+  color: var(--text);
   background: color-mix(in srgb, #fff 55%, transparent);
   border-radius: 999px;
 }
