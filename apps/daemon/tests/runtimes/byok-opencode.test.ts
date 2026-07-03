@@ -151,6 +151,13 @@ describe('byok-opencode runtime config', () => {
     });
   });
 
+  it('rejects Azure providers without a base URL', () => {
+    expect(buildOpenCodeByokProviderConfig(
+      { protocol: 'azure', apiKey: 'azure-key', baseUrl: '' },
+      'gpt-4o',
+    )).toBeNull();
+  });
+
   it('keeps Azure OpenAI-compatible v1 paths in model-based URL mode', () => {
     expect(buildOpenCodeByokProviderConfig(
       {

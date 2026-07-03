@@ -57,7 +57,7 @@ export function buildOpenCodeByokProviderConfig(
   );
   if (requiresApiKey(protocol, baseUrl) && !apiKey) return null;
   if (!rawModel || rawModel.toLowerCase() === 'default') return null;
-  if (!baseUrl && protocol !== 'azure') return null;
+  if (!baseUrl) return null;
 
   const modelId = opencodeByokModelId(rawModel);
   if (!modelId) return null;
