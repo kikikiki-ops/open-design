@@ -55,7 +55,7 @@ export function buildOpenCodeByokProviderConfig(
       ? provider.baseUrl.trim()
       : defaultBaseUrl,
   );
-  if (requiresApiKey(protocol, baseUrl) && !apiKey) return null;
+  if (requiresApiKey(provider, baseUrl) && !apiKey) return null;
   if (!rawModel || rawModel.toLowerCase() === 'default') return null;
   if (!baseUrl) return null;
 
@@ -115,9 +115,11 @@ function normalizeProviderBaseUrl(
 }
 
 function requiresApiKey(
-  protocol: ByokChatProviderConfig['protocol'],
+  provider: ByokChatProviderConfig,
   baseUrl: string,
 ): boolean {
+  const protocol = provider.protocol;
+  if (provider.requiresApiKey === false) return false;
   return protocol !== 'ollama' || !isLocalOllamaBaseUrl(baseUrl);
 }
 

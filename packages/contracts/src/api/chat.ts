@@ -32,6 +32,8 @@ export interface ByokChatProviderConfig {
   apiKey: string;
   baseUrl?: string;
   apiVersion?: string;
+  /** Explicit run-scoped provider policy for presets that do not require bearer credentials. */
+  requiresApiKey?: boolean;
 }
 
 export interface ByokMediaDefaults {

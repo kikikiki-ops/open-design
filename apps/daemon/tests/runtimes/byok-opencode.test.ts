@@ -253,4 +253,30 @@ describe('byok-opencode runtime config', () => {
       'gpt-oss:20b',
     )).toBeNull();
   });
+
+  it('allows explicit keyless OpenAI-compatible presets such as vLLM', () => {
+    const out = buildOpenCodeByokProviderConfig(
+      {
+        protocol: 'openai',
+        apiKey: '',
+        baseUrl: 'http://127.0.0.1:8000/v1',
+        requiresApiKey: false,
+      },
+      'model',
+    );
+
+    expect(out?.modelId).toBe('open-design-byok/model');
+    expect(out?.env).toEqual({ [BYOK_OPENCODE_API_KEY_ENV]: '' });
+    expect(out?.config).toMatchObject({
+      provider: {
+        [BYOK_OPENCODE_PROVIDER_ID]: {
+          npm: '@ai-sdk/openai',
+          options: {
+            baseURL: 'http://127.0.0.1:8000/v1',
+            apiKey: `{env:${BYOK_OPENCODE_API_KEY_ENV}}`,
+          },
+        },
+      },
+    });
+  });
 });

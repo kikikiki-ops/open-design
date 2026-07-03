@@ -1532,9 +1532,43 @@ describe('ProjectView conversation run isolation', () => {
         protocol: 'ollama',
         apiKey: '',
         baseUrl: 'http://localhost:11434',
+        requiresApiKey: false,
         apiVersion: '',
       },
       model: 'llama3.2',
+    }));
+  });
+
+  it('routes the keyless vLLM BYOK preset through OpenCode with provider metadata', async () => {
+    listMessages.mockResolvedValue([]);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+
+    renderProjectView({
+      ...config,
+      mode: 'api',
+      apiProtocol: 'openai',
+      apiKey: '',
+      baseUrl: 'http://127.0.0.1:8000/v1',
+      apiProviderBaseUrl: 'http://127.0.0.1:8000/v1',
+      model: 'model',
+    });
+
+    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
+    await waitFor(() => expect(screen.getByTestId('send-message')).toHaveProperty('disabled', false));
+
+    fireEvent.click(screen.getByTestId('send-message'));
+
+    await waitFor(() => expect(streamViaDaemon).toHaveBeenCalledTimes(1));
+    expect(streamViaDaemon).toHaveBeenCalledWith(expect.objectContaining({
+      agentId: 'byok-opencode',
+      byokProvider: {
+        protocol: 'openai',
+        apiKey: '',
+        baseUrl: 'http://127.0.0.1:8000/v1',
+        requiresApiKey: false,
+        apiVersion: '',
+      },
+      model: 'model',
     }));
   });
 

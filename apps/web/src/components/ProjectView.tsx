@@ -217,6 +217,7 @@ import {
 import { buildRepoImportPrompt, designSystemNeedsRepoConnect } from './design-system-github-evidence';
 import { isDesignSystemProject, resolveProjectDesignSystemId } from './design-system-project';
 import { collectReferencedJsxNames } from '../runtime/jsx-module-refs';
+import { KNOWN_PROVIDERS } from '../state/config';
 import { DESIGN_SYSTEM_TAB, FileWorkspace, type BrowserOpenRequest } from './FileWorkspace';
 import {
   type PluginFolderAgentAction,
@@ -1161,9 +1162,10 @@ function byokMediaDefaultsForRun(input: {
 function byokOpenCodeProviderFromConfig(
   config: AppConfig,
 ): ByokChatProviderConfig | undefined {
+  const selectedProvider = selectedKnownProviderForConfig(config);
   if (
     !isOpenCodeByokChatProtocol(config.apiProtocol) ||
-    (byokProviderRequiresApiKey(config.apiProtocol, undefined, config.baseUrl) && !config.apiKey.trim())
+    (byokProviderRequiresApiKey(config.apiProtocol, selectedProvider, config.baseUrl) && !config.apiKey.trim())
   ) {
     return undefined;
   }
@@ -1171,11 +1173,22 @@ function byokOpenCodeProviderFromConfig(
     protocol: config.apiProtocol,
     apiKey: config.apiKey.trim(),
     baseUrl: config.baseUrl,
+    ...(selectedProvider?.requiresApiKey === false ? { requiresApiKey: false } : {}),
     apiVersion:
       config.apiProtocol === 'azure'
         ? config.apiVersion ?? ''
         : '',
   };
+}
+
+function selectedKnownProviderForConfig(config: AppConfig) {
+  if (!config.apiProtocol) return undefined;
+  return KNOWN_PROVIDERS.find(
+    (provider) =>
+      provider.protocol === config.apiProtocol &&
+      provider.baseUrl === config.baseUrl &&
+      (config.apiProviderBaseUrl == null || provider.baseUrl === config.apiProviderBaseUrl),
+  );
 }
 
 function isOpenCodeByokChatProtocol(
