@@ -696,7 +696,16 @@ export function composeSystemPrompt({
         '\n\n---\n\n',
       ]
     : isSlimCore
-      ? [CHAT_MODE_OVERRIDE, '\n\n---\n\n', PROMPT_INJECTION_RESISTANCE, '\n\n---\n\n']
+      ? [
+          // Ask mode on a plain stream still leads with the API override so
+          // its "overrides every rule below" scope covers the chat charter,
+          // matching classic's authority order (API before CHAT).
+          ...(streamFormat === 'plain' ? [API_MODE_OVERRIDE, '\n\n---\n\n'] : []),
+          CHAT_MODE_OVERRIDE,
+          '\n\n---\n\n',
+          PROMPT_INJECTION_RESISTANCE,
+          '\n\n---\n\n',
+        ]
       : [PROMPT_INJECTION_RESISTANCE, '\n\n---\n\n'];
   const activeDesignSystemBody = designSystemBody?.trim();
   const activeSkillModes = new Set(
@@ -718,8 +727,13 @@ export function composeSystemPrompt({
   // markup described in #313. Keep the wording byte-identical to the
   // contracts copy so both code paths produce the same observable
   // behaviour.
-  if (streamFormat === 'plain' && !isSlimCharterHead) {
-    // Slim charter-head runs already composed this first (see head above).
+  // Turn-variable blocks (gated on per-message signals) are pushed LAST under
+  // slim — after every conversation/project-stable section — so a signal flip
+  // mid-conversation only invalidates the cached suffix, not the whole prompt.
+  const slimTurnVariableParts: string[] = [];
+
+  if (streamFormat === 'plain' && !isSlimCore) {
+    // Slim runs (charter head AND ask head) already composed this first.
     parts.push(API_MODE_OVERRIDE);
     parts.push('\n\n---\n\n');
   }
@@ -816,13 +830,20 @@ export function composeSystemPrompt({
     if (isMultiTargetProject) {
       parts.push(renderSharedFramesBlock(), '\n\n---\n\n');
     }
-    const hasExplicitPlatformSignal =
+    // Trigger stability decides position. Metadata is fixed at project
+    // creation → the block can sit here in the project-stable zone. The
+    // conversation-text signal is turn-variable (a mid-session "make it an
+    // iOS app" flips it on), so signal-only triggers defer the block to the
+    // turn-variable suffix like the deck/media signals — an early insert
+    // would break the cached prefix for every section after this line.
+    const metadataPlatformSignal =
       isMultiTargetProject ||
       typeof metadata?.platform === 'string' ||
-      (metadata?.platformTargets?.length ?? 0) > 0 ||
-      (platformHintSignal ?? false);
-    if (isSlimCore && hasExplicitPlatformSignal) {
+      (metadata?.platformTargets?.length ?? 0) > 0;
+    if (isSlimCore && metadataPlatformSignal) {
       parts.push(PLATFORM_CONTRACTS_BLOCK, '\n\n---\n\n');
+    } else if (isSlimCore && (platformHintSignal ?? false)) {
+      slimTurnVariableParts.push(`\n\n---\n\n${PLATFORM_CONTRACTS_BLOCK}`);
     }
   }
 
@@ -1020,10 +1041,6 @@ export function composeSystemPrompt({
   // skeleton would conflict. The skill-seed path takes over via
   // `derivePreflight` above, so we only fire the generic skeleton when no
   // skill seed is on offer.
-  // Turn-variable blocks (gated on per-message signals) are pushed LAST under
-  // slim — after every conversation/project-stable section — so a signal flip
-  // mid-conversation only invalidates the cached suffix, not the whole prompt.
-  const slimTurnVariableParts: string[] = [];
   const isDeckProject = resolvedExclusiveSurface === 'deck';
   const isFreeformProject = activeSkillModes.size === 0 && (!metadata || metadata.kind === 'other');
   const hasSkillSeed =

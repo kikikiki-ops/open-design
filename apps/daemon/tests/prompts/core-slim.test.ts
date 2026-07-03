@@ -389,9 +389,37 @@ describe('slim core — regression-audit fixes vs classic', () => {
       promptCoreVariant: 'slim' as const,
     };
     expect(composeSystemPrompt(base)).not.toContain('## Platform delivery contracts');
-    expect(
-      composeSystemPrompt({ ...base, platformHintSignal: true }),
-    ).toContain('## Platform delivery contracts');
+    const signalled = composeSystemPrompt({ ...base, platformHintSignal: true });
+    expect(signalled).toContain('## Platform delivery contracts');
+    // Signal-only trigger is turn-variable: the block must land in the
+    // deferred suffix (after the project-stable metadata block), so a
+    // mid-session flip only invalidates the cached tail.
+    expect(signalled.indexOf('\n## Platform delivery contracts')).toBeGreaterThan(
+      signalled.indexOf('\n## Project metadata'),
+    );
+    // Metadata trigger is project-stable: the block stays in the early zone.
+    const metadataGated = composeSystemPrompt({
+      metadata: { kind: 'prototype', platform: 'responsive' },
+      executionProfile: 'filesystem',
+      promptCoreVariant: 'slim',
+    });
+    expect(metadataGated.indexOf('\n## Platform delivery contracts')).toBeLessThan(
+      metadataGated.indexOf('\n## Project metadata'),
+    );
+  });
+
+  it('ask mode on a plain stream leads with the API override (classic authority order)', () => {
+    const out = composeSystemPrompt({
+      metadata: { kind: 'prototype' },
+      sessionMode: 'chat',
+      streamFormat: 'plain',
+      promptCoreVariant: 'slim',
+    });
+    expect(out.startsWith('# API mode — no tools available')).toBe(true);
+    expect(out.indexOf('# Ask mode — bare conversation')).toBeGreaterThan(0);
+    expect(out.indexOf('# API mode — no tools available')).toBe(
+      out.lastIndexOf('# API mode — no tools available'),
+    );
   });
 
   it('keeps the restored classic product rules in the charter', () => {
