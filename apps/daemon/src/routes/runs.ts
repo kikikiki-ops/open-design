@@ -1427,6 +1427,7 @@ export function registerRunRoutes(app: Express, ctx: RegisterRunRoutesDeps) {
     };
     const run = design.runs.create(meta);
     design.runs.stream(run, req, res);
+    reconcileAssistantMessageOnRunEnd(db, design.runs, run);
     design.runs.start(run, () => startChatRun(meta, run));
   });
 }
