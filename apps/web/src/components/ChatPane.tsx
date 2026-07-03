@@ -2403,6 +2403,7 @@ export function ChatPane({
                               signInLabel={t('chat.amrError.authorizeCta')}
                               amrEntrySourceDetail="chat_error_authorize_retry"
                               initialStatus={inlineAmrLoginStatus}
+                              skipInitialRefresh
                               metricsConsent={config?.telemetry?.metrics === true}
                               installationId={config?.installationId}
                               showActivationDetails
