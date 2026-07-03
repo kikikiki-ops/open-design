@@ -134,15 +134,6 @@ export function RecommendedStartRegion({ recommendation, onStart, onDismiss }: P
         <span className={styles.title}>{t(copy.title)}</span>
         <span className={styles.desc}>{t(copy.desc)}</span>
       </span>
-      <button
-        type="button"
-        className={styles.primary}
-        onClick={handleEnter}
-        data-testid="home-recommendation-start"
-      >
-        {t('home.recommendation.primaryCta')}
-        <Icon name="chevron-right" size={14} />
-      </button>
       {canChange ? (
         <button
           type="button"
@@ -162,6 +153,15 @@ export function RecommendedStartRegion({ recommendation, onStart, onDismiss }: P
         data-testid="home-recommendation-browse-all"
       >
         {t('home.recommendation.browseAll')}
+      </button>
+      <button
+        type="button"
+        className={styles.primary}
+        onClick={handleEnter}
+        data-testid="home-recommendation-start"
+      >
+        {t('home.recommendation.primaryCta')}
+        <Icon name="chevron-right" size={14} />
       </button>
     </section>
   );
