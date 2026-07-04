@@ -2238,7 +2238,7 @@ export const id: Dict = {
   'home.recommendation.browseAll': 'Semua jenis',
   'home.recommendation.defaultProjectName': 'Proyek baru',
   'studio.firstArtifactHint.title': 'Desain pertama Anda sudah siap',
-  'studio.firstArtifactHint.body': 'Anda dapat melihat, mengedit, dan mengekspornya dari pratinjau.',
+  'studio.firstArtifactHint.body': 'Coba edit dan beri anotasi langsung — ekspor atau bagikan kapan saja setelah puas.',
   'studio.firstArtifactHint.dismiss': 'Mengerti',
   'home.starter.product_ui_prototype.title': 'Mulai dengan prototipe produk yang dapat diedit',
   'home.starter.product_ui_prototype.desc': 'Berdasarkan tujuan Anda, mulai dengan antarmuka yang dapat diklik dan bisa Anda sempurnakan.',

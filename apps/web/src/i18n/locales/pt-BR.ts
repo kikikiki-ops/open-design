@@ -2238,7 +2238,7 @@ export const ptBR: Dict = {
   'home.recommendation.browseAll': 'Todos os tipos',
   'home.recommendation.defaultProjectName': 'Novo projeto',
   'studio.firstArtifactHint.title': 'Seu primeiro design está pronto',
-  'studio.firstArtifactHint.body': 'Você pode visualizá-lo, editá-lo e exportá-lo pela pré-visualização.',
+  'studio.firstArtifactHint.body': 'Experimente editar e anotar diretamente — exporte ou compartilhe quando estiver satisfeito.',
   'studio.firstArtifactHint.dismiss': 'Entendi',
   'home.starter.product_ui_prototype.title': 'Comece com um protótipo de produto editável',
   'home.starter.product_ui_prototype.desc': 'Com base no seu objetivo, comece com uma interface clicável que você pode refinar.',

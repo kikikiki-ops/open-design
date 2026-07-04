@@ -2239,7 +2239,7 @@ export const en: Dict = {
   'home.recommendation.browseAll': 'All types',
   'home.recommendation.defaultProjectName': 'New project',
   'studio.firstArtifactHint.title': 'Your first design is ready',
-  'studio.firstArtifactHint.body': 'You can view, edit, and export it from the preview.',
+  'studio.firstArtifactHint.body': "Try editing and annotating it directly — export or share whenever you're happy.",
   'studio.firstArtifactHint.dismiss': 'Got it',
   'home.starter.product_ui_prototype.title': 'Start with an editable product prototype',
   'home.starter.product_ui_prototype.desc':

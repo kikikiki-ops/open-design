@@ -2238,7 +2238,7 @@ export const ar: Dict = {
   'home.recommendation.browseAll': 'كل الأنواع',
   'home.recommendation.defaultProjectName': 'مشروع جديد',
   'studio.firstArtifactHint.title': 'تصميمك الأول جاهز',
-  'studio.firstArtifactHint.body': 'يمكنك عرضه وتحريره وتصديره من المعاينة.',
+  'studio.firstArtifactHint.body': 'جرّب التحرير وإضافة التعليقات مباشرة — صدِّر أو شارك متى كنت راضيًا.',
   'studio.firstArtifactHint.dismiss': 'حسنًا',
   'home.starter.product_ui_prototype.title': 'ابدأ بنموذج منتج أولي قابل للتحرير',
   'home.starter.product_ui_prototype.desc': 'بناءً على هدفك، ابدأ بواجهة قابلة للنقر يمكنك تحسينها.',

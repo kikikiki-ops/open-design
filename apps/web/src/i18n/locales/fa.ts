@@ -2238,7 +2238,7 @@ export const fa: Dict = {
   'home.recommendation.browseAll': 'همه انواع',
   'home.recommendation.defaultProjectName': 'پروژه جدید',
   'studio.firstArtifactHint.title': 'اولین طراحی شما آماده است',
-  'studio.firstArtifactHint.body': 'می‌توانید آن را از پیش‌نمایش مشاهده، ویرایش و صادر کنید.',
+  'studio.firstArtifactHint.body': 'ویرایش و حاشیه‌نویسی را مستقیم امتحان کنید — هر وقت راضی بودید خروجی بگیرید یا به اشتراک بگذارید.',
   'studio.firstArtifactHint.dismiss': 'متوجه شدم',
   'home.starter.product_ui_prototype.title': 'با یک نمونه‌ اولیه محصول قابل ویرایش شروع کنید',
   'home.starter.product_ui_prototype.desc': 'بر اساس هدفتان، با یک رابط قابل کلیک که می‌توانید آن را پالایش کنید شروع کنید.',

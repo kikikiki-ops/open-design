@@ -2238,7 +2238,7 @@ export const th: Dict = {
   'home.recommendation.browseAll': 'ทุกประเภท',
   'home.recommendation.defaultProjectName': 'โปรเจกต์ใหม่',
   'studio.firstArtifactHint.title': 'งานออกแบบชิ้นแรกของคุณพร้อมแล้ว',
-  'studio.firstArtifactHint.body': 'คุณสามารถดู แก้ไข และส่งออกได้จากตัวอย่าง',
+  'studio.firstArtifactHint.body': 'ลองแก้ไขและใส่คำอธิบายได้เลย พอใจเมื่อไรก็ส่งออกหรือแชร์ได้ทุกเมื่อ',
   'studio.firstArtifactHint.dismiss': 'เข้าใจแล้ว',
   'home.starter.product_ui_prototype.title': 'เริ่มด้วยต้นแบบผลิตภัณฑ์ที่แก้ไขได้',
   'home.starter.product_ui_prototype.desc': 'จากเป้าหมายของคุณ เริ่มด้วยอินเทอร์เฟซที่คลิกได้และปรับแต่งต่อได้',

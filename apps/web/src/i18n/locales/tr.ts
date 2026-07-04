@@ -2238,7 +2238,7 @@ export const tr: Dict = {
   'home.recommendation.browseAll': 'Tüm türler',
   'home.recommendation.defaultProjectName': 'Yeni proje',
   'studio.firstArtifactHint.title': 'İlk tasarımınız hazır',
-  'studio.firstArtifactHint.body': 'Önizlemeden görüntüleyebilir, düzenleyebilir ve dışa aktarabilirsiniz.',
+  'studio.firstArtifactHint.body': 'Doğrudan düzenlemeyi ve not eklemeyi dene — memnun kaldığında dışa aktar veya paylaş.',
   'studio.firstArtifactHint.dismiss': 'Anladım',
   'home.starter.product_ui_prototype.title': 'Düzenlenebilir bir ürün prototipiyle başla',
   'home.starter.product_ui_prototype.desc': 'Hedefinize göre, üzerinde iyileştirme yapabileceğiniz tıklanabilir bir arayüzle başlayın.',

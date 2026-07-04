@@ -2238,7 +2238,7 @@ export const uk: Dict = {
   'home.recommendation.browseAll': 'Усі типи',
   'home.recommendation.defaultProjectName': 'Новий проєкт',
   'studio.firstArtifactHint.title': 'Ваш перший дизайн готовий',
-  'studio.firstArtifactHint.body': 'Ви можете переглянути, відредагувати та експортувати його в режимі попереднього перегляду.',
+  'studio.firstArtifactHint.body': 'Спробуйте відредагувати й додати позначки — експортуйте або поділіться, коли будете задоволені.',
   'studio.firstArtifactHint.dismiss': 'Зрозуміло',
   'home.starter.product_ui_prototype.title': 'Почніть з редагованого прототипу продукту',
   'home.starter.product_ui_prototype.desc': 'Виходячи з вашої мети, почніть з клікабельного інтерфейсу, який можна доопрацювати.',

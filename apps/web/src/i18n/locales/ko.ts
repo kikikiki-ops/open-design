@@ -2238,7 +2238,7 @@ export const ko: Dict = {
   'home.recommendation.browseAll': '전체 유형',
   'home.recommendation.defaultProjectName': '새 프로젝트',
   'studio.firstArtifactHint.title': '첫 번째 디자인이 준비되었습니다',
-  'studio.firstArtifactHint.body': '미리보기에서 확인하고 편집하고 내보낼 수 있습니다.',
+  'studio.firstArtifactHint.body': '바로 편집하고 주석을 달아 보세요. 마음에 들면 언제든 내보내거나 공유할 수 있어요.',
   'studio.firstArtifactHint.dismiss': '확인',
   'home.starter.product_ui_prototype.title': '편집 가능한 제품 프로토타입으로 시작하기',
   'home.starter.product_ui_prototype.desc': '목표에 맞춰, 다듬을 수 있는 클릭 가능한 인터페이스로 시작하세요.',

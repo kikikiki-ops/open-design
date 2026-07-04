@@ -2238,7 +2238,7 @@ export const ru: Dict = {
   'home.recommendation.browseAll': 'Все типы',
   'home.recommendation.defaultProjectName': 'Новый проект',
   'studio.firstArtifactHint.title': 'Ваш первый дизайн готов',
-  'studio.firstArtifactHint.body': 'Вы можете просмотреть, отредактировать и экспортировать его в режиме предпросмотра.',
+  'studio.firstArtifactHint.body': 'Попробуйте отредактировать и добавить пометки — экспортируйте или поделитесь, когда будете довольны.',
   'studio.firstArtifactHint.dismiss': 'Понятно',
   'home.starter.product_ui_prototype.title': 'Начните с редактируемого прототипа продукта',
   'home.starter.product_ui_prototype.desc': 'Исходя из вашей цели, начните с кликабельного интерфейса, который можно доработать.',

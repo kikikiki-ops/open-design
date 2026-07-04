@@ -2238,7 +2238,7 @@ export const fr: Dict = {
   'home.recommendation.browseAll': 'Tous les types',
   'home.recommendation.defaultProjectName': 'Nouveau projet',
   'studio.firstArtifactHint.title': 'Votre première création est prête',
-  'studio.firstArtifactHint.body': "Vous pouvez la visualiser, la modifier et l'exporter depuis l'aperçu.",
+  'studio.firstArtifactHint.body': "Essayez de le modifier et de l'annoter directement — exportez ou partagez quand vous êtes satisfait.",
   'studio.firstArtifactHint.dismiss': 'Compris',
   'home.starter.product_ui_prototype.title': 'Commencer avec un prototype de produit modifiable',
   'home.starter.product_ui_prototype.desc': 'À partir de votre objectif, commencez avec une interface cliquable que vous pouvez affiner.',

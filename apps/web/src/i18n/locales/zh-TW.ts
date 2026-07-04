@@ -2462,7 +2462,7 @@ export const zhTW: Dict = {
   'home.recommendation.browseAll': '全部類型',
   'home.recommendation.defaultProjectName': '新增專案',
   'studio.firstArtifactHint.title': '你的第一個設計已就緒',
-  'studio.firstArtifactHint.body': '你可以在預覽中檢視、編輯和匯出。',
+  'studio.firstArtifactHint.body': '試試直接編輯和標註，滿意後隨時匯出分享。',
   'studio.firstArtifactHint.dismiss': '知道了',
   'home.starter.product_ui_prototype.title': '從可編輯的產品原型開始',
   'home.starter.product_ui_prototype.desc': '根據你的目標，從一個可點擊、可反覆打磨的介面開始。',

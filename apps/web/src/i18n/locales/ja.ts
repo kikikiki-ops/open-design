@@ -2238,7 +2238,7 @@ export const ja: Dict = {
   'home.recommendation.browseAll': 'すべてのタイプ',
   'home.recommendation.defaultProjectName': '新規プロジェクト',
   'studio.firstArtifactHint.title': '最初のデザインが完成しました',
-  'studio.firstArtifactHint.body': 'プレビューから表示・編集・エクスポートできます。',
+  'studio.firstArtifactHint.body': 'そのまま編集や注釈を試してみましょう。満足したらいつでもエクスポート・共有できます。',
   'studio.firstArtifactHint.dismiss': 'OK',
   'home.starter.product_ui_prototype.title': '編集可能なプロダクトプロトタイプから始める',
   'home.starter.product_ui_prototype.desc': '目標に応じて、調整できるクリック可能なインターフェースから始めましょう。',

@@ -2238,7 +2238,7 @@ export const hu: Dict = {
   'home.recommendation.browseAll': 'Összes típus',
   'home.recommendation.defaultProjectName': 'Új projekt',
   'studio.firstArtifactHint.title': 'Az első terved elkészült',
-  'studio.firstArtifactHint.body': 'Megtekintheted, szerkesztheted és exportálhatod az előnézetből.',
+  'studio.firstArtifactHint.body': 'Próbáld meg közvetlenül szerkeszteni és jegyzetelni — exportáld vagy oszd meg, ha elégedett vagy.',
   'studio.firstArtifactHint.dismiss': 'Értem',
   'home.starter.product_ui_prototype.title': 'Kezdj egy szerkeszthető termékprototípussal',
   'home.starter.product_ui_prototype.desc': 'A célod alapján kezdj egy kattintható felülettel, amelyet finomíthatsz.',

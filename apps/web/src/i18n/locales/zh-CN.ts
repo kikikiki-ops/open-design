@@ -2452,7 +2452,7 @@ export const zhCN: Dict = {
   'home.recommendation.browseAll': '全部类型',
   'home.recommendation.defaultProjectName': '新建项目',
   'studio.firstArtifactHint.title': '你的第一个设计已就绪',
-  'studio.firstArtifactHint.body': '你可以在预览中查看、编辑和导出。',
+  'studio.firstArtifactHint.body': '试试直接编辑和标注，满意后随时导出分享。',
   'studio.firstArtifactHint.dismiss': '知道了',
   'home.starter.product_ui_prototype.title': '从可编辑的产品原型开始',
   'home.starter.product_ui_prototype.desc': '基于你的目标，从一个可点击、可反复打磨的界面开始。',
