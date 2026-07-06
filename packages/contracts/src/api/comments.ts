@@ -84,6 +84,12 @@ export interface PreviewCommentTarget {
   podMembers?: PreviewCommentMember[];
   /** Zero-based deck slide index when the comment was placed. */
   slideIndex?: number;
+  /**
+   * Team-collab: content version this anchor was captured against. Persisted as
+   * {@link PreviewComment.anchoredVersion}; drives the drift ladder's
+   * "based on older vN" badge.
+   */
+  anchoredVersion?: number;
 }
 
 export interface PreviewComment {
@@ -130,6 +136,24 @@ export interface PreviewCommentUpsertRequest {
   target: PreviewCommentTarget;
   note: string;
   attachments?: PreviewCommentAttachment[];
+  /**
+   * Team-collab: comment author's workspaceMemberId. Server-set from the request
+   * identity (B token → member context); clients do not supply it.
+   */
+  authorMemberId?: string;
+}
+
+/**
+ * Team-collab: drift-ladder write-back. The anchoring engine reports where a
+ * comment resolved this render so the resolved state persists across sessions
+ * (see {@link PreviewCommentAnchorState}).
+ */
+export interface PreviewCommentAnchorUpdateRequest {
+  anchorState: PreviewCommentAnchorState;
+  /** Written back on a successful (anchored/reanchored) resolve; the `lost` ghost pin renders here. */
+  lastGoodPosition?: PreviewCommentPosition;
+  /** Optional: refresh the anchored content version. */
+  anchoredVersion?: number;
 }
 
 export interface PreviewCommentStatusRequest {
