@@ -442,7 +442,8 @@ describe('slim core — regression-audit fixes vs classic', () => {
     expect(charter).toContain('The design system stays bound on every turn');
     expect(charter).toContain('Locked constraints persist');
     // An edit changes only what was named — the anti-drift core.
-    expect(charter).toContain('touches ONLY what the user named');
+    expect(charter).toContain('do exactly what was asked, in full');
+    expect(charter).toContain('Never report a change you did not make');
   });
 
   it('keeps the restored classic product rules in the charter', () => {

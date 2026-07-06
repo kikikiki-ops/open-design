@@ -330,7 +330,7 @@ exports[`composeSystemPrompt — scenario × section golden matrix > keeps the s
       "media-dispatch-hint",
       "role-marker-guard",
     ],
-    "totalChars": 25400,
+    "totalChars": 26224,
   },
   "slim-freeform-no-deck-signal": {
     "sections": [
@@ -340,7 +340,7 @@ exports[`composeSystemPrompt — scenario × section golden matrix > keeps the s
       "media-dispatch-hint",
       "role-marker-guard",
     ],
-    "totalChars": 15742,
+    "totalChars": 16566,
   },
 }
 `;
