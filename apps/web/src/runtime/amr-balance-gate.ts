@@ -110,9 +110,17 @@ export async function checkAmrBalanceGate(): Promise<AmrBalanceGateResult> {
     // wallet before blocking — the cache may predate a sign-in or recharge.
     const fresh = await fetchAmrWalletSnapshot({ refresh: true }).catch(() => null);
     if (fresh == null) return { kind: 'allow' };
+    // Signed-out is decided from the LOCAL profile read, so it is definitive
+    // even though the snapshot carries an explanatory `signed_out` error —
+    // check it before the stale/error guard below.
     if (fresh.status === 'signed_out') {
       return { kind: 'hard', reason: 'signed_out', snapshot: fresh };
     }
+    // A failed refresh hands back the PREVIOUS cached snapshot flagged
+    // `stale: true` (plus an upstream/network `error`). That is not a fresh
+    // definitive answer, so it must not confirm a hard block — a user who
+    // just topped up while the wallet endpoint hiccuped would be stranded.
+    if (fresh.stale || fresh.error != null) return { kind: 'allow' };
     const freshBalance = amrWalletBalanceUsd(fresh);
     if (freshBalance == null) return { kind: 'allow' };
     if (freshBalance <= AMR_HARD_BLOCK_BALANCE_USD) {

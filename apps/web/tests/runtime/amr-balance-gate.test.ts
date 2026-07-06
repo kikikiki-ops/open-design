@@ -150,4 +150,44 @@ describe('checkAmrBalanceGate', () => {
     mockedFetch.mockRejectedValue(new Error('network down'));
     await expect(checkAmrBalanceGate()).resolves.toEqual({ kind: 'allow' });
   });
+
+  it('does not hard-block when the refresh only returns a stale cached snapshot', async () => {
+    // A failed upstream refresh hands back the previous cached snapshot with
+    // stale=true and an error — not a fresh definitive answer. The gate must
+    // fail open instead of stranding a user who just topped up while the
+    // wallet endpoint hiccuped.
+    mockedFetch
+      .mockResolvedValueOnce(snapshot({ balanceUsd: '0', source: 'daemon_cache' }))
+      .mockResolvedValueOnce(
+        snapshot({
+          balanceUsd: '0',
+          stale: true,
+          source: 'daemon_cache',
+          error: { code: 'upstream', message: 'wallet fetch failed' },
+        }),
+      );
+    await expect(checkAmrBalanceGate()).resolves.toEqual({ kind: 'allow' });
+  });
+
+  it('still hard-blocks a signed-out snapshot despite its explanatory error', async () => {
+    // The daemon's signed-out snapshot always carries
+    // error={code:'signed_out'} (and no balance). That error explains WHY
+    // the balance is unavailable — it is not a failed-refresh echo, and the
+    // signed-out determination comes from the local profile read, so it
+    // stays definitive. Regression test: a blanket "any error is
+    // indefinite" guard silently disabled the signed-out hard block.
+    const signedOut = snapshot({
+      status: 'signed_out',
+      balanceUsd: null,
+      user: null,
+      source: 'unavailable',
+      error: { code: 'signed_out', message: 'Sign in to view wallet balance.' },
+    });
+    mockedFetch.mockResolvedValueOnce(signedOut).mockResolvedValueOnce(signedOut);
+    await expect(checkAmrBalanceGate()).resolves.toEqual({
+      kind: 'hard',
+      reason: 'signed_out',
+      snapshot: signedOut,
+    });
+  });
 });
