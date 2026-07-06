@@ -776,33 +776,6 @@ function compareDeploymentsByNewest(a: WebDeploymentInfo, b: WebDeploymentInfo):
   return deploymentTimestamp(b) - deploymentTimestamp(a);
 }
 
-function shareUrlForDeployment(deployment: WebDeploymentInfo): string {
-  const customDomain = deployment.providerId === CLOUDFLARE_PAGES_PROVIDER_ID
-    ? deployment.cloudflarePages?.customDomain
-    : undefined;
-  if (customDomain?.status === 'ready' && customDomain.url?.trim()) {
-    return customDomain.url.trim();
-  }
-  return deployment.url?.trim() || '';
-}
-
-function resolveShareUrl(rawUrl: string): string {
-  const trimmed = rawUrl.trim();
-  if (!trimmed) return '';
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  if (typeof window === 'undefined') return trimmed;
-  return new URL(trimmed, window.location.origin).toString();
-}
-
-function pickLatestShareDeployment(
-  deploymentsByProvider: Partial<Record<WebDeployProviderId, WebDeploymentInfo>>,
-): WebDeploymentInfo | null {
-  return Object.values(deploymentsByProvider)
-    .filter((deployment): deployment is WebDeploymentInfo =>
-      Boolean(deployment && shareUrlForDeployment(deployment) && deployResultState(deployment.status) !== 'failed'))
-    .sort(compareDeploymentsByNewest)[0] ?? null;
-}
-
 function manualEditFloatingPanelStyle(
   target: ManualEditTarget,
   previewScale: number,
@@ -984,6 +957,17 @@ async function requestPreviewSnapshotWithRetry(iframe: HTMLIFrameElement): Promi
 
 function previewViewportStateKey(projectId: string, file: Pick<ProjectFile, 'name' | 'path'>): string {
   return `${projectId}:${file.path || file.name}`;
+}
+
+function demoPublishedFileUrl(projectId: string, file: Pick<ProjectFile, 'name' | 'path'>): string {
+  const identity = `${projectId}:${file.path || file.name}`;
+  let hash = 0;
+  for (let index = 0; index < identity.length; index += 1) {
+    hash = (hash * 31 + identity.charCodeAt(index)) >>> 0;
+  }
+  const title = file.name.replace(/\.[^.]+$/, '');
+  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'file';
+  return `https://open.design/p/${hash.toString(36)}/${slug}`;
 }
 
 function setPreviewViewportCached(key: string, viewport: PreviewViewportId) {
@@ -4850,8 +4834,11 @@ function HtmlViewer({
   const [selectedVersionId, setSelectedVersionId] = useState('v4');
   const [versionActionNote, setVersionActionNote] = useState<string | null>(null);
   const [unifiedActionTab, setUnifiedActionTab] = useState<'share' | 'export' | 'send'>('share');
-  const [shareAccess, setShareAccess] = useState<'private' | 'workspace' | 'everyone'>('private');
+  const [shareAccess, setShareAccess] = useState<'private' | 'workspace'>('private');
   const [shareAccessMenuOpen, setShareAccessMenuOpen] = useState(false);
+  const [filePublished, setFilePublished] = useState(false);
+  const [publishLinkFeedback, setPublishLinkFeedback] = useState<'copied' | 'failed' | null>(null);
+  const publishedFileUrl = useMemo(() => demoPublishedFileUrl(projectId, file), [file.name, file.path, projectId]);
   const [exportReadyNudge, setExportReadyNudge] = useState(false);
   const exportReadyNudgeSeenRef = useRef<Set<string>>(new Set());
   // Template save UX. We surface a transient "Saved" pill in the share
@@ -5251,7 +5238,6 @@ function HtmlViewer({
   const [exportToast, setExportToast] = useState<
     { message: string; tone: 'default' | 'success' | 'error' | 'loading' } | null
   >(null);
-  const [shareLinkFeedback, setShareLinkFeedback] = useState<'copied' | 'failed' | null>(null);
   const [shareGuideToast, setShareGuideToast] = useState<string | null>(null);
   const [selectedSideCommentIds, setSelectedSideCommentIds] = useState<Set<string>>(() => new Set());
   const [commentSidePanelCollapsed, setCommentSidePanelCollapsed] = useState(false);
@@ -7580,21 +7566,14 @@ function HtmlViewer({
     }, 1800);
   }
 
-  async function copyShareLink(url: string) {
-    const safeUrl = url.trim();
-    if (!safeUrl) {
-      setShareLinkFeedback('failed');
-      setExportToast({ message: t('useEverywhere.copyFailed'), tone: 'error' });
-      return false;
-    }
-    const ok = await copyToClipboard(safeUrl);
+  async function copyPublishedFileLink() {
+    const ok = await copyToClipboard(publishedFileUrl);
     const feedback = ok ? 'copied' : 'failed';
-    setShareLinkFeedback(feedback);
+    setPublishLinkFeedback(feedback);
     if (!ok) setExportToast({ message: t('useEverywhere.copyFailed'), tone: 'error' });
     window.setTimeout(() => {
-      setShareLinkFeedback((current) => (current === feedback ? null : current));
+      setPublishLinkFeedback((current) => (current === feedback ? null : current));
     }, 1800);
-    return ok;
   }
 
   function presentInThisTab() {
@@ -8469,39 +8448,6 @@ function HtmlViewer({
     if (providerId === 'cloudflare-pages') return 'pages-line';
     return 'upload-cloud-line';
   };
-  const latestShareDeployment = useMemo(
-    () => pickLatestShareDeployment(deploymentsByProvider),
-    [deploymentsByProvider],
-  );
-  const latestDeployedShareUrl = latestShareDeployment
-    ? shareUrlForDeployment(latestShareDeployment)
-    : '';
-  const latestShareState = latestShareDeployment
-    ? deployResultState(latestShareDeployment.status)
-    : null;
-  const sharePageUrl = useMemo(
-    () => resolveShareUrl(latestDeployedShareUrl),
-    [latestDeployedShareUrl],
-  );
-  const canCopyShareLink = !streaming && Boolean(sharePageUrl);
-  const canOpenSharePage = !streaming && Boolean(sharePageUrl) && latestShareState !== 'delayed';
-  const shareLinkStatusHint =
-    streaming
-      ? t('fileViewer.shareAfterGenerationComplete')
-      : latestShareState === 'delayed'
-      ? t('fileViewer.deployLinkDelayed')
-      : latestShareState === 'protected'
-        ? t('fileViewer.deployLinkProtected')
-        : '';
-  const shareUnavailableHint = streaming
-    ? t('fileViewer.shareAfterGenerationComplete')
-    : t('fileViewer.shareLinkRequiresDeploy');
-  const copyShareLinkLabel =
-    shareLinkFeedback === 'copied'
-      ? t('fileViewer.copied')
-      : shareLinkFeedback === 'failed'
-        ? t('useEverywhere.copyFailed')
-        : t('fileViewer.copyShareLink');
   const shareMenuLabel = t('fileViewer.shareLabel');
   const deployMenuLabel = t('fileViewer.deployModalTitle') || 'Deploy';
   const isSocialShareDeployModal = deployModalIntent === 'social-share';
@@ -9171,8 +9117,13 @@ function HtmlViewer({
                         ) : (
                           <>
                             <div className="share-menu-section-label" role="presentation">
-                              Who can access
+                              Share project in Workspace
                             </div>
+                            <p className="chrome-share-status">
+                              {shareAccess === 'private'
+                                ? 'Only you can access this project. Choose Workspace members to share it with your team.'
+                                : 'Team members in this Workspace can access this project.'}
+                            </p>
                             <div className="chrome-access-select">
                               <button
                                 type="button"
@@ -9186,9 +9137,7 @@ function HtmlViewer({
                                     name={
                                       shareAccess === 'private'
                                         ? 'lock-line'
-                                        : shareAccess === 'workspace'
-                                          ? 'team-line'
-                                          : 'earth-line'
+                                        : 'team-line'
                                     }
                                     size={16}
                                   />
@@ -9196,9 +9145,7 @@ function HtmlViewer({
                                 <span>
                                   {shareAccess === 'private'
                                     ? 'Only you'
-                                    : shareAccess === 'workspace'
-                                      ? 'Your workspace'
-                                      : 'Everyone'}
+                                    : 'Workspace members'}
                                 </span>
                                 <RemixIcon name="arrow-down-s-line" size={16} />
                               </button>
@@ -9206,8 +9153,7 @@ function HtmlViewer({
                                 <div className="chrome-access-options" role="listbox">
                                   {([
                                     ['private', 'lock-line', 'Only you'],
-                                    ['workspace', 'team-line', 'Your workspace'],
-                                    ['everyone', 'earth-line', 'Everyone'],
+                                    ['workspace', 'team-line', 'Workspace members'],
                                   ] as const).map(([value, icon, label]) => (
                                     <button
                                       key={value}
@@ -9228,36 +9174,56 @@ function HtmlViewer({
                                 </div>
                               ) : null}
                             </div>
-                            <p className="chrome-share-status">
-                              {shareAccess === 'private'
-                                ? 'Only you can see this design.'
-                                : shareAccess === 'workspace'
-                                  ? 'Everyone in your workspace can view this design.'
-                                  : 'Anyone with the link can view this design.'}
-                            </p>
+                            <div className="chrome-publish-card">
+                              <div className="chrome-publish-card__header">
+                                <span className="share-menu-icon"><RemixIcon name="broadcast-line" size={16} /></span>
+                                <span className="share-menu-text">
+                                  <span>Publish file for everyone</span>
+                                  <small>Make this single file externally visible. Anyone with the published link can view it online.</small>
+                                </span>
+                              </div>
+                              {filePublished ? (
+                                <>
+                                  <div className="chrome-publish-url" title={publishedFileUrl}>
+                                    {publishedFileUrl}
+                                  </div>
+                                  <div className="chrome-publish-actions">
+                                    <button
+                                      type="button"
+                                      className="chrome-publish-button"
+                                      onClick={() => {
+                                        void copyPublishedFileLink();
+                                      }}
+                                    >
+                                      <RemixIcon name="file-copy-line" size={14} />
+                                      {publishLinkFeedback === 'copied'
+                                        ? t('fileViewer.copied')
+                                        : publishLinkFeedback === 'failed'
+                                          ? t('useEverywhere.copyFailed')
+                                          : 'Copy link'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="chrome-publish-button chrome-publish-button--ghost"
+                                      onClick={() => setFilePublished(false)}
+                                    >
+                                      Unpublish
+                                    </button>
+                                  </div>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="chrome-publish-primary"
+                                  onClick={() => setFilePublished(true)}
+                                >
+                                  <RemixIcon name="upload-cloud-2-line" size={15} />
+                                  Publish file
+                                </button>
+                              )}
+                            </div>
                           </>
                         )}
-                        {demoUseMode === 'cloud' && shareAccess !== 'private' ? (
-                          <button
-                            type="button"
-                            className="share-menu-item"
-                            role="menuitem"
-                            title={shareLinkStatusHint || undefined}
-                            onClick={() => {
-                              const href = sharePageUrl ?? window.location.href;
-                              fireShareExport('share_link', async () => {
-                                const ok = await copyShareLink(href);
-                                if (!ok) throw new Error('copy_share_link_failed');
-                              });
-                            }}
-                          >
-                            <span className="share-menu-icon"><RemixIcon name="file-copy-line" size={15} /></span>
-                            <span className="share-menu-text">
-                              <span>{copyShareLinkLabel}</span>
-                              {shareLinkStatusHint ? <small>{shareLinkStatusHint}</small> : null}
-                            </span>
-                          </button>
-                        ) : null}
                       </div>
                     ) : null}
                     {unifiedActionTab === 'export' ? (

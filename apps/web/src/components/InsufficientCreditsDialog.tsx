@@ -42,7 +42,7 @@ const AUTO_RECHARGE_LIMITS: Array<{ id: AutoRechargeLimit; label: string }> = [
   { id: '50', label: '$50' },
   { id: '100', label: '$100' },
   { id: '200', label: '$200' },
-  { id: 'custom', label: '$ 100000' },
+  { id: 'custom', label: '$ 自定义' },
   { id: 'unlimited', label: '∞ 不限额（无月度上限）' },
 ];
 
@@ -72,7 +72,7 @@ export function InsufficientCreditsDialog({
   const isMemberRecharge = autoRechargeScope === 'member';
 
   const [selectedTier, setSelectedTier] = useState<DemoPlan>(targets[0]?.plan ?? 'team');
-  const [selectedLimit, setSelectedLimit] = useState<AutoRechargeLimit>('unlimited');
+  const [selectedLimit, setSelectedLimit] = useState<AutoRechargeLimit>('50');
   // Billing cycle for tier upgrades — defaults to annual (年付).
   const [cycle, setCycle] = useState<BillingCycle>('annual');
 
