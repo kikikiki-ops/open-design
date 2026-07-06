@@ -1,5 +1,10 @@
 import { afterEach } from 'vitest';
 
+// Extend vitest's expect with @testing-library/jest-dom matchers (e.g.
+// toBeInTheDocument, toHaveTextContent) so jsdom-environment tests can use
+// them without importing jest-dom in every test file.
+import '@testing-library/jest-dom/vitest';
+
 import { resetPluginsCache } from '../../src/state/projects';
 
 // The visible-plugins cache is module-level so it survives Home remounts in the

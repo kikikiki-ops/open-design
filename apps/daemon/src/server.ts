@@ -9223,6 +9223,11 @@ export async function startServer({
       }
       if (projectId) {
         run.projectId = projectId;
+        const preparedProject = getProject(db, projectId);
+        run.projectMetadata =
+          preparedProject?.metadata && typeof preparedProject.metadata === 'object'
+            ? preparedProject.metadata
+            : null;
         if (routineRun) {
           routineRun.projectId = projectId;
         }
