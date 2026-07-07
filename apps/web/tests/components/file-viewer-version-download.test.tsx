@@ -168,7 +168,7 @@ describe('FileViewer version download actions', () => {
     openVersionDownloadMenu(versionDialog);
     fireEvent.click(within(versionDialog).getByRole('menuitem', { name: 'Export as PDF' }));
 
-    expect(await screen.findByText('Export failed')).toBeTruthy();
+    expect(await screen.findByText(/Export failed/)).toBeTruthy();
     expect(requestPreviewSnapshotMock).toHaveBeenCalledWith(expect.any(HTMLIFrameElement), expect.any(Number), {
       full: true,
     });

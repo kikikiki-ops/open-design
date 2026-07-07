@@ -679,9 +679,45 @@ describe('FileWorkspace upload input', () => {
     );
   });
 
-  it('creates blank slide pages without default speaker notes', async () => {
+  it('creates slide template pages without default speaker notes', async () => {
     const onRefreshFiles = vi.fn();
     const onTabsStateChange = vi.fn();
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/plugins') {
+        return new Response(JSON.stringify({
+          plugins: [{
+            id: 'clean-deck',
+            title: 'Clean Deck',
+            version: '0.1.0',
+            sourceKind: 'bundled',
+            source: '/tmp',
+            trust: 'bundled',
+            capabilitiesGranted: [],
+            manifest: {
+              name: 'clean-deck',
+              version: '0.1.0',
+              title: 'Clean Deck',
+              od: {
+                kind: 'scenario',
+                mode: 'deck',
+                preview: { type: 'html', entry: './preview.html' },
+              },
+            },
+            fsPath: '/tmp',
+            installedAt: 0,
+            updatedAt: 0,
+          }],
+        }), { headers: { 'content-type': 'application/json' } });
+      }
+      if (url === '/api/plugins/clean-deck/preview') {
+        return new Response(
+          '<!doctype html><html><body><main>Clean Deck</main><script type="application/json" id="speaker-notes">["Use speaker notes"]</script></body></html>',
+          { headers: { 'content-type': 'text/html' } },
+        );
+      }
+      return new Response('', { status: 404 });
+    }));
     mockedWriteProjectTextFile.mockImplementation(async (_projectId, name) => workspaceFile(name));
 
     render(
@@ -699,12 +735,15 @@ describe('FileWorkspace upload input', () => {
 
     fireEvent.click(screen.getByTestId('workspace-pages-menu-trigger'));
     fireEvent.click(screen.getByRole('menuitem', { name: /New blank page/i }));
-    fireEvent.click(screen.getByRole('button', { name: /New blank page/i }));
+    const title = await screen.findByText('Clean Deck');
+    const card = title.closest('article');
+    expect(card).not.toBeNull();
+    fireEvent.click(within(card as HTMLElement).getByRole('button', { name: 'Use' }));
 
     await waitFor(() => expect(mockedWriteProjectTextFile).toHaveBeenCalledTimes(1));
     const [projectId, name, content] = mockedWriteProjectTextFile.mock.calls[0]!;
     expect(projectId).toBe('project-1');
-    expect(name).toBe('slides.html');
+    expect(name).toBe('clean-deck.html');
     expect(content).not.toContain('id="speaker-notes"');
     expect(content).not.toContain('Use speaker notes');
     await waitFor(() => expect(onRefreshFiles).toHaveBeenCalledTimes(1));
