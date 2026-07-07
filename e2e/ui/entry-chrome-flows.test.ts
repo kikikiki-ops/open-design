@@ -1995,14 +1995,15 @@ async function revealHomeTemplates(page: Page) {
   const section = home.getByTestId('plugins-home-section');
   const hint = home.getByTestId('home-templates-hint');
   if (await hint.count()) {
-    await page.mouse.wheel(0, 900);
-    if (!(await home.locator('.home-templates-reveal').evaluate((node) => node.classList.contains('is-revealed')).catch(() => false))) {
-      await page.evaluate(() => {
-        window.dispatchEvent(new WheelEvent('wheel', { deltaY: 900, bubbles: true, cancelable: true }));
-      });
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if (await home.locator('.home-templates-reveal').evaluate((node) => node.classList.contains('is-revealed')).catch(() => false)) break;
+      await page.mouse.wheel(0, 900);
+      await page.waitForTimeout(120);
     }
     if (!(await home.locator('.home-templates-reveal').evaluate((node) => node.classList.contains('is-revealed')).catch(() => false))) {
-      await hint.evaluate((element) => (element as HTMLButtonElement).click());
+      await hint.scrollIntoViewIfNeeded();
+      await expect(hint).toBeVisible();
+      await hint.click();
     }
     await expect(home.locator('.home-templates-reveal')).toHaveClass(/is-revealed/);
     await expect(home.locator('.home-templates-reveal__body')).not.toHaveAttribute('inert', '');

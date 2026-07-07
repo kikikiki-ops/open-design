@@ -1613,13 +1613,14 @@ test('[P1] project detail HTML version manager previews and restores an older sn
     current: true,
     restoreFromVersionId: oldVersion.id,
   };
+  const oldVersionContent = '<!doctype html><html><body><main><h1>Initial Version</h1></main></body></html>';
   const restoredContent = '<!doctype html><html><body><main><h1>Restored Version</h1></main></body></html>';
 
   await page.route(`**/api/projects/${projectId}/files/${uploadedName}/versions`, async (route) => {
     if (route.request().method() === 'GET') {
       await route.fulfill({
         json: {
-          file: { name: uploadedName, kind: 'html', mime: 'text/html', size: restoredContent.length, mtime: now },
+          file: { name: uploadedName, kind: 'html', mime: 'text/html', size: oldVersionContent.length, mtime: now },
           versions: [currentVersion, oldVersion],
         },
       });
@@ -1629,7 +1630,7 @@ test('[P1] project detail HTML version manager previews and restores an older sn
   });
   await page.route(`**/api/projects/${projectId}/files/${uploadedName}/versions/v-old`, async (route) => {
     if (route.request().method() === 'GET') {
-      await route.fulfill({ json: { version: oldVersion, content: restoredContent } });
+      await route.fulfill({ json: { version: oldVersion, content: oldVersionContent } });
       return;
     }
     await route.continue();
@@ -1655,7 +1656,7 @@ test('[P1] project detail HTML version manager previews and restores an older sn
   await expect(dialog.getByRole('option', { name: /Current generated HTML/i })).toHaveAttribute('aria-selected', 'true');
 
   await dialog.getByRole('option', { name: /Initial generated HTML/i }).click();
-  await expect(dialog.locator('iframe').first().contentFrame().getByRole('heading', { name: 'Restored Version' })).toBeVisible();
+  await expect(dialog.locator('iframe').first().contentFrame().getByRole('heading', { name: 'Initial Version' })).toBeVisible();
 
   await dialog.getByRole('button', { name: 'Switch to this version' }).click();
   await dialog.getByRole('dialog', { name: 'Switch to this version?' }).getByRole('button', { name: 'Switch' }).click();
