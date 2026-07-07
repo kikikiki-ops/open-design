@@ -36,6 +36,7 @@ export type AnalyticsEventName =
   // Artifact
   | 'artifact_export_result'
   | 'artifact_deploy_result'
+  | 'file_version_restore_result'
   // Feedback
   | 'feedback_submit_result'
   | 'assistant_feedback_click'
@@ -48,6 +49,8 @@ export type AnalyticsEventName =
   | 'settings_byok_test_result'
   | 'settings_byok_models_fetch_result'
   | 'settings_connector_auth_result'
+  // AMR (hosted model) account auth result.
+  | 'amr_auth_result'
   // Onboarding-only result events. UI clicks + page_views inside the
   // onboarding flow reuse the generic `ui_click` / `page_view` shapes
   // with `page_name=onboarding`; the three `onboarding_*` names below

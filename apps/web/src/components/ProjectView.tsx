@@ -8468,7 +8468,12 @@ export function ProjectView({
           onClose={() => setContextDesignSystemDetails(null)}
         />
       ) : null}
-      {hasPreviewableArtifact && !currentConversationStreaming ? (
+      {/* One-time first-generation hint (spec §8.3) is scoped to the new-user
+          onboarding handoff: only projects started from the Home recommendation
+          carry a consumed `onboardingEntryRef`. Without this gate the hint
+          would surface for any returning user opening an existing HTML project
+          and burn its once-ever localStorage budget outside the intended flow. */}
+      {onboardingEntryRef.current && hasPreviewableArtifact && !currentConversationStreaming ? (
         <FirstArtifactHint />
       ) : null}
       <AnimatePresence>

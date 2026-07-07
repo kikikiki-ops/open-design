@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  clearPendingOnboardingEntry,
   consumePendingOnboardingEntry,
   stashPendingOnboardingEntry,
 } from '../src/onboarding/onboarding-entry';
@@ -68,6 +69,21 @@ describe('pending onboarding entry (session hand-off)', () => {
   });
 
   it('returns null when nothing was stashed', () => {
+    expect(consumePendingOnboardingEntry()).toBeNull();
+  });
+
+  it('clears a stashed entry so a later consume returns null (failed create)', () => {
+    stashPendingOnboardingEntry({
+      source: 'home_recommendation',
+      productType: 'product_ui',
+      recommendationId: 'product_ui_prototype',
+    });
+    clearPendingOnboardingEntry();
+    expect(consumePendingOnboardingEntry()).toBeNull();
+  });
+
+  it('clearing when nothing is stashed is a harmless no-op', () => {
+    expect(() => clearPendingOnboardingEntry()).not.toThrow();
     expect(consumePendingOnboardingEntry()).toBeNull();
   });
 

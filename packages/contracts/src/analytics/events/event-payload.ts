@@ -2,6 +2,7 @@
  * @module analytics/events/event-payload
  * Discriminated union of all analytics event payloads.
  */
+import type { AnalyticsEventName } from './event-names.js';
 import type { DesignSystemApplyResultProps, DesignSystemCreateResultProps, DesignSystemEnrichResultProps, DesignSystemReviewResultProps, DesignSystemSourceIngestResultProps, DesignSystemStatusResultProps } from './design-systems.js';
 import type { OnboardingCompleteResultProps, OnboardingFirstGenerationCompletedProps, OnboardingFirstPromptSentProps, OnboardingPromptPrefilledProps, OnboardingRuntimeScanResultProps } from './onboarding.js';
 import type { PageViewProps } from './page-view.js';
@@ -70,4 +71,19 @@ export type AnalyticsEventPayload =
   | { event: 'design_system_status_result'; props: DesignSystemStatusResultProps }
   | { event: 'design_system_apply_result'; props: DesignSystemApplyResultProps }
   | { event: 'design_system_enrich_result'; props: DesignSystemEnrichResultProps };
+
+// Compile-time guard: `AnalyticsEventName` (event-names.ts) and the payload
+// discriminants above must stay in sync. If a future catalog split drops or
+// adds an event name on only one side, `AnalyticsEventCatalogDrift` stops being
+// `never` and the assertion below fails to type-check — reconcile the two files
+// rather than letting the public contract diverge. Downstream code that
+// validates or switches on `AnalyticsEventName` relies on this parity.
+type AnalyticsEventCatalogDrift =
+  | Exclude<AnalyticsEventName, AnalyticsEventPayload['event']>
+  | Exclude<AnalyticsEventPayload['event'], AnalyticsEventName>;
+// The default type argument must satisfy `extends never`; any drift makes it a
+// non-`never` union and turns this alias into a type error.
+type AssertAnalyticsEventCatalogInSync<
+  _Drift extends never = AnalyticsEventCatalogDrift,
+> = _Drift;
 

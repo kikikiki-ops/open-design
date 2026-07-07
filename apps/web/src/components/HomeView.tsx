@@ -242,7 +242,7 @@ interface Props {
     name: string;
     prompt: string;
     metadata: ProjectMetadata;
-  }) => void;
+  }) => boolean | void | Promise<boolean | void>;
   onRecommendationDismiss?: () => void;
   executionSwitcher?: ReactNode;
 }

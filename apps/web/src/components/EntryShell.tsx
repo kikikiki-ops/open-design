@@ -751,10 +751,12 @@ export function EntryShell({
     name: string;
     prompt: string;
     metadata: ProjectMetadata;
-  }) {
+  }): boolean | void | Promise<boolean | void> {
     dismissRecommendation();
     const pluginId = defaultPluginIdForMetadata(input.metadata);
-    onCreateProject({
+    // Return the create result so RecommendedStartRegion can drop its pending
+    // onboarding entry when the create/navigation did not succeed.
+    return onCreateProject({
       name: input.name,
       skillId: null,
       designSystemId: null,

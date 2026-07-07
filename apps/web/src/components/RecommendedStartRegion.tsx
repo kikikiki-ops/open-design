@@ -12,7 +12,10 @@ import {
   type ProductType,
   type Recommendation,
 } from '../onboarding/recommendation';
-import { stashPendingOnboardingEntry } from '../onboarding/onboarding-entry';
+import {
+  clearPendingOnboardingEntry,
+  stashPendingOnboardingEntry,
+} from '../onboarding/onboarding-entry';
 import { starterCopyFor } from '../onboarding/starter-copy';
 import { Icon } from './Icon';
 import styles from './RecommendedStartRegion.module.css';
@@ -31,7 +34,14 @@ const PRODUCT_KIND: Record<ProductType, ProjectMetadata['kind']> = {
 interface Props {
   recommendation: Recommendation;
   // Open Studio with the recommended first request pre-filled (not auto-sent).
-  onStart: (input: { name: string; prompt: string; metadata: ProjectMetadata }) => void;
+  // Resolves `false` (or throws) when the project create/navigation failed, so
+  // the onboarding handoff can drop its pending entry instead of leaving it for
+  // an unrelated later project to consume.
+  onStart: (input: {
+    name: string;
+    prompt: string;
+    metadata: ProjectMetadata;
+  }) => boolean | void | Promise<boolean | void>;
   // Abandon the recommendation for the generic entry ("浏览全部类型").
   onDismiss: () => void;
 }
@@ -91,7 +101,7 @@ export function RecommendedStartRegion({ recommendation, onStart, onDismiss }: P
     });
   }
 
-  function handleEnter() {
+  async function handleEnter() {
     fireClick('enter_studio', current.id);
     // Hand the entry context across to Studio (session-only) so the
     // first-prompt / first-generation funnel events can attribute back to this
@@ -103,11 +113,22 @@ export function RecommendedStartRegion({ recommendation, onStart, onDismiss }: P
       ...(recommendation.role ? { role: recommendation.role } : {}),
       ...(recommendation.useCases.length > 0 ? { useCases: recommendation.useCases } : {}),
     });
-    onStart({
-      name: projectNameFromPrompt(firstPrompt, t('home.recommendation.defaultProjectName')),
-      prompt: firstPrompt,
-      metadata: { kind: PRODUCT_KIND[current.productType], nameSource: 'prompt' },
-    });
+    // Only a successful create → navigate reaches the Studio mount that
+    // consumes this entry. If the create fails or is aborted, drop the stashed
+    // slot so it can't be picked up by a later unrelated project mount and
+    // mis-attributed as recommendation-started.
+    let started = false;
+    try {
+      started =
+        (await onStart({
+          name: projectNameFromPrompt(firstPrompt, t('home.recommendation.defaultProjectName')),
+          prompt: firstPrompt,
+          metadata: { kind: PRODUCT_KIND[current.productType], nameSource: 'prompt' },
+        })) !== false;
+    } catch {
+      started = false;
+    }
+    if (!started) clearPendingOnboardingEntry();
   }
 
   function handleChange() {
@@ -162,7 +183,7 @@ export function RecommendedStartRegion({ recommendation, onStart, onDismiss }: P
       <button
         type="button"
         className={styles.primary}
-        onClick={handleEnter}
+        onClick={() => void handleEnter()}
         data-testid="home-recommendation-start"
       >
         {t('home.recommendation.primaryCta')}

@@ -34,6 +34,18 @@ export function stashPendingOnboardingEntry(entry: OnboardingEntry): void {
   }
 }
 
+// Drop a stashed entry that was never consumed. Called when the project
+// create/navigation the entry was stashed for did not succeed, so a later
+// unrelated project mount cannot consume the stale slot and mis-attribute
+// itself as recommendation-started.
+export function clearPendingOnboardingEntry(): void {
+  try {
+    window.sessionStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Nothing to clean up in a storage-denied context.
+  }
+}
+
 // Read and remove the pending entry. Returns null when none is set (the common
 // case: any project not started from a recommendation).
 export function consumePendingOnboardingEntry(): OnboardingEntry | null {
