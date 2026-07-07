@@ -6,15 +6,19 @@ import type { ProjectFile } from '../../src/types';
 import { readExpandedIndexCss } from '../helpers/read-expanded-css';
 
 const {
+  captureHostIframeSnapshotMock,
   exportArtifactAsPdfMock,
   exportAsHtmlMock,
   exportAsPdfMock,
   exportAsZipMock,
+  exportSnapshotAsPdfMock,
 } = vi.hoisted(() => ({
+  captureHostIframeSnapshotMock: vi.fn(),
   exportArtifactAsPdfMock: vi.fn(),
   exportAsHtmlMock: vi.fn(),
   exportAsPdfMock: vi.fn(),
   exportAsZipMock: vi.fn(),
+  exportSnapshotAsPdfMock: vi.fn(),
 }));
 
 vi.mock('../../src/runtime/exports', async () => {
@@ -23,10 +27,12 @@ vi.mock('../../src/runtime/exports', async () => {
   );
   return {
     ...actual,
+    captureHostIframeSnapshot: captureHostIframeSnapshotMock,
     exportArtifactAsPdf: exportArtifactAsPdfMock,
     exportAsHtml: exportAsHtmlMock,
     exportAsPdf: exportAsPdfMock,
     exportAsZip: exportAsZipMock,
+    exportSnapshotAsPdf: exportSnapshotAsPdfMock,
   };
 });
 
@@ -149,10 +155,41 @@ describe('FileViewer version download actions', () => {
         expect.objectContaining({
           deck: false,
           onProgress: expect.any(Function),
+          timeoutMs: 8000,
         }),
       );
     });
     expect(exportAsPdfMock).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the rendered version preview when artifact PDF capture stalls', async () => {
+    const snapshot = { dataUrl: 'data:image/png;base64,c25hcHNob3Q=', w: 400, h: 800 };
+    exportArtifactAsPdfMock.mockRejectedValueOnce(new Error('export capture timed out'));
+    captureHostIframeSnapshotMock.mockResolvedValueOnce(snapshot);
+    exportSnapshotAsPdfMock.mockResolvedValueOnce(undefined);
+    const { file } = setupVersionFetch();
+    const versionDialog = await renderVersionDialog(file);
+
+    openVersionDownloadMenu(versionDialog);
+    fireEvent.click(within(versionDialog).getByRole('menuitem', { name: 'Export as PDF' }));
+
+    await waitFor(() => {
+      expect(exportSnapshotAsPdfMock).toHaveBeenCalledWith(snapshot, 'index-v1');
+    });
+    expect(exportAsPdfMock).not.toHaveBeenCalled();
+  });
+
+  it('does not show a close button while a version export is still running', async () => {
+    exportArtifactAsPdfMock.mockReturnValueOnce(new Promise(() => {}));
+    const { file } = setupVersionFetch();
+    const versionDialog = await renderVersionDialog(file);
+
+    openVersionDownloadMenu(versionDialog);
+    fireEvent.click(within(versionDialog).getByRole('menuitem', { name: 'Export as PDF' }));
+
+    const toast = await screen.findByRole('status');
+    expect(toast).toHaveTextContent('Export started');
+    expect(within(toast).queryByRole('button', { name: 'Dismiss' })).toBeNull();
   });
 
   it('opens the version image export dialog from the download menu', async () => {
