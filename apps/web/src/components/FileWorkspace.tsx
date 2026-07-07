@@ -1019,6 +1019,10 @@ const PROJECT_PAGE_CATEGORIES: Array<{
   { id: 'audio', icon: 'volume', labelKey: 'homeHero.chip.audio' },
   { id: 'liveArtifact', icon: 'kanban', labelKey: 'homeHero.chip.liveArtifact' },
 ];
+const PAGE_CREATOR_HIDDEN_CATEGORIES = new Set<ProjectPageKind>(['image', 'video', 'audio']);
+const PAGE_CREATOR_CATEGORIES = PROJECT_PAGE_CATEGORIES.filter((item) =>
+  pageCreatorCategoryVisible(item.id),
+);
 // Page categories that map onto a plugins-home facet primary with a meaningful
 // sub-category taxonomy (Prototype / Slides / Image / Video). Other kinds stay
 // flat — selecting them shows no second-level filter row.
@@ -6001,6 +6005,14 @@ function pagePresetMatchesCategory(preset: ProjectPagePreset, category: ProjectP
   return preset.category === category;
 }
 
+function pageCreatorCategoryVisible(category: ProjectPageCategoryId): boolean {
+  return category !== 'recommended' && !PAGE_CREATOR_HIDDEN_CATEGORIES.has(category);
+}
+
+function pageCreatorPresetVisible(preset: ProjectPagePreset): boolean {
+  return preset.source !== 'blank' && pageCreatorCategoryVisible(preset.category);
+}
+
 function pagePresetSourceLabel(preset: ProjectPagePreset, t: TranslateFn): string {
   return preset.source === 'blank' ? t('workspace.newBlankPage') : t('pluginsHome.title');
 }
@@ -7170,15 +7182,16 @@ function PageCreatorDialog({
   const [modalPreviewId, setModalPreviewId] = useState<ProjectPagePresetId | null>(null);
   const [subcategory, setSubcategory] = useState<string | null>(null);
   const [previewAvailability, setPreviewAvailability] = useState<PagePresetPreviewAvailability>({});
+  const visiblePresets = useMemo(() => presets.filter(pageCreatorPresetVisible), [presets]);
   const remotePreviewValidationKey = useMemo(
-    () => presets
+    () => visiblePresets
       .map((preset) => {
         const url = pagePresetRemotePreviewUrl(preset);
         return url ? `${preset.id}:${url}` : null;
       })
       .filter((item): item is string => item !== null)
       .join('|'),
-    [presets],
+    [visiblePresets],
   );
   useEffect(() => {
     if (!open) setModalPreviewId(null);
@@ -7191,7 +7204,7 @@ function PageCreatorDialog({
   useEffect(() => {
     if (!open) return;
     if (typeof fetch !== 'function') return;
-    const candidates = presets
+    const candidates = visiblePresets
       .map((preset) => ({ preset, url: pagePresetRemotePreviewUrl(preset) }))
       .filter((item): item is { preset: ProjectPagePreset; url: string } => Boolean(item.url));
     if (candidates.length === 0) return;
@@ -7217,7 +7230,7 @@ function PageCreatorDialog({
       cancelled = true;
       controller.abort();
     };
-  }, [open, presets, remotePreviewValidationKey]);
+  }, [open, visiblePresets, remotePreviewValidationKey]);
   // Keep the search box instantly responsive while deferring the heavy
   // (iframe-laden) grid re-render, so typing never blocks and results settle in
   // smoothly instead of janking on every keystroke.
@@ -7227,7 +7240,7 @@ function PageCreatorDialog({
 
   const normalizedQuery = deferredQuery.trim().toLocaleLowerCase();
   const searchPending = query !== deferredQuery;
-  const displayablePresets = presets.filter((preset) =>
+  const displayablePresets = visiblePresets.filter((preset) =>
     pagePresetHasDisplayablePreview(preset, previewAvailability),
   );
   // Facet slug for the active category (only Slides / Prototype / Image / Video
@@ -7287,7 +7300,7 @@ function PageCreatorDialog({
     return true;
   });
   const categoryCounts = new Map<ProjectPageCategoryId, number>(
-    PROJECT_PAGE_CATEGORIES.map((item) => [
+    PAGE_CREATOR_CATEGORIES.map((item) => [
       item.id,
       displayablePresets.filter((preset) => pagePresetMatchesCategory(preset, item.id)).length,
     ]),
@@ -7296,6 +7309,7 @@ function PageCreatorDialog({
     projectPagePresetById(previewId, displayablePresets)
     ?? filteredPresets[0]
     ?? displayablePresets[0]
+    ?? visiblePresets[0]
     ?? PROJECT_PAGE_PRESETS[0]!;
   const modalPreviewPreset = modalPreviewId
     ? projectPagePresetById(modalPreviewId, displayablePresets) ?? previewPreset
@@ -7351,7 +7365,7 @@ function PageCreatorDialog({
         </header>
         <div className="page-creator-body">
           <aside className="page-creator-sidebar" aria-label={t('workspace.pageCreatorCategoryAll')}>
-            {PROJECT_PAGE_CATEGORIES.map((item) => (
+            {PAGE_CREATOR_CATEGORIES.map((item) => (
               <button
                 key={item.id}
                 type="button"

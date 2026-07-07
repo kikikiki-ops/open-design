@@ -81,8 +81,6 @@ import {
 import type { ProjectFilePreview } from '../providers/registry';
 import {
   downloadImageDataUrl,
-  exportArtifactAsPdf,
-  exportArtifactImageDataUrl,
   exportAsHtml,
   exportAsJsx,
   exportAsMd,
@@ -2580,6 +2578,13 @@ export function fileVersionPreviewOptions(
   };
 }
 
+function fileVersionPreviewSrcDoc(projectId: string, fileName: string, source: string) {
+  return buildSrcdoc(source, {
+    ...fileVersionPreviewOptions(projectId, fileName, source),
+    previewFocusGuard: true,
+  });
+}
+
 function fileVersionExportTitle(fileName: string, version: ProjectFileVersion): string {
   const base = fileName.replace(/\.html?$/i, '') || fileName;
   return `${base}-v${version.version}`;
@@ -2770,11 +2775,7 @@ function FileVersionManagerModal({
     !selectedVersion || selectedVersion.current || restoring || loadingContent || !selectedContentMatchesVersion;
   const srcDoc = useMemo(() => {
     if (!selectedContent) return '';
-    const previewOptions = fileVersionPreviewOptions(projectId, file.name, selectedContent);
-    return buildSrcdoc(selectedContent, {
-      ...previewOptions,
-      previewFocusGuard: true,
-    });
+    return fileVersionPreviewSrcDoc(projectId, file.name, selectedContent);
   }, [file.name, projectId, selectedContent]);
   const frameReady = loadedSrcDoc === srcDoc;
 
@@ -2983,6 +2984,13 @@ function FileVersionManagerModal({
       return;
     }
     try {
+      contentCacheRef.current.set(version.id, content);
+      setSelectedId(version.id);
+      setSelectedContent(content);
+      setSelectedContentVersionId(version.id);
+      setLoadingContent(false);
+      await waitForAnimationFrame();
+      await waitForAnimationFrame();
       const result = await action(content, fileVersionExportTitle(file.name, version));
       if (result === 'cancelled') {
         setVersionExportToast(null);
@@ -2992,15 +3000,6 @@ function FileVersionManagerModal({
     } catch (err) {
       const message = err instanceof Error && err.message ? err.message : t('fileViewer.exportFailed');
       setVersionExportToast({ message, tone: 'error' });
-    }
-  }
-
-  function onVersionExportProgress(done: number, total: number) {
-    if (total > 1) {
-      setVersionExportToast({
-        message: t('fileViewer.exportSlideProgress', { current: done, total }),
-        tone: 'loading',
-      });
     }
   }
 
@@ -3018,37 +3017,16 @@ function FileVersionManagerModal({
 
   async function exportVersionPdf(version: ProjectFileVersion) {
     await runVersionExport(version, async (content, title) => {
-      const previewOptions = fileVersionPreviewOptions(projectId, file.name, content);
-      try {
-        await exportArtifactAsPdf(content, title, {
-          deck: previewOptions.deck,
-          onProgress: onVersionExportProgress,
-          timeoutMs: 8_000,
-        });
-      } catch (err) {
-        console.warn('[version-export] artifact PDF capture failed, falling back to preview snapshot:', err);
-        const snapshot = await captureVersionPreviewSnapshot({ full: true });
-        if (!snapshot) throw err;
-        await exportSnapshotAsPdf(snapshot, title);
-      }
+      const snapshot = await captureVersionPreviewSnapshot({ full: true });
+      if (!snapshot) throw new Error(t('fileViewer.exportFailed'));
+      await exportSnapshotAsPdf(snapshot, title);
     });
   }
 
   async function exportVersionImage(version: ProjectFileVersion, format: ImageExportFormat) {
     await runVersionExport(version, async (content, title) => {
-      const previewOptions = fileVersionPreviewOptions(projectId, file.name, content);
-      let snapshot;
-      try {
-        snapshot = await exportArtifactImageDataUrl(content, {
-          deck: previewOptions.deck,
-          onProgress: onVersionExportProgress,
-          timeoutMs: 8_000,
-        });
-      } catch (err) {
-        console.warn('[version-export] artifact image capture failed, falling back to preview snapshot:', err);
-        snapshot = await captureVersionPreviewSnapshot({ full: true });
-        if (!snapshot) throw err;
-      }
+      const snapshot = await captureVersionPreviewSnapshot({ full: true });
+      if (!snapshot) throw new Error(t('fileViewer.exportImageFailed'));
       const blob = await imageDataUrlToBlob(snapshot.dataUrl, format);
       if (blob.size <= 0) throw new Error(t('fileViewer.exportImageFailed'));
       const target = await prepareImageExportTarget(title, format, { useNativePicker: false });
@@ -9265,11 +9243,6 @@ function HtmlViewer({
     openInNewTab();
   }
 
-  function selectHtmlMode(nextMode: 'preview' | 'source') {
-    fireArtifactToolbarClick(nextMode);
-    setMode(nextMode);
-  }
-
   function reloadHtmlPreview() {
     fireArtifactToolbarClick('reload');
     capturePreviewScrollPosition();
@@ -10726,30 +10699,6 @@ function HtmlViewer({
           ) : null}
         </div>
         <div className="viewer-toolbar-actions">
-          <div
-            className="viewer-tabs viewer-mode-tabs"
-            role="tablist"
-            aria-label={`${t('fileViewer.preview')} / ${t('fileViewer.source')}`}
-          >
-            <button
-              type="button"
-              className={`viewer-tab ${mode === 'preview' ? 'active' : ''}`}
-              role="tab"
-              aria-selected={mode === 'preview'}
-              onClick={() => selectHtmlMode('preview')}
-            >
-              {t('fileViewer.preview')}
-            </button>
-            <button
-              type="button"
-              className={`viewer-tab ${mode === 'source' ? 'active' : ''}`}
-              role="tab"
-              aria-selected={mode === 'source'}
-              onClick={() => selectHtmlMode('source')}
-            >
-              {t('fileViewer.source')}
-            </button>
-          </div>
           {showPreviewToolbarControls ? (
             <div className="viewer-toolbar-inline-actions">
               {mode === 'preview' ? (

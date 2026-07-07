@@ -7,7 +7,6 @@ import { readExpandedIndexCss } from '../helpers/read-expanded-css';
 
 const {
   captureHostIframeSnapshotMock,
-  exportArtifactAsPdfMock,
   exportAsHtmlMock,
   exportAsPdfMock,
   exportAsZipMock,
@@ -15,7 +14,6 @@ const {
   requestPreviewSnapshotMock,
 } = vi.hoisted(() => ({
   captureHostIframeSnapshotMock: vi.fn(),
-  exportArtifactAsPdfMock: vi.fn(),
   exportAsHtmlMock: vi.fn(),
   exportAsPdfMock: vi.fn(),
   exportAsZipMock: vi.fn(),
@@ -30,7 +28,6 @@ vi.mock('../../src/runtime/exports', async () => {
   return {
     ...actual,
     captureHostIframeSnapshot: captureHostIframeSnapshotMock,
-    exportArtifactAsPdf: exportArtifactAsPdfMock,
     exportAsHtml: exportAsHtmlMock,
     exportAsPdf: exportAsPdfMock,
     exportAsZip: exportAsZipMock,
@@ -143,31 +140,8 @@ describe('FileViewer version download actions', () => {
     vi.unstubAllGlobals();
   });
 
-  it('exports version PDFs through the artifact screenshot PDF path', async () => {
-    exportArtifactAsPdfMock.mockResolvedValueOnce(undefined);
-    const { file, priorContent } = setupVersionFetch();
-    const versionDialog = await renderVersionDialog(file);
-
-    openVersionDownloadMenu(versionDialog);
-    fireEvent.click(within(versionDialog).getByRole('menuitem', { name: 'Export as PDF' }));
-
-    await waitFor(() => {
-      expect(exportArtifactAsPdfMock).toHaveBeenCalledWith(
-        priorContent,
-        'index-v1',
-        expect.objectContaining({
-          deck: false,
-          onProgress: expect.any(Function),
-          timeoutMs: 8000,
-        }),
-      );
-    });
-    expect(exportAsPdfMock).not.toHaveBeenCalled();
-  });
-
-  it('falls back to the rendered version preview when artifact PDF capture stalls', async () => {
+  it('exports version PDFs from the rendered version preview container', async () => {
     const snapshot = { dataUrl: 'data:image/png;base64,c25hcHNob3Q=', w: 400, h: 800 };
-    exportArtifactAsPdfMock.mockRejectedValueOnce(new Error('export capture timed out'));
     requestPreviewSnapshotMock.mockResolvedValueOnce(snapshot);
     exportSnapshotAsPdfMock.mockResolvedValueOnce(undefined);
     const { file } = setupVersionFetch();
@@ -186,8 +160,25 @@ describe('FileViewer version download actions', () => {
     expect(exportAsPdfMock).not.toHaveBeenCalled();
   });
 
+  it('shows an export error when the rendered version preview cannot be captured', async () => {
+    requestPreviewSnapshotMock.mockResolvedValueOnce(null);
+    const { file } = setupVersionFetch();
+    const versionDialog = await renderVersionDialog(file);
+
+    openVersionDownloadMenu(versionDialog);
+    fireEvent.click(within(versionDialog).getByRole('menuitem', { name: 'Export as PDF' }));
+
+    expect(await screen.findByText('Export failed')).toBeTruthy();
+    expect(requestPreviewSnapshotMock).toHaveBeenCalledWith(expect.any(HTMLIFrameElement), expect.any(Number), {
+      full: true,
+    });
+    expect(captureHostIframeSnapshotMock).not.toHaveBeenCalled();
+    expect(exportSnapshotAsPdfMock).not.toHaveBeenCalled();
+    expect(exportAsPdfMock).not.toHaveBeenCalled();
+  });
+
   it('does not show a close button while a version export is still running', async () => {
-    exportArtifactAsPdfMock.mockReturnValueOnce(new Promise(() => {}));
+    requestPreviewSnapshotMock.mockReturnValueOnce(new Promise(() => {}));
     const { file } = setupVersionFetch();
     const versionDialog = await renderVersionDialog(file);
 

@@ -2,7 +2,7 @@
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -708,6 +708,31 @@ describe('FileWorkspace upload input', () => {
     expect(content).not.toContain('id="speaker-notes"');
     expect(content).not.toContain('Use speaker notes');
     await waitFor(() => expect(onRefreshFiles).toHaveBeenCalledTimes(1));
+  });
+
+  it('hides blank cards and media category entries in the page creator dialog', async () => {
+    render(
+      <FileWorkspace
+        projectId="project-1"
+        projectKind="slide_deck"
+        files={[]}
+        liveArtifacts={[]}
+        onRefreshFiles={vi.fn()}
+        isDeck={false}
+        tabsState={{ tabs: [], active: null }}
+        onTabsStateChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('workspace-pages-menu-trigger'));
+    fireEvent.click(screen.getByRole('menuitem', { name: /New blank page/i }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Create page' });
+    const dialogScope = within(dialog);
+    expect(dialogScope.queryByText('New blank page')).toBeNull();
+    expect(dialogScope.queryByRole('button', { name: /^Image\b/i })).toBeNull();
+    expect(dialogScope.queryByRole('button', { name: /^Video\b/i })).toBeNull();
+    expect(dialogScope.queryByRole('button', { name: /^Audio\b/i })).toBeNull();
   });
 
   it('hides upload failure details during in-panel preview and restores them after closing preview', async () => {
