@@ -187,9 +187,10 @@ describe('FileViewer version download actions', () => {
     openVersionDownloadMenu(versionDialog);
     fireEvent.click(within(versionDialog).getByRole('menuitem', { name: 'Export as PDF' }));
 
-    const toast = await screen.findByRole('status');
-    expect(toast).toHaveTextContent('Export started');
-    expect(within(toast).queryByRole('button', { name: 'Dismiss' })).toBeNull();
+    const toastMessage = await screen.findByText('Export started');
+    const toast = toastMessage.closest('.od-toast');
+    expect(toast).toBeTruthy();
+    expect(within(toast as HTMLElement).queryByRole('button', { name: 'Dismiss' })).toBeNull();
   });
 
   it('opens the version image export dialog from the download menu', async () => {

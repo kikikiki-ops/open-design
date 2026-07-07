@@ -76,6 +76,14 @@ type TranslateFn = (key: keyof Dict, vars?: Record<string, string | number>) => 
 
 type NewProjectPlatform = Exclude<ProjectPlatform, 'auto'>;
 
+function folderPickerErrorDetails(err: unknown): string | undefined {
+  if (!(err instanceof Error)) return undefined;
+  const message = err.message.trim();
+  if (!message) return undefined;
+  const detail = message.replace(/^Could not open folder picker:\s*/i, '').trim();
+  return detail || message;
+}
+
 const DESIGN_PLATFORMS: Array<{
   value: NewProjectPlatform;
   labelKey: keyof Dict;
@@ -786,10 +794,17 @@ export function NewProjectPanel({
         });
         return;
       }
-      const picked = await openFolderDialog();
-      if (picked) {
-        setWorkingDir(picked);
-        setWorkingDirToken(null);
+      try {
+        const picked = await openFolderDialog({ throwOnError: true });
+        if (picked) {
+          setWorkingDir(picked);
+          setWorkingDirToken(null);
+        }
+      } catch (err) {
+        setWorkingDirError({
+          message: t('chat.linkedFolderPickError'),
+          details: folderPickerErrorDetails(err),
+        });
       }
     } finally {
       setWorkingDirPicking(false);
