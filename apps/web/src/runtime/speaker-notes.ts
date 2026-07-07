@@ -216,7 +216,9 @@ export function buildSpeakerNotesPresenterHtml(options: {
     @media (max-width: 980px) {
       body { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) minmax(200px, 0.55fr); }
       .stage { border-right: 0; border-bottom: 1px solid #303030; }
-      .filmstrip { display: none; }
+      .filmstrip { gap: 10px; min-height: 96px; }
+      .thumb-label { font-size: 11px; margin-bottom: 4px; }
+      .thumb-frame { height: 86px; border-radius: 7px; }
       .notes-head { height: auto; min-height: 58px; padding: 12px 22px; }
       .notes-body { padding: 22px; }
       .note-text { font-size: 20px; }
@@ -226,6 +228,8 @@ export function buildSpeakerNotesPresenterHtml(options: {
       .timer { font-size: 28px; }
       .counter { font-size: 16px; }
       button { min-height: 40px; padding: 7px 11px; }
+      .filmstrip { gap: 8px; min-height: 82px; }
+      .thumb-frame { height: 74px; }
       .notes-body { padding: 20px; }
       .note-text { font-size: 18px; line-height: 1.55; }
       textarea { min-height: 180px; font-size: 16px; }

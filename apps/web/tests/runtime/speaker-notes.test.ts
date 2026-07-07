@@ -360,7 +360,12 @@ describe('speaker notes HTML helpers', () => {
     expect(html).toContain('html {');
     expect(html).toContain('overflow: auto;');
     expect(html).toContain('.topbar { display: flex; flex-wrap: wrap;');
+    expect(html).toContain('.filmstrip { gap: 10px; min-height: 96px; }');
+    expect(html).toContain('.thumb-frame { height: 86px; border-radius: 7px; }');
     expect(html).toContain('@media (max-width: 720px), (max-height: 640px)');
+    expect(html).toContain('.filmstrip { gap: 8px; min-height: 82px; }');
+    expect(html).toContain('.thumb-frame { height: 74px; }');
+    expect(html).not.toContain('.filmstrip { display: none; }');
     expect(html).toContain(`var minWindowWidth = ${PRESENTER_WINDOW_MIN_WIDTH};`);
     expect(html).toContain(`var minWindowHeight = ${PRESENTER_WINDOW_MIN_HEIGHT};`);
     expect(html).toContain('function enforceMinimumWindowSize(){');
