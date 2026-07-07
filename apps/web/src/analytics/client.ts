@@ -15,6 +15,7 @@ import {
   clearExceptionTrackingContext,
   setExceptionTrackingContext,
 } from './error-tracking';
+import { pinFirstSessionForCapture } from './identity';
 
 interface AnalyticsContext {
   anonymousId: string;
@@ -233,6 +234,13 @@ export async function getAnalyticsClient(
       if (!res.ok) return null;
       const cfg = (await res.json()) as AnalyticsConfigResponse;
       if (!cfg.enabled || !cfg.key || !cfg.host) return null;
+      // Capture is confirmed enabled here — this is the single consent gate
+      // every caller (mount, locale effect, track(), and the setConsent opt-in
+      // re-init) funnels through. Pin the first-analytics-session marker now so
+      // an install that first booted with analytics OFF and opts in later still
+      // records its real first analytics session as first (see
+      // identity.ts#isFirstSession). Idempotent + best-effort.
+      pinFirstSessionForCapture();
       const telemetryEnv = cfg.env || 'unknown';
       const distinctId =
         (typeof cfg.installationId === 'string' && cfg.installationId) ||

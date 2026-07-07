@@ -29,9 +29,20 @@ describe('resolveProductType', () => {
     expect(resolveProductType({ role: 'ops', useCases: ['landing'] })).toBe('marketing');
   });
 
-  it('honors use-case order — first resolvable signal wins', () => {
+  it('honors questionnaire order — first resolvable signal wins', () => {
     // `deck` has no mapping and is skipped; `landing` resolves.
     expect(resolveProductType({ useCases: ['deck', 'landing'] })).toBe('marketing');
+  });
+
+  it('is independent of the click sequence (canonical questionnaire order)', () => {
+    // `product` sits before `landing` in the questionnaire, so a set containing
+    // both resolves to product_ui no matter which chip the user tapped first —
+    // otherwise the same answers would flip between product_ui and marketing.
+    expect(resolveProductType({ useCases: ['product', 'landing'] })).toBe('product_ui');
+    expect(resolveProductType({ useCases: ['landing', 'product'] })).toBe('product_ui');
+    // `landing` precedes `dashboard`, so their set always resolves to marketing.
+    expect(resolveProductType({ useCases: ['dashboard', 'landing'] })).toBe('marketing');
+    expect(resolveProductType({ useCases: ['landing', 'dashboard'] })).toBe('marketing');
   });
 
   it('falls back to role when no use-case resolves', () => {
@@ -74,6 +85,16 @@ describe('buildRecommendation', () => {
     expect(buildRecommendation({ useCases: ['landing'] }).primary.id).toBe('marketing_landing');
     expect(buildRecommendation({ useCases: ['prototype'] }).primary.id).toBe('product_ui_prototype');
     expect(buildRecommendation({ role: 'ops' }).primary.id).toBe('internal_dashboard');
+  });
+
+  it('is identical for the same answer set in any selection order', () => {
+    const a = buildRecommendation({ role: 'ops', useCases: ['landing', 'product', 'deck'] });
+    const b = buildRecommendation({ role: 'ops', useCases: ['deck', 'product', 'landing'] });
+    expect(a).toEqual(b);
+    // Echoed use-cases are canonicalized (questionnaire order), not click order,
+    // so telemetry for the same survey state is stable too.
+    expect(a.useCases).toEqual(['product', 'landing', 'deck']);
+    expect(a.productType).toBe('product_ui');
   });
 });
 

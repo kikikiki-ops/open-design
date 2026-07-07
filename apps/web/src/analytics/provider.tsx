@@ -34,7 +34,6 @@ import {
   getAnonymousId,
   getSessionId,
   isFirstSession,
-  pinFirstSessionForCapture,
 } from './identity';
 import { randomUUID } from '../utils/uuid';
 
@@ -196,7 +195,7 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
         locale,
         appVersion: resolvedAppVersion,
       });
-      const analyticsClient = await getAnalyticsClient({
+      await getAnalyticsClient({
         anonymousId: identity.anonymousId,
         sessionId: identity.sessionId,
         clientType: identity.clientType,
@@ -205,12 +204,6 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
         appVersion: resolvedAppVersion,
       });
       if (cancelled) return;
-      // A non-null client means /api/analytics/config confirmed capture is
-      // enabled (consented). Pin the first-analytics-session marker only now —
-      // never on unconditional mount — so an install that first boots with
-      // analytics off and opts in later still records its real first analytics
-      // session as first (see identity.ts#isFirstSession).
-      if (analyticsClient) pinFirstSessionForCapture();
       const resolved = getResolvedAnonymousId();
       if (resolved) setResolvedAnonId(resolved);
     })();

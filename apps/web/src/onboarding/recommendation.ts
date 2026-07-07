@@ -82,6 +82,26 @@ const USE_CASE_TO_PRODUCT: Record<string, ProductType> = {
   // taxonomy, so it falls through to the general starting point.
 };
 
+// Canonical questionnaire display order for the multi-select use-case chips
+// (mirrors `useCaseOptions` in EntryShell.tsx). The multi-select stores values
+// in the user's click order, so we canonicalize against this order before
+// resolving — otherwise the same set of answers picked in a different sequence
+// (e.g. `['product','landing']` vs `['landing','product']`) would resolve to a
+// different product bucket. Spec §6.3: use-case priority follows questionnaire
+// order, not selection order.
+const USE_CASE_DISPLAY_ORDER: readonly string[] = [
+  'product',
+  'design-system',
+  'prototype',
+  'landing',
+  'marketing',
+  'ads',
+  'dashboard',
+  'deck',
+  'engineering',
+  'agency',
+];
+
 // role value → product bucket, used only when no use-case signal resolves.
 // Values match `roleOptions` in EntryShell.tsx. founder / student / other are
 // deliberately absent so they fall through to `general`.
@@ -126,7 +146,7 @@ function starter(id: string, productType: ProductType): StarterOption {
  * fallback. Exported for tests and callers that only need the bucket.
  */
 export function resolveProductType(input: RecommendationInput): ProductType {
-  const useCases = normalizeList(input.useCases);
+  const useCases = canonicalizeUseCases(normalizeList(input.useCases));
   for (const useCase of useCases) {
     const product = USE_CASE_TO_PRODUCT[useCase];
     if (product) return product;
@@ -143,14 +163,18 @@ export function resolveProductType(input: RecommendationInput): ProductType {
  * on skip or for returning users — is the caller's responsibility.
  */
 export function buildRecommendation(input: RecommendationInput): Recommendation {
-  const productType = resolveProductType(input);
+  // Canonicalize once so both the resolved product bucket AND the echoed
+  // `useCases` (telemetry) are deterministic for a given selection set,
+  // independent of the order the user clicked the chips.
+  const useCases = canonicalizeUseCases(normalizeList(input.useCases));
+  const productType = resolveProductType({ role: input.role, useCases });
   const options = STARTERS_BY_PRODUCT[productType];
   return {
     productType,
     primary: options[0],
     options,
     role: normalizeValue(input.role) ?? '',
-    useCases: normalizeList(input.useCases),
+    useCases,
   };
 }
 
@@ -190,4 +214,20 @@ function normalizeValue(value: string | null | undefined): string | undefined {
 function normalizeList(values: readonly string[] | null | undefined): string[] {
   if (!values) return [];
   return values.map((value) => value.trim()).filter((value) => value.length > 0);
+}
+
+// Reorder use-case values into canonical questionnaire display order so a set
+// of answers resolves identically regardless of the click sequence that
+// produced it. Values not in the catalogue keep their relative order but sort
+// after every known one (a stable sort keyed on the display index). Input is
+// assumed already normalized/de-duplicated by `normalizeList`.
+function canonicalizeUseCases(values: string[]): string[] {
+  const orderOf = (value: string): number => {
+    const index = USE_CASE_DISPLAY_ORDER.indexOf(value);
+    return index < 0 ? Number.MAX_SAFE_INTEGER : index;
+  };
+  return values
+    .map((value, index) => ({ value, index }))
+    .sort((a, b) => orderOf(a.value) - orderOf(b.value) || a.index - b.index)
+    .map((entry) => entry.value);
 }

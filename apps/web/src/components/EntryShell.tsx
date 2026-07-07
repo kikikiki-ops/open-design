@@ -747,24 +747,35 @@ export function EntryShell({
   // "进入 Studio" from the Home recommendation. Creates the project with the
   // recommended first request pre-filled into the composer but NOT auto-sent —
   // the user keeps control and can edit or clear it (spec §7.4 / §8.2).
-  function handleRecommendationStart(input: {
+  async function handleRecommendationStart(input: {
     name: string;
     prompt: string;
     metadata: ProjectMetadata;
-  }): boolean | void | Promise<boolean | void> {
-    dismissRecommendation();
+  }): Promise<boolean> {
     const pluginId = defaultPluginIdForMetadata(input.metadata);
-    // Return the create result so RecommendedStartRegion can drop its pending
-    // onboarding entry when the create/navigation did not succeed.
-    return onCreateProject({
-      name: input.name,
-      skillId: null,
-      designSystemId: null,
-      metadata: input.metadata,
-      pendingPrompt: input.prompt,
-      ...(pluginId ? { pluginId } : {}),
-      autoSendFirstMessage: false,
-    });
+    // Create FIRST, then tear down the recommendation only once it actually
+    // opened. Dismissing up-front turned a transient create/navigation failure
+    // into an onboarding dead-end: the user dropped back to generic Home with
+    // no way to retry the starter they just picked. On failure we keep the
+    // recommendation mounted (and RecommendedStartRegion clears its pending
+    // entry off the same result). A thrown create is treated as a failure.
+    let ok = false;
+    try {
+      ok =
+        (await onCreateProject({
+          name: input.name,
+          skillId: null,
+          designSystemId: null,
+          metadata: input.metadata,
+          pendingPrompt: input.prompt,
+          ...(pluginId ? { pluginId } : {}),
+          autoSendFirstMessage: false,
+        })) !== false;
+    } catch {
+      ok = false;
+    }
+    if (ok) dismissRecommendation();
+    return ok;
   }
 
   const avatarMenu = (
