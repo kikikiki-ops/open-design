@@ -32,6 +32,7 @@ import {
   appendSavedPreviewCommentOrder,
   applyInspectOverridesToSource,
   commentPreviewCanvasSize,
+  deckKeyboardShortcutForEvent,
   effectivePreviewScale,
   fileVersionPreviewOptions,
   parseInspectOverridesFromSource,
@@ -219,6 +220,20 @@ describe('FileViewer preview scale', () => {
     expect(css).toContain('.viewer-action');
   });
 
+  it('uses a layered skeleton for the initial preview loading state', () => {
+    const css = readExpandedIndexCss();
+
+    expect(css).toContain('.viewer-loading-stage');
+    expect(css).toContain('aspect-ratio: 16 / 9;');
+    expect(css).toContain('.viewer-loading-card-back-one');
+    expect(css).toContain('.viewer-loading-card-main::before');
+    expect(css).toContain('.viewer-loading-chart');
+    expect(css).toContain('@keyframes od-viewer-loading-sweep');
+    expect(css).toMatch(
+      /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*\.viewer-loading-stage,[\s\S]*animation: none;/,
+    );
+  });
+
   it('keeps manual edit canvas layout aligned with comment preview on device viewports (#2960)', () => {
     const css = readExpandedIndexCss();
 
@@ -248,6 +263,19 @@ describe('FileViewer preview scale', () => {
 
   it('uses the requested zoom for desktop preview overlays', () => {
     expect(effectivePreviewScale('desktop', 1.5, { width: 320, height: 480 })).toBe(1.5);
+  });
+
+  it('only treats unmodified deck keyboard presses as deck shortcuts', () => {
+    const base = { ctrlKey: false, altKey: false, metaKey: false, shiftKey: false };
+
+    expect(deckKeyboardShortcutForEvent({ ...base, key: 'r' })).toBe('reset');
+    expect(deckKeyboardShortcutForEvent({ ...base, key: 'R' })).toBe('reset');
+    expect(deckKeyboardShortcutForEvent({ ...base, key: 'ArrowRight' })).toBe('next');
+    expect(deckKeyboardShortcutForEvent({ ...base, key: 'r', metaKey: true })).toBeNull();
+    expect(deckKeyboardShortcutForEvent({ ...base, key: 'r', ctrlKey: true })).toBeNull();
+    expect(deckKeyboardShortcutForEvent({ ...base, key: 'r', altKey: true })).toBeNull();
+    expect(deckKeyboardShortcutForEvent({ ...base, key: 'r', shiftKey: true })).toBeNull();
+    expect(deckKeyboardShortcutForEvent({ ...base, key: 'ArrowRight', metaKey: true })).toBeNull();
   });
 
   it('clamps mobile and tablet overlay scale to the iframe auto-fit scale', () => {
@@ -1778,8 +1806,8 @@ describe('FileViewer SVG artifacts', () => {
       expect(frame.srcdoc).toContain('.deck-floating-nav');
       expect(frame.srcdoc).toContain('[role="navigation"][aria-label*="Deck"]');
     }
-    const notesSwitch = screen.getByRole('switch', { name: /edit/i });
-    expect(notesSwitch.closest('label')).toBeNull();
+    expect(screen.getByTestId('speaker-notes-panel')).toBeTruthy();
+    expect(screen.getByText('No speaker notes for this slide.')).toBeTruthy();
     fireEvent.click(container.querySelector('.deck-thumbnail-toolbar-toggle')!);
     expect(container.querySelector('.comment-preview-layer-deck-rail-collapsed')).toBeTruthy();
     expect(container.querySelector('.deck-thumbnail-toolbar-toggle')).toBeTruthy();
@@ -1787,6 +1815,46 @@ describe('FileViewer SVG artifacts', () => {
     expect(container.querySelector('.viewer-viewport-switcher')).toBeTruthy();
     expect(screen.queryByTestId('palette-tweaks-toggle')).toBeNull();
     expect(screen.getByTestId('artifact-preview-frame')).toBeTruthy();
+  });
+
+  it('shows speaker notes panel with existing real notes', () => {
+    const file = baseFile({
+      name: 'deck.html',
+      path: 'deck.html',
+      mime: 'text/html',
+      kind: 'html',
+      artifactManifest: {
+        version: 1,
+        kind: 'html',
+        title: 'Deck',
+        entry: 'deck.html',
+        renderer: 'html',
+        exports: ['html'],
+      },
+    });
+
+    render(
+      <FileViewer
+        projectId="project-1"
+        projectKind="prototype"
+        file={file}
+        isDeck
+        liveHtml={[
+          '<html><body>',
+          '<section class="slide">one</section>',
+          '<section class="slide">two</section>',
+          '<script type="application/json" id="speaker-notes">',
+          '["Intro note", ""]',
+          '</script>',
+          '</body></html>',
+        ].join('')}
+      />,
+    );
+
+    expect(screen.getByTestId('speaker-notes-panel')).toBeTruthy();
+    expect(screen.getByText('Intro note')).toBeTruthy();
+    const notesSwitch = screen.getByRole('switch', { name: /edit/i });
+    expect(notesSwitch.closest('label')).toBeNull();
   });
 
   it('shows Cloudflare Pages as a deploy action without requiring a project name input', async () => {

@@ -11,8 +11,17 @@ export type SpeakerNotesPresenterLabels = {
   slide: string;
 };
 
-const SPEAKER_NOTES_SCRIPT_RE =
-  /(<script\b(?=[^>]*\bid\s*=\s*(["'])speaker-notes\2)[^>]*>)([\s\S]*?)(<\/script>)/i;
+type ScriptBlock = {
+  start: number;
+  end: number;
+  open: string;
+  body: string;
+  close: string;
+};
+
+const SCRIPT_OPEN_RE = /<script\b[^>]*>/gi;
+const SCRIPT_CLOSE_RE = /<\/script\s*>/gi;
+const SPEAKER_NOTES_ID_RE = /\bid\s*=\s*(?:"speaker-notes"|'speaker-notes'|speaker-notes)(?=[\s/>])/i;
 
 export function normalizeSpeakerNotes(notes: readonly string[], slideCount = 0): string[] {
   const count = Math.max(slideCount, notes.length, 0);
@@ -30,19 +39,24 @@ export function extractSpeakerNotesFromHtml(source: string | null | undefined, s
   return normalizeSpeakerNotes([], slideCount);
 }
 
+export function removeSpeakerNotesFromHtml(source: string): string {
+  const block = findSpeakerNotesScriptBlock(source);
+  if (!block) return source;
+  return `${source.slice(0, block.start)}${source.slice(block.end)}`;
+}
+
 export function upsertSpeakerNotesInHtml(source: string, notes: readonly string[]): string {
   const normalized = normalizeSpeakerNotes(notes);
   const json = safeJsonForScript(normalized);
-  if (SPEAKER_NOTES_SCRIPT_RE.test(source)) {
-    return source.replace(SPEAKER_NOTES_SCRIPT_RE, (_match, open: string, _quote: string, _body: string, close: string) => {
-      return `${open}\n${json}\n${close}`;
-    });
+  const block = findSpeakerNotesScriptBlock(source);
+  if (block) {
+    return `${source.slice(0, block.start)}${block.open}\n${json}\n${block.close}${source.slice(block.end)}`;
   }
-  const block = `\n<script type="application/json" id="speaker-notes">\n${json}\n</script>\n`;
+  const notesBlock = `\n<script type="application/json" id="speaker-notes">\n${json}\n</script>\n`;
   if (/<\/body\s*>/i.test(source)) {
-    return source.replace(/<\/body\s*>/i, `${block}</body>`);
+    return source.replace(/<\/body\s*>/i, `${notesBlock}</body>`);
   }
-  return `${source.trimEnd()}${block}`;
+  return `${source.trimEnd()}${notesBlock}`;
 }
 
 function buildPresenterFrameHtml(previewHtml: string): string {
@@ -483,9 +497,9 @@ export function buildSpeakerNotesPresenterHtml(options: {
 }
 
 function extractSpeakerNotesJson(source: string): string[] {
-  const match = SPEAKER_NOTES_SCRIPT_RE.exec(source);
-  if (!match) return [];
-  const raw = match[3]?.trim() ?? '';
+  const block = findSpeakerNotesScriptBlock(source);
+  if (!block) return [];
+  const raw = block.body.trim();
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
@@ -494,9 +508,40 @@ function extractSpeakerNotesJson(source: string): string[] {
       return (parsed as { notes: unknown[] }).notes.map((item) => String(item ?? '').trim());
     }
   } catch {
-    // Fall through to plain text handling.
+    // Invalid JSON is not a usable notes payload. Older regex-based parsing
+    // could accidentally target deck runtime comments that merely mentioned
+    // the speaker-notes tag; treating that tail as plain text produced long
+    // garbage notes in template-created decks.
   }
-  return [stripHtmlToText(raw)];
+  return [];
+}
+
+function findSpeakerNotesScriptBlock(source: string): ScriptBlock | null {
+  SCRIPT_OPEN_RE.lastIndex = 0;
+  let openMatch: RegExpExecArray | null;
+  while ((openMatch = SCRIPT_OPEN_RE.exec(source))) {
+    const open = openMatch[0] ?? '';
+    const bodyStart = SCRIPT_OPEN_RE.lastIndex;
+    SCRIPT_CLOSE_RE.lastIndex = bodyStart;
+    const closeMatch = SCRIPT_CLOSE_RE.exec(source);
+    const bodyEnd = closeMatch?.index ?? source.length;
+    const close = closeMatch?.[0] ?? '';
+    const end = closeMatch ? SCRIPT_CLOSE_RE.lastIndex : source.length;
+
+    if (SPEAKER_NOTES_ID_RE.test(open)) {
+      return {
+        start: openMatch.index,
+        end,
+        open,
+        body: source.slice(bodyStart, bodyEnd),
+        close,
+      };
+    }
+
+    if (!closeMatch) break;
+    SCRIPT_OPEN_RE.lastIndex = end;
+  }
+  return null;
 }
 
 function extractInlineSlideNotes(source: string): string[] {

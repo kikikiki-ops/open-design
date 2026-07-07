@@ -61,6 +61,7 @@ import {
 import { latestTodosFromEvents, type TodoItem } from '../runtime/todos';
 import { deliverableSlideNavForActiveFile, isSlideNavDeliverableNow } from '../runtime/slide-nav';
 import { buildSrcdoc } from '../runtime/srcdoc';
+import { removeSpeakerNotesFromHtml } from '../runtime/speaker-notes';
 import { useDesignKit, hostnameOf, type KitColor } from '../runtime/design-kit';
 import { useKitModuleUpload } from '../runtime/kit-upload';
 import {
@@ -6114,16 +6115,17 @@ async function contentForPagePreset(
   t: TranslateFn,
   locale?: string,
 ): Promise<string> {
+  let html: string | null = null;
   if (preset.plugin && preset.pluginHtmlPreview?.kind === 'html') {
     const preview = preset.pluginHtmlPreview;
     const result = preview.source === 'preview'
       ? await fetchPluginPreviewHtml(preset.plugin.id)
       : await fetchPluginExampleHtml(preset.plugin.id, preview.exampleStem ?? '');
     if ('html' in result && typeof result.html === 'string' && result.html.trim().length > 0) {
-      return result.html;
+      html = result.html;
     }
   }
-  return initialHtmlPage(target, preset, t, locale);
+  return removeSpeakerNotesFromHtml(html ?? initialHtmlPage(target, preset, t, locale));
 }
 
 function isProjectPageFile(
@@ -6429,12 +6431,12 @@ function initialSlidesPage(title: string, body = DEFAULT_SLIDES_PAGE_BODY): stri
           <div class="card"><strong>Decision</strong><p>The choice or next step you need.</p></div>
         </div>
         <div class="num">02</div>
-        <div class="footer"><span>Agenda</span><span>Use notes for delivery cues</span></div>
+        <div class="footer"><span>Agenda</span><span>Keep delivery cues off-slide</span></div>
       </section>
       <section class="slide" data-screen-label="03 Decision">
         <div class="kicker">Close</div>
         <h2>What should happen next?</h2>
-        <p class="body">Use speaker notes for delivery cues and keep the slide itself focused on the decision.</p>
+        <p class="body">Keep the slide focused on the decision, owner, timing, and next step.</p>
         <div class="num">03</div>
         <div class="footer"><span>Decision</span><span>Owner / timing / next step</span></div>
       </section>
@@ -6446,11 +6448,6 @@ function initialSlidesPage(title: string, body = DEFAULT_SLIDES_PAGE_BODY): stri
     <button type="button" id="deck-next" aria-label="Next slide">›</button>
   </nav>
   <div class="deck-hint">← / → · space</div>
-  <script type="application/json" id="speaker-notes">[
-    "Open with the one-sentence outcome for the audience.",
-    "Keep each agenda item tied to a decision or review moment.",
-    "Close with the action owner and timing."
-  ]</script>
   <script>
     (function () {
       var stage = document.getElementById('deck-stage');
@@ -6497,6 +6494,7 @@ function initialSlidesPage(title: string, body = DEFAULT_SLIDES_PAGE_BODY): stri
         if (e.__odDeckKeyHandled) return;
         var t = e.target;
         if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+        if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
         if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.__odDeckKeyHandled = true; e.preventDefault(); go(idx + 1); }
         else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.__odDeckKeyHandled = true; e.preventDefault(); go(idx - 1); }
         else if (e.key === 'Home' || String(e.key).toLowerCase() === 'r') { e.__odDeckKeyHandled = true; e.preventDefault(); go(0); }

@@ -24,6 +24,8 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { useT } from '../i18n';
 import { useInView } from './plugins-home/useInView';
+import { DeckSlideThumbnail } from './DeckSlideThumbnail';
+import type { ParsedDeckThumbnails } from '../runtime/deck-thumbnail-parser';
 
 /**
  * Upper bound on concurrently mounted thumbnail iframes. Currently-visible
@@ -76,6 +78,12 @@ interface DeckThumbnailItemProps {
   mounted: boolean;
   label: string;
   listRef: RefObject<HTMLDivElement | null>;
+  /**
+   * Parsed deck for shadow-root single-slide rendering. When present a mounted
+   * thumbnail renders a `<DeckSlideThumbnail>`; when null it falls back to the
+   * full-deck iframe built by `getSrcDoc`.
+   */
+  parsedDeck: ParsedDeckThumbnails | null;
   getSrcDoc: (index: number) => string;
   onSelect: (index: number) => void;
   onVisibilityChange: (index: number, inView: boolean) => void;
@@ -87,6 +95,7 @@ const DeckThumbnailItem = memo(function DeckThumbnailItem({
   mounted,
   label,
   listRef,
+  parsedDeck,
   getSrcDoc,
   onSelect,
   onVisibilityChange,
@@ -105,6 +114,15 @@ const DeckThumbnailItem = memo(function DeckThumbnailItem({
     onVisibilityChange(index, inView);
   }, [index, inView, onVisibilityChange]);
   useEffect(() => () => onVisibilityChange(index, false), [index, onVisibilityChange]);
+
+  // If the shadow build throws for this slide, drop to the iframe fallback.
+  // Reset when the deck source (parsedDeck identity) or index changes so a new
+  // deck retries the cheap path.
+  const [shadowFailed, setShadowFailed] = useState(false);
+  useEffect(() => setShadowFailed(false), [parsedDeck, index]);
+  const handleShadowError = useCallback(() => setShadowFailed(true), []);
+  const useShadow = parsedDeck !== null && !shadowFailed;
+
   return (
     <button
       ref={ref}
@@ -117,12 +135,16 @@ const DeckThumbnailItem = memo(function DeckThumbnailItem({
       <span className="deck-thumbnail-number">{index + 1}</span>
       <span className="deck-thumbnail-frame" aria-hidden="true">
         {mounted ? (
-          <iframe
-            title={label}
-            sandbox="allow-scripts allow-downloads"
-            srcDoc={getSrcDoc(index)}
-            tabIndex={-1}
-          />
+          useShadow ? (
+            <DeckSlideThumbnail parsed={parsedDeck} index={index} onError={handleShadowError} />
+          ) : (
+            <iframe
+              title={label}
+              sandbox="allow-scripts allow-downloads"
+              srcDoc={getSrcDoc(index)}
+              tabIndex={-1}
+            />
+          )
         ) : null}
       </span>
     </button>
@@ -138,9 +160,15 @@ export interface DeckThumbnailRailProps {
   labelTotal: number;
   /**
    * Build the per-slide thumbnail document. Must be referentially stable for
-   * a given deck source — its identity is the srcdoc cache key.
+   * a given deck source — its identity is the srcdoc cache key. Used only for
+   * the iframe fallback (when `parsedDeck` is null or a slide fails to render).
    */
   buildThumbSrcDoc: (index: number) => string;
+  /**
+   * Parsed deck for shadow-root single-slide thumbnails. Null → every mounted
+   * thumbnail uses the iframe fallback (decks we can't statically render).
+   */
+  parsedDeck?: ParsedDeckThumbnails | null;
   onSelect: (index: number) => void;
 }
 
@@ -149,6 +177,7 @@ export const DeckThumbnailRail = memo(function DeckThumbnailRail({
   activeIndex,
   labelTotal,
   buildThumbSrcDoc,
+  parsedDeck = null,
   onSelect,
 }: DeckThumbnailRailProps) {
   const t = useT();
@@ -199,6 +228,7 @@ export const DeckThumbnailRail = memo(function DeckThumbnailRail({
               total: labelTotal,
             })}
             listRef={listRef}
+            parsedDeck={parsedDeck}
             getSrcDoc={getSrcDoc}
             onSelect={onSelect}
             onVisibilityChange={onVisibilityChange}

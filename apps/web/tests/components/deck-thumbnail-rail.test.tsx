@@ -7,11 +7,22 @@
 // selection wiring.
 
 import { cleanup, fireEvent, render } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   DeckThumbnailRail,
   nextMountedThumbnails,
 } from '../../src/components/DeckThumbnailRail';
+import { parseDeckThumbnails } from '../../src/runtime/deck-thumbnail-parser';
+
+beforeAll(() => {
+  if (typeof globalThis.ResizeObserver === 'undefined') {
+    globalThis.ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+  }
+});
 
 afterEach(cleanup);
 
@@ -81,6 +92,43 @@ describe('DeckThumbnailRail', () => {
     const buttons = Array.from(container.querySelectorAll('.deck-thumbnail-button'));
     expect(buttons).toHaveLength(3);
     expect(buttons[1]!.getAttribute('aria-current')).toBe('true');
+    fireEvent.click(buttons[2]!);
+    expect(onSelect).toHaveBeenCalledWith(2);
+  });
+
+  it('renders shadow-root thumbnails (not iframes) when a parsed deck is given', () => {
+    const deck = `<!doctype html><html><head><style>
+      .deck-stage { width: 1920px; height: 1080px; }
+      .slide:not(.active) { display: none !important; }
+    </style></head><body><div class="deck-stage" id="deck-stage">
+      <section class="slide active" data-screen-label="01">One</section>
+      <section class="slide" data-screen-label="02">Two</section>
+      <section class="slide" data-screen-label="03">Three</section>
+    </div></body></html>`;
+    const parsedDeck = parseDeckThumbnails(deck, '/api/projects/p1/raw/');
+    expect(parsedDeck.renderable).toBe(true);
+
+    const build = vi.fn((index: number) => `<html><body>slide ${index}</body></html>`);
+    const onSelect = vi.fn();
+    const { container } = render(
+      <DeckThumbnailRail {...railProps({ buildThumbSrcDoc: build, parsedDeck, onSelect })} />,
+    );
+
+    // Shadow hosts, not iframes; the iframe srcdoc builder is never touched.
+    expect(container.querySelectorAll('.deck-thumbnail-shadow-host')).toHaveLength(3);
+    expect(container.querySelectorAll('.deck-thumbnail-frame iframe')).toHaveLength(0);
+    expect(build).not.toHaveBeenCalled();
+
+    // Each thumbnail holds exactly its own single slide, no nav chrome.
+    const hosts = Array.from(
+      container.querySelectorAll<HTMLElement>('.deck-thumbnail-shadow-host'),
+    );
+    expect(hosts[0]!.shadowRoot!.querySelectorAll('section')).toHaveLength(1);
+    expect(hosts[1]!.shadowRoot!.textContent).toContain('Two');
+    expect(hosts[0]!.shadowRoot!.querySelector('iframe')).toBeNull();
+
+    // Selection still flows through the button, independent of render mode.
+    const buttons = Array.from(container.querySelectorAll('.deck-thumbnail-button'));
     fireEvent.click(buttons[2]!);
     expect(onSelect).toHaveBeenCalledWith(2);
   });

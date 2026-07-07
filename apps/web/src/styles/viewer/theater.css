@@ -879,7 +879,8 @@
 }
 /* 200%/scale(0.5) keeps thumbnails 2× supersampled (crisp on retina) while
    rasterizing a quarter of the pixels the previous 400%/scale(0.25) did —
-   per mounted thumbnail, and the rail can hold many at once. */
+   per mounted thumbnail, and the rail can hold many at once. This path is the
+   fallback for decks that can't be statically rendered into a shadow root. */
 .deck-thumbnail-frame iframe {
   display: block;
   width: 200%;
@@ -889,6 +890,20 @@
   transform-origin: top left;
   pointer-events: none;
   background: #000;
+}
+/* Shadow-root thumbnail host (the default path): the single cloned slide lives
+   in a shadow root whose `.od-thumb-canvas` is scaled + centered inline by
+   DeckSlideThumbnail. `contain: strict` isolates each thumbnail's layout/paint
+   so the rail stays cheap even with many mounted. */
+.deck-thumbnail-frame .deck-thumbnail-shadow-host {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+  background: #050506;
+  contain: strict;
 }
 .comment-preview-layer-with-deck-rail .comment-preview-canvas {
   background: #050505;

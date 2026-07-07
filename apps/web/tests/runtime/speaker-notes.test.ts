@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildSpeakerNotesPresenterHtml,
   extractSpeakerNotesFromHtml,
+  removeSpeakerNotesFromHtml,
   upsertSpeakerNotesInHtml,
 } from '../../src/runtime/speaker-notes';
 
@@ -47,6 +48,75 @@ describe('speaker notes HTML helpers', () => {
 
     expect(next).not.toContain('Old');
     expect(extractSpeakerNotesFromHtml(next)).toEqual(['New']);
+  });
+
+  it('ignores invalid speaker notes JSON instead of showing script garbage', () => {
+    const source = [
+      '<deck-stage><section class="slide">One</section></deck-stage>',
+      '<script type="application/json" id="speaker-notes">',
+      ' * and posts {slideIndexChanged: N} to the parent window on nav.',
+      ' * keyboard navigation — arrows.',
+      '</script>',
+    ].join('\n');
+
+    expect(extractSpeakerNotesFromHtml(source, 1)).toEqual([]);
+  });
+
+  it('removes only the real speaker notes script block', () => {
+    const source = [
+      '<script>',
+      '/* mentions <script type="application/json" id="speaker-notes"> in runtime docs */',
+      'window.RUNTIME = true;',
+      '</script>',
+      '<script type="application/json" id="speaker-notes">["Intro"]</script>',
+    ].join('\n');
+    const next = removeSpeakerNotesFromHtml(source);
+
+    expect(next).toContain('window.RUNTIME = true;');
+    expect(next).toContain('mentions <script type="application/json" id="speaker-notes">');
+    expect(extractSpeakerNotesFromHtml(next)).toEqual([]);
+  });
+
+  // Regression: the deck-stage runtime's JSDoc header contains the literal
+  // string `<script type="application/json" id="speaker-notes">` (it documents
+  // that the component reads that tag). Script content is CDATA, so that text
+  // is NOT a real element — but a naive regex matches it and treats the deck
+  // runtime's own `</script>` as the block's close, clobbering the entire
+  // runtime on upsert and reading garbage on extract. The result is a deck
+  // that renders as a black screen (issue: deck black screen after notes save).
+  const deckWithRuntimeMention = [
+    '<!doctype html><html><body>',
+    '<deck-stage><section class="slide">One</section></deck-stage>',
+    '<script>',
+    '/**',
+    ' * <deck-stage> — reusable web component for HTML decks.',
+    ' * Handles:',
+    ' *  (a) speaker notes — reads <script type="application/json" id="speaker-notes">',
+    ' *  (b) keyboard navigation — arrows, PgUp/PgDn.',
+    ' */',
+    "(() => { const DECK_RUNTIME_MARKER = 1; customElements.define('deck-stage', class extends HTMLElement {}); })();",
+    '</script>',
+    '<script type="application/json" id="speaker-notes">',
+    '["Real one", "Real two"]',
+    '</script>',
+    '</body></html>',
+  ].join('\n');
+
+  it('reads the real notes tag, not the deck-stage JSDoc mention', () => {
+    expect(extractSpeakerNotesFromHtml(deckWithRuntimeMention, 2)).toEqual(['Real one', 'Real two']);
+  });
+
+  it('upserts without clobbering a deck-stage runtime that mentions the tag', () => {
+    const next = upsertSpeakerNotesInHtml(deckWithRuntimeMention, ['Edited']);
+
+    // The runtime and its JSDoc must survive untouched.
+    expect(next).toContain('const DECK_RUNTIME_MARKER = 1');
+    expect(next).toContain("customElements.define('deck-stage'");
+    expect(next).toContain('(b) keyboard navigation');
+    // And the edit lands in the real notes block.
+    expect(extractSpeakerNotesFromHtml(next)).toEqual(['Edited']);
+    // Exactly one real speaker-notes element still exists.
+    expect(next.match(/id="speaker-notes"/g)?.length).toBe(2); // one mention + one real tag
   });
 
   it('escapes script-closing text inside presenter data', () => {

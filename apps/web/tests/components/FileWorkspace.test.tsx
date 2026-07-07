@@ -679,6 +679,37 @@ describe('FileWorkspace upload input', () => {
     );
   });
 
+  it('creates blank slide pages without default speaker notes', async () => {
+    const onRefreshFiles = vi.fn();
+    const onTabsStateChange = vi.fn();
+    mockedWriteProjectTextFile.mockImplementation(async (_projectId, name) => workspaceFile(name));
+
+    render(
+      <FileWorkspace
+        projectId="project-1"
+        projectKind="slide_deck"
+        files={[]}
+        liveArtifacts={[]}
+        onRefreshFiles={onRefreshFiles}
+        isDeck={false}
+        tabsState={{ tabs: [], active: null }}
+        onTabsStateChange={onTabsStateChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('workspace-pages-menu-trigger'));
+    fireEvent.click(screen.getByRole('menuitem', { name: /New blank page/i }));
+    fireEvent.click(screen.getByRole('button', { name: /New blank page/i }));
+
+    await waitFor(() => expect(mockedWriteProjectTextFile).toHaveBeenCalledTimes(1));
+    const [projectId, name, content] = mockedWriteProjectTextFile.mock.calls[0]!;
+    expect(projectId).toBe('project-1');
+    expect(name).toBe('slides.html');
+    expect(content).not.toContain('id="speaker-notes"');
+    expect(content).not.toContain('Use speaker notes');
+    await waitFor(() => expect(onRefreshFiles).toHaveBeenCalledTimes(1));
+  });
+
   it('hides upload failure details during in-panel preview and restores them after closing preview', async () => {
     mockedUploadProjectFiles.mockRejectedValueOnce(new Error('storage offline'));
 

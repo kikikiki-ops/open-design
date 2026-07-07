@@ -105,6 +105,7 @@ import { shouldConsumeSlideNav } from '../runtime/slide-nav';
 import { findHtmlEntriesReferencing } from '../runtime/jsx-module-refs';
 import { buildLazySrcdocTransport, buildSrcdoc, canActivateSrcDocTransport } from '../runtime/srcdoc';
 import { DeckThumbnailRail } from './DeckThumbnailRail';
+import { parseDeckThumbnails } from '../runtime/deck-thumbnail-parser';
 import {
   buildSpeakerNotesPresenterHtml,
   extractSpeakerNotesFromHtml,
@@ -726,7 +727,6 @@ function PreviewViewportControls({
           className="viewer-viewport-icon"
         />
         <span>{t(activePreset.labelKey)}</span>
-        <RemixIcon name="arrow-down-s-line" size={14} />
       </button>
       {open ? (
         <div className="viewer-viewport-menu" id={listboxId} role="listbox" aria-label={t('fileViewer.viewportAria')}>
@@ -2556,6 +2556,23 @@ export function fileVersionPreviewOptions(
     deck: sourceLooksLikeExportableDeck(source),
     baseHref: projectRawUrl(projectId, baseDirFor(fileName)),
   };
+}
+
+export type DeckKeyboardShortcut = 'next' | 'prev' | 'first' | 'last' | 'reset';
+
+type DeckKeyboardShortcutEvent = Pick<
+  KeyboardEvent,
+  'key' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'
+>;
+
+export function deckKeyboardShortcutForEvent(event: DeckKeyboardShortcutEvent): DeckKeyboardShortcut | null {
+  if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return null;
+  if (event.key === 'ArrowRight' || event.key === 'PageDown') return 'next';
+  if (event.key === 'ArrowLeft' || event.key === 'PageUp') return 'prev';
+  if (event.key === 'Home') return 'first';
+  if (event.key === 'End') return 'last';
+  if (event.key.toLowerCase() === 'r') return 'reset';
+  return null;
 }
 
 function FileVersionManagerModal({
@@ -6182,7 +6199,10 @@ function HtmlViewer({
   // never surface and the deck becomes a static, unnavigable preview.
   const looksLikeDeck = useMemo(() => {
     if (!source) return false;
-    return /class\s*=\s*['"](?:[^'"]*\s)?slide(?:\s|['"])/i.test(source);
+    return (
+      /class\s*=\s*['"](?:[^'"]*\s)?slide(?:\s|['"])/i.test(source) ||
+      sourceLooksLikeExportableDeck(source)
+    );
   }, [source]);
   const effectiveDeck = isDeck || looksLikeDeck;
   const showDeckNavigation = effectiveDeck && (slideState === null || slideState.count > 0);
@@ -6213,10 +6233,11 @@ function HtmlViewer({
     const id = window.setTimeout(() => setSpeakerNotesStatus(null), 2400);
     return () => window.clearTimeout(id);
   }, [speakerNotesStatus]);
-  // Extra deck signal for EXPORT only. Runtime-managed decks (`<deck-stage>` /
-  // `data-screen-label`) need deck capture even when the viewer's nav bridge
-  // cannot drive them. Plain `.slide` is intentionally excluded: ordinary pages
-  // use it for carousels/testimonials and must export as full pages.
+  // Extra deck signal for export planning. Runtime-managed decks (`<deck-stage>` /
+  // `data-screen-label`) need deck capture even when they have no plain
+  // `class="slide"` marker. Plain `.slide` is intentionally excluded here:
+  // ordinary pages use it for carousels/testimonials and must export as full
+  // pages.
   const structuredDeckExportSignal = sourceLooksLikeExportableDeck(source);
   const livePreviewSource = inlinedSource ?? source;
   // Annotation modes that should hold the preview still while open. Manual
@@ -6431,6 +6452,17 @@ function HtmlViewer({
     }),
     [source, projectId, file.name],
   );
+  // Parse the deck once per source into per-slide shadow-root render data. When
+  // renderable, DeckThumbnailRail mounts a single cloned slide per thumbnail
+  // instead of a full-deck iframe — no scripts, no deck bridge, no N documents
+  // saturating the main thread on entry. Decks we can't statically render
+  // (external CSS, viewport-sized slides, no inline styles) keep the iframe
+  // fallback via `parsedDeck = null`.
+  const parsedDeckThumbnails = useMemo(() => {
+    if (!effectiveDeck || !source) return null;
+    const parsed = parseDeckThumbnails(source, projectRawUrl(projectId, baseDirFor(file.name)));
+    return parsed.renderable ? parsed : null;
+  }, [effectiveDeck, source, projectId, file.name]);
   // Stable thunk so HtmlViewer's frequent re-renders (slide state, streaming
   // edits) never invalidate the memoized rail; the ref always calls the
   // freshest goToSlide closure.
@@ -7980,19 +8012,20 @@ function HtmlViewer({
         const tag = target.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return;
       }
-      if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+      const shortcut = deckKeyboardShortcutForEvent(e);
+      if (shortcut === 'next') {
         e.preventDefault();
         postSlide('next');
-      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+      } else if (shortcut === 'prev') {
         e.preventDefault();
         postSlide('prev');
-      } else if (e.key === 'Home') {
+      } else if (shortcut === 'first') {
         e.preventDefault();
         postSlide('first');
-      } else if (e.key === 'End') {
+      } else if (shortcut === 'last') {
         e.preventDefault();
         postSlide('last');
-      } else if (e.key.toLowerCase() === 'r') {
+      } else if (shortcut === 'reset') {
         e.preventDefault();
         goToSlide(0);
       }
@@ -10739,7 +10772,28 @@ function HtmlViewer({
             aria-busy="true"
             aria-label={t('fileViewer.loading')}
           >
-            <span className="viewer-loading-canvas" aria-hidden="true" />
+            <div className="viewer-loading-stage" aria-hidden="true">
+              <span className="viewer-loading-card viewer-loading-card-back viewer-loading-card-back-two" />
+              <span className="viewer-loading-card viewer-loading-card-back viewer-loading-card-back-one" />
+              <span className="viewer-loading-card viewer-loading-card-main">
+                <span className="viewer-loading-kicker" />
+                <span className="viewer-loading-title" />
+                <span className="viewer-loading-title viewer-loading-title-short" />
+                <span className="viewer-loading-rule" />
+                <span className="viewer-loading-content">
+                  <span className="viewer-loading-copy">
+                    <span className="viewer-loading-line" />
+                    <span className="viewer-loading-line viewer-loading-line-medium" />
+                    <span className="viewer-loading-line viewer-loading-line-short" />
+                  </span>
+                  <span className="viewer-loading-chart">
+                    <span className="viewer-loading-bar viewer-loading-bar-one" />
+                    <span className="viewer-loading-bar viewer-loading-bar-two" />
+                    <span className="viewer-loading-bar viewer-loading-bar-three" />
+                  </span>
+                </span>
+              </span>
+            </div>
           </div>
         ) : mode === 'preview' ? (
           <div
@@ -10756,6 +10810,7 @@ function HtmlViewer({
                 activeIndex={activeDeckSlideIndex}
                 labelTotal={deckNavTotal}
                 buildThumbSrcDoc={buildDeckThumbnailSrcDoc}
+                parsedDeck={parsedDeckThumbnails}
                 onSelect={handleDeckThumbnailSelect}
               />
             ) : null}

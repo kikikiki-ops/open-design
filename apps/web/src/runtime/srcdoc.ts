@@ -14,6 +14,8 @@
  *   { type: 'od:slide-state', active: number, count: number }
  * after every navigation so the host can render its own counter / dots.
  */
+import { injectDeckStageFallback } from '@open-design/contracts/runtime/deck-stage-fallback';
+
 import {
   buildManualEditBridge,
   buildManualEditBridgeStyle,
@@ -272,9 +274,12 @@ export function buildSrcdoc(
   const withShim = injectSandboxShim(withBase);
   const withFocusGuard = options.previewFocusGuard ? injectPreviewFocusGuard(withShim) : withShim;
   const withMotionFreeze = options.freezeMotion ? injectMotionFreeze(withFocusGuard) : withFocusGuard;
-  const withDeckChrome = options.deck && options.hideDeckChrome
-    ? injectDeckChromeHiding(withMotionFreeze)
+  const withDeckStageFallback = options.deck
+    ? injectDeckStageFallback(withMotionFreeze)
     : withMotionFreeze;
+  const withDeckChrome = options.deck && options.hideDeckChrome
+    ? injectDeckChromeHiding(withDeckStageFallback)
+    : withDeckStageFallback;
   const withDeck = options.deck
     ? injectDeckBridge(withDeckChrome, {
         initialSlideIndex: options.initialSlideIndex,
@@ -2057,22 +2062,19 @@ html[data-od-inspect-mode] body iframe { pointer-events: none !important; }
 // invisible, while collapsing the duration lets every animation run to its
 // final keyframe immediately — the thumbnail shows the slide's settled state
 // and the compositor never re-rasterizes the frame again.
-function injectMotionFreeze(doc: string): string {
-  return injectBeforeHeadEnd(doc, `<style data-od-motion-freeze>
-*, *::before, *::after {
+// Bare CSS bodies (no `<style>` wrapper) so the shadow-root thumbnail renderer
+// (`DeckSlideThumbnail`) can adopt the exact same rules the iframe path injects,
+// keeping a single source of truth for freeze + chrome-hiding behavior.
+export const DECK_MOTION_FREEZE_CSS = `*, *::before, *::after {
   animation-duration: 0.001s !important;
   animation-delay: 0s !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0.001s !important;
   transition-delay: 0s !important;
   scroll-behavior: auto !important;
-}
-</style>`);
-}
+}`;
 
-function injectDeckChromeHiding(doc: string): string {
-  return injectBeforeHeadEnd(doc, `<style data-od-deck-chrome-hidden>
-.deck-counter,
+export const DECK_CHROME_HIDE_CSS = `.deck-counter,
 .deck-hint,
 .deck-nav,
 .deck-floating-nav,
@@ -2093,7 +2095,17 @@ function injectDeckChromeHiding(doc: string): string {
   display: none !important;
   visibility: hidden !important;
   pointer-events: none !important;
+}`;
+
+function injectMotionFreeze(doc: string): string {
+  return injectBeforeHeadEnd(doc, `<style data-od-motion-freeze>
+${DECK_MOTION_FREEZE_CSS}
+</style>`);
 }
+
+function injectDeckChromeHiding(doc: string): string {
+  return injectBeforeHeadEnd(doc, `<style data-od-deck-chrome-hidden>
+${DECK_CHROME_HIDE_CSS}
 </style>`);
 }
 
@@ -2124,6 +2136,7 @@ function injectDeckBridge(
         try { window.parent.postMessage({ type: 'od:present-escape' }, '*'); } catch (_) {}
         return;
       }
+      if (ev.metaKey || ev.ctrlKey || ev.altKey || ev.shiftKey) return;
       if (
         key !== 'ArrowRight' &&
         key !== 'PageDown' &&
@@ -2151,7 +2164,7 @@ function injectDeckBridge(
     // fall back to all .slide only when nothing structured matched, so
     // freeform decks that nest slides under an extra wrapper still report
     // the real count instead of leaving the host counter at 1 / 0.
-    var structured = document.querySelectorAll('.deck > .slide, .deck-stage > .slide, .deck-shell > .slide, body > .slide');
+    var structured = document.querySelectorAll('deck-stage > .slide, .deck > .slide, .deck-stage > .slide, .deck-shell > .slide, body > .slide');
     if (structured.length) return structured;
     return document.querySelectorAll('.slide');
   }
