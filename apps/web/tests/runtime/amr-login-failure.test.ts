@@ -41,6 +41,29 @@ describe('amrLoginReasonText', () => {
     );
   });
 
+  it('surfaces the raw detail for an unclassified failure instead of the generic string', () => {
+    // An unclassified failure carries the only actionable clue in `detail`
+    // (e.g. the fetch error when the daemon is unreachable). Collapsing it to
+    // the generic compact copy would regress the fallback path (issue #426).
+    expect(
+      amrLoginReasonText(t, {
+        code: 'AMR_LOGIN_UNKNOWN',
+        recovery: 'retry',
+        detail: 'Failed to fetch',
+      }),
+    ).toBe('Failed to fetch');
+  });
+
+  it('shows the concrete error when startVelaLogin fails unclassified (daemon unreachable)', () => {
+    // Mirrors the caller path amrLoginReasonText(t, amrLoginFailureForSpawn(result))
+    // for the { status: 0, error } shape startVelaLogin() returns on a fetch
+    // error — the user must keep the concrete message, not "Sign-in failed."
+    const result = { ok: false as const, status: 0, error: 'NetworkError: Failed to fetch' };
+    expect(amrLoginReasonText(t, amrLoginFailureForSpawn(result))).toBe(
+      'NetworkError: Failed to fetch',
+    );
+  });
+
   it('falls back to the generic compact string when no failure is present', () => {
     expect(amrLoginReasonText(t, null)).toBe('settings.amrLoginErrorCompact');
     expect(amrLoginReasonText(t, undefined)).toBe('settings.amrLoginErrorCompact');

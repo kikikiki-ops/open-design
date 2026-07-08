@@ -32,12 +32,20 @@ const REASON_KEY: Record<AmrLoginFailureCode, keyof Dict> = {
 };
 
 // Localized reason line for a failure. Falls back to the generic compact
-// string when no failure is available.
+// string when no failure is available. An unclassified failure (UNKNOWN) has no
+// specific localized reason, so its raw detail — e.g. the fetch-error message
+// startVelaLogin() returns as `{ status: 0, error }` when the daemon is
+// unreachable — is surfaced directly instead of a bare "Sign-in failed.",
+// preserving the only actionable clue the old code showed (issue #426).
+// Classified codes always prefer their specific localized copy.
 export function amrLoginReasonText(
   t: TranslateFn,
   failure: AmrLoginFailure | null | undefined,
 ): string {
   if (!failure) return t('settings.amrLoginErrorCompact');
+  if (failure.code === 'AMR_LOGIN_UNKNOWN' && failure.detail) {
+    return failure.detail;
+  }
   return t(REASON_KEY[failure.code] ?? 'settings.amrLoginErrorCompact');
 }
 
