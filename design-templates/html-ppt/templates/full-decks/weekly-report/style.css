@@ -38,10 +38,11 @@
 .tpl-weekly-report .ship-item b{color:var(--text-1);font-weight:600}
 .tpl-weekly-report .ship-item span.owner{margin-left:auto;color:var(--text-3);font-size:12px;font-family:'JetBrains Mono',monospace}
 .tpl-weekly-report .chart{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:28px}
-.tpl-weekly-report .chart-bars{display:flex;align-items:flex-end;gap:16px;height:220px;margin-top:20px}
-.tpl-weekly-report .chart-bars .col{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;position:relative}
-.tpl-weekly-report .chart-bars .col .b{width:100%;background:var(--grad);border-radius:6px 6px 0 0;min-height:6px;position:relative}
-.tpl-weekly-report .chart-bars .col .b::after{content:attr(data-v);position:absolute;top:-22px;left:0;right:0;text-align:center;font-size:12px;font-weight:700;color:var(--text-1)}
+.tpl-weekly-report .chart-bars{display:flex;align-items:stretch;gap:16px;height:220px;margin-top:20px}
+.tpl-weekly-report .chart-bars .col{flex:1;display:grid;grid-template-rows:auto 1fr auto;align-items:end;gap:6px;min-height:0}
+.tpl-weekly-report .chart-bars .col .bar-value{font-size:12px;font-weight:700;color:var(--text-1);line-height:1;text-align:center}
+.tpl-weekly-report .chart-bars .col .bar-track{width:100%;height:100%;display:flex;align-items:flex-end}
+.tpl-weekly-report .chart-bars .col .b{width:100%;height:var(--bar-height,0%);background:var(--grad);border-radius:6px 6px 0 0}
 .tpl-weekly-report .chart-bars .col .lbl{font-size:11px;color:var(--text-3);font-family:'JetBrains Mono',monospace}
 .tpl-weekly-report .blocker{background:var(--surface);border-left:3px solid var(--bad);padding:16px 20px;border-radius:8px;margin-bottom:12px}
 .tpl-weekly-report .blocker h4{font-size:16px;margin-bottom:4px}
