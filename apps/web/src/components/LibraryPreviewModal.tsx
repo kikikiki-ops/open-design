@@ -241,7 +241,7 @@ function ElementPanel({ asset }: { asset: LibraryAsset }) {
                 padding: '10px 12px',
                 background: 'var(--subtle, #f6f7f9)',
                 borderRadius: 8,
-                fontSize: 11,
+                fontSize: 12,
                 lineHeight: 1.5,
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-word',

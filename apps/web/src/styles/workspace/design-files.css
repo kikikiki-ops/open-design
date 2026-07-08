@@ -125,12 +125,12 @@
 }
 .df-actions button {
   background: transparent;
-  border: 1px solid transparent;
+  border: 0;
   color: var(--text-muted);
   padding: 5px 10px;
   font-size: 14px;
   line-height: 1.3;
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -140,6 +140,14 @@
      tint and doesn't visually bleed into the tab strip / canvas above-below. */
   background: color-mix(in srgb, var(--bg-subtle) 55%, transparent);
   color: var(--text);
+  border-color: transparent;
+  box-shadow: none;
+  outline: none;
+}
+.df-actions button:focus-visible {
+  border-color: transparent;
+  box-shadow: none;
+  outline: none;
 }
 .df-actions button.danger { color: var(--red); }
 .df-actions button.danger:hover:not(:disabled) {
@@ -175,7 +183,7 @@
   border: 1px solid currentColor;
   color: inherit;
   padding: 3px 9px;
-  font-size: 11.5px;
+  font-size: 12px;
   border-radius: var(--radius-sm);
   cursor: pointer;
 }
@@ -198,7 +206,7 @@
   to { opacity: 1; transform: translateY(0); }
 }
 .df-batch-count {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--text-strong);
 }
@@ -213,7 +221,7 @@
   border: 1px solid transparent;
   color: var(--text-muted);
   padding: 5px 10px;
-  font-size: 12.5px;
+  font-size: 13px;
   border-radius: var(--radius-sm);
   display: inline-flex;
   align-items: center;
@@ -233,14 +241,14 @@
 .df-section { display: flex; flex-direction: column; gap: 0; }
 .df-section + .df-section { margin-top: 0; }
 .df-section-label {
-  font-size: 10.5px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-soft);
   font-weight: 600;
   padding: 8px 20px;
-  background: var(--bg-subtle);
-  border-bottom: 1px solid var(--border-soft);
+  background: transparent;
+  border-bottom: 0;
 }
 .df-section-count {
   margin-left: 8px;
@@ -358,7 +366,7 @@
   color: var(--text-muted);
   cursor: pointer;
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 .df-plugin-install:hover:not(:disabled) {
@@ -478,7 +486,7 @@
   padding: 3px 6px;
 }
 .df-row-sub {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
   display: inline-flex;
   align-items: center;
@@ -501,7 +509,7 @@
   display: none;
 }
 .df-row-time {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -560,12 +568,8 @@
   color: var(--text-muted);
   font-size: 13px;
   min-height: 320px;
+  /* Plain pure-white surface — grid pattern removed. */
   background-color: #fff;
-  background-image:
-    linear-gradient(to right, var(--border-soft) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--border-soft) 1px, transparent 1px);
-  background-size: 24px 24px;
-  background-position: -1px -1px;
 }
 .df-empty-pill {
   display: inline-flex;
@@ -581,6 +585,85 @@
     0 8px 24px -12px rgba(15, 15, 15, 0.08);
   max-width: min(560px, 92%);
   text-align: center;
+}
+/* Fanned deck of blank ghost cards above the title — suggests "your generated
+   designs will fan out here". Three cards spread from a shared bottom pivot. */
+.df-empty-stack {
+  position: relative;
+  width: 148px;
+  height: 96px;
+  margin-bottom: 2px;
+}
+.df-empty-stack-card {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 70px;
+  height: 88px;
+  margin-left: -35px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-app, #fff);
+  box-shadow: 0 6px 16px -9px rgba(15, 15, 15, 0.28);
+  transform-origin: bottom center;
+  transition:
+    transform 280ms cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 280ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+/* A faint thumbnail bar + caption line so each card reads as a design file. */
+.df-empty-stack-card::before {
+  content: '';
+  position: absolute;
+  inset: 9px 9px auto 9px;
+  height: 32px;
+  border-radius: 6px;
+  background: var(--bg-subtle);
+}
+.df-empty-stack-card::after {
+  content: '';
+  position: absolute;
+  left: 9px;
+  right: 22px;
+  bottom: 12px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-subtle);
+}
+.df-empty-stack-card--left {
+  transform: translateX(-30px) rotate(-13deg);
+  z-index: 1;
+}
+.df-empty-stack-card--right {
+  transform: translateX(30px) rotate(13deg);
+  z-index: 1;
+}
+.df-empty-stack-card--front {
+  transform: rotate(0deg);
+  z-index: 2;
+  box-shadow: 0 10px 22px -10px rgba(15, 15, 15, 0.3);
+}
+/* Hover a single card → only THAT card enlarges and pops to the front. Each
+   keeps its own fan offset/rotation (so it grows in place instead of jumping
+   to center), just scaled up with a stronger shadow. */
+.df-empty-stack-card--left:hover {
+  transform: translateX(-30px) rotate(-13deg) scale(1.12);
+  z-index: 3;
+  box-shadow: 0 16px 30px -12px rgba(15, 15, 15, 0.34);
+}
+.df-empty-stack-card--right:hover {
+  transform: translateX(30px) rotate(13deg) scale(1.12);
+  z-index: 3;
+  box-shadow: 0 16px 30px -12px rgba(15, 15, 15, 0.34);
+}
+.df-empty-stack-card--front:hover {
+  transform: rotate(0deg) scale(1.12);
+  z-index: 3;
+  box-shadow: 0 16px 30px -12px rgba(15, 15, 15, 0.34);
+}
+@media (prefers-reduced-motion: reduce) {
+  .df-empty-stack-card {
+    transition: none;
+  }
 }
 .df-empty-title {
   font-size: 16px;
@@ -606,7 +689,7 @@
   background: var(--bg);
   color: var(--text);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   flex-shrink: 0;
@@ -668,7 +751,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -701,7 +784,7 @@
   color: var(--accent);
 }
 .df-useful-info-label {
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -772,7 +855,7 @@
   color: var(--accent);
 }
 .df-drop-overlay-card .label {
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--text-faint);
@@ -807,7 +890,7 @@
   margin: 16px;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius);
-  background: var(--bg-panel);
+  background: #fff;
   box-shadow: var(--shadow-sm);
   overflow: hidden;
   aspect-ratio: 16/10;
@@ -835,6 +918,15 @@
   border-radius: inherit;
   background: transparent;
   cursor: pointer;
+}
+.df-preview-thumb-open,
+button.df-preview-thumb-open:hover:not(:disabled),
+button.df-preview-thumb-open:active:not(:disabled),
+button.df-preview-thumb-open:focus:not(:disabled) {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  filter: none;
 }
 .df-preview-thumb-open:focus-visible {
   outline: 2px solid var(--accent);
@@ -916,7 +1008,7 @@
   word-break: break-word;
 }
 .df-preview-kind { font-size: 12px; color: var(--text-muted); }
-.df-preview-stats { font-size: 11.5px; color: var(--text-muted); }
+.df-preview-stats { font-size: 12px; color: var(--text-muted); }
 .df-preview-actions {
   display: inline-flex;
   align-items: center;
@@ -1003,11 +1095,18 @@
 .df-row-popover button {
   background: transparent;
   border: none;
+  width: 100%;
+  display: flex;
+  justify-content: flex-start;
   padding: 7px 10px;
-  font-size: 12.5px;
+  font-size: 13px;
   text-align: left;
   border-radius: var(--radius-xs);
   color: var(--text);
+}
+.df-row-popover a {
+  display: block;
+  width: 100%;
 }
 .df-row-popover button:hover { background: var(--bg-subtle); }
 .df-row-popover button.danger { color: var(--red); }

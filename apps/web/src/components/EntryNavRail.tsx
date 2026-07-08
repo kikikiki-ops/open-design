@@ -125,6 +125,104 @@ export function EntryNavRail({ view, onViewChange, onNewProject, open, onClose, 
     }
   }, [open]);
 
+  const accountSwitcher = cloudWorkspace ? (
+    <div className="entry-nav-rail__account">
+      <button
+        type="button"
+        className="entry-nav-rail__account-trigger"
+        onClick={() => setAccountOpen((v) => !v)}
+        aria-expanded={accountOpen}
+      >
+        <span className="entry-nav-rail__account-avatar" aria-hidden>琼</span>
+        <span className="entry-nav-rail__account-name">琼羽</span>
+        <Icon name="chevron-down" size={14} />
+      </button>
+      {credits ? (
+        <button
+          type="button"
+          className="entry-nav-rail__credits-chip"
+          onClick={() => setCreditsOpen((v) => !v)}
+          aria-expanded={creditsOpen}
+          aria-label={`${credits.tierLabel} · 剩余积分 ${credits.balance}`}
+        >
+          <span className="entry-nav-rail__credits-tier">{credits.tierLabel}</span>
+          <span className="entry-nav-rail__credits-sep" aria-hidden>·</span>
+          <Icon name="sparkles" size={12} />
+          {credits.balance.toLocaleString('en-US')}
+        </button>
+      ) : null}
+      {credits ? (
+        <CreditsPanel
+          open={creditsOpen}
+          onClose={() => setCreditsOpen(false)}
+          info={credits}
+          onUpgrade={() => {
+            setCreditsOpen(false);
+            onUpgrade?.();
+          }}
+          memberCreditNotice={cloudWorkspace && !canManageWorkspace}
+        />
+      ) : null}
+      {accountOpen ? (
+        <>
+          <div className="entry-nav-rail__menu-backdrop" onClick={() => setAccountOpen(false)} />
+          <div className="entry-nav-rail__account-menu" role="menu">
+            <div className="entry-nav-rail__account-head">
+              <span className="entry-nav-rail__account-head-avatar" aria-hidden>琼</span>
+              <span className="entry-nav-rail__account-head-name">琼羽</span>
+              <span className="entry-nav-rail__account-head-email">qiongyu1999@gmail.com</span>
+            </div>
+            <button type="button" className="entry-nav-rail__menu-item is-primary" role="menuitem">
+              <Icon name="layout" size={15} /> 切换主题 <span className="entry-nav-rail__menu-chevron"><Icon name="chevron-right" size={13} /></span>
+            </button>
+            <button type="button" className="entry-nav-rail__menu-item" role="menuitem">
+              <Icon name="languages" size={15} />
+              切换语言
+              <span className="entry-nav-rail__menu-meta">中文 / English</span>
+            </button>
+            <button
+              type="button"
+              className="entry-nav-rail__menu-item"
+              role="menuitem"
+              onClick={() => {
+                setAccountOpen(false);
+                onOpenSettings?.();
+              }}
+            >
+              <Icon name="settings" size={15} /> 设置
+            </button>
+            <div className="entry-nav-rail__menu-divider" />
+            <a
+              className="entry-nav-rail__menu-item"
+              role="menuitem"
+              href={GITHUB_HELP_URL}
+              {...externalLinkProps}
+              onClick={() => setAccountOpen(false)}
+            >
+              <Icon name="comment" size={15} /> 在 GitHub 上获取帮助
+            </a>
+            <a
+              className="entry-nav-rail__menu-item"
+              role="menuitem"
+              href={GITHUB_FEATURE_URL}
+              {...externalLinkProps}
+              onClick={() => setAccountOpen(false)}
+            >
+              <Icon name="sparkles" size={15} /> 提交功能建议
+            </a>
+            <div className="entry-nav-rail__menu-divider" />
+            <button type="button" className="entry-nav-rail__menu-item" role="menuitem">
+              <Icon name="plus" size={15} /> 添加账号
+            </button>
+            <button type="button" className="entry-nav-rail__menu-item" role="menuitem">
+              <Icon name="log-out" size={15} /> 退出登录
+            </button>
+          </div>
+        </>
+      ) : null}
+    </div>
+  ) : null;
+
   return (
     <nav
       ref={railRef}
@@ -134,105 +232,6 @@ export function EntryNavRail({ view, onViewChange, onNewProject, open, onClose, 
     >
       <div className="entry-nav-rail__panel">
       <div className="entry-nav-rail__group">
-        {cloudWorkspace ? (
-          <div className="entry-nav-rail__account">
-            <button
-              type="button"
-              className="entry-nav-rail__account-trigger"
-              onClick={() => setAccountOpen((v) => !v)}
-              aria-expanded={accountOpen}
-            >
-              <span className="entry-nav-rail__account-avatar" aria-hidden>琼</span>
-              <span className="entry-nav-rail__account-name">琼羽</span>
-              <Icon name="chevron-down" size={14} />
-            </button>
-            {credits ? (
-              <button
-                type="button"
-                className="entry-nav-rail__credits-chip"
-                onClick={() => setCreditsOpen((v) => !v)}
-                aria-expanded={creditsOpen}
-                aria-label={`${credits.tierLabel} · 剩余积分 ${credits.balance}`}
-              >
-                <span className="entry-nav-rail__credits-tier">{credits.tierLabel}</span>
-                <span className="entry-nav-rail__credits-sep" aria-hidden>·</span>
-                <Icon name="sparkles" size={12} />
-                {credits.balance.toLocaleString('en-US')}
-              </button>
-            ) : null}
-            {credits ? (
-              <CreditsPanel
-                open={creditsOpen}
-                onClose={() => setCreditsOpen(false)}
-                info={credits}
-                onUpgrade={() => {
-                  setCreditsOpen(false);
-                  onUpgrade?.();
-                }}
-                memberCreditNotice={cloudWorkspace && !canManageWorkspace}
-              />
-            ) : null}
-            {accountOpen ? (
-              <>
-                <div className="entry-nav-rail__menu-backdrop" onClick={() => setAccountOpen(false)} />
-                <div className="entry-nav-rail__account-menu" role="menu">
-                  <div className="entry-nav-rail__account-head">
-                    <span className="entry-nav-rail__account-head-avatar" aria-hidden>琼</span>
-                    <span className="entry-nav-rail__account-head-name">琼羽</span>
-                    <span className="entry-nav-rail__account-head-email">qiongyu1999@gmail.com</span>
-                  </div>
-                  <button type="button" className="entry-nav-rail__menu-item is-primary" role="menuitem">
-                    <Icon name="layout" size={15} /> 切换主题 <span className="entry-nav-rail__menu-chevron"><Icon name="chevron-right" size={13} /></span>
-                  </button>
-                  <button type="button" className="entry-nav-rail__menu-item" role="menuitem">
-                    <Icon name="languages" size={15} />
-                    切换语言
-                    <span className="entry-nav-rail__menu-meta">中文 / English</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="entry-nav-rail__menu-item"
-                    role="menuitem"
-                    onClick={() => {
-                      setAccountOpen(false);
-                      onOpenSettings?.();
-                    }}
-                  >
-                    <Icon name="settings" size={15} /> 设置
-                  </button>
-                  <div className="entry-nav-rail__menu-divider" />
-                  <a
-                    className="entry-nav-rail__menu-item"
-                    role="menuitem"
-                    href={GITHUB_HELP_URL}
-                    {...externalLinkProps}
-                    onClick={() => setAccountOpen(false)}
-                  >
-                    <Icon name="comment" size={15} /> 在 GitHub 上获取帮助
-                  </a>
-                  <a
-                    className="entry-nav-rail__menu-item"
-                    role="menuitem"
-                    href={GITHUB_FEATURE_URL}
-                    {...externalLinkProps}
-                    onClick={() => setAccountOpen(false)}
-                  >
-                    <Icon name="sparkles" size={15} /> 提交功能建议
-                  </a>
-                  <div className="entry-nav-rail__menu-divider" />
-                  <button type="button" className="entry-nav-rail__menu-item" role="menuitem">
-                    <Icon name="plus" size={15} /> 添加账号
-                  </button>
-                  <button type="button" className="entry-nav-rail__menu-item" role="menuitem">
-                    <Icon name="log-out" size={15} /> 退出登录
-                  </button>
-                </div>
-              </>
-            ) : null}
-          </div>
-        ) : (
-          null
-        )}
         <div className="entry-nav-rail__search" aria-hidden>
           <Icon name="search" size={14} />
           <input type="text" placeholder={t('common.search')} readOnly tabIndex={-1} />
@@ -414,6 +413,7 @@ export function EntryNavRail({ view, onViewChange, onNewProject, open, onClose, 
         <div className="entry-rail-actions">
           {footerExtra}
         </div>
+        {accountSwitcher}
       </div>
       </div>
 

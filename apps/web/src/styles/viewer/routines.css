@@ -17,7 +17,7 @@
   align-items: center;
   gap: 6px;
   padding: 5px 12px;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.3;
   border-radius: var(--radius-sm, 4px);
   border: 1px solid var(--border);
@@ -68,14 +68,14 @@
   }
 }
 .project-actions-label {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--text-strong, var(--text));
 }
 .project-actions-link {
   background: none;
   border: none;
   color: var(--accent);
-  font-size: 12.5px;
+  font-size: 13px;
   cursor: pointer;
   padding: 0;
   text-decoration: underline;
@@ -87,14 +87,14 @@
   gap: 6px;
 }
 .project-actions-chip {
-  font-size: 11.5px;
+  font-size: 12px;
   padding: 2px 8px;
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--warning, #d97706) 14%, transparent);
   color: var(--warning, #d97706);
 }
 .project-actions-disabled-hint {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-muted);
   font-style: italic;
 }
@@ -111,7 +111,7 @@
   border-radius: var(--radius-sm, 4px);
   background: var(--text-strong, #1f2328);
   color: var(--bg, white);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.4;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
   z-index: 1000;
@@ -198,7 +198,7 @@
 }
 .od-toast-details {
   margin-top: 4px;
-  font-size: 11.5px;
+  font-size: 12px;
   opacity: 0.85;
   font-weight: 400;
 }
@@ -208,7 +208,7 @@
   border-radius: var(--radius-sm, 4px);
   background: rgba(255, 255, 255, 0.08);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
@@ -221,7 +221,7 @@
   background: rgba(255, 255, 255, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: var(--bg, white);
-  font-size: 11.5px;
+  font-size: 12px;
   padding: 4px 10px;
   border-radius: var(--radius-sm, 4px);
   cursor: pointer;
@@ -476,7 +476,7 @@
 }
 .routines-item-main { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .routines-item-title { display: flex; align-items: center; gap: 8px; }
-.routines-item-title strong { font-size: 15px; color: var(--text); font-weight: 600; }
+.routines-item-title strong { font-size: 16px; color: var(--text); font-weight: 600; }
 .routines-item-line { font-size: 13px; color: var(--text); }
 .routines-item-meta {
   font-size: 12px;
@@ -493,7 +493,7 @@
   overflow-wrap: anywhere;
 }
 .routines-tag {
-  font-size: 11px;
+  font-size: 12px;
   background: var(--bg-muted);
   color: var(--text-muted);
   padding: 2px 8px;
@@ -526,7 +526,7 @@
 .routines-history-row:hover { background: var(--bg-subtle); }
 .routines-history-time { color: var(--text); }
 .routines-history-trigger {
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -566,7 +566,7 @@
   display: inline-block;
   padding: 2px 8px;
   border-radius: var(--radius-pill);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -651,7 +651,7 @@
 .newproj-aspect-icon-3-4   { width: 10.5px; height: 14px;  }
 .newproj-aspect-ratio {
   font-variant-numeric: tabular-nums;
-  font-size: 11.5px;
+  font-size: 12px;
   letter-spacing: 0.02em;
 }
 
@@ -666,7 +666,7 @@
   justify-content: space-between;
   gap: 8px;
   padding: 6px 8px 2px;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -677,9 +677,9 @@
 .model-picker .ds-picker-list { padding: 6px; }
 .model-picker .ds-picker-item { padding: 8px 10px; }
 .model-picker .ds-picker-item-title { font-size: 13px; font-weight: 500; }
-.model-picker .ds-picker-item-sub { font-size: 11.5px; }
+.model-picker .ds-picker-item-sub { font-size: 12px; }
 .model-picker .ds-picker-item .ds-picker-item-badge {
-  font-size: 9px;
+  font-size: 12px;
   padding: 1px 5px;
   background: var(--accent-tint);
   color: var(--accent);
@@ -714,12 +714,12 @@
   border-bottom: 1px solid var(--border-subtle, var(--border));
 }
 .palette-tweaks-title { font-size: 12px; font-weight: 600; color: var(--text); }
-.palette-tweaks-sub { font-size: 11px; color: var(--text-muted); }
+.palette-tweaks-sub { font-size: 12px; color: var(--text-muted); }
 .palette-tweaks-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .palette-tweaks-item {
   display: flex; align-items: center; gap: 10px;
   padding: 6px 8px; border-radius: var(--radius-sm, 6px);
-  cursor: pointer; font-size: 12.5px; color: var(--text);
+  cursor: pointer; font-size: 13px; color: var(--text);
   transition: background 100ms var(--ease-out);
 }
 .palette-tweaks-item:hover, .palette-tweaks-item.hovered { background: var(--bg-subtle); }
@@ -818,12 +818,7 @@
 .workspace-shell .workspace-tab:not(.is-active):hover,
 .workspace-shell .workspace-tab:not(.is-active):focus-within {
   border-radius: var(--radius-pill, 999px);
-  background:
-    linear-gradient(
-      color-mix(in srgb, var(--bg-panel) 78%, transparent),
-      color-mix(in srgb, var(--bg-panel) 78%, transparent)
-    )
-    0 0 / 100% calc(100% - 2px) no-repeat;
+  background: color-mix(in srgb, var(--bg-panel) 78%, transparent);
   border-color: transparent;
   box-shadow:
     inset 0 0 0 1px color-mix(in srgb, var(--border) 58%, transparent),
@@ -840,8 +835,7 @@
     linear-gradient(
       color-mix(in srgb, var(--bg-panel) 78%, transparent),
       color-mix(in srgb, var(--bg-panel) 78%, transparent)
-    )
-    0 0 / 100% calc(100% - 2px) no-repeat,
+    ),
     var(--workspace-tab-bar-bg);
 }
 .workspace-shell .workspace-tab.is-dragging {
@@ -865,8 +859,8 @@
   z-index: 2;
 }
 .workspace-shell .workspace-tab__label {
-  font-size: 11.5px;
-  font-weight: 540;
+  font-size: 12px;
+  font-weight: 500;
 }
 .workspace-shell .workspace-tab.is-active .workspace-tab__label {
   font-size: var(--font-size-12, 12px);
@@ -915,8 +909,8 @@
   gap: 8px;
 }
 .app .app-project-title .title {
-  font-size: 15px;
-  font-weight: 650;
+  font-size: 16px;
+  font-weight: 600;
   line-height: 18px;
   letter-spacing: 0;
 }
@@ -936,23 +930,85 @@
   grid-template-columns: minmax(0, 1fr);
 }
 .app .split-chat-slot {
-  padding: 0;
+  /* Inset the pane so it reads as a floating card (same treatment as the home
+     sidebar's .entry-nav-rail__panel). 8px gap on every side — the top gap to
+     the tabs chrome and the bottom gap both read as 8px. The slot's
+     overflow:hidden (shell.css) clips the card's shadow cleanly at the slot
+     edge so it never bleeds onto the file-viewer panel to the right.
+     Right side is 0 so the gap to the workspace card is just the 8px
+     resize-handle column (not 8+8+8=24px). */
+  padding: 8px 0 8px 8px;
+  background: #fff;
 }
 .app .split-chat-slot > .pane {
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
+  /* Floating layer — mirrors the home sidebar panel: white surface, soft
+     border, large radius, md elevation. overflow:hidden rounds the content
+     (the composer is a separate fixed/portaled layer, so it isn't clipped and
+     auto-follows the inset via composerPortalRect). */
+  border: 1px solid color-mix(in srgb, var(--border) 66%, transparent);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  background: #fff;
+  overflow: hidden;
+}
+[data-theme="dark"] .app .split-chat-slot > .pane {
   background: var(--bg-panel);
 }
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) .app .split-chat-slot > .pane {
+    background: var(--bg-panel);
+  }
+}
 .app .split-resize-handle {
+  --split-resize-gradient-surface: #fff;
   width: 8px;
   min-width: 8px;
   background: transparent;
 }
+
+.app .split-resize-handle::after {
+  top: 8px;
+  bottom: 8px;
+  left: 0;
+  width: 8px;
+  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--split-resize-gradient-surface) 96%, transparent) 0%,
+    color-mix(in srgb, var(--split-resize-gradient-surface) 62%, transparent) 54%,
+    transparent 100%
+  );
+  opacity: 0.52;
+  transition: opacity 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
 .app .split-resize-handle:hover,
 .app .split-resize-handle:focus-visible,
 .app .split.is-resizing-chat .split-resize-handle {
   background: transparent;
+}
+
+.app .split-resize-handle:hover::after,
+.app .split-resize-handle:focus-visible::after,
+.app .split.is-resizing-chat .split-resize-handle::after {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--split-resize-gradient-surface) 96%, transparent) 0%,
+    color-mix(in srgb, var(--split-resize-gradient-surface) 62%, transparent) 54%,
+    transparent 100%
+  );
+  box-shadow: none;
+  opacity: 0.9;
+}
+
+[data-theme="dark"] .app .split-resize-handle {
+  --split-resize-gradient-surface: var(--bg-panel);
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) .app .split-resize-handle {
+    --split-resize-gradient-surface: var(--bg-panel);
+  }
 }
 
 .app .chat-header,
@@ -962,7 +1018,7 @@
   border-radius: 0;
   border: none;
   border-bottom: 1px solid var(--border);
-  background: var(--bg-panel);
+  background: #fff;
   box-shadow: none;
 }
 .app .chat-header {
@@ -978,7 +1034,7 @@
   min-height: 28px;
   padding: 0 10px;
   border-radius: var(--radius);
-  font-size: 12.5px;
+  font-size: 13px;
 }
 .app .chat-header-tab.active {
   background: var(--bg-subtle);
@@ -993,7 +1049,7 @@
 .app .chat-log {
   gap: 14px;
   padding: 18px 18px 20px;
-  background: var(--bg-panel);
+  background: #fff;
 }
 /* Cancel the 14px flex gap so the idle spacer adds no trailing space. */
 .app .chat-log-tail-spacer {
@@ -1019,15 +1075,15 @@
 .app .msg .role {
   margin-bottom: 5px;
   gap: 7px;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.25;
   color: var(--text-muted);
-  font-weight: 560;
+  font-weight: 500;
 }
 .app .msg .role > span:first-child,
 .app .msg .role .role-name {
   color: var(--text);
-  font-weight: 650;
+  font-weight: 600;
 }
 .app .msg.assistant .role {
   align-items: center;
@@ -1043,19 +1099,19 @@
   border-radius: var(--radius-sm);
 }
 .app .msg-time {
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-soft);
   font-weight: 500;
 }
 .app .msg.user .user-text {
   padding: 8px 12px;
-  border: 1px solid color-mix(in srgb, var(--selected) 88%, #000);
-  border-radius: 14px 14px 4px 14px;
-  background: var(--selected);
-  color: #fff;
+  border: 0;
+  border-radius: var(--radius-lg) var(--radius-none) var(--radius-lg) var(--radius-lg);
+  background: #ededed;
+  color: var(--text);
   line-height: 1.45;
-  font-size: 13.5px;
-  box-shadow: var(--shadow-xs);
+  font-size: 13px;
+  box-shadow: none;
 }
 .app .msg.user .user-copy-btn {
   color: var(--text-soft);
@@ -1093,7 +1149,7 @@
 .app .assistant-footer {
   padding: 4px 0;
   gap: 6px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-faint);
   opacity: 0;
   transition: opacity 150ms var(--ease-out);
@@ -1112,11 +1168,11 @@
 }
 .app .assistant-footer .assistant-label {
   font-weight: 400;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 .app .assistant-footer .assistant-stats {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 .app .op-waiting {
@@ -1245,7 +1301,7 @@
   box-shadow: none;
 }
 .app .produced-files-label {
-  font-size: 11.5px;
+  font-size: 12px;
   margin-bottom: 10px;
   color: var(--text-muted);
 }
@@ -1276,11 +1332,11 @@
   font-size: 13px;
 }
 .app .produced-file-size {
-  font-size: 11px;
+  font-size: 12px;
 }
 .app .produced-file-actions .ghost,
 .app .produced-file-actions .ghost-link {
-  font-size: 11px;
+  font-size: 12px;
   padding: 2px 8px;
   border-radius: var(--radius-sm);
   border: none;
@@ -1297,7 +1353,7 @@
   border-radius: 0;
   background: none;
   border: none;
-  font-size: 11.5px;
+  font-size: 12px;
   font-family: var(--mono);
 }
 .app .chat-empty-wrap {
@@ -1315,10 +1371,10 @@
   text-align: left;
 }
 .app .chat-empty-title {
-  font-size: 13.5px;
+  font-size: 13px;
 }
 .app .chat-empty-hint {
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.45;
 }
 .app .chat-examples {
@@ -1349,7 +1405,7 @@
   box-shadow: none;
 }
 .app .chat-example-title {
-  font-size: 12.8px;
+  font-size: 13px;
 }
 .app .chat-example-prompt {
   font-size: 12px;
@@ -1417,7 +1473,7 @@
 }
 .app .chat-design-artifact-more-count {
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .app .chat-design-artifact-preview {
   aspect-ratio: 16 / 10;
@@ -1451,8 +1507,8 @@
   place-items: center;
   gap: 5px;
   color: var(--text-faint);
-  font-size: 10px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
   letter-spacing: 0.08em;
 }
 .app .chat-design-artifact-meta {
@@ -1465,8 +1521,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12.5px;
-  font-weight: 650;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text);
 }
 .app .chat-design-artifact-kind {
@@ -1474,7 +1530,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 .app .chat-design-artifacts-empty {
@@ -1486,7 +1542,7 @@
   border-radius: var(--radius-md);
   background: var(--bg-panel);
   color: var(--text-muted);
-  font-size: 12.5px;
+  font-size: 13px;
 }
 .app .chat-connect-repo {
   max-width: none;
@@ -1504,7 +1560,7 @@
   border-radius: var(--radius);
 }
 .app .chat-connect-repo-title {
-  font-size: 12.8px;
+  font-size: 13px;
 }
 .app .chat-connect-repo-text {
   font-size: 12px;
@@ -1521,8 +1577,12 @@
 }
 .chat-composer-fixed-layer .composer {
   gap: 5px;
-  padding: 8px 10px 10px;
+  padding: 8px;
+  /* Bottommost gray card removed — the white shell sits directly on the chat
+     card. (Dark keeps --bg-panel below, which matches the dark shell, so no
+     separate card shows there either.) */
   background: transparent;
+  border-radius: var(--radius-lg);
 }
 .app .composer-shell {
   padding: 7px;
@@ -1532,21 +1592,30 @@
   box-shadow: var(--shadow-sm);
 }
 .chat-composer-fixed-layer .composer-shell {
-  /* Vertical breathing room only. The side inset is applied as a margin on the
-     children below instead of horizontal padding here, so the shell's
-     content-box width — which is what the shared label-collapse @container in
-     chat.css measures — stays full and that breakpoint can remain generic. */
-  padding: 8px 0;
-  border-color: var(--border);
-  border-radius: var(--radius-md);
+  padding: 5px;
+  gap: 8px;
+  border-color: var(--border-soft);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--bg-subtle) 45%, var(--bg-panel));
   box-shadow: none;
 }
-/* Inset the staged chips, the input field and the toolbar off the card's
-   rounded frame (giving + and Send a real side margin) without shrinking the
-   @container width — see the .composer-shell padding note above. */
+
+[data-theme="dark"] .app .chat-log,
+[data-theme="dark"] .chat-composer-fixed-layer .composer,
+[data-theme="dark"] .chat-composer-fixed-layer .composer-shell {
+  background: var(--bg-panel);
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) .app .chat-log,
+  html:not([data-theme]) .chat-composer-fixed-layer .composer,
+  html:not([data-theme]) .chat-composer-fixed-layer .composer-shell {
+    background: var(--bg-panel);
+  }
+}
 .chat-composer-fixed-layer .composer-shell > * {
-  margin-left: 8px;
-  margin-right: 8px;
+  margin-left: 0;
+  margin-right: 0;
 }
 .app .composer-shell:focus-within {
   border-color: color-mix(in srgb, var(--accent) 34%, var(--border-strong));
@@ -1555,8 +1624,8 @@
     0 0 0 1px color-mix(in srgb, var(--accent) 6%, transparent);
 }
 .chat-composer-fixed-layer .composer-shell:focus-within {
-  border-color: var(--border-strong);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--text) 4%, transparent);
+  border-color: var(--border-soft);
+  box-shadow: none;
 }
 .app .composer.drag-active .composer-shell {
   border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
@@ -1566,12 +1635,30 @@
   border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 9%, transparent);
 }
-/* Keep the typing area a clean white field with a soft border so it reads as
-   the one input surface inside the tinted card — the resting border replaces
-   the removed toolbar divider as the only separator in the footer. */
 .chat-composer-fixed-layer .composer-input-wrap {
-  background: var(--bg-panel);
-  border-color: var(--border-soft);
+  background: #fff;
+  /* No inner frame — the input sits directly on the shell surface. The shell
+     keeps its own outer border (see .composer-shell above). */
+  border-color: transparent;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.chat-composer-fixed-layer .composer-input-wrap:focus-within {
+  border-color: transparent;
+}
+.chat-composer-fixed-layer .composer-input-editor,
+.chat-composer-fixed-layer .composer-input-editor [contenteditable='true'],
+.chat-composer-fixed-layer .composer-input-editor .composer-editable {
+  border-radius: inherit;
+}
+.chat-composer-fixed-layer .composer-input-editor [contenteditable='true'],
+.chat-composer-fixed-layer .composer-input-editor .composer-editable {
+  font-size: 13px;
+  font-weight: 500;
+}
+.chat-composer-fixed-layer .composer-input-placeholder,
+.chat-composer-fixed-layer .composer-input-wrap .home-hero__carousel {
+  font-size: 13px;
 }
 .app .composer textarea {
   min-height: 56px;
@@ -1593,16 +1680,14 @@
   min-height: 30px;
   padding-top: 6px;
   margin-top: 1px;
-  gap: 6px;
+  gap: 4px;
 }
 .chat-composer-fixed-layer .composer-row {
-  /* Match the 28px control height exactly — the old 32px min-height left 4px
-     of dead space that made the footer band feel too tall. */
   min-height: 28px;
-  /* No divider above the toolbar: the white input box already separates it
-     from the textarea, so the extra border-top + its 2px spacing just stacked
-     another line into the footer. Drop both so the card reads as fewer layers. */
+  margin-top: 0;
+  padding: 0 4px;
   padding-top: 0;
+  gap: 4px;
   border-top: none;
 }
 .chat-composer-fixed-layer .composer-row > * {
@@ -1644,7 +1729,7 @@
   border-color: var(--text-strong);
   color: var(--bg);
   font-size: var(--font-size-14);
-  font-weight: 650;
+  font-weight: 600;
   box-shadow: var(--shadow-xs);
 }
 .chat-composer-fixed-layer .composer-send {
@@ -1658,7 +1743,7 @@
   border-color: var(--text-strong);
   color: var(--bg);
   font-size: var(--font-size-14);
-  font-weight: 650;
+  font-weight: 600;
   box-shadow: var(--shadow-xs);
 }
 .app .composer-send.stop,
@@ -1694,9 +1779,12 @@
 }
 .app .composer-row .avatar-agent-trigger,
 .chat-composer-fixed-layer .composer-row .avatar-agent-trigger {
-  width: 22px;
+  /* Width hugs the content: agent mark + the selected-model readout, so the
+     current model reads right next to the Send button. */
+  width: auto;
   min-width: 22px;
-  padding: 0;
+  padding: 0 4px;
+  gap: 5px;
   /* Flex-center the mark instead of grid: a single grid item + implicit-row
      `align-content` could leave the mark a few px off the vertical center,
      making it sit low next to the flex `.icon-btn` palette. Flex centers the
@@ -1707,6 +1795,17 @@
   border-color: transparent;
   background: transparent;
   box-shadow: none;
+}
+.app .composer-row .avatar-agent-trigger .avatar-agent-trigger__model,
+.chat-composer-fixed-layer .composer-row .avatar-agent-trigger .avatar-agent-trigger__model {
+  display: inline-block;
+  max-width: 148px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
 }
 .app .composer-row .avatar-agent-trigger:hover:not(:disabled),
 .app .composer-row .avatar-agent-trigger:focus-visible,
@@ -1725,6 +1824,13 @@
 .chat-composer-fixed-layer .composer-row .avatar-agent-trigger > i:last-child {
   display: none;
 }
+/* When the selected-model readout is shown, drop the leading agent mark so the
+   trigger reads as just the model name (icon-only mode, with no readout, keeps
+   the mark). */
+.app .composer-row .avatar-agent-trigger:has(.avatar-agent-trigger__model) .avatar-agent-mark,
+.chat-composer-fixed-layer .composer-row .avatar-agent-trigger:has(.avatar-agent-trigger__model) .avatar-agent-mark {
+  display: none;
+}
 .app .composer-send:disabled {
   background: var(--bg-subtle);
   border-color: var(--border);
@@ -1737,6 +1843,61 @@
   color: var(--text-faint);
   cursor: default;
 }
+/* Send buttons (chat composer + home hero): the looping video is ALWAYS shown —
+   focused or blurred, empty or not (no gray disabled fill, no outer stroke, no
+   button-level opacity fade). Only the arrow icon fades: 40% when there's no
+   input, 100% once the user starts typing. */
+.composer-send,
+.home-hero__submit {
+  position: relative;
+  overflow: hidden;
+  border: none;
+}
+/* Empty/disabled: strip the gray fill / border / opacity fade so the video
+   stays full. The home selectors are extra-specific to beat home-hero.css,
+   which is imported after this file. */
+.app .composer-send:disabled,
+.chat-composer-fixed-layer .composer-send:disabled,
+.home-hero__input-card .home-hero__submit:disabled {
+  opacity: 1;
+  background: transparent;
+  border: none;
+}
+.composer-send__video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  pointer-events: none;
+  /* Zoom the video content in ~30% (clipped by the button's overflow:hidden). */
+  transform: scale(1.3);
+}
+/* Light arrow over the video; its opacity conveys the input state. */
+.composer-send .od-icon,
+.home-hero__submit .od-icon {
+  position: relative;
+  z-index: 1;
+  color: #fff;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+  transition: opacity 160ms var(--ease-out, ease);
+}
+.composer-send:disabled .od-icon,
+.home-hero__input-card .home-hero__submit:disabled .od-icon {
+  opacity: 0.4;
+}
+.composer-send:not(:disabled) .od-icon,
+.home-hero__submit:not(:disabled) .od-icon {
+  opacity: 1;
+}
+/* Kill the green ring on the home submit button: its --brand background was
+   showing through the 1px border (home-hero.css sets border:1px solid
+   transparent, which outranks the base rule above). The video covers the
+   button, so remove the border entirely. Extra-specific to beat home-hero.css. */
+.home-hero__input-card .home-hero__submit {
+  border: none;
+}
 /* The pill renders under `.app` (legacy header host) and under
    `.chat-composer-fixed-layer` (its current home in the composer toolbar).
    Paired selectors cover both contexts — matching the `.icon-btn` convention
@@ -1747,7 +1908,7 @@
   position: relative;
   display: inline-flex;
   margin-top: 0;
-  font-size: 11.5px;
+  font-size: 12px;
 }
 .app .working-dir-pill-trigger,
 .chat-composer-fixed-layer .working-dir-pill-trigger {
@@ -1797,7 +1958,7 @@
 .chat-composer-fixed-layer .working-dir-pill-menu-path {
   padding: 4px 10px;
   color: var(--text-muted);
-  font-size: 10.5px;
+  font-size: 12px;
   word-break: break-all;
 }
 .app .working-dir-pill-menu-item,
@@ -1818,7 +1979,7 @@
 }
 .app .working-dir-pill-menu-item.small,
 .chat-composer-fixed-layer .working-dir-pill-menu-item.small {
-  font-size: 11.5px;
+  font-size: 12px;
 }
 .app .working-dir-pill-menu-item:hover,
 .chat-composer-fixed-layer .working-dir-pill-menu-item:hover {
@@ -1843,7 +2004,7 @@
 .chat-composer-fixed-layer .working-dir-pill-menu-section {
   padding: 4px 10px;
   color: var(--text-muted);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0;
   text-transform: uppercase;
@@ -1859,7 +2020,7 @@
 .chat-composer-fixed-layer .working-dir-pill-menu-error {
   padding: 4px 10px 6px;
   color: var(--red, #c0392b);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 /* Hosted in the composer's bottom toolbar (left of the spacer): flip the menu
    to open upward and anchor it left so it neither drops below the viewport nor
@@ -1883,7 +2044,7 @@
 }
 .app .composer-hint {
   margin: 4px 8px 0;
-  font-size: 10.5px;
+  font-size: 12px;
   line-height: 1.35;
   color: color-mix(in srgb, var(--text-muted) 58%, transparent);
   overflow: hidden;
@@ -1911,8 +2072,33 @@
 }
 
 .app .workspace {
+  /* Floating card — same treatment as the chat pane (.split-chat-slot > .pane):
+     inset 8px, white surface, soft border, large radius, md elevation. Rounded
+     via overflow:hidden; the toolbar dropdowns open downward into the preview
+     (away from the edges) so they aren't clipped. Left side is 0 so the gap to
+     the chat card is just the 8px resize-handle column (focus mode restores it
+     below, since there's no chat card then). */
+  margin: 8px 8px 8px 0;
   padding: 0;
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--border) 66%, transparent);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+/* Focus mode hides the chat card, so the workspace is the only card — give it
+   the 8px left gap back (in split mode the left is 0 to keep the inter-card gap
+   at 8px). */
+.app .split.split-focus .workspace {
+  margin-left: 8px;
+}
+[data-theme="dark"] .app .workspace {
   background: var(--bg-panel);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) .app .workspace {
+    background: var(--bg-panel);
+  }
 }
 .app .ws-tabs-shell {
   padding: 6px 14px;
@@ -1973,7 +2159,7 @@
 
 .app .df-panel,
 .app .df-main {
-  background: var(--bg-panel);
+  background: #fff;
 }
 .app .df-panel:not(.no-preview) {
   /* Keep a usable minimum for the file list (toolbar + names stay
@@ -1989,7 +2175,7 @@
 }
 .app .df-body {
   padding: 4px 20px 20px;
-  background: var(--bg-panel);
+  background: #fff;
 }
 .app .df-controls-row {
   margin: 0 0 14px;
@@ -2153,7 +2339,7 @@
 }
 .app .df-th-sortable {
   padding: 10px 8px 8px;
-  font-size: 10px;
+  font-size: 12px;
 }
 .app .df-section-row td {
   padding: 14px 8px 7px;
@@ -2161,7 +2347,7 @@
 }
 .app .df-section-label {
   padding: 0;
-  font-size: 10px;
+  font-size: 12px;
 }
 .app .df-cell-name,
 .app .df-cell-kind,
@@ -2196,7 +2382,7 @@
 }
 .app .df-row-name {
   font-size: 13px;
-  font-weight: 560;
+  font-weight: 500;
   color: var(--text-strong);
 }
 .app .df-row-name-wrap {
@@ -2347,8 +2533,8 @@
   background: transparent;
   color: var(--text-muted);
   font: inherit;
-  font-size: 11.5px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
   transition: background 200ms cubic-bezier(0.23, 1, 0.32, 1),
     color 200ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -2381,7 +2567,7 @@
   color: var(--text);
   font: inherit;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   cursor: pointer;
   transition:
     background 200ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -2434,9 +2620,9 @@
   padding: 0 2px;
   margin: 0;
   color: var(--text);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 16px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .app .handoff-menu-item {
   display: inline-flex;
@@ -2490,9 +2676,9 @@
   min-height: 18px;
   padding: 0 2px;
   color: var(--text-muted);
-  font-size: 10.5px;
+  font-size: 12px;
   line-height: 18px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .app .handoff-target-rail--unavailable .handoff-target-card {
   border-style: dashed;
@@ -2542,7 +2728,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 14px;
   font-weight: 600;
 }
@@ -2552,7 +2738,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-muted);
-  font-size: 10.5px;
+  font-size: 12px;
   line-height: 12px;
 }
 .app .handoff-framework-row {
@@ -2573,8 +2759,8 @@
   border-radius: var(--radius);
   color: var(--text);
   background: color-mix(in srgb, var(--accent) 7%, var(--bg-panel));
-  font-size: 11.5px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
   text-decoration: none;
   transition: background 200ms cubic-bezier(0.23, 1, 0.32, 1),
     border-color 200ms cubic-bezier(0.23, 1, 0.32, 1);
@@ -2588,7 +2774,7 @@
 }
 .app .handoff-framework-label {
   color: var(--text-muted);
-  font-size: 10.5px;
+  font-size: 12px;
   line-height: 18px;
   margin-right: 2px;
 }
@@ -2600,7 +2786,7 @@
   background: transparent;
   color: var(--text-muted);
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   transition:
@@ -2634,14 +2820,14 @@
   margin: 0;
 }
 .app .handoff-menu-section {
-  font-size: 10.5px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-muted);
   padding: 4px 10px;
 }
 .app .handoff-menu-error {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-danger, #c0392b);
   padding: 4px 10px 6px;
 }
@@ -2663,7 +2849,7 @@
   background: var(--bg-panel);
   color: var(--text);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1;
   cursor: pointer;
   transition: background 200ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -2731,7 +2917,7 @@
   outline: none;
   background: transparent;
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.2;
   color: var(--text);
 }
@@ -2759,7 +2945,7 @@
   background: var(--bg-panel);
   color: var(--text-muted);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
@@ -2809,7 +2995,7 @@
   top: -5px;
   z-index: 1;
   padding: 8px 8px 4px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -2845,7 +3031,7 @@
 }
 .project-ds-picker-option-title {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 400;
   color: var(--text-strong, var(--text));
   min-width: 0;
   overflow: hidden;
@@ -2853,14 +3039,14 @@
   white-space: nowrap;
 }
 .project-ds-picker-option-cat {
-  font-size: 10.5px;
+  font-size: 12px;
   padding: 1px 6px;
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--text-muted) 12%, transparent);
   color: var(--text-muted);
 }
 .project-ds-picker-option-summary {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-muted);
   line-height: 1.4;
   display: -webkit-box;
@@ -2920,7 +3106,7 @@
   background: var(--bg-panel);
   color: var(--accent);
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   cursor: pointer;
   transition:
     background-color 160ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -2993,7 +3179,7 @@
   background: color-mix(in srgb, var(--text-muted) 8%, var(--bg-panel));
 }
 .project-ds-picker-preview-cat {
-  font-size: 10.5px;
+  font-size: 12px;
   padding: 1px 6px;
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--text-muted) 12%, transparent);

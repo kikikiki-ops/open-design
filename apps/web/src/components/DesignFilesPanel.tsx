@@ -1007,6 +1007,11 @@ export function DesignFilesPanel({
           {files.length === 0 && liveArtifacts.length === 0 && (folders?.length ?? 0) === 0 ? (
             <div className="df-empty" data-testid="design-files-empty">
               <div className="df-empty-pill">
+                <div className="df-empty-stack" aria-hidden="true">
+                  <span className="df-empty-stack-card df-empty-stack-card--left" />
+                  <span className="df-empty-stack-card df-empty-stack-card--right" />
+                  <span className="df-empty-stack-card df-empty-stack-card--front" />
+                </div>
                 <span className="df-empty-title">
                   {t('designFiles.empty')}
                 </span>
@@ -1338,7 +1343,7 @@ function DfPreview({
               alignItems: 'center',
               justifyContent: 'center',
               color: 'var(--text-faint)',
-              fontSize: 38,
+              fontSize: 36,
             }}
           >
             {categoryGlyph(fileCategory(file))}

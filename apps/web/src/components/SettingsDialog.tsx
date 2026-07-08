@@ -7311,7 +7311,7 @@ function IntegrationsSection() {
                         <span className="ds-picker-item-title">{c.label}</span>
                         <span
                           style={{
-                            fontSize: 11,
+                            fontSize: 12,
                             color: 'var(--text-muted)',
                           }}
                         >

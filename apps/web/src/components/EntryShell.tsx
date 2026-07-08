@@ -851,51 +851,51 @@ export function EntryShell({
   // and content can rise up a row.
   const railFooterActions = (
     <>
-      <GithubStarBadge />
-      <a
-        className="entry-discord-badge od-tooltip"
-        href={DISCORD_URL}
-        aria-label={discordAriaLabel}
-        data-tooltip={discordAriaLabel}
-        data-tooltip-placement="right"
-        data-testid="entry-discord-badge"
-      >
-        <Icon name="discord" size={14} className="entry-discord-badge__icon" />
-        <span className="entry-discord-badge__label">{t('entry.discordLabel')}</span>
-        {discordOnlineLabel ? (
-          <>
-            <span className="entry-discord-badge__sep" aria-hidden>·</span>
-            <span className="entry-discord-badge__online">{discordOnlineLabel}</span>
-          </>
-        ) : null}
-      </a>
-      <a
-        className="entry-x-badge od-tooltip"
-        href={X_URL}
-        target="_blank"
-        rel="noreferrer noopener"
-        aria-label="在 X 上关注 Open Design"
-        data-tooltip="在 X 上关注 Open Design"
-        data-tooltip-placement="right"
-        data-testid="entry-x-badge"
-      >
-        <span className="entry-x-badge__icon" aria-hidden>X</span>
-        <span className="entry-x-badge__label">@OpenDesignHQ</span>
-      </a>
-      <button
-        type="button"
-        className="entry-settings-chip od-tooltip"
-        onClick={() => onOpenSettings()}
-        data-tooltip="设置"
-        data-tooltip-placement="right"
-        aria-label="设置"
-        data-testid="entry-settings-button"
-      >
-        <span className="entry-settings-chip__icon" aria-hidden>
-          <Icon name="settings" size={13} />
-        </span>
-        <span className="entry-settings-chip__label">设置</span>
-      </button>
+      <div className="entry-rail-actions__settings-group" aria-label="社区与设置快捷入口">
+        <button
+          type="button"
+          className="entry-settings-chip"
+          onClick={() => onOpenSettings()}
+          aria-label="设置"
+          data-testid="entry-settings-button"
+        >
+          <span className="entry-settings-chip__icon" aria-hidden>
+            <Icon name="settings" size={13} />
+          </span>
+          <span className="entry-settings-chip__label">设置</span>
+        </button>
+        <GithubStarBadge />
+        <a
+          className="entry-discord-badge od-tooltip"
+          href={DISCORD_URL}
+          aria-label={discordAriaLabel}
+          data-tooltip={discordAriaLabel}
+          data-tooltip-placement="right"
+          data-testid="entry-discord-badge"
+        >
+          <Icon name="discord" size={14} className="entry-discord-badge__icon" />
+          <span className="entry-discord-badge__label">{t('entry.discordLabel')}</span>
+          {discordOnlineLabel ? (
+            <>
+              <span className="entry-discord-badge__sep" aria-hidden>·</span>
+              <span className="entry-discord-badge__online">{discordOnlineLabel}</span>
+            </>
+          ) : null}
+        </a>
+        <a
+          className="entry-x-badge od-tooltip"
+          href={X_URL}
+          target="_blank"
+          rel="noreferrer noopener"
+          aria-label="在 X 上关注 Open Design"
+          data-tooltip="在 X 上关注 Open Design"
+          data-tooltip-placement="right"
+          data-testid="entry-x-badge"
+        >
+          <span className="entry-x-badge__icon" aria-hidden>X</span>
+          <span className="entry-x-badge__label">@OpenDesignHQ</span>
+        </a>
+      </div>
       <UpdaterPopup />
     </>
   );

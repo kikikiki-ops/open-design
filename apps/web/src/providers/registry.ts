@@ -1053,7 +1053,7 @@ function renderConnectorAuthLoading(authWindow: Window | null, copy: { title: st
       <main style="min-height:100vh;display:grid;place-items:center;margin:0;background:#0f1115;color:#f6f7fb;font-family:"Albert Sans","PingFang SC","Microsoft YaHei",sans-serif;">
         <div style="display:grid;gap:14px;justify-items:center;text-align:center;padding:32px;">
           <div aria-hidden="true" style="width:28px;height:28px;border-radius:999px;border:3px solid rgba(255,255,255,.22);border-top-color:#fff;animation:od-spin .8s linear infinite;"></div>
-          <div style="font-size:15px;font-weight:600;">${escapeHtmlText(copy.title)}</div>
+          <div style="font-size: 16px;font-weight:600;">${escapeHtmlText(copy.title)}</div>
           <div style="max-width:300px;color:rgba(246,247,251,.72);font-size:13px;line-height:1.5;">${escapeHtmlText(copy.body)}</div>
         </div>
         <style>@keyframes od-spin{to{transform:rotate(360deg)}}</style>
@@ -1071,7 +1071,7 @@ function renderConnectorAuthInfo(authWindow: Window | null, copy: { title: strin
     authWindow.document.body.innerHTML = `
       <main style="min-height:100vh;display:grid;place-items:center;margin:0;background:#0f1115;color:#f6f7fb;font-family:"Albert Sans","PingFang SC","Microsoft YaHei",sans-serif;">
         <div style="display:grid;gap:14px;justify-items:center;text-align:center;padding:32px;">
-          <div style="font-size:15px;font-weight:600;">${escapeHtmlText(copy.title)}</div>
+          <div style="font-size: 16px;font-weight:600;">${escapeHtmlText(copy.title)}</div>
           <div style="max-width:360px;color:rgba(246,247,251,.72);font-size:13px;line-height:1.5;">${escapeHtmlText(copy.body)}</div>
         </div>
       </main>
@@ -1087,7 +1087,7 @@ function renderConnectorAuthRedirect(authWindow: Window, redirectUrl: string): v
     authWindow.document.body.innerHTML = `
       <main style="min-height:100vh;display:grid;place-items:center;margin:0;background:#0f1115;color:#f6f7fb;font-family:"Albert Sans","PingFang SC","Microsoft YaHei",sans-serif;">
         <div style="display:grid;gap:14px;justify-items:center;text-align:center;padding:32px;">
-          <div style="font-size:15px;font-weight:600;">Continue authorization</div>
+          <div style="font-size: 16px;font-weight:600;">Continue authorization</div>
           <div style="max-width:300px;color:rgba(246,247,251,.72);font-size:13px;line-height:1.5;">If this window does not redirect automatically, use the button below.</div>
           <a href="${escapeHtmlAttribute(redirectUrl)}" style="display:inline-flex;align-items:center;justify-content:center;min-width:164px;border-radius:8px;padding:9px 14px;background:#df7b56;color:#fff;text-decoration:none;font-size:13px;font-weight:600;">Open Composio</a>
         </div>
@@ -1114,7 +1114,7 @@ function renderConnectorAuthError(authWindow: Window | null, message: string): v
     authWindow.document.body.innerHTML = `
       <main style="min-height:100vh;display:grid;place-items:center;margin:0;background:#0f1115;color:#f6f7fb;font-family:"Albert Sans","PingFang SC","Microsoft YaHei",sans-serif;">
         <div style="display:grid;gap:14px;justify-items:center;text-align:center;padding:32px;">
-          <div style="font-size:15px;font-weight:600;">Connection failed</div>
+          <div style="font-size: 16px;font-weight:600;">Connection failed</div>
           <div style="max-width:360px;color:rgba(246,247,251,.72);font-size:13px;line-height:1.5;">${escapeHtmlText(message)}</div>
         </div>
       </main>
@@ -1403,6 +1403,63 @@ export async function fetchProjectFiles(projectId: string): Promise<ProjectFile[
     if (!resp.ok) return [];
     const json = (await resp.json()) as { files: ProjectFile[] };
     return json.files ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export interface ProjectSearchMatch {
+  file: string;
+  line: number;
+  snippet: string;
+}
+
+export async function searchProjectFiles(
+  projectId: string,
+  query: string,
+  options?: { pattern?: string; max?: number },
+): Promise<ProjectSearchMatch[]> {
+  const cleanQuery = query.trim();
+  if (!cleanQuery) return [];
+  const params = new URLSearchParams({ q: cleanQuery });
+  if (options?.pattern) params.set('pattern', options.pattern);
+  if (options?.max) params.set('max', String(options.max));
+  try {
+    const resp = await fetch(`/api/projects/${encodeURIComponent(projectId)}/search?${params.toString()}`);
+    if (!resp.ok) return [];
+    const json = (await resp.json()) as { matches?: ProjectSearchMatch[] };
+    return json.matches ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export type ProjectDesignTokenSuggestion = import('@open-design/contracts').ProjectDesignTokenSuggestion;
+export type ProjectDesignTokenSuggestionProp = import('@open-design/contracts').ProjectDesignTokenSuggestionProp;
+
+export async function fetchProjectDesignTokenSuggestions(
+  projectId: string,
+  input: {
+    file?: string;
+    targetId?: string;
+    props?: ProjectDesignTokenSuggestionProp[];
+    values?: Partial<Record<ProjectDesignTokenSuggestionProp, string>>;
+  },
+): Promise<ProjectDesignTokenSuggestion[]> {
+  const params = new URLSearchParams();
+  if (input.file) params.set('file', input.file);
+  if (input.targetId) params.set('targetId', input.targetId);
+  if (input.props?.length) params.set('props', input.props.join(','));
+  for (const [prop, value] of Object.entries(input.values ?? {})) {
+    if (value) params.set(`value_${prop}`, value);
+  }
+  try {
+    const resp = await fetch(`/api/projects/${encodeURIComponent(projectId)}/design-token-suggestions?${params.toString()}`, {
+      cache: 'no-store',
+    });
+    if (!resp.ok) return [];
+    const json = (await resp.json()) as { suggestions?: ProjectDesignTokenSuggestion[] };
+    return json.suggestions ?? [];
   } catch {
     return [];
   }

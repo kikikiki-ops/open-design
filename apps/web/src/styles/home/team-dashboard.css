@@ -63,7 +63,7 @@
   border-radius: var(--radius-pill);
   background: var(--bg-subtle);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -93,14 +93,14 @@
 .team-dashboard__recharge-callout h2 {
   margin: 0;
   color: var(--text-strong);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.25;
 }
 
 .team-dashboard__recharge-callout p {
   margin: 5px 0 0;
   color: var(--text-muted);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.45;
 }
 
@@ -114,8 +114,8 @@
   background: var(--accent-strong);
   color: var(--accent-contrast);
   font: inherit;
-  font-size: 12.5px;
-  font-weight: 750;
+  font-size: 13px;
+  font-weight: 700;
   white-space: nowrap;
 }
 
@@ -173,7 +173,7 @@
 
 .team-dashboard__credit-row span {
   color: var(--text-soft);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.2;
 }
 
@@ -188,9 +188,9 @@
   border-radius: var(--radius-pill);
   background: var(--brand-soft);
   color: var(--brand-text);
-  font-size: 11px;
+  font-size: 12px;
   font-style: normal;
-  font-weight: 750;
+  font-weight: 700;
 }
 
 .team-dashboard__credit-row em.is-brand {
@@ -223,7 +223,7 @@
   grid-column: 1 / 2;
   margin: 0;
   color: var(--text-muted);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.45;
 }
 
@@ -280,8 +280,8 @@
   align-self: center;
   min-width: 0;
   color: var(--text-muted);
-  font-size: 12.5px;
-  font-weight: 650;
+  font-size: 13px;
+  font-weight: 600;
   line-height: 1.3;
 }
 
@@ -302,8 +302,8 @@
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--brand) 8%, var(--bg-panel));
   color: var(--brand-text);
-  font-size: 11px;
-  font-weight: 750;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .team-dashboard__token-card {
@@ -339,7 +339,7 @@
   border-radius: var(--radius-pill);
   background: var(--bg-subtle);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -376,8 +376,8 @@
   border-radius: 8px;
   background: var(--bg-subtle);
   color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 700;
   transition: background-color 120ms var(--ease-out), color 120ms var(--ease-out);
 }
 
@@ -395,7 +395,7 @@
 
 .team-dashboard__token-person strong {
   color: var(--text-strong);
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 1.15;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -405,14 +405,14 @@
 
 .team-dashboard__token-person span {
   color: var(--text-soft);
-  font-size: 11px;
+  font-size: 12px;
   transition: color 120ms var(--ease-out);
 }
 
 .team-dashboard__token-value {
   color: var(--text);
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: -0.02em;
   transition: color 120ms var(--ease-out);
 }
@@ -542,7 +542,7 @@
   border-radius: 12px;
   background: color-mix(in srgb, var(--accent) 5%, var(--bg-panel));
   color: var(--text-muted);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.45;
 }
 

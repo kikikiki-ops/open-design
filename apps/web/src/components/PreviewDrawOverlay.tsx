@@ -1145,7 +1145,7 @@ const tooltipStyle = `
     border-radius: var(--radius-medium, 4px);
     background: rgba(20,20,20,0.94);
     color: #fff;
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.2;
     opacity: 0;
     pointer-events: none;
@@ -1229,7 +1229,7 @@ function subToolButtonStyle(active: boolean): CSSProperties {
     background: active ? 'rgba(255,255,255,0.18)' : 'transparent',
     color: '#fff',
     fontSize: 12,
-    fontWeight: active ? 650 : 500,
+    fontWeight: active ? 600 : 500,
     cursor: 'pointer',
     whiteSpace: 'nowrap',
   };

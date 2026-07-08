@@ -65,8 +65,8 @@
   border-radius: var(--radius-lg);
   background: var(--bg-muted);
   color: var(--text-soft);
-  font-size: 44px;
-  font-weight: 680;
+  font-size: 48px;
+  font-weight: 600;
 }
 
 .coverImageButton {
@@ -162,7 +162,7 @@
   height: 100%;
   color: var(--text-soft);
   font-size: 18px;
-  font-weight: 680;
+  font-weight: 600;
 }
 
 .previewHeadSticky .previewHeadIdentity {
@@ -234,7 +234,7 @@
   align-items: center;
   gap: 5px;
   width: fit-content;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--text-muted);
   text-decoration: none;
   transition: color var(--dur-quick) var(--ease-out);
@@ -248,7 +248,7 @@
   flex-shrink: 0;
   padding: 2px 9px;
   border-radius: var(--radius-pill);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   border: 1px solid var(--border);
 }
@@ -478,7 +478,7 @@
 .sectionTitle {
   margin: 0;
   font-size: 12px;
-  font-weight: 660;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
@@ -574,7 +574,7 @@
   padding: 2px 4px;
   background: transparent;
   color: var(--accent);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -589,7 +589,7 @@
 .subTitle {
   margin: 0;
   font-size: 12px;
-  font-weight: 620;
+  font-weight: 600;
   color: var(--text-soft);
 }
 
@@ -688,7 +688,7 @@
   align-items: center;
   justify-content: center;
   height: 104px;
-  font-size: 56px;
+  font-size: 52px;
   line-height: 1;
   color: var(--text-strong);
   background: var(--bg);
@@ -709,7 +709,7 @@
 .fontTileRole {
   display: block;
   margin-top: 1px;
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-faint);
@@ -734,8 +734,8 @@
 }
 
 .fontRole {
-  font-size: 11px;
-  font-weight: 660;
+  font-size: 12px;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-faint);
@@ -753,7 +753,7 @@
 }
 
 .fontSpecimen {
-  font-size: 30px;
+  font-size: 32px;
   line-height: 1.2;
   color: var(--text-strong);
   overflow: hidden;
@@ -812,7 +812,7 @@
 }
 
 .swatchHex {
-  font-size: 11px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   text-transform: uppercase;
 }
@@ -832,13 +832,13 @@
 }
 
 .swatchRole {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 
 .swatchUsage {
   margin-top: 4px;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.4;
   color: var(--text-muted);
 }
@@ -861,7 +861,7 @@
 
 .aesthetic {
   margin: 0;
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 1.55;
   color: var(--text);
 }
@@ -873,7 +873,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--text);
 }
 
@@ -908,7 +908,7 @@
 .vocabUse,
 .vocabAvoid {
   font-size: 12px;
-  font-weight: 660;
+  font-weight: 600;
 }
 
 .vocabUse {
@@ -920,7 +920,7 @@
 }
 
 .vocabVals {
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.45;
   color: var(--text-muted);
 }
@@ -928,18 +928,18 @@
 /* ── Imagery & layout ─────────────────────────────────────────────── */
 .imageryLine {
   margin: 0;
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--text-muted);
 }
 
 .imageryKey {
-  font-weight: 640;
+  font-weight: 600;
   color: var(--text-strong);
 }
 
 .imageryKeyAvoid {
-  font-weight: 640;
+  font-weight: 600;
   color: var(--red);
 }
 
@@ -955,7 +955,7 @@
 .postureList {
   margin: 0;
   padding-left: 18px;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--text-muted);
 }
@@ -1052,7 +1052,7 @@
 
 .shotCap {
   display: block;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
   line-height: 1.25;
   color: var(--text-strong);
@@ -1061,7 +1061,7 @@
 .shotKind {
   display: block;
   margin-top: 1px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 
@@ -1120,7 +1120,7 @@
 }
 
 .dsCap {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
@@ -1163,13 +1163,13 @@
 }
 
 .tokKey {
-  font-size: 11px;
-  font-weight: 660;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-strong);
 }
 
 .tokHex {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
@@ -1184,8 +1184,8 @@
   border-radius: var(--radius-xs);
   background: var(--accent-tint);
   color: var(--accent);
-  font-size: 11px;
-  font-weight: 660;
+  font-size: 12px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -1425,7 +1425,7 @@
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-mono, ui-monospace, 'SF Mono', Menlo, monospace);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.6;
   resize: none;
 }
@@ -1466,7 +1466,7 @@
 
 .colorModalPreview span {
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
   text-transform: uppercase;
 }
@@ -1478,7 +1478,7 @@
   gap: 12px;
   color: var(--text-muted);
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .colorModalField input {
@@ -1534,7 +1534,7 @@
 .compact .coverLogoFallback {
   width: 56px;
   height: 56px;
-  font-size: 26px;
+  font-size: 28px;
 }
 
 .compact .previewHead {
@@ -1542,7 +1542,7 @@
 }
 
 .compact .previewName {
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .compact .previewTagline {
@@ -1571,7 +1571,7 @@
 
 .compact .fontTileAg {
   height: 64px;
-  font-size: 34px;
+  font-size: 36px;
 }
 
 .compact .fontTileMeta {
@@ -1579,7 +1579,7 @@
 }
 
 .compact .fontTileName {
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 .compact .paletteGrid {
@@ -1597,7 +1597,7 @@
 }
 
 .compact .swatchName {
-  font-size: 11.5px;
+  font-size: 12px;
 }
 
 /* ══ Showcase cover (design systems) ═══════════════════════════════════
@@ -1724,7 +1724,7 @@
   width: 100%;
   min-height: 440px;
   font-family: var(--font-mono, ui-monospace, 'SF Mono', Menlo, monospace);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.6;
   resize: vertical;
 }
@@ -1777,7 +1777,7 @@
   border-radius: var(--radius-sm);
   background: var(--bg-panel);
   color: var(--text);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
   font-family: inherit;
   cursor: pointer;

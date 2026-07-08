@@ -18,7 +18,7 @@
 .control:focus {
   outline: none;
   border-color: var(--selected);
-  box-shadow: 0 0 0 3px var(--selected-soft);
+  box-shadow: none;
 }
 
 .textarea {

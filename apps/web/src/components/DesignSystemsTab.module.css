@@ -74,6 +74,7 @@
   border: 0;
   border-radius: 0;
   background: transparent;
+  box-shadow: none;
 }
 
 .newBtn {
@@ -199,7 +200,7 @@
   background: var(--bg-subtle);
   color: var(--text-muted);
   font-size: 12px;
-  font-weight: 550;
+  font-weight: 500;
   font-family: inherit;
   cursor: pointer;
   transition: border-color var(--dur-quick) var(--ease-out),
@@ -236,8 +237,8 @@
   border-radius: var(--radius-pill);
   background: var(--bg-panel);
   color: var(--text-faint);
-  font-size: 10.5px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
@@ -275,8 +276,8 @@
   border-radius: var(--radius-pill);
   background: var(--bg-panel);
   color: var(--text-muted);
-  font-size: 11.5px;
-  font-weight: 550;
+  font-size: 12px;
+  font-weight: 500;
   font-family: inherit;
   cursor: pointer;
   transition: border-color var(--dur-quick) var(--ease-out),
@@ -304,7 +305,7 @@
 
 .surfaceCount {
   font-variant-numeric: tabular-nums;
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 
@@ -424,14 +425,14 @@
 .categoryOptionActive:focus-visible {
   background: var(--bg-subtle);
   color: var(--text-strong);
-  font-weight: 650;
+  font-weight: 600;
 }
 
 /* List */
 .listLabel {
   margin: 2px 4px 0;
-  font-size: 10.5px;
-  font-weight: 660;
+  font-size: 12px;
+  font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--text-faint);
@@ -565,8 +566,9 @@
 .itemActive:focus,
 .itemActive:focus-visible {
   border: 0;
-  background: transparent;
-  box-shadow: none;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
 }
 
 .item:focus-visible {
@@ -603,8 +605,8 @@
   height: 100%;
   background: var(--bg-muted);
   color: var(--text-soft);
-  font-size: 15px;
-  font-weight: 650;
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .itemLogo {
@@ -633,7 +635,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-strong);
 }
@@ -642,7 +644,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
@@ -653,8 +655,8 @@
   border-radius: var(--radius-pill);
   background: var(--accent-tint);
   color: var(--accent);
-  font-size: 10px;
-  font-weight: 660;
+  font-size: 12px;
+  font-weight: 600;
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
@@ -677,8 +679,16 @@
 
 .itemRowActive,
 .itemRowActive:hover {
-  border-color: var(--border);
-  background: transparent;
+  border-color: #dbdbdb;
+  background: color-mix(in srgb, #ededed 32%, transparent);
+}
+
+.itemRow:hover > .item,
+.itemRowActive > .item,
+.itemRowActive:hover > .item {
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
 }
 
 .itemSubRow {
@@ -700,8 +710,8 @@
   border: 1px solid var(--border);
   background: var(--bg-subtle);
   color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
   line-height: 1;
   letter-spacing: 0.01em;
 }
@@ -730,8 +740,8 @@
   border-radius: var(--radius-sm);
   background: var(--bg-panel);
   color: var(--text-muted);
-  font-size: 11.5px;
-  font-weight: 560;
+  font-size: 12px;
+  font-weight: 500;
   font-family: inherit;
   cursor: pointer;
   transition: border-color var(--dur-quick) var(--ease-out),
@@ -783,7 +793,7 @@
 
 .sidebarEmptyText {
   margin: 0;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--text-muted);
 }
@@ -850,8 +860,8 @@
 .collabDemoKicker {
   margin: 0 0 4px;
   color: var(--accent);
-  font-size: 11px;
-  font-weight: 720;
+  font-size: 12px;
+  font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -873,7 +883,7 @@
   background: color-mix(in srgb, var(--green, #3d7a4f) 8%, transparent);
   color: var(--green, #3d7a4f);
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -920,7 +930,7 @@
 .collabCardHeader p {
   margin: 4px 0 0;
   color: var(--text-muted);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.45;
 }
 
@@ -959,7 +969,7 @@
   color: var(--text-strong);
   background: var(--bg-panel);
   box-shadow: 0 10px 26px color-mix(in srgb, var(--text-strong) 8%, transparent);
-  font-weight: 720;
+  font-weight: 700;
 }
 
 .collabCanvasNodePrimary {
@@ -996,8 +1006,8 @@
   align-items: center;
   gap: 4px;
   color: var(--collab-color);
-  font-size: 11px;
-  font-weight: 720;
+  font-size: 12px;
+  font-weight: 700;
   transform: translate(-2px, -2px);
   transition:
     transform 200ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -1045,7 +1055,7 @@
   background: var(--bg-panel);
   color: var(--text-muted);
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   cursor: pointer;
   transition:
     border-color 160ms cubic-bezier(0.23, 1, 0.32, 1),
@@ -1074,8 +1084,8 @@
   height: 22px;
   border-radius: 999px;
   color: #fff;
-  font-size: 11px;
-  font-weight: 760;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .collabMemberChipActive {
@@ -1138,7 +1148,7 @@
 
 .collabQueueSummary span {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .collabQueueSummary strong {
@@ -1185,8 +1195,8 @@
   border-radius: 999px;
   background: var(--bg-subtle);
   color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 760;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .collabQueueItemRunning .collabQueueIndex {
@@ -1209,18 +1219,18 @@
 
 .collabQueueBody strong {
   color: var(--text-strong);
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 .collabQueueBody small {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .collabQueueStatus {
   color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 720;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .collabQueueItemRunning .collabQueueStatus {
@@ -1482,7 +1492,7 @@
 .title {
   margin: 0;
   font-family: var(--serif);
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--text-strong);
@@ -1492,7 +1502,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 
@@ -1507,7 +1517,7 @@
   padding: 2px 9px;
   border-radius: var(--radius-pill);
   border: 1px solid var(--border);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-muted);
   background: var(--bg-subtle);
@@ -1522,7 +1532,7 @@
 /* Summary text */
 .summary {
   margin: 0;
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 1.55;
   color: var(--text-muted);
 }
@@ -1552,7 +1562,7 @@
 }
 
 .swatchHex {
-  font-size: 11px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -1577,7 +1587,7 @@
   padding: 6px 12px;
   border-radius: var(--radius-sm);
   font-size: 13px;
-  font-weight: 560;
+  font-weight: 500;
 }
 
 .teamActionButton {
@@ -1603,8 +1613,8 @@
   min-height: 34px;
   padding: 5px 10px;
   border-radius: var(--radius-sm);
-  font-size: 12.5px;
-  font-weight: 520;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--text-muted);
 }
 
@@ -1636,8 +1646,8 @@
   border-radius: var(--radius-pill);
   background: var(--bg-subtle);
   color: var(--text-muted);
-  font-size: 12.5px;
-  font-weight: 550;
+  font-size: 13px;
+  font-weight: 500;
   font-family: inherit;
   cursor: pointer;
   transition: border-color var(--dur-quick) var(--ease-out),
@@ -1746,7 +1756,7 @@
 .previewEmptyText {
   margin: 0;
   max-width: 42ch;
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 1.55;
   color: var(--text-muted);
 }
@@ -1759,7 +1769,7 @@
   border: 1px solid var(--border);
   background: var(--bg-subtle);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
   text-transform: uppercase;

@@ -110,10 +110,12 @@
   }
 }
 .home-hero__title {
-  margin: 0;
+  /* Extra bottom margin widens just the title → input-card gap (adds to the
+     6px flex gap → ~26px total) without touching the logo → title spacing. */
+  margin: 0 0 var(--spacing-20);
   font-family: var(--serif);
   font-weight: 600;
-  font-size: 23px;
+  font-size: 24px;
   line-height: 1.24;
   letter-spacing: -0.02em;
   color: var(--text-strong);
@@ -122,14 +124,14 @@
 .home-hero__subtitle {
   margin: 0;
   color: var(--text-muted);
-  font-size: 13.5px;
+  font-size: 13px;
   text-align: center;
   max-width: 540px;
   line-height: 1.55;
 }
 .home-hero__subtitle kbd {
   font: inherit;
-  font-size: 11.5px;
+  font-size: 12px;
   padding: 1px 5px;
   border: 1px solid var(--border);
   border-radius: 3px;
@@ -166,8 +168,8 @@
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--bg-panel) 92%, var(--bg-subtle));
   color: var(--text-muted);
-  font-size: 12.5px;
-  font-weight: 580;
+  font-size: 13px;
+  font-weight: 500;
   line-height: 1.3;
   letter-spacing: 0;
   box-shadow: var(--shadow-xs);
@@ -257,7 +259,7 @@
   background: transparent;
   color: var(--text-muted);
   font-size: 12px;
-  font-weight: 540;
+  font-weight: 500;
   line-height: 1.3;
   cursor: pointer;
   transition:
@@ -336,7 +338,7 @@
   background: transparent;
   color: var(--text);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.2;
   text-align: left;
@@ -377,10 +379,9 @@
   white-space: nowrap;
 }
 
-/* Base card ("底卡") grouping the composer input + the design-system /
-   working-dir row into one module. Padding: 4px top + left/right, 8px bottom.
-   Its max-width is the input card's 720px plus the 2×4px left/right padding so
-   the input stays full size. */
+/* Base card grouping the composer input + the design-system / working-dir row.
+   Use the same subtle selected surface as the left rail so the grouping reads
+   without becoming a separate heavy panel. */
 .home-hero__composer-card {
   position: relative;
   z-index: 2;
@@ -391,9 +392,12 @@
   flex-direction: column;
   gap: var(--spacing-8);
   padding: var(--spacing-4) var(--spacing-4) var(--spacing-8);
-  background: var(--bg-subtle);
+  background: color-mix(in srgb, var(--bg-panel) 70%, var(--bg-subtle));
   border: var(--stroke-thin) solid var(--border);
-  border-radius: var(--radius-lg);
+  /* Rounder, and concentric with the inner input card: outer radius = inner
+     radius (16px) + the 4px gap (this card's side padding), so the two corners
+     run parallel and read as consistent. */
+  border-radius: 20px;
 }
 .home-hero__composer-card .home-hero__input-card,
 .home-hero__composer-card .home-hero__workdir-row {
@@ -408,17 +412,17 @@
   z-index: 2;
   width: 100%;
   max-width: 720px;
-  /* One surface tier lighter than --bg-panel (#fafafa): on the now-pure-white
-     page (--bg-app #fff) the #fafafa fill read as too heavy a gray, so drop the
-     card to --bg-app and let its border carry the delineation. */
+  /* Inner prompt surface stays white; the outer composer card provides the
+     subtle selected-gray grouping. */
   background: var(--bg-app);
   border: var(--stroke-thin) solid var(--border);
-  border-radius: var(--radius-lg);
+  /* Concentric with the outer composer card (20px) minus its 4px inset. */
+  border-radius: 16px;
   box-shadow: none;
-  padding: var(--spacing-16);
+  padding: var(--spacing-8);
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-10);
+  gap: var(--spacing-8);
   margin-top: 0;
   transition:
     border-color var(--duration-faster) var(--curve-easy-ease),
@@ -432,7 +436,7 @@
 }
 .home-hero__input-card--compact-authoring {
   max-width: 640px;
-  padding: var(--spacing-16);
+  padding: var(--spacing-8);
 }
 .home-hero__input-card:focus-within {
   border-color: var(--border-strong);
@@ -451,7 +455,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   padding: 0;
-  font-size: 11.5px;
+  font-size: 12px;
 }
 .home-hero__active-chip {
   display: inline-flex;
@@ -506,8 +510,8 @@
   border-radius: var(--radius-xs);
   background: color-mix(in srgb, var(--text) 7%, var(--bg-subtle));
   color: var(--text-muted);
-  font-size: 9px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
   line-height: 1;
 }
 .home-hero__active-label {
@@ -520,7 +524,7 @@
 .home-hero__active-meta {
   flex: 0 0 auto;
   color: var(--text-soft);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 18px;
 }
 .home-hero__active-chip-body {
@@ -632,11 +636,13 @@
 }
 .home-hero__lexical .composer-editable {
   min-height: 34px;
-  padding: 6px 4px;
+  padding: 0;
+  font-size: var(--font-size-14);
+  font-weight: 500;
 }
 .home-hero__lexical .composer-input-placeholder {
-  top: 6px;
-  left: 4px;
+  top: 0;
+  left: 0;
   color: var(--text-soft);
 }
 /* Typewriter placeholder carousel — a pointer-events-none overlay aligned to
@@ -645,14 +651,14 @@
    blanked behind it. See home-hero/PlaceholderCarousel.tsx. */
 .home-hero__lexical .home-hero__carousel {
   position: absolute;
-  top: 8px;
-  left: 4px;
+  top: 0;
+  left: 0;
   right: 8px;
   display: flex;
   align-items: center;
   pointer-events: none;
   user-select: none;
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 1.6;
   color: var(--text-soft);
   overflow: hidden;
@@ -722,8 +728,8 @@
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--accent) 10%, var(--bg-panel));
   color: var(--accent);
-  font-size: 11.5px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
 }
 .home-hero__input-card .plugin-inputs-form__required {
   color: var(--accent);
@@ -840,14 +846,14 @@
 .home-hero__plugin-hover-card p {
   margin: 3px 0 0;
   color: var(--text-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.4;
 }
 .home-hero__plugin-hover-kicker {
   display: block;
   margin-bottom: 2px;
   color: var(--text-faint);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0;
   text-transform: uppercase;
@@ -858,7 +864,7 @@
   flex-wrap: wrap;
   gap: 4px 8px;
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: 12px;
 }
 .home-hero__plugin-hover-meta span {
   min-width: 0;
@@ -874,7 +880,7 @@
   background: var(--bg-panel);
   color: var(--text);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 12px;
   cursor: pointer;
 }
 .home-hero__plugin-hover-card button:hover {
@@ -912,7 +918,7 @@
   background: transparent;
   color: var(--text-muted);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 12px;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -924,7 +930,7 @@
 }
 .home-hero__mention-tab span:last-child {
   color: var(--text-faint);
-  font-size: 10.5px;
+  font-size: 12px;
 }
 .home-hero__plugin-picker-empty {
   padding: 10px;
@@ -939,7 +945,7 @@
 .home-hero__mention-section-label {
   padding: 5px 4px 2px;
   color: var(--text-faint);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0;
   text-transform: uppercase;
@@ -987,21 +993,21 @@
   overflow: hidden;
   color: var(--text-strong);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .home-hero__plugin-option-main span:last-child {
   overflow: hidden;
   color: var(--text-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .home-hero__plugin-option-meta {
   flex: 0 0 auto;
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: 12px;
 }
 .home-hero__input-foot {
   position: relative;
@@ -1111,7 +1117,7 @@
   height: 18px;
   border-radius: var(--radius-sm);
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1;
 }
 /* "+" menu: collapses attach + connectors/plugins/mcp into one trigger with an
@@ -1281,7 +1287,7 @@
 .home-hero__working-dir-picker [data-testid='working-dir-trigger'] {
   min-height: 26px;
   padding: 4px 5px;
-  border-radius: 8px;
+  border-radius: 999px;
   color: var(--text-muted);
 }
 .home-hero__working-dir-picker [data-testid='working-dir-trigger']:hover,
@@ -1304,6 +1310,9 @@
   left: 0;
   z-index: 90;
 }
+.home-hero__composer-card:has(.home-hero__working-dir-picker [data-testid='working-dir-panel']) {
+  margin-bottom: calc(var(--spacing-68) + var(--spacing-12));
+}
 /* Persistent design-system picker — borderless trigger mirroring the
    working-directory picker so the two read as one row of leading accessories
    below the composer. The shared popover (search + preview) is unchanged. */
@@ -1319,7 +1328,7 @@
   gap: 6px;
   padding: 4px 6px;
   border: 0;
-  border-radius: var(--radius);
+  border-radius: 999px;
   background: transparent;
   color: var(--text-muted, var(--text));
   font: inherit;
@@ -1381,7 +1390,7 @@
   border-color: color-mix(in srgb, var(--selected) 42%, var(--border));
   background: color-mix(in srgb, var(--selected) 10%, var(--bg-panel));
   color: var(--selected);
-  font-weight: 650;
+  font-weight: 600;
   box-shadow:
     0 0 0 3px color-mix(in srgb, var(--selected-soft) 66%, transparent),
     var(--shadow-xs);
@@ -1476,7 +1485,7 @@
   color: var(--text);
   font: inherit;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: 0;
   outline: none;
 }
@@ -1684,12 +1693,12 @@
   padding: 12px 4px 4px;
   color: var(--text-muted);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .home-hero__footer-option--select[data-field-name='designSystem'] .home-hero__footer-select-count {
   padding: 7px 3px 0;
   color: var(--text-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 700;
 }
 .home-hero__footer-select-group + .home-hero__footer-select-group {
@@ -1704,16 +1713,16 @@
 .home-hero__footer-select-group-label {
   padding: 7px 4px 6px;
   color: var(--text-faint);
-  font-size: 10.5px;
-  font-weight: 750;
+  font-size: 12px;
+  font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 .home-hero__footer-option--select[data-field-name='designSystem'] .home-hero__footer-select-group-label {
   padding: 3px 3px 5px;
   color: color-mix(in srgb, var(--text-muted) 82%, transparent);
-  font-size: 9.5px;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 700;
   letter-spacing: 0.12em;
 }
 .home-hero__footer-select-item {
@@ -1732,7 +1741,7 @@
   padding: 7px 9px;
   font: inherit;
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
   letter-spacing: 0;
   text-align: left;
   transition:
@@ -1751,8 +1760,8 @@
 .home-hero__footer-select-description {
   overflow: hidden;
   color: var(--text-muted);
-  font-size: 12.5px;
-  font-weight: 550;
+  font-size: 13px;
+  font-weight: 500;
   line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1761,12 +1770,12 @@
   gap: 2px;
 }
 .home-hero__footer-option--select[data-field-name='designSystem'] .home-hero__footer-select-copy > .home-hero__footer-select-label {
-  font-size: 12.5px;
-  font-weight: 760;
+  font-size: 13px;
+  font-weight: 700;
   color: currentColor;
 }
 .home-hero__footer-option--select[data-field-name='designSystem'] .home-hero__footer-select-description {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1.15;
 }
@@ -1783,8 +1792,8 @@
   padding: 5px 8px;
   border-radius: var(--radius);
   color: var(--text);
-  font-size: 12.5px;
-  font-weight: 720;
+  font-size: 13px;
+  font-weight: 700;
 }
 .home-hero__footer-select-meta {
   max-width: 92px;
@@ -1792,7 +1801,7 @@
   color: var(--text-muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   text-overflow: ellipsis;
   text-transform: lowercase;
   white-space: nowrap;
@@ -1800,8 +1809,8 @@
 .home-hero__footer-option--select[data-field-name='designSystem'] .home-hero__footer-select-meta {
   max-width: 66px;
   color: var(--text-muted);
-  font-size: 10.5px;
-  font-weight: 720;
+  font-size: 12px;
+  font-weight: 700;
   letter-spacing: 0.02em;
 }
 .home-hero__ds-option-preview {
@@ -1853,12 +1862,12 @@
 .home-hero__ds-option-preview b {
   align-self: center;
   color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 750;
+  font-size: 12px;
+  font-weight: 700;
   line-height: 1;
 }
 .home-hero__ds-option-preview--compact b {
-  font-size: 7px;
+  font-size: 12px;
 }
 .home-hero__footer-option-icon {
   width: 26px;
@@ -1894,8 +1903,8 @@
   border-radius: var(--radius);
   background: color-mix(in srgb, currentColor 10%, var(--bg-panel));
   color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 700;
   letter-spacing: 0;
   line-height: 1;
   box-shadow: inset 0 1px 0 color-mix(in srgb, white 44%, transparent);
@@ -1914,7 +1923,7 @@
   border-radius: 0;
   background: transparent;
   box-shadow: none;
-  font-size: 8px;
+  font-size: 12px;
 }
 .home-hero__model-option-icon--compact img {
   width: 12px;
@@ -2043,7 +2052,7 @@
 }
 .home-hero__footer-option--select[data-field-name='template'] .home-hero__footer-select-item.is-selected .home-hero__footer-select-label {
   color: var(--brand-text);
-  font-weight: 650;
+  font-weight: 600;
 }
 .home-hero__footer-option--select[data-field-name='designSystem'] .home-hero__footer-select-item.is-selected {
   background: color-mix(in srgb, var(--accent) 10%, #e7e1e3);
@@ -2124,46 +2133,55 @@
   }
 }
 .home-hero__submit {
+  --home-hero-submit-bg: var(--brand, #87ea5c);
+
   appearance: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  min-width: 36px;
-  height: 36px;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
   padding: 0;
-  border-radius: var(--radius-pill);
-  border: var(--stroke-thin) solid var(--text-strong);
-  background: var(--text-strong);
-  color: var(--bg-panel);
-  box-shadow: var(--shadow-xs);
+  border-radius: var(--radius-circular);
+  border: var(--stroke-thin) solid transparent;
+  background: var(--home-hero-submit-bg);
+  color: #202020;
+  box-shadow: none;
   cursor: pointer;
   font: inherit;
   font-size: var(--font-size-14);
-  font-weight: 650;
+  font-weight: 500;
   line-height: 1;
-  transition:
-    background-color var(--duration-faster) var(--curve-easy-ease),
-    border-color var(--duration-faster) var(--curve-easy-ease),
-    box-shadow var(--duration-faster) var(--curve-easy-ease),
-    transform var(--duration-faster) var(--curve-easy-ease),
-    opacity var(--duration-faster) var(--curve-easy-ease);
+  filter: none;
+  backdrop-filter: none;
+  transition: none;
 }
-.home-hero__submit:hover:not(:disabled) {
-  background: var(--text);
-  border-color: var(--text);
-  color: var(--bg-panel);
-  box-shadow: var(--shadow-sm);
+
+.home-hero__submit:hover:not(:disabled),
+.home-hero__submit:active:not(:disabled) {
+  border-color: transparent;
+  background: var(--home-hero-submit-bg);
+  color: #202020;
+  box-shadow: none;
+  transform: none;
 }
-.home-hero__submit:active:not(:disabled) { transform: translateY(1px); box-shadow: var(--shadow-xs); }
+
+.home-hero__submit.home-hero__attention-sheen::after {
+  animation: none;
+  content: none;
+}
+
 .home-hero__submit:disabled {
-  opacity: 0.5;
+  opacity: 0.42;
   cursor: default;
+  background: var(--surface-secondary);
+  color: var(--text-tertiary);
   box-shadow: none;
 }
 .home-hero__error {
   color: var(--red);
-  font-size: 12.5px;
+  font-size: 13px;
   background: var(--red-bg);
   border: 1px solid var(--red-border);
   padding: 8px 12px;
@@ -2215,7 +2233,7 @@
   padding: 8px 12px;
   border-radius: var(--radius-sm);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   cursor: pointer;
 }
 .home-hero-confirm__secondary {
@@ -2268,7 +2286,7 @@
   background: var(--bg-panel);
   color: var(--text);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.35;
   text-align: left;
   cursor: pointer;
@@ -2462,8 +2480,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   padding: 0 12px 12px;
-  font-size: 12.5px;
-  font-weight: 650;
+  font-size: 13px;
+  font-weight: 600;
   line-height: 1.2;
 }
 
@@ -2517,7 +2535,7 @@
   border-radius: var(--radius-pill);
   background: var(--bg-panel);
   color: var(--text-muted);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
   line-height: 1;
   letter-spacing: -0.005em;
@@ -2579,7 +2597,7 @@
 
 @media (max-width: 900px) {
   .home-hero__title {
-    font-size: 30px;
+    font-size: 32px;
   }
   .home-hero__prompt-examples-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2677,7 +2695,7 @@
 .home-hero__template-heading {
   padding: 0 2px;
   color: var(--text-muted);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.3;
   text-align: center;
@@ -2693,8 +2711,8 @@
   background: transparent;
   color: var(--text-muted);
   font: inherit;
-  font-size: 12.5px;
-  font-weight: 560;
+  font-size: 13px;
+  font-weight: 500;
   line-height: 1.2;
   cursor: pointer;
   transition:
@@ -2846,7 +2864,7 @@
 .home-hero__scenario-card-title {
   color: var(--text-strong);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.25;
 }
 .home-hero__scenario-card.is-active .home-hero__scenario-card-title {
@@ -2854,7 +2872,7 @@
 }
 .home-hero__scenario-card-desc {
   color: var(--text-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 500;
   line-height: 1.3;
   white-space: normal;
@@ -2920,7 +2938,7 @@
 .home-hero__template-kicker {
   flex: 0 0 auto;
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0;
 }
@@ -2946,7 +2964,7 @@
 }
 .home-hero__template-option.has-selection .home-hero__footer-select-label {
   color: var(--brand-text);
-  font-weight: 650;
+  font-weight: 600;
 }
 .home-hero__template-reset {
   appearance: none;
@@ -3026,7 +3044,7 @@
   background: transparent;
   outline: none;
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--text);
 }
 .home-hero__template-search input:focus,
@@ -3045,7 +3063,7 @@
   background: transparent;
   color: var(--text-muted);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition:
@@ -3061,8 +3079,8 @@
 .home-hero__template-group-label {
   padding: 2px 2px 8px;
   color: var(--text-faint);
-  font-size: 10.5px;
-  font-weight: 750;
+  font-size: 12px;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -3074,7 +3092,7 @@
 .home-hero__template-empty {
   padding: 12px 4px;
   color: var(--text-muted);
-  font-size: 12.5px;
+  font-size: 13px;
 }
 .home-hero__template-card {
   appearance: none;
@@ -3153,7 +3171,7 @@
 .home-hero__template-card-label {
   color: var(--text-strong);
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.25;
   overflow-wrap: anywhere;
 }
@@ -3162,7 +3180,7 @@
 }
 .home-hero__template-card-desc {
   color: var(--text-muted);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 500;
   line-height: 1.25;
   overflow-wrap: anywhere;
@@ -3195,7 +3213,7 @@
   background: transparent;
   color: var(--text-muted);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   padding: 4px 6px;

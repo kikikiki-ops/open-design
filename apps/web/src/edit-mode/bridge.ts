@@ -304,6 +304,117 @@ export function buildManualEditBridge(enabled: boolean): string {
     styleProps.forEach(function(prop){ styles[prop] = el.style[prop] || computed[prop] || ''; });
     return styles;
   }
+  function rectFor(el){
+    if (!el || !el.getBoundingClientRect) return null;
+    var rect = el.getBoundingClientRect();
+    return {
+      x: Math.round(rect.x),
+      y: Math.round(rect.y),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height)
+    };
+  }
+  function computedSummaryFor(el){
+    var computed = window.getComputedStyle(el);
+    return {
+      display: computed.display || '',
+      position: computed.position || '',
+      fontFamily: computed.fontFamily || '',
+      fontSize: computed.fontSize || '',
+      fontWeight: computed.fontWeight || '',
+      lineHeight: computed.lineHeight || '',
+      letterSpacing: computed.letterSpacing || '',
+      color: computed.color || '',
+      backgroundColor: computed.backgroundColor || '',
+      borderColor: computed.borderColor || '',
+      borderRadius: computed.borderRadius || '',
+      padding: computed.padding || '',
+      margin: computed.margin || ''
+    };
+  }
+  function siblingRectsFor(el){
+    var parent = el && el.parentElement;
+    if (!parent) return [];
+    return Array.prototype.slice.call(parent.children)
+      .filter(function(child){ return child !== el && !isHostNode(child); })
+      .map(rectFor)
+      .filter(Boolean)
+      .slice(0, 24);
+  }
+  function alignmentGuidesFor(rect, parentRect){
+    var guides = [];
+    if (!rect) return guides;
+    guides.push({ orientation: 'vertical', position: rect.x, label: 'left' });
+    guides.push({ orientation: 'vertical', position: rect.x + Math.round(rect.width / 2), label: 'center' });
+    guides.push({ orientation: 'vertical', position: rect.x + rect.width, label: 'right' });
+    guides.push({ orientation: 'horizontal', position: rect.y, label: 'top' });
+    guides.push({ orientation: 'horizontal', position: rect.y + Math.round(rect.height / 2), label: 'middle' });
+    guides.push({ orientation: 'horizontal', position: rect.y + rect.height, label: 'bottom' });
+    if (parentRect) {
+      guides.push({ orientation: 'vertical', position: parentRect.x + Math.round(parentRect.width / 2), label: 'parent center' });
+      guides.push({ orientation: 'horizontal', position: parentRect.y + Math.round(parentRect.height / 2), label: 'parent middle' });
+    }
+    return guides;
+  }
+  function measurementsFor(rect, parentRect, siblings){
+    var measurements = [];
+    if (!rect || !parentRect) return measurements;
+    measurements.push({
+      label: 'left',
+      value: Math.max(0, Math.round(rect.x - parentRect.x)),
+      orientation: 'horizontal',
+      from: parentRect,
+      to: rect
+    });
+    measurements.push({
+      label: 'top',
+      value: Math.max(0, Math.round(rect.y - parentRect.y)),
+      orientation: 'vertical',
+      from: parentRect,
+      to: rect
+    });
+    measurements.push({
+      label: 'right',
+      value: Math.max(0, Math.round(parentRect.x + parentRect.width - rect.x - rect.width)),
+      orientation: 'horizontal',
+      from: rect,
+      to: parentRect
+    });
+    measurements.push({
+      label: 'bottom',
+      value: Math.max(0, Math.round(parentRect.y + parentRect.height - rect.y - rect.height)),
+      orientation: 'vertical',
+      from: rect,
+      to: parentRect
+    });
+    var nearest = (siblings || [])
+      .map(function(sibling){
+        var horizontalGap = sibling.x >= rect.x + rect.width
+          ? sibling.x - rect.x - rect.width
+          : rect.x >= sibling.x + sibling.width
+            ? rect.x - sibling.x - sibling.width
+            : null;
+        var verticalGap = sibling.y >= rect.y + rect.height
+          ? sibling.y - rect.y - rect.height
+          : rect.y >= sibling.y + sibling.height
+            ? rect.y - sibling.y - sibling.height
+            : null;
+        var gap = horizontalGap !== null ? horizontalGap : verticalGap;
+        return gap === null ? null : { sibling: sibling, gap: Math.round(gap), orientation: horizontalGap !== null ? 'horizontal' : 'vertical' };
+      })
+      .filter(Boolean)
+      .sort(function(a, b){ return a.gap - b.gap; })[0];
+    if (nearest) {
+      measurements.push({
+        label: 'nearest',
+        value: Math.max(0, nearest.gap),
+        orientation: nearest.orientation,
+        from: rect,
+        to: nearest.sibling
+      });
+    }
+    return measurements;
+  }
   function isLayoutContainer(el){
     var display = window.getComputedStyle(el).display || '';
     if (display.indexOf('flex') >= 0 || display.indexOf('grid') >= 0) return true;
@@ -328,6 +439,9 @@ export function buildManualEditBridge(enabled: boolean): string {
   }
   function targetFrom(el, includeOuterHtml){
     var rect = el.getBoundingClientRect();
+    var ownRect = rectFor(el);
+    var parentRect = rectFor(el.parentElement);
+    var siblingRects = siblingRectsFor(el);
     var kind = inferKind(el);
     var id = stableId(el);
     var hidden = isHiddenTarget(el, rect);
@@ -352,6 +466,11 @@ export function buildManualEditBridge(enabled: boolean): string {
       fields: fields,
       attributes: attrsFor(el),
       styles: stylesFor(el),
+      computedSummary: computedSummaryFor(el),
+      parentRect: parentRect,
+      siblingRects: siblingRects,
+      measurements: measurementsFor(ownRect, parentRect, siblingRects),
+      alignmentGuides: alignmentGuidesFor(ownRect, parentRect),
       isLayoutContainer: isLayoutContainer(el),
       isHidden: hidden,
       outerHtml: includeOuterHtml ? (el.outerHTML || '').replace(/\\sdata-od-runtime-id="[^"]*"/g, '').replace(/\\sdata-od-source-path="[^"]*"/g, '').replace(/\\sdata-od-id="path-[^"]*"/g, '').replace(/\\sdata-od-edit-selected="[^"]*"/g, '') : ''
@@ -374,12 +493,168 @@ export function buildManualEditBridge(enabled: boolean): string {
     window.parent.postMessage({ type: 'od-edit-targets', targets: allTargets() }, '*');
   }
   var lastHoverId = null;
+  var guidesEnabled = true;
+  var selectedTargetId = null;
+  function ensureGuidesLayer(){
+    var layer = document.querySelector('[data-od-edit-guides-layer]');
+    if (layer) return layer;
+    layer = document.createElement('div');
+    layer.setAttribute('data-od-edit-guides-layer', 'true');
+    layer.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(layer);
+    return layer;
+  }
+  function clearGuidesLayer(){
+    var layer = document.querySelector('[data-od-edit-guides-layer]');
+    if (layer) layer.replaceChildren();
+  }
+  function addGuideNode(layer, className, style, text){
+    var node = document.createElement('div');
+    node.className = className;
+    Object.keys(style || {}).forEach(function(key){ node.style[key] = style[key]; });
+    if (text) node.textContent = text;
+    layer.appendChild(node);
+  }
+  function renderBox(layer, target, mode){
+    if (!target || !target.rect) return;
+    var rect = target.rect;
+    addGuideNode(layer, 'od-edit-guide-box od-edit-guide-box-' + mode, {
+      left: rect.x + 'px',
+      top: rect.y + 'px',
+      width: rect.width + 'px',
+      height: rect.height + 'px'
+    });
+  }
+  function rectCenter(rect){
+    return {
+      x: Math.round(rect.x + rect.width / 2),
+      y: Math.round(rect.y + rect.height / 2)
+    };
+  }
+  function addRelationMeasurement(layer, selectedRect, hoverRect){
+    var selectedCenter = rectCenter(selectedRect);
+    var hoverCenter = rectCenter(hoverRect);
+    var horizontalGap = null;
+    var verticalGap = null;
+    if (hoverRect.x >= selectedRect.x + selectedRect.width) {
+      horizontalGap = {
+        value: Math.round(hoverRect.x - selectedRect.x - selectedRect.width),
+        x1: selectedRect.x + selectedRect.width,
+        x2: hoverRect.x,
+        y: hoverCenter.y
+      };
+    } else if (selectedRect.x >= hoverRect.x + hoverRect.width) {
+      horizontalGap = {
+        value: Math.round(selectedRect.x - hoverRect.x - hoverRect.width),
+        x1: hoverRect.x + hoverRect.width,
+        x2: selectedRect.x,
+        y: hoverCenter.y
+      };
+    }
+    if (hoverRect.y >= selectedRect.y + selectedRect.height) {
+      verticalGap = {
+        value: Math.round(hoverRect.y - selectedRect.y - selectedRect.height),
+        y1: selectedRect.y + selectedRect.height,
+        y2: hoverRect.y,
+        x: hoverCenter.x
+      };
+    } else if (selectedRect.y >= hoverRect.y + hoverRect.height) {
+      verticalGap = {
+        value: Math.round(selectedRect.y - hoverRect.y - hoverRect.height),
+        y1: hoverRect.y + hoverRect.height,
+        y2: selectedRect.y,
+        x: hoverCenter.x
+      };
+    }
+    var chosen = horizontalGap && (!verticalGap || horizontalGap.value <= verticalGap.value)
+      ? { orientation: 'horizontal', gap: horizontalGap }
+      : verticalGap
+        ? { orientation: 'vertical', gap: verticalGap }
+        : null;
+    if (!chosen) {
+      addGuideNode(layer, 'od-edit-guide-line od-edit-guide-line-v od-edit-guide-line-reference', {
+        left: hoverCenter.x + 'px',
+        top: Math.min(selectedRect.y, hoverRect.y) + 'px',
+        height: Math.max(selectedRect.y + selectedRect.height, hoverRect.y + hoverRect.height) - Math.min(selectedRect.y, hoverRect.y) + 'px'
+      });
+      addGuideNode(layer, 'od-edit-guide-line od-edit-guide-line-h od-edit-guide-line-reference', {
+        top: hoverCenter.y + 'px',
+        left: Math.min(selectedRect.x, hoverRect.x) + 'px',
+        width: Math.max(selectedRect.x + selectedRect.width, hoverRect.x + hoverRect.width) - Math.min(selectedRect.x, hoverRect.x) + 'px'
+      });
+      addGuideNode(layer, 'od-edit-guide-measure', {
+        left: Math.max(6, Math.min(window.innerWidth - 72, hoverCenter.x + 8)) + 'px',
+        top: Math.max(6, Math.min(window.innerHeight - 24, hoverCenter.y + 8)) + 'px'
+      }, 'overlap');
+      return;
+    }
+    if (chosen.orientation === 'horizontal') {
+      var hg = chosen.gap;
+      addGuideNode(layer, 'od-edit-guide-line od-edit-guide-line-h od-edit-guide-line-distance', {
+        left: Math.min(hg.x1, hg.x2) + 'px',
+        top: hg.y + 'px',
+        width: Math.abs(hg.x2 - hg.x1) + 'px'
+      });
+      addGuideNode(layer, 'od-edit-guide-measure', {
+        left: Math.max(6, Math.min(window.innerWidth - 72, Math.min(hg.x1, hg.x2) + Math.abs(hg.x2 - hg.x1) / 2 - 18)) + 'px',
+        top: Math.max(6, Math.min(window.innerHeight - 24, hg.y + 8)) + 'px'
+      }, hg.value + 'px');
+    } else {
+      var vg = chosen.gap;
+      addGuideNode(layer, 'od-edit-guide-line od-edit-guide-line-v od-edit-guide-line-distance', {
+        left: vg.x + 'px',
+        top: Math.min(vg.y1, vg.y2) + 'px',
+        height: Math.abs(vg.y2 - vg.y1) + 'px'
+      });
+      addGuideNode(layer, 'od-edit-guide-measure', {
+        left: Math.max(6, Math.min(window.innerWidth - 72, vg.x + 8)) + 'px',
+        top: Math.max(6, Math.min(window.innerHeight - 24, Math.min(vg.y1, vg.y2) + Math.abs(vg.y2 - vg.y1) / 2 - 10)) + 'px'
+      }, vg.value + 'px');
+    }
+    addGuideNode(layer, 'od-edit-guide-line od-edit-guide-line-v od-edit-guide-line-reference', {
+      left: selectedCenter.x + 'px',
+      top: Math.min(selectedRect.y, hoverRect.y) + 'px',
+      height: Math.max(selectedRect.y + selectedRect.height, hoverRect.y + hoverRect.height) - Math.min(selectedRect.y, hoverRect.y) + 'px'
+    });
+    addGuideNode(layer, 'od-edit-guide-line od-edit-guide-line-h od-edit-guide-line-reference', {
+      top: selectedCenter.y + 'px',
+      left: Math.min(selectedRect.x, hoverRect.x) + 'px',
+      width: Math.max(selectedRect.x + selectedRect.width, hoverRect.x + hoverRect.width) - Math.min(selectedRect.x, hoverRect.x) + 'px'
+    });
+  }
+  function renderHoverRelation(hoverTarget){
+    if (!enabled || !guidesEnabled || !hoverTarget || !hoverTarget.rect) {
+      clearGuidesLayer();
+      return;
+    }
+    var selectedEl = selectedTargetId ? findById(selectedTargetId) : null;
+    if (!selectedEl || stableId(selectedEl) === hoverTarget.id) {
+      clearGuidesLayer();
+      return;
+    }
+    var layer = ensureGuidesLayer();
+    layer.replaceChildren();
+    var selectedTarget = targetFrom(selectedEl, false);
+    renderBox(layer, selectedTarget, 'selected');
+    renderBox(layer, hoverTarget, 'hover');
+    addRelationMeasurement(layer, selectedTarget.rect, hoverTarget.rect);
+  }
   function postHoverTarget(el){
     if (!enabled || !el) return;
     var id = stableId(el);
     if (id === lastHoverId) return;
     lastHoverId = id;
-    window.parent.postMessage({ type: 'od-edit-hover', target: targetFrom(el, true) }, '*');
+    var target = targetFrom(el, true);
+    renderHoverRelation(target);
+    window.parent.postMessage({ type: 'od-edit-hover', target: target }, '*');
+    window.parent.postMessage({ type: 'od-edit-inspect-hover', target: target }, '*');
+  }
+  function renderHoverRelationOnly(el){
+    if (!enabled || !el) return;
+    var id = stableId(el);
+    if (id === lastHoverId) return;
+    lastHoverId = id;
+    renderHoverRelation(targetFrom(el, false));
   }
   function clearSelectedTarget(){
     var selected = document.querySelectorAll('[data-od-edit-selected]');
@@ -387,6 +662,7 @@ export function buildManualEditBridge(enabled: boolean): string {
   }
   function setSelectedTarget(id){
     clearSelectedTarget();
+    selectedTargetId = id || null;
     if (!id) return;
     var el = findById(id);
     if (el) el.setAttribute('data-od-edit-selected', 'true');
@@ -553,12 +829,26 @@ export function buildManualEditBridge(enabled: boolean): string {
         // dropping it (the #3647 exit-path regression).
         finishActiveTextEdit(true);
         clearSelectedTarget();
+        clearGuidesLayer();
       }
       if (enabled) setTimeout(postTargets, 0);
       return;
     }
     if (ev.data.type === 'od-edit-selected-target') {
       setSelectedTarget(ev.data.id || null);
+      if (!ev.data.id) clearGuidesLayer();
+      else {
+        clearGuidesLayer();
+      }
+      return;
+    }
+    if (ev.data.type === 'od-edit-guides-mode') {
+      guidesEnabled = ev.data.enabled !== false;
+      if (!guidesEnabled) clearGuidesLayer();
+      return;
+    }
+    if (ev.data.type === 'od-edit-capture-chrome') {
+      document.documentElement.toggleAttribute('data-od-hide-edit-chrome', !!ev.data.hidden);
       return;
     }
     if (ev.data.type === 'od-edit-hover-reset') {
@@ -595,7 +885,11 @@ export function buildManualEditBridge(enabled: boolean): string {
     // previous edit is never silently dropped.
     if (activeTextEdit && activeTextEdit.el !== el) finishActiveTextEdit(true);
     var kind = inferKind(el);
-    window.parent.postMessage({ type: 'od-edit-select', target: targetFrom(el, true) }, '*');
+    var selectedTarget = targetFrom(el, true);
+    setSelectedTarget(selectedTarget.id);
+    clearGuidesLayer();
+    window.parent.postMessage({ type: 'od-edit-select', target: selectedTarget }, '*');
+    window.parent.postMessage({ type: 'od-edit-inspect-select', target: selectedTarget }, '*');
     if (kind === 'text' || kind === 'link') {
       makeEditable(el, ev);
       return;
@@ -604,12 +898,37 @@ export function buildManualEditBridge(enabled: boolean): string {
   document.addEventListener('pointerover', function(ev){
     if (!enabled) return;
     // While editing, hovering must not retarget the inspector or surface a new
-    // affordance — that's the other half of the #3646 instability.
-    if (activeTextEdit) return;
+    // affordance — that's the other half of the #3646 instability. It should
+    // still draw the selected-vs-hover spacing overlay, though.
+    if (activeTextEdit) {
+      var hoverEditEl = closestTarget(ev);
+      if (!hoverEditEl) {
+        lastHoverId = null;
+        clearGuidesLayer();
+        return;
+      }
+      renderHoverRelationOnly(hoverEditEl);
+      return;
+    }
     if (ev.target && ev.target.closest && ev.target.closest('[data-od-editing="true"]')) return;
     var el = closestTarget(ev);
     if (!el) return;
     postHoverTarget(el);
+  }, true);
+  document.addEventListener('pointermove', function(ev){
+    if (!enabled) return;
+    var hoveredEl = closestTarget(ev);
+    if (activeTextEdit) {
+      if (!hoveredEl || (activeTextEdit.el && stableId(activeTextEdit.el) === stableId(hoveredEl))) {
+        lastHoverId = null;
+        clearGuidesLayer();
+      }
+      return;
+    }
+    if (!hoveredEl) {
+      lastHoverId = null;
+      clearGuidesLayer();
+    }
   }, true);
   window.addEventListener('resize', postTargets);
   function bootEditBridge(){
@@ -630,22 +949,61 @@ export function buildManualEditBridge(enabled: boolean): string {
 export function buildManualEditBridgeStyle(): string {
   return `<style data-od-edit-bridge-style>
 html[data-od-edit-mode] body * { cursor: pointer !important; }
-html[data-od-edit-mode] [data-od-id],
-html[data-od-edit-mode] [data-od-runtime-id],
-html[data-od-edit-mode] [data-od-source-path] { outline: 1px dashed rgba(37, 99, 235, 0.35) !important; outline-offset: 3px !important; }
-html[data-od-edit-mode] [data-od-id]:hover,
-html[data-od-edit-mode] [data-od-runtime-id]:hover,
-html[data-od-edit-mode] [data-od-source-path]:hover { outline: 2px solid #1A74FF !important; outline-offset: 3px !important; }
 html[data-od-edit-mode] [data-od-edit-selected] {
-  outline: 2px solid #1A74FF !important;
+  outline: 2px solid var(--selected, var(--accent, CanvasText)) !important;
   outline-offset: 4px;
-  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.16);
 }
 html[data-od-edit-mode] [data-od-editing="true"] {
-  outline: 2px solid #1A74FF !important;
+  outline: 2px solid var(--selected, var(--accent, CanvasText)) !important;
   outline-offset: 4px;
-  background: rgba(37, 99, 235, 0.06);
+  background: color-mix(in srgb, var(--selected, var(--accent, CanvasText)) 8%, transparent);
   cursor: text !important;
+}
+[data-od-edit-guides-layer] {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  pointer-events: none;
+  font: 11px/1.2 Inter, system-ui, sans-serif;
+}
+[data-od-edit-guides-layer] .od-edit-guide-box {
+  position: fixed;
+  border: 1px solid var(--selected, var(--accent, CanvasText));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--selected, var(--accent, CanvasText)) 14%, transparent);
+}
+[data-od-edit-guides-layer] .od-edit-guide-box-hover {
+  border-style: dashed;
+}
+[data-od-edit-guides-layer] .od-edit-guide-line {
+  position: fixed;
+  background: color-mix(in srgb, var(--amber, var(--selected, var(--accent, CanvasText))) 70%, transparent);
+}
+[data-od-edit-guides-layer] .od-edit-guide-line-v {
+  width: 1px;
+}
+[data-od-edit-guides-layer] .od-edit-guide-line-h {
+  height: 1px;
+}
+[data-od-edit-guides-layer] .od-edit-guide-line-distance {
+  background: var(--amber, var(--selected, var(--accent, CanvasText)));
+}
+[data-od-edit-guides-layer] .od-edit-guide-line-reference {
+  background: color-mix(in srgb, var(--amber, var(--selected, var(--accent, CanvasText))) 36%, transparent);
+}
+[data-od-edit-guides-layer] .od-edit-guide-measure {
+  position: fixed;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: var(--amber, var(--selected, var(--accent, CanvasText)));
+  color: var(--accent-contrast, Canvas);
+  box-shadow: 0 5px 16px color-mix(in srgb, var(--selected, var(--accent, CanvasText)) 18%, transparent);
+}
+html[data-od-hide-edit-chrome] [data-od-edit-guides-layer],
+html[data-od-hide-edit-chrome] [data-od-edit-selected],
+html[data-od-hide-edit-chrome] [data-od-editing="true"] {
+  opacity: 0 !important;
+  box-shadow: none !important;
+  outline-color: transparent !important;
 }
 </style>`;
 }

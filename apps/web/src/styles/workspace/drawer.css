@@ -54,7 +54,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.02em;
   text-transform: uppercase;
@@ -62,7 +62,7 @@
 }
 .connector-drawer-titles h2 {
   margin: 0;
-  font-size: 21px;
+  font-size: 20px;
   font-weight: 600;
   line-height: 1.2;
   letter-spacing: 0;
@@ -84,7 +84,7 @@
   border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
   background: color-mix(in srgb, var(--bg-panel) 72%, var(--bg-subtle));
   color: var(--text-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1.2;
 }
@@ -126,7 +126,7 @@
 }
 .connector-drawer-section-title {
   margin: 0;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -158,7 +158,7 @@
   background: var(--bg-subtle);
   border: 1px solid var(--border);
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
@@ -190,7 +190,7 @@
 .connector-drawer-details dt {
   margin: 0;
   color: var(--text-muted);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
 }
 .connector-drawer-details dd {
@@ -241,7 +241,7 @@
 }
 .connector-drawer-tool-title {
   min-width: 0;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text);
   line-height: 1.35;
@@ -252,7 +252,7 @@
   flex: 0 0 auto;
   padding: 1px 6px;
   border-radius: var(--radius-pill);
-  font-size: 9.5px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -283,7 +283,7 @@
 }
 .connector-drawer-tool-name {
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-faint);
   background: color-mix(in srgb, var(--bg-subtle) 76%, transparent);
   padding: 2px 5px;
@@ -465,7 +465,7 @@
   justify-content: center;
   background: var(--bg-subtle);
   color: var(--text-faint);
-  font-size: 38px;
+  font-size: 36px;
   position: relative;
 }
 .design-card-thumb::before {
@@ -513,7 +513,7 @@
   display: flex;
   align-items: baseline;
   gap: 6px;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-muted);
   min-width: 0;
   white-space: nowrap;
@@ -636,7 +636,7 @@
   background: transparent;
   border-radius: var(--radius-sm);
   color: var(--text-strong);
-  font-size: 12.5px;
+  font-size: 13px;
   text-align: left;
   cursor: pointer;
 }
@@ -681,7 +681,7 @@
   border-radius: var(--radius-pill);
   background: var(--bg-panel);
   color: var(--text-strong);
-  font-size: 12.5px;
+  font-size: 13px;
   cursor: pointer;
 }
 .designs-select-toggle:hover { border-color: var(--border-strong); }
@@ -695,7 +695,7 @@
   border-radius: var(--radius-pill);
   background: var(--bg-panel);
   color: var(--text-strong);
-  font-size: 12.5px;
+  font-size: 13px;
   cursor: pointer;
   transition: border-color 120ms var(--ease-out), opacity 120ms var(--ease-out);
 }
@@ -716,7 +716,7 @@
   background: var(--bg-panel);
 }
 .designs-select-count {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--text-strong);
 }
 .designs-select-delete {
@@ -877,7 +877,7 @@
   border-radius: var(--radius-pill);
   border: 1px solid var(--border);
   padding: 2px 7px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -913,7 +913,7 @@
 }
 .live-artifact-badges.compact .live-artifact-badge {
   padding: 1px 5px;
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.25;
 }
 .design-live-count {
@@ -987,7 +987,7 @@
   background: var(--bg-panel);
   border: 1px solid var(--border-soft);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   padding: 2px 8px;
   border-radius: var(--radius-pill);
   flex-shrink: 0;
@@ -1139,7 +1139,7 @@
 }
 .example-cta { align-self: flex-start; padding: 8px 18px; }
 .example-tag {
-  font-size: 10px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   padding: 2px 8px;
@@ -1219,7 +1219,7 @@
   bottom: 8px;
   background: rgba(15, 15, 18, 0.78);
   color: #fff;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1257,7 +1257,7 @@
   min-width: 0;
 }
 .ds-card-badge {
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.06em;
   padding: 2px 6px;
@@ -1284,7 +1284,7 @@
   padding-top: 6px;
 }
 .ds-card-category {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1333,7 +1333,7 @@
   gap: 8px;
 }
 .ds-row-default {
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.06em;
   padding: 2px 6px;
@@ -1406,7 +1406,7 @@
 .ws-tabs-bar {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 0;
   overflow-x: auto;
   overflow-y: hidden;
   flex-wrap: nowrap;
@@ -1452,7 +1452,9 @@
   display: inline-flex;
   align-items: center;
 }
-.ws-tabs-file-actions-before:not(:empty) + .ws-tabs-file-actions:not(:empty),
+/* Divider only before the project-actions (settings) cluster. The leading
+   divider before the file-actions group (present / 历史版本 / 分享) was removed
+   per design. */
 .ws-tabs-file-actions:not(:empty) + .ws-tabs-project-actions {
   margin-inline-start: 2px;
   padding-inline-start: 8px;
@@ -1492,6 +1494,22 @@
    center rather than slightly low. */
 .app .ws-tabs-actions .chrome-action > svg:first-child {
   transform: none;
+}
+/* 分享 button as a solid dark (inverted) action: black fill + white icon/label
+   in light mode; inverts cleanly to a light fill + dark content in dark mode. */
+.app .ws-tabs-actions .chrome-action-share-dark {
+  background: var(--text-strong);
+  border-color: var(--text-strong);
+  color: var(--bg-app);
+}
+.app .ws-tabs-actions .chrome-action-share-dark:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text-strong) 88%, var(--bg-app));
+  border-color: color-mix(in srgb, var(--text-strong) 88%, var(--bg-app));
+  color: var(--bg-app);
+}
+.app .ws-tabs-actions .chrome-action-share-dark svg,
+.app .ws-tabs-actions .chrome-action-share-dark i {
+  color: var(--bg-app);
 }
 
 .project-collab-demo-stage {
@@ -1538,8 +1556,8 @@
   border-radius: var(--radius-large, 8px) 7px 7px 2px;
   background: var(--collab-color);
   color: #fff;
-  font-size: 11px;
-  font-weight: 760;
+  font-size: 12px;
+  font-weight: 700;
   line-height: 1;
   white-space: nowrap;
 }
@@ -1588,8 +1606,8 @@
     inset 0 0 0 1px color-mix(in srgb, #fff 18%, transparent),
     0 5px 12px color-mix(in srgb, var(--collab-color) 18%, transparent);
   color: #fff;
-  font-size: 11px;
-  font-weight: 760;
+  font-size: 12px;
+  font-weight: 700;
   line-height: 1;
   white-space: nowrap;
 }
@@ -1605,7 +1623,7 @@
   background: transparent;
   border: none;
   border-radius: var(--radius-pill);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1;
   cursor: pointer;
   flex-shrink: 0;
@@ -1699,8 +1717,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-faint);
-  font-size: 11.5px;
-  font-weight: 450;
+  font-size: 12px;
+  font-weight: 500;
 }
 .ws-tab-meta::before {
   content: "/";
@@ -1850,7 +1868,7 @@
 }
 .ws-tab-action {
   padding: 4px 12px;
-  font-size: 12.5px;
+  font-size: 13px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);

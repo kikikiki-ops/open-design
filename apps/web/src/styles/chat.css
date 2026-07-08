@@ -9,12 +9,22 @@
   gap: 4px;
   padding: 8px 12px;
   border-bottom: none;
-  background: var(--bg-panel);
+  /* Pure white to match the chat card surface (the .pane is #fff). Opaque so
+     messages scrolling under this sticky header don't show through. */
+  background: #fff;
   min-width: 0;
   height: 38px;
   position: sticky;
   top: 0;
   z-index: 4;
+}
+[data-theme="dark"] .chat-project-header {
+  background: var(--bg-panel);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme]) .chat-project-header {
+    background: var(--bg-panel);
+  }
 }
 .chat-project-back {
   width: 28px;
@@ -53,7 +63,7 @@
 }
 .chat-project-header-title .title {
   color: var(--text-strong);
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 18px;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -66,24 +76,24 @@
      box, so the contentEditable focus ring reads as a field, not brackets.
      No negative margin — the parent clips overflow, which would shave the
      left edge of the focus ring. */
-  padding: 1px 6px;
+  padding: 4px 8px;
   border-radius: var(--radius-sm);
   outline: none;
   caret-color: var(--accent);
-  transition: background 120ms cubic-bezier(0.23, 1, 0.32, 1),
-    box-shadow 120ms cubic-bezier(0.23, 1, 0.32, 1);
+  box-shadow: none;
+  transition: background 120ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 .chat-project-header-title .title:hover {
-  background: color-mix(in srgb, var(--text) 5%, transparent);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
 }
 .chat-project-header-title .title:focus,
 .chat-project-header-title .title:focus-visible {
-  background: var(--bg);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  box-shadow: none;
 }
 .chat-project-header-title .meta {
   color: var(--text-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 16px;
   white-space: nowrap;
   overflow: hidden;
@@ -359,7 +369,7 @@
   display: flex;
   align-items: baseline;
   gap: 8px;
-  font-size: 13.5px;
+  font-size: 13px;
   text-transform: none;
   color: var(--text-strong);
   margin-bottom: 8px;
@@ -368,7 +378,7 @@
 }
 .msg-time {
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -376,12 +386,12 @@
 .msg.user .user-text {
   white-space: pre-wrap;
   color: var(--text);
-  background: var(--bg-fill-tertiary);
+  background: #ededed;
   border: none;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-lg) var(--radius-none) var(--radius-lg) var(--radius-lg);
   padding: 8px 12px;
   line-height: 1.5;
-  font-size: 14.5px;
+  font-size: 16px;
   box-shadow: none;
 }
 .msg-run-context-row {
@@ -407,7 +417,7 @@
   border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border));
   background: color-mix(in srgb, var(--accent-tint) 72%, var(--bg));
   color: color-mix(in srgb, var(--accent) 72%, var(--text-strong));
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 12px;
   white-space: nowrap;
@@ -441,7 +451,7 @@
   border-radius: var(--radius-pill);
   background: var(--bg-fill-tertiary);
   border: none;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1;
   color: var(--text-muted);
   max-width: 100%;
@@ -515,7 +525,7 @@
   text-transform: uppercase;
   letter-spacing: 0.02em;
   font-weight: 600;
-  font-size: 8.5px;
+  font-size: 12px;
   flex: 0 0 auto;
   color: var(--text-faint);
 }
@@ -550,7 +560,7 @@
   max-width: 190px;
   overflow: hidden;
   border-radius: var(--radius-sm);
-  font-size: 9px;
+  font-size: 12px;
   line-height: 12px;
 }
 .msg-plugin-context .context-chip-strip__body {
@@ -570,13 +580,13 @@
   box-shadow: none;
 }
 .msg-plugin-context .context-chip-strip__kind {
-  font-size: 8.5px;
+  font-size: 12px;
   letter-spacing: 0.02em;
 }
 .msg-plugin-context .context-chip-strip__remove {
   width: 14px;
   height: 14px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 /* Wrapper for user bubble + hover action footer */
@@ -603,7 +613,7 @@
   background: color-mix(in srgb, var(--bg-panel) 92%, var(--bg-subtle));
   box-shadow: none;
   color: var(--text-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   font-style: normal;
 }
 .msg.assistant .op-waiting-dot {
@@ -627,7 +637,7 @@
 .msg.assistant .op-waiting-hint {
   flex-basis: auto;
   color: var(--text-soft);
-  font-size: 11px;
+  font-size: 12px;
   font-style: italic;
 }
 .user-status-card {
@@ -660,12 +670,12 @@
   gap: 2px;
 }
 .user-status-card__copy strong {
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.2;
-  font-weight: 650;
+  font-weight: 600;
 }
 .user-status-card__copy span {
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.35;
   color: var(--text-muted);
 }
@@ -712,7 +722,7 @@
   display: inline-block;
   margin-top: 8px;
   padding: 2px 8px;
-  font-size: 11px;
+  font-size: 12px;
   background: var(--accent);
   color: white;
   border-radius: var(--radius-xs);
@@ -766,7 +776,7 @@
 .run-error__copy { min-width: 0; flex: 1 1 auto; }
 .run-error__title {
   margin: 0;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.4;
   color: var(--text-strong);
@@ -836,7 +846,7 @@
 .run-error__source.is-open .run-error__source-chevron { transform: rotate(90deg); }
 .run-error__source-label {
   flex: 0 0 auto;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -847,7 +857,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 .run-error__source.is-open .run-error__source-peek { opacity: 0; }
@@ -864,7 +874,7 @@
   max-height: 220px;
   padding: 4px 10px 10px;
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.6;
   color: var(--text);
   white-space: pre-wrap;
@@ -888,7 +898,7 @@
   background: var(--accent);
   color: white;
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   padding: 6px 14px;
   border-radius: var(--radius-sm);
@@ -923,7 +933,7 @@
   flex: 1 1 100%;
   overflow-wrap: anywhere;
   color: var(--danger-text, #991b1b);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1.3;
 }
@@ -1012,7 +1022,7 @@
   gap: 6px;
 }
 .amr-card__chip {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.4;
   padding: 3px 8px;
   border-radius: var(--radius-pill);
@@ -1091,6 +1101,9 @@
 }
 .chat-composer-fixed-layer .composer {
   pointer-events: auto;
+}
+.chat-composer-fixed-layer .composer-shell {
+  background: color-mix(in srgb, var(--bg-panel) 70%, var(--bg-subtle));
 }
 .composer-shell {
   container-type: inline-size;
@@ -1185,7 +1198,7 @@
 .composer-active-file__label {
   flex: 0 0 auto;
   color: var(--text-muted);
-  font-weight: 650;
+  font-weight: 600;
 }
 .composer-active-file__name {
   min-width: 0;
@@ -1193,7 +1206,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 650;
+  font-weight: 600;
 }
 /* -------- Lexical contenteditable input ---------------------------- */
 .composer-input-wrap {
@@ -1229,7 +1242,7 @@
   min-height: 72px;
   padding: 8px 9px;
   font: inherit;
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 1.6;
   color: var(--text);
   white-space: pre-wrap;
@@ -1237,6 +1250,11 @@
   word-break: break-word;
   caret-color: var(--accent);
   -webkit-user-modify: read-write-plaintext-only; /* paste-as-plain-text guard */
+}
+.chat-composer-fixed-layer .composer-input-editor [contenteditable='true'],
+.chat-composer-fixed-layer .composer-input-editor .composer-editable {
+  font-size: 13px;
+  font-weight: 500;
 }
 .composer.composer-active-file-mode .composer-input-editor [contenteditable='true'],
 .composer.composer-active-file-mode .composer-input-editor .composer-editable {
@@ -1251,7 +1269,7 @@
   pointer-events: none;
   user-select: none;
   color: var(--text-faint);
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 1.6;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1268,7 +1286,7 @@
   align-items: center;
   gap: 1px;
   color: var(--text-faint);
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 1.6;
   pointer-events: none;
   user-select: none;
@@ -1322,7 +1340,7 @@
   background: var(--m-tint);
   color: color-mix(in srgb, var(--m-hue) 72%, var(--text));
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
   line-height: 1;
   white-space: nowrap;
@@ -1550,7 +1568,7 @@
   cursor: pointer;
   font: inherit;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
   transition:
@@ -1673,14 +1691,14 @@
 .session-mode-card__title {
   color: var(--text-strong);
   font-size: 13px;
-  font-weight: 750;
+  font-weight: 700;
   line-height: 1.25;
 }
 .session-mode-card__label {
   margin-top: 1px;
   color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
   line-height: 1.3;
 }
 .session-mode-card__summary,
@@ -1695,8 +1713,8 @@
 }
 .session-mode-card__section-label {
   color: var(--text-strong);
-  font-size: 11px;
-  font-weight: 750;
+  font-size: 12px;
+  font-weight: 700;
   letter-spacing: 0;
   line-height: 1.25;
 }
@@ -1713,7 +1731,7 @@
   border-radius: var(--radius-sm);
   background: var(--bg-panel);
   color: var(--text);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1.35;
 }
@@ -1777,7 +1795,7 @@
   background: var(--text-strong);
   border: var(--stroke-thin) solid var(--text-strong);
   color: var(--bg);
-  font-weight: 650;
+  font-weight: 600;
   padding: 0;
   font-size: var(--font-size-14);
   border-radius: var(--radius-pill);
@@ -1838,24 +1856,18 @@
 .composer-send.stop:hover .composer-stop-label,
 .composer-send.stop:focus-visible .composer-stop-label { visibility: visible; }
 .composer-send.stop:hover { background: var(--text); border-color: var(--text); color: var(--bg-panel); }
-.composer-run-dot {
-  opacity: 0;
-  animation: composer-run-bloom 2200ms cubic-bezier(0.16, 1, 0.3, 1) infinite both;
-}
-@keyframes composer-run-bloom {
-  0% { opacity: 0; }
-  8% { opacity: 1; }
-  36% { opacity: 0.05; }
-  100% { opacity: 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .composer-run-dot {
-    animation: none;
-    opacity: 0.45;
-  }
+.composer-run-glyph {
+  display: block;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  pointer-events: none;
+  /* Now a looping video (same as the send button) — fill the 24px circle. */
+  object-fit: cover;
+  border-radius: 50%;
 }
 .composer-hint {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-faint);
   margin: 0 8px;
 }
@@ -1912,14 +1924,14 @@
   gap: 4px;
   min-width: 0;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.2;
   white-space: nowrap;
 }
 
 .chat-queued-send-heading strong {
   color: var(--text-strong);
-  font-weight: 620;
+  font-weight: 600;
 }
 
 .chat-queued-send-row {
@@ -2006,7 +2018,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2016,7 +2028,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--text);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2043,7 +2055,7 @@
   border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
   background: color-mix(in srgb, var(--bg) 78%, transparent);
   color: var(--text-muted);
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2108,7 +2120,7 @@
 .chat-queued-send-overflow {
   padding: 1px 4px 0 33px;
   color: var(--text-faint);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.2;
   white-space: nowrap;
 }
@@ -2128,7 +2140,7 @@
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--text-strong) 92%, #000);
   color: var(--bg-panel);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.2;
   white-space: nowrap;
   opacity: 0;
@@ -2187,7 +2199,7 @@
   max-width: min(190px, 100%);
   overflow: hidden;
   white-space: nowrap;
-  font-size: 10.5px;
+  font-size: 12px;
   line-height: 14px;
   box-shadow: none;
   transition:
@@ -2208,12 +2220,18 @@
   border-radius: var(--radius-xs);
   background: color-mix(in srgb, var(--text) 7%, var(--bg-subtle));
   color: var(--text-muted);
-  font-size: 8px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
   line-height: 1;
 }
 .staged-context-row {
   padding-top: 2px;
+}
+.chat-composer-fixed-layer .staged-context-row:has(> .staged-context--workspace):not(:has(> :not(.staged-context--workspace))) {
+  display: none;
+}
+.chat-composer-fixed-layer .staged-context--workspace {
+  display: none;
 }
 .staged-context-picker {
   display: inline-flex;
@@ -2228,7 +2246,7 @@
   padding: 0 7px;
   gap: 5px;
   border-radius: var(--radius);
-  font-size: 11px;
+  font-size: 12px;
   box-shadow: none;
 }
 .staged-context {
@@ -2238,7 +2256,7 @@
   max-width: min(190px, 100%);
   padding: 2px 5px 2px 3px;
   border-radius: var(--radius-sm);
-  font-size: 10.5px;
+  font-size: 12px;
   background: color-mix(in srgb, var(--accent-tint) 30%, var(--bg-panel));
   border-color: color-mix(in srgb, var(--accent) 18%, var(--border));
 }
@@ -2328,7 +2346,7 @@
 .staged-context-kind {
   margin-right: 3px;
   color: var(--text-muted);
-  font-weight: 650;
+  font-weight: 600;
 }
 .staged-chip img {
   display: block;
@@ -2431,7 +2449,7 @@
 }
 .staged-comment .staged-name strong {
   color: var(--accent-strong);
-  font-weight: 650;
+  font-weight: 600;
   flex: 0 0 auto;
 }
 .staged-comment .staged-name span {
@@ -2463,7 +2481,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 9px;
+  font-size: 12px;
 }
 .staged-icon svg {
   display: block;
@@ -2513,7 +2531,7 @@
   background: var(--bg-fill-tertiary);
   border: none;
   border-radius: var(--radius-sm);
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-muted);
   max-width: 220px;
 }
@@ -2539,13 +2557,13 @@
   background: var(--bg-fill-tertiary);
   border: none;
   border-radius: var(--radius);
-  font-size: 11.5px;
+  font-size: 12px;
   max-width: 240px;
   color: var(--text);
   cursor: default;
   text-align: left;
   font-family: inherit;
-  font-size: 9px;
+  font-size: 12px;
   line-height: 12px;
 }
 .user-attachment.openable { cursor: pointer; }

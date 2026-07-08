@@ -106,7 +106,7 @@ export function AvatarMenu({
 
       const margin = 16;
       const gap = 8;
-      const width = Math.min(320, window.innerWidth - margin * 2);
+      const width = Math.min(208, window.innerWidth - margin * 2);
       const left = Math.min(
         Math.max(rect.left, margin),
         window.innerWidth - width - margin,
@@ -190,6 +190,10 @@ export function AvatarMenu({
     currentAgent?.reasoningOptions?.find((option) => option.id === currentReasoningId)?.label ??
     currentReasoningId;
   const apiModelLabel = config.model?.trim() || null;
+  // Selected-model readout shown inside the trigger (left of the Send button).
+  // Hidden by default in CSS; composer-row contexts opt it in.
+  const triggerModelLabel =
+    config.mode === 'api' ? apiModelLabel : config.mode === 'daemon' ? currentModelLabel : null;
 
   return (
     <div className={`avatar-menu avatar-menu--${placement}`} ref={wrapRef}>
@@ -205,6 +209,9 @@ export function AvatarMenu({
         aria-label={t('avatar.title')}
       >
         <AvatarAgentMark size={20} />
+        {triggerModelLabel ? (
+          <span className="avatar-agent-trigger__model">{triggerModelLabel}</span>
+        ) : null}
         <RemixIcon name="arrow-down-s-line" size={14} />
       </button>
       {open && popoverStyle ? createPortal(
@@ -272,9 +279,11 @@ export function AvatarMenu({
                               role="radio"
                               aria-checked={active}
                               className={`avatar-model-option${active ? ' is-active' : ''}`}
-                              onClick={() =>
-                                onAgentModelChange(currentAgent.id, { model: model.id })
-                              }
+                              onClick={() => {
+                                onAgentModelChange(currentAgent.id, { model: model.id });
+                                // Selection made — dismiss the popover right away.
+                                setOpen(false);
+                              }}
                             >
                               <span className="avatar-model-option-label">
                                 {model.label}

@@ -2061,45 +2061,6 @@ export function ChatPane({
                     />
                   ) : (
                     <>
-                      <div className="chat-empty">
-                        <span className="chat-empty-title">
-                          {t('chat.startTitle')}
-                        </span>
-                      </div>
-                      <div className="chat-examples" role="list">
-                        {pickStarters(projectMetadata, t).map((ex, i) => (
-                          <button
-                            key={`${ex.title}-${i}`}
-                            type="button"
-                            role="listitem"
-                            className="chat-example"
-                            style={{ animationDelay: `${i * 70}ms` }}
-                            onClick={() => {
-                              trackChatPanelClick(analytics.track, {
-                                page_name: 'chat_panel',
-                                area: 'chat_panel',
-                                element: 'template_card',
-                              });
-                              composerRef.current?.setDraft(ex.prompt);
-                            }}
-                            title={t('chat.fillInputTitle')}
-                          >
-                            <span className="chat-example-icon" aria-hidden>
-                              {ex.icon}
-                            </span>
-                            <span className="chat-example-body">
-                              <span className="chat-example-head">
-                                <span className="chat-example-title">{ex.title}</span>
-                                <span className="chat-example-tag">{ex.tag}</span>
-                              </span>
-                              <span className="chat-example-prompt">{ex.prompt}</span>
-                            </span>
-                            <span className="chat-example-cta" aria-hidden>
-                              ↵
-                            </span>
-                          </button>
-                        ))}
-                      </div>
                       {connectRepoNeeded ? (
                         <div className="chat-connect-repo" role="note">
                           <span className="chat-connect-repo-icon" aria-hidden>

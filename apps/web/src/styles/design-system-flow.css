@@ -61,7 +61,7 @@
   box-shadow: var(--shadow-xs);
   font: inherit;
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
   cursor: pointer;
   transition: background-color 160ms cubic-bezier(0.23, 1, 0.32, 1), border-color 160ms cubic-bezier(0.23, 1, 0.32, 1), color 160ms cubic-bezier(0.23, 1, 0.32, 1), transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
 }
@@ -156,14 +156,14 @@
 }
 .ds-setup-shell--embedded .ds-setup-form > h1 {
   font-family: var(--sans);
-  font-size: 27px;
-  font-weight: 750;
+  font-size: 28px;
+  font-weight: 700;
   letter-spacing: 0;
 }
 .ds-setup-shell--embedded .ds-setup-form > p {
   max-width: 62ch;
   margin-bottom: 18px;
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 1.55;
 }
 .ds-setup-form > h1,
@@ -189,7 +189,7 @@
 }
 .ds-setup-field > span {
   color: var(--text-strong);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 700;
 }
 .ds-setup-field textarea {
@@ -202,7 +202,7 @@
   background: var(--bg-panel);
   box-shadow: var(--shadow-xs);
   font: inherit;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.6;
 }
 .ds-setup-field textarea::placeholder,
@@ -225,8 +225,8 @@
 .ds-resource-section h2 {
   margin: 0 0 8px;
   font-family: var(--sans);
-  font-size: 19px;
-  font-weight: 750;
+  font-size: 20px;
+  font-weight: 700;
   line-height: 1.2;
 }
 .ds-resource-section h2 span,
@@ -269,14 +269,14 @@
 }
 .ds-resource-row > strong {
   color: var(--text-strong);
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 1.3;
 }
 .ds-resource-row > strong span {
   display: block;
   margin-top: 2px;
   color: var(--text-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 500;
 }
 .ds-resource-row > p {
@@ -312,7 +312,7 @@
 }
 .ds-resource-description > span {
   color: var(--text-muted);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.45;
 }
 .ds-resource-description textarea {
@@ -342,7 +342,7 @@
 }
 .ds-design-md-field-head > span {
   color: var(--text-muted);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.45;
 }
 .ds-design-md-reference-link {
@@ -351,7 +351,7 @@
   gap: 4px;
   margin-left: 8px;
   color: var(--accent);
-  font-weight: 650;
+  font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
 }
@@ -375,7 +375,7 @@
 .ds-design-md-reference-picker > span:first-child {
   color: var(--text-muted);
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .ds-design-md-reference-picker .project-ds-picker-trigger {
   min-height: 28px;
@@ -409,7 +409,7 @@
   color: var(--text-muted);
   font: inherit;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   cursor: pointer;
 }
 .ds-design-md-actions button.active {
@@ -452,14 +452,14 @@
   justify-content: space-between;
   gap: 12px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0;
   text-transform: uppercase;
 }
 .ds-design-md-preview-head span {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
@@ -498,7 +498,7 @@
 .ds-design-md-kit-tabs span {
   margin-left: auto;
   color: var(--ds-md-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 .ds-design-md-kit-stage {
   min-height: 270px;
@@ -513,22 +513,22 @@
   border-radius: var(--radius-medium, 4px);
   background: var(--ds-md-primary-bg);
   color: var(--ds-md-primary-active);
-  font-size: 11px;
-  font-weight: 750;
+  font-size: 12px;
+  font-weight: 700;
 }
 .ds-design-md-kit-stage h3 {
   margin: 14px 0 6px;
   color: var(--ds-md-foreground);
   font-family: var(--ds-md-display-font);
-  font-size: 34px;
-  font-weight: 760;
+  font-size: 36px;
+  font-weight: 700;
   line-height: 1.08;
 }
 .ds-design-md-kit-stage p {
   max-width: 560px;
   margin: 0;
   color: var(--ds-md-muted);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.45;
 }
 .ds-design-md-specimen {
@@ -548,7 +548,7 @@
   margin: 0;
   color: var(--ds-md-foreground);
   font-size: 20px;
-  font-weight: 740;
+  font-weight: 700;
 }
 .ds-design-md-specimen small {
   display: block;
@@ -575,7 +575,7 @@
   color: var(--ds-md-foreground);
   font: inherit;
   font-size: var(--ds-md-font-size);
-  font-weight: 740;
+  font-weight: 700;
 }
 .ds-design-md-button-row button.primary,
 .ds-design-md-size-row button.primary {
@@ -611,7 +611,7 @@
 }
 .ds-design-md-type-row strong {
   font-family: var(--ds-md-display-font);
-  font-size: 46px;
+  font-size: 48px;
   line-height: 1;
 }
 .ds-design-md-type-row span {
@@ -663,7 +663,7 @@
 }
 .ds-design-md-token-chip small {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 .ds-design-md-token-chip--value {
   min-width: 92px;
@@ -674,7 +674,7 @@
   background: var(--ds-md-primary-bg);
   color: var(--accent);
   font-size: 12px;
-  font-weight: 750;
+  font-weight: 700;
 }
 /* Compact secondary action that opens the brand-picker modal — sits inline with
    the URL input + Add rather than spanning a full row. */
@@ -886,7 +886,7 @@ a.ds-source-link-open:focus-visible {
   border-radius: var(--radius-pill);
   background: var(--bg-subtle);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1.2;
 }
@@ -1120,7 +1120,7 @@ a.ds-source-link-open:focus-visible {
   }
 
   .ds-design-md-kit-stage h3 {
-    font-size: 26px;
+    font-size: 28px;
   }
 
   .ds-setup-actions--embedded {
@@ -1181,7 +1181,7 @@ a.ds-source-link-open:focus-visible {
 }
 .ds-project-chat__bar span {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 .ds-project-chat__pane {
@@ -1226,14 +1226,14 @@ a.ds-source-link-open:focus-visible {
 }
 .ds-source-context-card span {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 .ds-source-context-card small {
   color: var(--text);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
@@ -1282,7 +1282,7 @@ a.ds-source-link-open:focus-visible {
 }
 .ds-generation-stage h1 {
   font-family: Georgia, "Times New Roman", serif;
-  font-size: 30px;
+  font-size: 32px;
   margin: 0 0 10px;
 }
 .ds-generation-stage p {
@@ -1478,7 +1478,7 @@ a.ds-source-link-open:focus-visible {
 }
 .ds-workspace-files-touched > span {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0;
   text-transform: uppercase;
@@ -1540,7 +1540,7 @@ a.ds-source-link-open:focus-visible {
   border-radius: var(--radius-pill);
   background: var(--bg-panel);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 .ds-generation-review-steps span.is-running {
   border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
@@ -1613,7 +1613,7 @@ a.ds-source-link-open:focus-visible {
   border: 1px solid var(--border);
   border-radius: 999px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1.2;
 }
@@ -1640,7 +1640,7 @@ a.ds-source-link-open:focus-visible {
 }
 .ds-package-card h2 {
   margin: 0;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0;
   text-transform: uppercase;
 }
@@ -1681,7 +1681,7 @@ a.ds-source-link-open:focus-visible {
 }
 .ds-package-metrics small,
 .ds-evidence-stats small {
-  font-size: 11px;
+  font-size: 12px;
 }
 .ds-package-file-list span {
   display: grid;
@@ -1693,7 +1693,7 @@ a.ds-source-link-open:focus-visible {
   border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
   border-radius: 999px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 .ds-evidence-excerpt {
   max-height: 160px;
@@ -1840,7 +1840,7 @@ a.ds-source-link-open:focus-visible {
 }
 .ds-revision-history h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: 16px;
 }
 .ds-revision-history div {
   display: grid;
@@ -1855,7 +1855,7 @@ a.ds-source-link-open:focus-visible {
   border: 1px solid var(--border);
   border-radius: var(--radius-pill);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   text-align: center;
   text-transform: capitalize;
 }
@@ -1917,7 +1917,7 @@ a.ds-source-link-open:focus-visible {
 .ds-file-row small,
 .ds-file-group {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -2067,7 +2067,7 @@ a.ds-source-link-open:focus-visible {
 .ds-manager-eyebrow {
   display: block;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2131,7 +2131,7 @@ a.ds-source-link-open:focus-visible {
   background: var(--bg-subtle);
   color: var(--text-muted);
   padding: 5px 10px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.01em;
 }
@@ -2396,7 +2396,7 @@ a.ds-source-link-open:focus-visible {
 }
 .ws-tab-action {
   padding: 4px 12px;
-  font-size: 12.5px;
+  font-size: 13px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
@@ -2460,8 +2460,8 @@ a.ds-source-link-open:focus-visible {
   align-items: flex-start;
   gap: 6px;
   color: var(--collab-color);
-  font-size: 11px;
-  font-weight: 760;
+  font-size: 12px;
+  font-weight: 700;
   filter: drop-shadow(0 6px 12px color-mix(in srgb, var(--text-strong) 16%, transparent));
   transform: translate(0, 0);
   transition: transform 180ms cubic-bezier(0.23, 1, 0.32, 1);
@@ -2524,8 +2524,8 @@ a.ds-source-link-open:focus-visible {
   border-radius: var(--radius-large, 8px) 7px 7px 2px;
   background: var(--collab-color);
   color: #fff;
-  font-size: 11px;
-  font-weight: 720;
+  font-size: 12px;
+  font-weight: 700;
   line-height: 1;
   white-space: nowrap;
 }
@@ -2643,8 +2643,8 @@ a.ds-source-link-open:focus-visible {
 }
 .ds-project-loading-kicker {
   color: color-mix(in srgb, var(--accent) 70%, var(--text-muted));
-  font-size: 11px;
-  font-weight: 750;
+  font-size: 12px;
+  font-weight: 700;
   line-height: 1.2;
   text-transform: uppercase;
 }
@@ -2652,7 +2652,7 @@ a.ds-source-link-open:focus-visible {
   margin: 0;
   color: var(--text);
   font-family: var(--serif);
-  font-size: 42px;
+  font-size: 48px;
   font-weight: 500;
   line-height: 1.04;
   letter-spacing: 0;
@@ -2911,7 +2911,7 @@ a.ds-source-link-open:focus-visible {
 .ds-project-head h1 {
   margin: 0 0 8px;
   font-family: var(--serif);
-  font-size: clamp(28px, 4vw, 42px);
+  font-size: clamp(28px, 4vw, 48px);
   line-height: 1.08;
   font-weight: 500;
   letter-spacing: 0;
@@ -2920,7 +2920,7 @@ a.ds-source-link-open:focus-visible {
   margin: 0;
   max-width: 640px;
   color: var(--text-muted);
-  font-size: 15px;
+  font-size: 16px;
 }
 .ds-project-badges {
   display: inline-flex;
@@ -3246,7 +3246,7 @@ a.ds-source-link-open:focus-visible {
 }
 .ds-context-label {
   color: var(--text-faint);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -3335,7 +3335,7 @@ a.ds-source-link-open:focus-visible {
   border-radius: var(--radius-pill);
   background: var(--bg-panel);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   white-space: nowrap;
 }
 .ds-project-section-state.is-ready {
@@ -3646,7 +3646,7 @@ a.ds-source-link-open:focus-visible {
 }
 .ds-project-head--review h1 {
   margin: 0;
-  font-size: clamp(32px, 4vw, 42px);
+  font-size: clamp(32px, 4vw, 48px);
 }
 .ds-project-publish-card--review {
   margin: 0 0 30px;

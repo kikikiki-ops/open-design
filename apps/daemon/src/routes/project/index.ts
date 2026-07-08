@@ -4,6 +4,8 @@ import type { Express, Response } from 'express';
 import {
   defaultScenarioPluginIdForProjectMetadata,
   type ChatSessionMode,
+  type ProjectDesignTokenSuggestionQuery,
+  type ProjectDesignTokenSuggestionProp,
   type PluginManifest,
 } from '@open-design/contracts';
 import { readMeta as readBrandMeta } from '../../brands/store.js';
@@ -32,6 +34,7 @@ import {
 } from '../../project-locations.js';
 import { auditDesignSystemPackage } from '../../tools-connectors-cli.js';
 import { parseOrchestratorWorkspace } from '../../workspace-contract.js';
+import { buildProjectDesignTokenSuggestions } from '../../project-design-token-suggestions.js';
 import { registerProjectConversationRoutes } from './conversations.js';
 
 export interface RegisterProjectRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'paths' | 'projectStore' | 'projectFiles' | 'conversations' | 'templates' | 'status' | 'events' | 'ids' | 'telemetry' | 'appConfig' | 'agents' | 'validation'> {}
@@ -1915,7 +1918,7 @@ export interface RegisterProjectFileRoutesDeps extends RouteDeps<'db' | 'http' |
 export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFileRoutesDeps) {
   const { db } = ctx;
   const { sendApiError, sendMulterError } = ctx.http;
-  const { PROJECTS_DIR } = ctx.paths;
+  const { DESIGN_SYSTEMS_DIR, PROJECTS_DIR, USER_DESIGN_SYSTEMS_DIR } = ctx.paths;
   const { upload } = ctx.uploads;
   const { fs } = ctx.node;
   const { getProject } = ctx.projectStore;
@@ -2100,6 +2103,63 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
       res.json({ query, matches });
     } catch (err: any) {
       sendApiError(res, 400, 'BAD_REQUEST', String(err));
+    }
+  });
+
+  app.get('/api/projects/:id/design-token-suggestions', async (req, res) => {
+    try {
+      const project = getProject(db, req.params.id);
+      if (!project) {
+        sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
+        return;
+      }
+      const allowedProps = new Set([
+        'color',
+        'backgroundColor',
+        'borderColor',
+        'fontFamily',
+        'fontSize',
+        'fontWeight',
+        'lineHeight',
+        'letterSpacing',
+        'width',
+        'height',
+        'gap',
+        'padding',
+        'margin',
+        'borderRadius',
+        'borderWidth',
+      ]);
+      const props = String(req.query.props ?? '')
+        .split(',')
+        .map((item) => item.trim())
+        .filter((item): item is ProjectDesignTokenSuggestionProp => allowedProps.has(item));
+      const values: Partial<Record<ProjectDesignTokenSuggestionProp, string>> = {};
+      for (const [key, raw] of Object.entries(req.query)) {
+        if (!key.startsWith('value_')) continue;
+        const prop = key.slice('value_'.length);
+        if (!allowedProps.has(prop)) continue;
+        const value = Array.isArray(raw) ? raw[0] : raw;
+        if (typeof value === 'string' && value.trim()) values[prop as ProjectDesignTokenSuggestionProp] = value.trim();
+      }
+      const query: ProjectDesignTokenSuggestionQuery = { values };
+      if (typeof req.query.file === 'string') query.file = req.query.file;
+      if (typeof req.query.targetId === 'string') query.targetId = req.query.targetId;
+      if (props.length > 0) query.props = props;
+      const body = await buildProjectDesignTokenSuggestions({
+        projectId: req.params.id,
+        project,
+        projectMetadata: project.metadata,
+        projectsRoot: PROJECTS_DIR,
+        designSystemsRoot: DESIGN_SYSTEMS_DIR,
+        userDesignSystemsRoot: USER_DESIGN_SYSTEMS_DIR,
+        listFiles,
+        resolveProjectDir,
+        query,
+      });
+      res.json(body);
+    } catch (err: any) {
+      sendApiError(res, 400, 'BAD_REQUEST', String(err?.message || err));
     }
   });
 

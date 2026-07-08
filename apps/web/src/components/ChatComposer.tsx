@@ -2605,6 +2605,15 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
                 title={t('chat.send')}
                 data-tooltip={t('chat.send')}
               >
+                <video
+                  className="composer-send__video"
+                  src="/composer-send.mp4"
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  aria-hidden
+                />
                 <Icon name="arrow-up" size={17} />
               </button>
             ) : null}
@@ -2875,40 +2884,17 @@ function workspaceContextIcon(item: WorkspaceContextItem): IconName {
    steps (delay = 220ms × Manhattan distance from the middle dot); the faint
    base grid stays static. Dots use currentColor so the glyph adapts to the
    button's light-on-dark (and dark-mode inverted) fill. */
-const COMPOSER_RUN_DOTS = Array.from({ length: 25 }, (_, i) => {
-  const row = Math.floor(i / 5);
-  const col = i % 5;
-  return {
-    x: 6 + col * 11,
-    y: 6 + row * 11,
-    delay: 220 * (Math.abs(row - 2) + Math.abs(col - 2)),
-  };
-});
-
 function ComposerRunIcon({ className }: { className?: string }) {
   return (
-    <svg
+    <video
       className={className}
-      viewBox="0 0 56 56"
-      width={20}
-      height={20}
+      src="/composer-send.mp4"
+      autoPlay
+      loop
+      muted
+      playsInline
       aria-hidden
-      focusable="false"
-    >
-      {COMPOSER_RUN_DOTS.map((dot) => (
-        <g key={`${dot.x}-${dot.y}`}>
-          <circle cx={dot.x} cy={dot.y} r={2.4} fill="currentColor" opacity={0.07} />
-          <circle
-            className="composer-run-dot"
-            cx={dot.x}
-            cy={dot.y}
-            r={3.1}
-            fill="currentColor"
-            style={{ animationDelay: `${dot.delay}ms` }}
-          />
-        </g>
-      ))}
-    </svg>
+    />
   );
 }
 

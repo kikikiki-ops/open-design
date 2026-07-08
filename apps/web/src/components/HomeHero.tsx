@@ -9,6 +9,7 @@
 
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useMemo,
@@ -374,6 +375,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
   // The scenario the placeholder carousel is currently showing. A Send on an
   // empty composer submits THIS scenario's text + template (see handleSend).
   const [carouselScenario, setCarouselScenario] = useState<PlaceholderScenario | null>(null);
+  const [carouselDismissedByInput, setCarouselDismissedByInput] = useState(false);
   const editorRef = useRef<LexicalComposerInputHandle | null>(null);
   const promptEditorRef = useRef<HTMLDivElement | null>(null);
   const mentionPickerRef = useRef<HTMLDivElement | null>(null);
@@ -415,6 +417,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
   // the editor falls back to its own placeholder there.
   const carouselActive =
     active &&
+    !carouselDismissedByInput &&
     !submitting &&
     !submitDisabled &&
     prompt.trim().length === 0 &&
@@ -434,6 +437,9 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
     carouselScenario !== null &&
     carouselScenarios.some((scenario) => scenario.id === carouselScenario.id);
   const sendEnabled = canSubmit || carouselSubmittable;
+  const dismissCarouselForInput = useCallback(() => {
+    setCarouselDismissedByInput(true);
+  }, []);
   function handleSend() {
     if (submitting || submitDisabled) return;
     if (canSubmit) {
@@ -1367,6 +1373,7 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
                   onExamplePromptStatusChange?.(null);
                 }
               }}
+              onInputIntent={dismissCarouselForInput}
               onTrigger={handleTrigger}
               onEnterSend={handleSend}
               onPasteFiles={handleFiles}
@@ -1668,6 +1675,15 @@ export const HomeHero = forwardRef<HomeHeroHandle, Props>(function HomeHero(
               aria-label={submitting ? t('chat.comments.sending') : t('homeHero.run')}
               aria-busy={submitting}
             >
+              <video
+                className="composer-send__video"
+                src="/composer-send.mp4"
+                autoPlay
+                loop
+                muted
+                playsInline
+                aria-hidden
+              />
               <Icon name={submitting ? 'spinner' : 'arrow-up'} size={17} />
             </button>
           </div>

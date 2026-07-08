@@ -47,6 +47,7 @@ import {
   fetchProjectFilePreview,
   fetchProjectFiles,
   fetchProjectFileText,
+  fetchProjectDesignTokenSuggestions,
   uploadProjectFiles,
   liveArtifactPreviewUrl,
   projectFileUrl,
@@ -62,6 +63,10 @@ import {
   type WebUpdateDeployConfigRequest,
   writeProjectTextFile,
   writeProjectTextFileDetailed,
+  searchProjectFiles,
+  type ProjectDesignTokenSuggestion,
+  type ProjectDesignTokenSuggestionProp,
+  type ProjectSearchMatch,
 } from '../providers/registry';
 import type { ProjectFilePreview } from '../providers/registry';
 import {
@@ -141,7 +146,7 @@ import type {
   PreviewCommentMember,
   PreviewCommentTarget,
 } from '../types';
-import { ManualEditPanel, emptyManualEditDraft, type ManualEditDraft } from './ManualEditPanel';
+import { ManualEditPanel, emptyManualEditDraft, type ManualEditDraft, type ManualEditSearchResult } from './ManualEditPanel';
 import {
   applyManualEditPatch,
   isManualEditFullHtmlDocument,
@@ -1125,6 +1130,7 @@ export function FileViewer({
         onRemovePreviewComment={onRemovePreviewComment}
         onSendBoardCommentAttachments={onSendBoardCommentAttachments}
         onFileSaved={onFileSaved}
+        onOpenFileReplacing={onOpenFileReplacing}
         commentPortalId={commentPortalId}
         onCommentModeChange={onCommentModeChange}
         shareRequest={shareRequest}
@@ -4563,6 +4569,7 @@ function HtmlViewer({
   onRemovePreviewComment,
   onSendBoardCommentAttachments,
   onFileSaved,
+  onOpenFileReplacing,
   commentPortalId,
   onCommentModeChange,
   shareRequest,
@@ -4593,6 +4600,7 @@ function HtmlViewer({
   onRemovePreviewComment?: (commentId: string) => Promise<void>;
   onSendBoardCommentAttachments?: (attachments: ChatCommentAttachment[], images?: File[]) => Promise<boolean | void> | boolean | void;
   onFileSaved?: () => Promise<void> | void;
+  onOpenFileReplacing?: (openName: string, closeName: string) => void;
   commentPortalId?: string;
   onCommentModeChange?: (active: boolean) => void;
   shareRequest?: { nonce: number } | null;
@@ -5117,6 +5125,12 @@ function HtmlViewer({
   const [manualEditUndone, setManualEditUndone] = useState<ManualEditHistoryEntry[]>([]);
   const [manualEditError, setManualEditError] = useState<string | null>(null);
   const [manualEditSaving, setManualEditSaving] = useState(false);
+  const [manualEditTokenSuggestions, setManualEditTokenSuggestions] = useState<ProjectDesignTokenSuggestion[]>([]);
+  const [manualEditTokenLoading, setManualEditTokenLoading] = useState(false);
+  const [manualEditSearchQuery, setManualEditSearchQuery] = useState('');
+  const [manualEditSearchResults, setManualEditSearchResults] = useState<ManualEditSearchResult[]>([]);
+  const [manualEditSearchLoading, setManualEditSearchLoading] = useState(false);
+  const manualEditSearchNonceRef = useRef(0);
   const manualEditSavingRef = useRef(false);
   const manualEditPendingStyleRef = useRef<ManualEditPendingStyleSave | null>(null);
   const manualEditStyleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -5985,6 +5999,13 @@ function HtmlViewer({
     win.postMessage({ type: 'od:inspect-mode', enabled: inspectMode }, '*');
   }
 
+  function setManualEditCaptureChromeHidden(hidden: boolean) {
+    const frames = [iframeRef.current, srcDocPreviewIframeRef.current, urlPreviewIframeRef.current];
+    for (const frame of frames) {
+      frame?.contentWindow?.postMessage({ type: 'od-edit-capture-chrome', hidden }, '*');
+    }
+  }
+
   useEffect(() => {
     const win = iframeRef.current?.contentWindow;
     if (!win) return;
@@ -6072,6 +6093,11 @@ function HtmlViewer({
     setManualEditHistory([]);
     setManualEditUndone([]);
     setManualEditError(null);
+    setManualEditTokenSuggestions([]);
+    setManualEditTokenLoading(false);
+    setManualEditSearchQuery('');
+    setManualEditSearchResults([]);
+    setManualEditSearchLoading(false);
     manualEditPendingStyleRef.current = null;
     clearManualEditStyleTimer();
   }, [file.name]);
@@ -6117,6 +6143,40 @@ function HtmlViewer({
   useEffect(() => {
     selectedManualEditTargetIdRef.current = selectedManualEditTarget?.id ?? null;
   }, [selectedManualEditTarget?.id]);
+
+  useEffect(() => {
+    if (!manualEditMode || !selectedManualEditTarget) {
+      setManualEditTokenSuggestions([]);
+      setManualEditTokenLoading(false);
+      setManualEditSearchQuery('');
+      setManualEditSearchResults([]);
+      setManualEditSearchLoading(false);
+      return;
+    }
+    const target = selectedManualEditTarget;
+    const values = manualEditTokenValuesForTarget(target);
+    const props = Object.entries(values)
+      .filter(([, value]) => typeof value === 'string' && value.trim().length > 0)
+      .map(([prop]) => prop as ProjectDesignTokenSuggestionProp);
+    let canceled = false;
+    setManualEditTokenLoading(true);
+    void fetchProjectDesignTokenSuggestions(projectId, {
+      file: file.name,
+      targetId: target.id,
+      props,
+      values,
+    }).then((suggestions) => {
+      if (!canceled) setManualEditTokenSuggestions(suggestions);
+    }).finally(() => {
+      if (!canceled) setManualEditTokenLoading(false);
+    });
+    const query = defaultManualEditSearchQuery(target);
+    setManualEditSearchQuery(query);
+    if (query) void runManualEditProjectSearch(query);
+    return () => {
+      canceled = true;
+    };
+  }, [manualEditMode, selectedManualEditTarget?.id, projectId, file.name]);
 
   useEffect(() => {
     if (!boardMode) {
@@ -6645,6 +6705,88 @@ function HtmlViewer({
       outerHtml: readManualEditOuterHtml(base, target.id) || target.outerHtml,
       fullSource: base,
     };
+  }
+
+  function manualEditTokenValuesForTarget(target: ManualEditTarget): Partial<Record<ProjectDesignTokenSuggestionProp, string>> {
+    const styles = target.styles;
+    const summary = target.computedSummary;
+    return {
+      color: styles.color || summary?.color || '',
+      backgroundColor: styles.backgroundColor || summary?.backgroundColor || '',
+      borderColor: styles.borderColor || summary?.borderColor || '',
+      fontFamily: styles.fontFamily || summary?.fontFamily || '',
+      fontSize: styles.fontSize || summary?.fontSize || '',
+      fontWeight: styles.fontWeight || summary?.fontWeight || '',
+      lineHeight: styles.lineHeight || summary?.lineHeight || '',
+      letterSpacing: styles.letterSpacing || summary?.letterSpacing || '',
+      width: styles.width || `${Math.round(target.rect.width)}px`,
+      height: styles.height || `${Math.round(target.rect.height)}px`,
+      gap: styles.gap || '',
+      padding: styles.padding || summary?.padding || styles.paddingTop || '',
+      margin: styles.margin || summary?.margin || styles.marginTop || '',
+      borderRadius: styles.borderRadius || summary?.borderRadius || '',
+      borderWidth: styles.borderTopWidth || styles.borderRightWidth || styles.borderBottomWidth || styles.borderLeftWidth || '',
+    };
+  }
+
+  function defaultManualEditSearchQuery(target: ManualEditTarget): string {
+    const candidates = [
+      target.attributes['data-od-id'],
+      target.attributes.id,
+      target.className.split(/\s+/).find(Boolean),
+      target.text,
+      target.fields.text,
+      target.tagName,
+      target.styles.color,
+      target.styles.backgroundColor,
+    ];
+    return candidates.map((value) => (value ?? '').trim()).find((value) => value.length >= 2) ?? '';
+  }
+
+  async function runManualEditProjectSearch(query = manualEditSearchQuery) {
+    const clean = query.trim();
+    if (!clean) {
+      setManualEditSearchResults([]);
+      return;
+    }
+    const nonce = manualEditSearchNonceRef.current + 1;
+    manualEditSearchNonceRef.current = nonce;
+    setManualEditSearchLoading(true);
+    try {
+      const matches = await searchProjectFiles(projectId, clean, { max: 80 });
+      if (manualEditSearchNonceRef.current !== nonce) return;
+      setManualEditSearchResults(matches.map((match: ProjectSearchMatch) => ({
+        file: match.file,
+        line: match.line,
+        snippet: match.snippet,
+      })));
+    } finally {
+      if (manualEditSearchNonceRef.current === nonce) setManualEditSearchLoading(false);
+    }
+  }
+
+  function openManualEditSearchResult(result: ManualEditSearchResult) {
+    void copyToClipboard(`${result.file}:${result.line}`);
+    if (result.file !== file.name) onOpenFileReplacing?.(result.file, file.name);
+  }
+
+  async function selectManualEditInspectValue(prop: ProjectDesignTokenSuggestionProp, value: string) {
+    const clean = value.trim();
+    if (!selectedManualEditTarget || !clean) return;
+    setManualEditTokenLoading(true);
+    setManualEditSearchQuery(clean);
+    try {
+      const suggestions = await fetchProjectDesignTokenSuggestions(projectId, {
+        file: file.name,
+        targetId: selectedManualEditTarget.id,
+        props: [prop],
+        values: { [prop]: clean },
+      });
+      setManualEditTokenSuggestions(suggestions);
+      void runManualEditProjectSearch(clean);
+    } finally {
+      setManualEditTokenLoading(false);
+    }
   }
 
   async function clearManualEditTargetSelection() {
@@ -8032,61 +8174,71 @@ function HtmlViewer({
     setDeployMenuOpen((v) => !v);
   };
   const captureExportImageSnapshot = useCallback(async () => {
+    if (manualEditMode) {
+      setManualEditCaptureChromeHidden(true);
+    }
     // The host compositor grabs on-screen pixels, so any transient hover chrome
     // over the preview leaks into the capture. The screenshot control's own
     // tooltip is already dismissed by TooltipLayer's pointerdown/click listener,
     // but that setState(null) has not repainted yet when capture starts. Wait
     // two frames so the dismissal commits first — mirrors the double-rAF guard
     // in the browser screenshot flow (DesignBrowserPanel).
-    await waitForAnimationFrame();
-    await waitForAnimationFrame();
-    // Prefer the desktop compositor screenshot of the visible preview region:
-    // it returns the real rendered pixels (fonts, external CSS, gradients,
-    // images) and is never tainted, so it cannot produce the black/blank frames
-    // the in-iframe SVG-foreignObject bridge does. Works for both srcDoc and
-    // URL-load previews. Falls through to the bridge on pure web (no host).
-    const visibleIframe = iframeRef.current ?? srcDocPreviewIframeRef.current;
-    const hostSnapshot = await captureHostIframeSnapshot(visibleIframe);
-    if (hostSnapshot) return hostSnapshot;
-
-    if (!useUrlLoadPreview) {
-      const activeIframe = srcDocPreviewIframeRef.current ?? iframeRef.current;
-      if (!activeIframe) return null;
-      await waitForIframeLoadOrTimeout(activeIframe, 250);
-      await waitForAnimationFrame();
-      return requestPreviewSnapshotWithRetry(activeIframe);
-    }
-
-    const urlIframe = iframeRef.current ?? urlPreviewIframeRef.current;
-    if (urlIframe) {
-      await waitForIframeLoadOrTimeout(urlIframe, 250);
-      await waitForAnimationFrame();
-      const urlSnapshot = await requestPreviewSnapshotWithRetry(urlIframe);
-      if (urlSnapshot) return urlSnapshot;
-    }
-
-    const srcDocIframe = srcDocPreviewIframeRef.current;
-    if (!srcDocIframe) {
-      const activeIframe = iframeRef.current;
-      if (!activeIframe) return null;
-      return requestPreviewSnapshotWithRetry(activeIframe);
-    }
-
-    if (useLazySrcDocTransport && !srcDocShellReady) {
-      await waitForIframeLoadOrTimeout(srcDocIframe, 500);
-    }
-    if (useLazySrcDocTransport && activateSrcDocSnapshotTransport(srcDocIframe)) {
-      await waitForIframeLoadOrTimeout(srcDocIframe);
-    }
-    const restoreVisibility = temporarilyExposeIframeForSnapshot(srcDocIframe);
     try {
       await waitForAnimationFrame();
-      return requestPreviewSnapshotWithRetry(srcDocIframe);
+      await waitForAnimationFrame();
+      // Prefer the desktop compositor screenshot of the visible preview region:
+      // it returns the real rendered pixels (fonts, external CSS, gradients,
+      // images) and is never tainted, so it cannot produce the black/blank frames
+      // the in-iframe SVG-foreignObject bridge does. Works for both srcDoc and
+      // URL-load previews. Falls through to the bridge on pure web (no host).
+      const visibleIframe = iframeRef.current ?? srcDocPreviewIframeRef.current;
+      const hostSnapshot = await captureHostIframeSnapshot(visibleIframe);
+      if (hostSnapshot) return hostSnapshot;
+
+      if (!useUrlLoadPreview) {
+        const activeIframe = srcDocPreviewIframeRef.current ?? iframeRef.current;
+        if (!activeIframe) return null;
+        await waitForIframeLoadOrTimeout(activeIframe, 250);
+        await waitForAnimationFrame();
+        return requestPreviewSnapshotWithRetry(activeIframe);
+      }
+
+      const urlIframe = iframeRef.current ?? urlPreviewIframeRef.current;
+      if (urlIframe) {
+        await waitForIframeLoadOrTimeout(urlIframe, 250);
+        await waitForAnimationFrame();
+        const urlSnapshot = await requestPreviewSnapshotWithRetry(urlIframe);
+        if (urlSnapshot) return urlSnapshot;
+      }
+
+      const srcDocIframe = srcDocPreviewIframeRef.current;
+      if (!srcDocIframe) {
+        const activeIframe = iframeRef.current;
+        if (!activeIframe) return null;
+        return requestPreviewSnapshotWithRetry(activeIframe);
+      }
+
+      if (useLazySrcDocTransport && !srcDocShellReady) {
+        await waitForIframeLoadOrTimeout(srcDocIframe, 500);
+      }
+      if (useLazySrcDocTransport && activateSrcDocSnapshotTransport(srcDocIframe)) {
+        await waitForIframeLoadOrTimeout(srcDocIframe);
+      }
+      const restoreVisibility = temporarilyExposeIframeForSnapshot(srcDocIframe);
+      try {
+        await waitForAnimationFrame();
+        return requestPreviewSnapshotWithRetry(srcDocIframe);
+      } finally {
+        restoreVisibility();
+      }
     } finally {
-      restoreVisibility();
+      if (manualEditMode) {
+        setManualEditCaptureChromeHidden(false);
+      }
     }
   }, [
     activateSrcDocSnapshotTransport,
+    manualEditMode,
     srcDocShellReady,
     useLazySrcDocTransport,
     useUrlLoadPreview,
@@ -8614,6 +8766,39 @@ function HtmlViewer({
         setManualEditError(null);
         return toOwnerRelativePath(file.name, uploaded.path);
       }}
+      tokenSuggestions={manualEditTokenSuggestions}
+      tokenSuggestionsLoading={manualEditTokenLoading}
+      onApplyTokenSuggestion={(prop, value) => {
+        if (!selectedManualEditTarget) return;
+        const styles = prop === 'borderTopWidth'
+          ? {
+              borderTopWidth: value,
+              borderRightWidth: value,
+              borderBottomWidth: value,
+              borderLeftWidth: value,
+            }
+          : { [prop]: value };
+        setManualEditDraft((current) => ({
+          ...current,
+          styles: { ...current.styles, ...styles },
+        }));
+        void handleManualEditStyleChange(
+          selectedManualEditTarget.id,
+          styles,
+          `Token: ${selectedManualEditTarget.label}`,
+        );
+      }}
+      onInspectValueSelect={(prop, value) => {
+        void selectManualEditInspectValue(prop, value);
+      }}
+      searchQuery={manualEditSearchQuery}
+      searchResults={manualEditSearchResults}
+      searchLoading={manualEditSearchLoading}
+      onSearchQueryChange={setManualEditSearchQuery}
+      onRunSearch={() => {
+        void runManualEditProjectSearch();
+      }}
+      onOpenSearchResult={openManualEditSearchResult}
     />
   ) : null;
   const manualEditHoverAffordance =
@@ -9066,9 +9251,12 @@ function HtmlViewer({
           {rawCanShare || rawCanDownload ? (
             <button
               type="button"
-              className={`chrome-action chrome-action-secondary chrome-action-with-label chrome-action-text-only${versionPanelOpen ? ' is-active' : ''}`}
+              className={`chrome-action chrome-action-secondary chrome-action-icon od-tooltip${versionPanelOpen ? ' is-active' : ''}`}
               aria-expanded={versionPanelOpen}
               aria-label="历史版本"
+              data-tooltip="历史版本"
+              data-tooltip-placement="bottom"
+              title="历史版本"
               onClick={() => {
                 setDeployMenuOpen(false);
                 setDownloadMenuOpen(false);
@@ -9083,7 +9271,6 @@ function HtmlViewer({
               }}
             >
               <RemixIcon name="history-line" size={15} />
-              <span>历史版本</span>
             </button>
           ) : null}
           {rawCanShare || rawCanDownload ? (
@@ -9092,7 +9279,7 @@ function HtmlViewer({
                 <button
                   type="button"
                   className={
-                    'chrome-action chrome-action-secondary chrome-action-with-label chrome-action-text-only chrome-action-unified' +
+                    'chrome-action chrome-action-secondary chrome-action-with-label chrome-action-text-only chrome-action-unified chrome-action-share-dark' +
                     (exportReadyNudge ? ' export-ready-nudge' : '')
                   }
                   aria-haspopup="menu"
