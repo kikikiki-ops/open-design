@@ -835,6 +835,50 @@ describe('AmrLoginPill', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
+  it('surfaces (and later clears) the classified reason from a host-pushed signed-out initialStatus', () => {
+    // The Settings card mounts the pill with `initialStatus` + `skipInitialRefresh`
+    // and refetches on focus, so a signed-out snapshot carrying `lastLoginFailure`
+    // must render the reason through the `initialStatus` effect — not only through
+    // the pill's own `refresh()` — and clear when a later snapshot drops it
+    // (daemon restart loses the in-memory exit) (issue #426).
+    const withFailure: VelaLoginStatus = {
+      loggedIn: false,
+      loginInFlight: false,
+      profile: 'prod',
+      user: null,
+      configPath: '/x',
+      lastLoginFailure: { code: 'AMR_LOGIN_PROXY_BLOCKED', recovery: 'retry' },
+    };
+
+    const { rerender } = render(
+      <I18nProvider initial="en">
+        <AmrLoginPill initialStatus={withFailure} skipInitialRefresh />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByRole('alert').textContent).toBe(
+      'A proxy or VPN blocked sign-in. Turn it off and retry.',
+    );
+
+    rerender(
+      <I18nProvider initial="en">
+        <AmrLoginPill
+          initialStatus={{
+            loggedIn: false,
+            loginInFlight: false,
+            profile: 'prod',
+            user: null,
+            configPath: '/x',
+          }}
+          skipInitialRefresh
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeTruthy();
+  });
+
   it('does not silently auto-recover to signed-in after a local logout completes', async () => {
     let loggedIn = true;
     let statusCalls = 0;

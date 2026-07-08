@@ -348,8 +348,22 @@ export function AmrLoginPill({
       setErrorMessage(null);
       setPending(null);
       setCanceledVisible(false);
+      return;
     }
-  }, [initialStatus, stopPolling]);
+    // The Settings card mounts this pill with `initialStatus` + `skipInitialRefresh`
+    // and refetches on window focus, so a host-pushed signed-out snapshot never
+    // flows through `refresh()`. Mirror refresh()'s terminal mapping here (unless
+    // the pill's own login is mid-flight) so the classified reason surfaces on
+    // that surface after reload/focus too — and clears when the daemon no longer
+    // reports `lastLoginFailure` (restart drops the in-memory exit) (issue #426).
+    if (initialStatus && !initialStatus.loginInFlight && !loginPendingRef.current) {
+      setErrorMessage(
+        initialStatus.lastLoginFailure
+          ? amrLoginReasonText(t, initialStatus.lastLoginFailure)
+          : null,
+      );
+    }
+  }, [initialStatus, stopPolling, t]);
 
   useEffect(() => {
     if (!canceledVisible) return;
