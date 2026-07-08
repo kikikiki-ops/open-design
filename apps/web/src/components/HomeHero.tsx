@@ -2229,7 +2229,7 @@ function PluginPromptPresets({
   );
 }
 
-// A Website-clone text example ("Website URL to clone: https://vercel.com") —
+// A Website-clone text example ("Website URL to clone: https://kimi.com") —
 // pull the site out so the card can show the site's own favicon + bare domain
 // instead of the raw prompt line. Returns null for non-URL examples so the
 // generic text card renders unchanged.
@@ -3981,13 +3981,8 @@ function fallbackPluginPresetPrompt(
 const HOME_PROMPT_EXAMPLES: Record<Locale, Record<string, string[]>> = {
   "en": {
     "web-clone": [
-      "Website URL to clone: https://nexu.io",
       "Website URL to clone: https://open-design.ai",
-      "Website URL to clone: https://anthropic.com",
-      "Website URL to clone: https://vercel.com",
-      "Website URL to clone: https://resend.com",
-      "Website URL to clone: https://linear.app",
-      "Website URL to clone: https://raycast.com",
+      "Website URL to clone: https://kimi.com",
     ],
     prototype: [
       "Design a high-converting website for an AI CRM with a clear hero, feature story, proof points, and trial CTA",
@@ -4122,13 +4117,8 @@ const HOME_PROMPT_EXAMPLES: Record<Locale, Record<string, string[]>> = {
   },
   "zh-CN": {
     "web-clone": [
-      "想要复刻的网站链接：https://nexu.io",
       "想要复刻的网站链接：https://open-design.ai",
-      "想要复刻的网站链接：https://anthropic.com",
-      "想要复刻的网站链接：https://vercel.com",
-      "想要复刻的网站链接：https://resend.com",
-      "想要复刻的网站链接：https://linear.app",
-      "想要复刻的网站链接：https://raycast.com",
+      "想要复刻的网站链接：https://kimi.com",
     ],
     prototype: [
       "为 AI CRM 设计一个高转化官网，包含首屏、功能卖点、客户案例和清晰的试用入口",

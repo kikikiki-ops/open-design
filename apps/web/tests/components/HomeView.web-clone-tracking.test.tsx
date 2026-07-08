@@ -116,8 +116,8 @@ describe('web-clone example-card tracking', () => {
     expect(screen.queryByTestId('home-hero-plugin-presets')).toBeNull();
     // No remix/duplicate affordance on the web-clone rail.
     expect(document.querySelector('[data-testid^="home-hero-plugin-preset-duplicate"]')).toBeNull();
-    // Site cards show the bare domain (e.g. nexu.io), not the raw prompt line.
-    expect(textCards.some((c) => (c.textContent ?? '').includes('nexu.io'))).toBe(true);
+    // Site cards show the bare domain (e.g. open-design.ai), not the raw prompt line.
+    expect(textCards.some((c) => (c.textContent ?? '').includes('open-design.ai'))).toBe(true);
     expect(textCards.every((c) => !(c.textContent ?? '').includes('https://'))).toBe(true);
     expect(document.querySelector('.home-hero__prompt-example--site')).not.toBeNull();
   });
