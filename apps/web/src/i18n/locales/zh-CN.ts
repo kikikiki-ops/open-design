@@ -661,8 +661,6 @@ export const zhCN: Dict = {
   "messageCenter.emptyUnreadTitle": "都看完了",
   "messageCenter.emptyReadTitle": "暂时没有已读消息",
   "messageCenter.emptyBody": "新消息会出现在这里。",
-  "messageCenter.markRead": "标为已读",
-  "messageCenter.markUnread": "标为未读",
   "messageCenter.close": "关闭消息中心",
   "messageCenter.desktopSettings": "桌面提醒设置",
   "messageCenter.desktopSettingsHint": "任务完成声音和系统通知仍在设置中管理。",

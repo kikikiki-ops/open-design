@@ -195,20 +195,6 @@ export function MessageCenterDemo({ onOpenNotificationSettings }: Props) {
     return () => window.clearTimeout(timer);
   }, [expandedMessageId, open]);
 
-  const updateMessage = (
-    id: string,
-    patch: Partial<DemoMessageState> | ((state: DemoMessageState) => DemoMessageState),
-  ) => {
-    setMessages((current) => {
-      const state = current[id];
-      if (!state) return current;
-      return {
-        ...current,
-        [id]: typeof patch === 'function' ? patch(state) : { ...state, ...patch },
-      };
-    });
-  };
-
   const toggleExpanded = (id: string) => {
     setMessages((current) =>
       Object.fromEntries(
@@ -349,16 +335,8 @@ export function MessageCenterDemo({ onOpenNotificationSettings }: Props) {
                             <span className={styles.bodyPreview}>{t(message.bodyKey)}</span>
                           </button>
 
-                          <div className={styles.itemActions}>
-                            <button
-                              type="button"
-                              onClick={() => updateMessage(message.id, { read: !state.read })}
-                            >
-                              {state.read
-                                ? t('messageCenter.markUnread')
-                                : t('messageCenter.markRead')}
-                            </button>
-                            {state.expanded ? (
+                          {state.expanded ? (
+                            <div className={styles.itemActions}>
                               <button
                                 type="button"
                                 className={styles.primaryAction}
@@ -372,8 +350,8 @@ export function MessageCenterDemo({ onOpenNotificationSettings }: Props) {
                               >
                                 {t(message.actionKey)}
                               </button>
-                            ) : null}
-                          </div>
+                            </div>
+                          ) : null}
                         </article>
                       );
                     })

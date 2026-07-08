@@ -94,7 +94,7 @@ describe('MessageCenterDemo', () => {
     expect(screen.queryByText('Open Design 0.13.0 is available')).toBeNull();
   });
 
-  it('keeps message actions focused on read and unread state', () => {
+  it('does not render per-message read or unread actions', () => {
     renderMessageCenter();
     const dialog = openCenter();
     const message = within(dialog)
@@ -104,10 +104,8 @@ describe('MessageCenterDemo', () => {
 
     expect(screen.queryByRole('button', { name: 'Archived' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull();
-
-    fireEvent.click(within(message as HTMLElement).getByRole('button', { name: 'Mark read' }));
-
-    expect(within(message as HTMLElement).getByRole('button', { name: 'Mark unread' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Mark read' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Mark unread' })).toBeNull();
   });
 
   it('opens existing desktop notification settings from the drawer footer', () => {

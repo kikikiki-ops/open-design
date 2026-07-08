@@ -1018,8 +1018,6 @@ export interface Dict {
   'messageCenter.emptyUnreadTitle': string;
   'messageCenter.emptyReadTitle': string;
   'messageCenter.emptyBody': string;
-  'messageCenter.markRead': string;
-  'messageCenter.markUnread': string;
   'messageCenter.close': string;
   'messageCenter.desktopSettings': string;
   'messageCenter.desktopSettingsHint': string;

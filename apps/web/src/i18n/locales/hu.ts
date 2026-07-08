@@ -641,8 +641,6 @@ export const hu: Dict = {
   'messageCenter.emptyUnreadTitle': 'All caught up',
   'messageCenter.emptyReadTitle': 'No read messages',
   'messageCenter.emptyBody': 'New platform messages will appear here.',
-  'messageCenter.markRead': 'Mark read',
-  'messageCenter.markUnread': 'Mark unread',
   'messageCenter.close': 'Close message center',
   'messageCenter.desktopSettings': 'Desktop notification settings',
   'messageCenter.desktopSettingsHint': 'Task completion sounds and system notifications stay in Settings.',
