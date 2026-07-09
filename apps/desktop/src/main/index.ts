@@ -860,6 +860,12 @@ export async function runDesktopMain(
     // protection still works) and POSTs once more.
     registerDesktopAuthWithDaemon: () => registerDesktopAuthWithDaemon(runtime, desktopAuthSecret),
     rendererLogPath,
+    // Mark "reached running" only when the window is ACTUALLY revealed (web app
+    // mounted + shown), not when createDesktopRuntime returns — it starts async
+    // bootstrap via `void tick()` and returns before the first load. Until this
+    // fires, a crash is still a startup failure (covered by
+    // packaged_runtime_failed), not a runtime abnormal exit.
+    onRevealed: () => markDesktopSessionRunning({ stateFilePath: sessionStatePath }),
     requestQuit: shutdownAndExit,
     splashWindow: options.splashWindow,
     splashStartedAt: options.splashStartedAt,
@@ -868,12 +874,6 @@ export async function runDesktopMain(
   });
   console.info("[open-design desktop] desktop runtime created");
   options.onDesktopReady?.({ show: () => desktop?.show() });
-
-  // The app is up now — only from here does a subsequent dirty marker mean a
-  // RUNTIME crash. A bootstrap failure before this point never reached running,
-  // so it isn't misreported as an abnormal exit (it's a startup failure, which
-  // packaged_runtime_failed already covers).
-  markDesktopSessionRunning({ stateFilePath: sessionStatePath });
 
   const discoverDaemonBaseUrl = resolveDaemonBaseUrl(runtime, options);
   // Report an abnormal exit of the PREVIOUS run now that the daemon is up to
