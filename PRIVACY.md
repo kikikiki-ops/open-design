@@ -13,8 +13,8 @@ default**, and you can turn it off at any time under **Settings → Privacy**.
 
 Usage telemetry is **on by default**. On first run the app shows a privacy
 disclosure banner so you can see what is collected before doing anything else.
-The banner asks you to choose **Share usage data** or **Don’t share**.
-Choosing **Share usage data** keeps telemetry enabled; choosing **Don’t share**
+The banner asks you to choose **Share** or **Don’t share**.
+Choosing **Share** keeps telemetry enabled; choosing **Don’t share**
 turns telemetry off.
 
 You stay in control: the banner points you to **Settings → Privacy**, where you
