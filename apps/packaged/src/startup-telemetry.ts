@@ -23,15 +23,15 @@
 // opted-out users (and the main process cannot read daemon consent anyway,
 // since the daemon isn't up). The Settings → Privacy copy MUST call this out.
 //
-// Payload PII: the free-form crash fields (error_message, error_stack, and the
-// sidecar_log_tail slice of the failed sidecar's own log) and every path we send
-// (log_path, native_module_path) run through `scrubUserPaths` to strip the
-// user's home dir, and the free-form fields additionally run through
-// `scrubSecrets` to strip credentials/tokens/emails — because the daemon loads
-// config/connector/MCP secrets before it reports ready, so a startup error can
-// echo a connection string or auth header, and this event is sent even for
-// opted-out users. The free-form text is also length-capped. Scrubbing is a
-// best-effort denylist, not a guarantee.
+// Payload PII: the free-form fields (error_message, error_stack, sidecar_log_tail)
+// and every path (log_path, native_module_path) run through `scrubUserPaths`.
+// sidecar_log_tail is additionally WHITELISTED to error/stack-shaped lines
+// (`extractSidecarErrorLines`), so config / connection / KEY=value lines — where
+// the daemon's config/connector/MCP secrets live — are structurally excluded
+// rather than chased by an ever-incomplete denylist. `scrubSecrets` then runs on
+// all free-form fields as defense in depth (a token could still appear inside an
+// error message), and the text is length-capped. This event is sent even for
+// opted-out users, hence the layered structural + denylist controls.
 
 import { readFile } from "node:fs/promises";
 import { readFileSync, statSync } from "node:fs";
@@ -200,7 +200,7 @@ export function scrubSecrets(value: string): string {
     // "Authorization"/"author" because a `[=:]` separator must immediately follow
     // the matched word (the Authorization *header* is handled by the rule above).
     .replace(
-      /\b(pass(?:word|wd)?|pwd|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret|auth)(\s*[=:]\s*)("?)[^\s"'&]+\3/gi,
+      /\b(pass(?:word|wd)?|pwd|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret|auth)(\s*[=:]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s"'&]+)/gi,
       "$1$2<redacted>",
     )
     // Inline Bearer/Basic token values not under an Authorization header.
@@ -209,6 +209,25 @@ export function scrubSecrets(value: string): string {
     .replace(/\b(?:sk|pk|rk|phx|phc|ghp|gho|ghs|xox[baprs])[-_][A-Za-z0-9_-]{8,}/g, "<redacted-token>")
     // Bare email addresses.
     .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "<redacted-email>");
+}
+
+// A line is "diagnostically relevant" if it looks like a thrown error, a stack
+// frame, a Node error code, or an exit marker.
+const ERROR_LINE_RE =
+  /(error|exception|fatal|\bpanic\b|assert|\bthrow|unhandled|reject|\bERR_[A-Z0-9_]+|^\s+at\s|\bE[A-Z]{2,}\b|\b(?:code|signal)\s*[=:]|exited|cannot find|not found|refused|denied|timed?\s*out)/i;
+
+// Keep ONLY error/stack-shaped lines from a log tail. This is the primary PII
+// control for `sidecar_log_tail`: rather than trying to scrub every secret shape
+// out of arbitrary log text (a denylist that kept leaking — connection strings,
+// auth headers, KEY=value, quoted values), we structurally exclude the config
+// and connection lines where secrets live, since they don't match an error
+// shape. scrubUserPaths + scrubSecrets still run on what remains as defense in
+// depth (a token could appear inside an error message).
+export function extractSidecarErrorLines(logText: string): string {
+  return logText
+    .split(/\r?\n/)
+    .filter((line) => ERROR_LINE_RE.test(line))
+    .join("\n");
 }
 
 function osName(platform: NodeJS.Platform = process.platform): string {
@@ -404,12 +423,17 @@ export async function reportStartupFailure(
         missingModule = parsed.missingModule;
         // parseDaemonLogTail only recognises ERR_* and missing-module lines, so
         // it captures nothing for the majority of code=1 sidecar exits (a plain
-        // Error, a config parse failure, a port bind, an assertion). Production
-        // has code=1 exits where we read the log but classified neither field;
-        // emit a scrubbed, tail-truncated slice of the raw log so ANY exit
-        // reason is diagnosable, not just those two shapes. Carries whichever
-        // sidecar failed (daemon or web) — partition on failure_kind.
-        sidecarLogTail = truncateTailForTelemetry(scrubSecrets(scrubUserPaths(tail)), SIDECAR_LOG_TAIL_MAX);
+        // Error, a config parse failure, a port bind, an assertion). Emit the
+        // error/stack-shaped lines of the tail so ANY exit reason is diagnosable,
+        // not just those two shapes — but WHITELISTED to error shapes so config /
+        // connection / KEY=value lines (where secrets live) are structurally
+        // excluded, then scrubbed as defense in depth. Null when the tail had no
+        // error-shaped line. Carries whichever sidecar failed — partition on
+        // failure_kind.
+        const errorLines = extractSidecarErrorLines(tail);
+        sidecarLogTail = errorLines
+          ? truncateTailForTelemetry(scrubSecrets(scrubUserPaths(errorLines)), SIDECAR_LOG_TAIL_MAX)
+          : null;
       }
     }
     const rawMessage =

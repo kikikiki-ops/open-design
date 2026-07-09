@@ -712,12 +712,14 @@ export interface PackagedRuntimeFailedProps {
   native_module_path?: string | null;
   // Scrubbed of the user's home dir before send.
   log_path: string | null;
-  // A scrubbed, tail-truncated slice of the FAILED sidecar's own startup log —
-  // daemon or web, whichever `failure_kind` names (partition on `failure_kind`
-  // when querying). error_code / missing_module only classify ERR_* and
-  // missing-module lines, so this is the only signal for the many code=1 exits
-  // whose cause is a plain Error / config parse / port bind / assertion the log
-  // was read for but could not be classified. Null when there was no log to read.
+  // The error/stack-shaped lines of the FAILED sidecar's startup log — daemon or
+  // web, whichever `failure_kind` names (partition on `failure_kind`). Only lines
+  // that look like an error / stack frame / exit marker are kept (config and
+  // KEY=value lines are excluded as a PII control), then scrubbed and
+  // tail-truncated. error_code / missing_module only classify ERR_* and
+  // missing-module cases, so this is the only signal for the many code=1 exits
+  // whose cause is a plain Error / port bind / assertion. Null when the log had
+  // no error-shaped line (or no log to read).
   sidecar_log_tail?: string | null;
   app_version: string | null;
   namespace: string;

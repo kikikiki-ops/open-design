@@ -28,6 +28,7 @@ import {
   resolveStartupDistinctId,
   scrubUserPaths,
   scrubSecrets,
+  extractSidecarErrorLines,
 } from '../src/startup-telemetry.js';
 
 // Verbatim daemon log tail from issue #4638.
@@ -40,9 +41,9 @@ const ISSUE_4638_LOG = `Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'bette
 // (13 win + 7 mac in 0.14.0) whose log we read but discarded. Includes a home
 // dir to assert the tail is scrubbed.
 const UNCLASSIFIED_DAEMON_LOG = `2026-07-09T10:00:00.000Z [daemon] booting namespace release-stable
-2026-07-09T10:00:01.000Z [daemon] loading config from /Users/liudetao/Library/Application Support/Open Design/namespaces/release-stable/config.json
+2026-07-09T10:00:01.000Z [daemon] DATABASE_URL=postgres://od:s3cr3tpw@db.internal/open
 TypeError: Cannot read properties of undefined (reading 'port')
-    at resolveListenPort (/Applications/Open Design.app/Contents/Resources/app/prebundled/daemon/chunks/server-PULTSXNL.mjs:1201:14)
+    at resolveListenPort (/Users/liudetao/app/prebundled/server.mjs:1201:14)
 [open-design packaged] exited app=daemon pid=51001 code=1 signal=none`;
 
 // Verbatim shape of what waitForStatus throws (sidecars.ts:206-208).
@@ -207,9 +208,41 @@ describe('scrubSecrets', () => {
     );
   });
 
+  it('redacts quoted secret values that contain spaces or special chars', () => {
+    expect(scrubSecrets('password="hunter 2"')).toBe('password=<redacted>');
+    expect(scrubSecrets('token="abc&def"')).toBe('token=<redacted>');
+    expect(scrubSecrets('api_key: "abc def"')).toBe('api_key: <redacted>');
+  });
+
   it('leaves ordinary diagnostic text (stack frames, module paths) intact', () => {
     const stack = "TypeError: Cannot read properties of undefined (reading 'port')\n    at resolveListenPort (server.mjs:1201:14)";
     expect(scrubSecrets(stack)).toBe(stack);
+  });
+});
+
+describe('extractSidecarErrorLines', () => {
+  it('keeps error/stack/exit lines and drops config/log-noise lines', () => {
+    const log = [
+      '[daemon] booting namespace release-stable',
+      'DATABASE_URL=postgres://od:s3cr3tpw@db/x',
+      "TypeError: Cannot read properties of undefined (reading 'port')",
+      '    at resolveListenPort (server.mjs:1201:14)',
+      'Error: listen EADDRINUSE: address already in use :::8080',
+      '[open-design packaged] exited app=daemon pid=1 code=1 signal=none',
+    ].join('\n');
+    const out = extractSidecarErrorLines(log);
+    expect(out).toContain('TypeError: Cannot read');
+    expect(out).toContain('at resolveListenPort');
+    expect(out).toContain('EADDRINUSE');
+    expect(out).toContain('code=1');
+    // Structural PII control: the secret-bearing config lines are excluded.
+    expect(out).not.toContain('DATABASE_URL');
+    expect(out).not.toContain('s3cr3tpw');
+    expect(out).not.toContain('booting namespace');
+  });
+
+  it('returns an empty string when nothing looks like an error', () => {
+    expect(extractSidecarErrorLines('booting\nlistening on 8080\nready')).toBe('');
   });
 });
 
@@ -386,17 +419,52 @@ describe('reportStartupFailure', () => {
     // The two structured extractors classify nothing for this exit...
     expect(props.error_code).toBeNull();
     expect(props.missing_module).toBeNull();
-    // ...but the raw tail still carries the real cause, with the home dir scrubbed.
-    expect(props.sidecar_log_tail).toContain(
-      "TypeError: Cannot read properties of undefined (reading 'port')",
+    const tail = props.sidecar_log_tail as string;
+    // ...but the error/stack lines are forwarded so the cause is diagnosable.
+    expect(tail).toContain("TypeError: Cannot read properties of undefined (reading 'port')");
+    expect(tail).toContain('at resolveListenPort');
+    // The whitelist structurally excludes non-error lines — the DATABASE_URL
+    // config line (and its password) never reaches telemetry at all.
+    expect(tail).not.toContain('DATABASE_URL');
+    expect(tail).not.toContain('s3cr3tpw');
+    // A home dir inside a kept stack frame is still scrubbed (defense in depth).
+    expect(tail).not.toContain('liudetao');
+    expect(tail).toContain('<redacted>');
+  });
+
+  it('sends no sidecar_log_tail when the tail has no error-shaped line', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response('ok'));
+    await reportStartupFailure(
+      {
+        error: new Error(DAEMON_EXIT_MESSAGE),
+        isPathAccess: false,
+        posthogKey: 'phc_test',
+        posthogHost: null,
+        distinctId: 'd',
+        appVersion: '0.14.0',
+        namespace: 'release-stable',
+        source: 'packaged',
+      },
+      {
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        // Pure config/log noise, no error shape — nothing diagnostically useful,
+        // and nowhere for a secret to hide.
+        readLogTail: async () =>
+          'booting\nDATABASE_URL=postgres://od:s3cr3tpw@db/x\nlistening on 8080',
+      },
     );
-    expect(props.sidecar_log_tail).not.toContain('liudetao');
-    expect(props.sidecar_log_tail).toContain('<redacted>');
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    const props = (JSON.parse(init.body as string) as { properties: Record<string, unknown> })
+      .properties;
+    expect(props.sidecar_log_tail).toBeNull();
   });
 
   it('keeps the END of an oversized daemon log so the fatal error is not truncated away', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(new Response('ok'));
-    const bigLog = `${'x'.repeat(5000)}\nFATAL: daemon boot aborted at the very end`;
+    // Many error-shaped lines (so the whitelist keeps them) exceeding the cap,
+    // with the fatal marker last — the tail-truncation must preserve the END.
+    const noise = Array.from({ length: 120 }, (_, i) => `Error: transient failure number ${i} at handler`).join('\n');
+    const bigLog = `${noise}\nFATAL: daemon boot aborted at the very end`;
     await reportStartupFailure(
       {
         error: new Error(DAEMON_EXIT_MESSAGE),
