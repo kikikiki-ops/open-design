@@ -54,13 +54,7 @@ import { auditDesignSystemPackage } from '../../tools-connectors-cli.js';
 import { parseOrchestratorWorkspace } from '../../workspace-contract.js';
 import { registerProjectConversationRoutes } from './conversations.js';
 
-interface ProjectCollabRuntime {
-  requestTeamShare(projectId: string, ownerMemberId?: string): void;
-}
-
-export interface RegisterProjectRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'paths' | 'projectStore' | 'projectFiles' | 'conversations' | 'templates' | 'status' | 'events' | 'ids' | 'telemetry' | 'appConfig' | 'agents' | 'validation'> {
-  collab?: ProjectCollabRuntime;
-}
+export interface RegisterProjectRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'paths' | 'projectStore' | 'projectFiles' | 'conversations' | 'templates' | 'status' | 'events' | 'ids' | 'telemetry' | 'appConfig' | 'agents' | 'validation' | 'collabSync'> {}
 
 function projectDetailResolvedDir(
   projectsRoot: string,
@@ -1153,7 +1147,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
   const { subscribeFileEvents, activeProjectEventSinks } = ctx.events;
   const { randomId } = ctx.ids;
   const { validateProjectDesignSystemId, validateProjectSkillId } = ctx.validation;
-  const projectCollab = ctx.collab;
+  const { collabSync } = ctx;
   type WorkspaceProjectContext = {
     workspaceId: string;
     appUserId: string;
@@ -1632,7 +1626,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
   function requestTeamShares(projectIds: string[], ctx: WorkspaceProjectContext, visibility: 'personal' | 'team') {
     if (visibility !== 'team') return;
     for (const projectId of projectIds) {
-      projectCollab?.requestTeamShare(projectId, ctx.workspaceMemberId);
+      collabSync.requestTeamShare(projectId, ctx.workspaceMemberId);
     }
   }
 

@@ -138,6 +138,21 @@ export interface ServerContext {
   agents: any;
   critique: any;
   openDesignPublicMetadata: OpenDesignPublicMetadataService;
+  /**
+   * C-lane collaboration seam for D's project-visibility routes. After a
+   * successful personal→team move (D's move API), D's handler calls
+   * `collabSync.requestTeamShare(projectId, ownerMemberId)` in-process to trigger
+   * the team sync: the project is marked pending and published to the resource
+   * hub so every teammate can discover + read it. Idempotent (safe to call again
+   * on a re-move). `ownerMemberId` is the member who performed the move — recorded
+   * as the project's single writer so members can tell their own project from a
+   * shared one. D gates the move itself on `canShareProjects`, so this seam does
+   * NOT re-check permission. See routes/collab-sync.ts for the equivalent HTTP
+   * seam (POST /collab/sync-intent) used by the demo surface.
+   */
+  collabSync: {
+    requestTeamShare(projectId: string, ownerMemberId?: string): void;
+  };
   lifecycle: {
     isDaemonShuttingDown: () => boolean;
   };
