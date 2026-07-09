@@ -212,9 +212,14 @@ export function scrubSecrets(value: string): string {
 }
 
 // A line is "diagnostically relevant" if it looks like a thrown error, a stack
-// frame, a Node error code, or an exit marker.
+// frame, a Node error code, an exit marker, OR a plain-English failure message
+// ("failed to …", "could not …", "unable to …"). The failure-verb phrasings are
+// how much of our own startup code reports problems (e.g. "daemon failed to
+// resolve listening port", "… was found but could not …"); including them keeps
+// the diagnostic value without re-opening the secret surface, because config /
+// connection / KEY=value lines don't contain those verbs.
 const ERROR_LINE_RE =
-  /(error|exception|fatal|\bpanic\b|assert|\bthrow|unhandled|reject|\bERR_[A-Z0-9_]+|^\s+at\s|\bE[A-Z]{2,}\b|\b(?:code|signal)\s*[=:]|exited|cannot find|not found|refused|denied|timed?\s*out)/i;
+  /(error|exception|fatal|\bpanic\b|assert|\bthrow|unhandled|reject|abort|failed|fail(?:ing|ure)|could ?n['’]?t|could not|cannot|unable|\bERR_[A-Z0-9_]+|^\s+at\s|\bE[A-Z]{2,}\b|\b(?:code|signal)\s*[=:]|exited|not found|refused|denied|timed?\s*out)/i;
 
 // Keep ONLY error/stack-shaped lines from a log tail. This is the primary PII
 // control for `sidecar_log_tail`: rather than trying to scrub every secret shape

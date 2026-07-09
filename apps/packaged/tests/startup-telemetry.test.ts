@@ -241,6 +241,25 @@ describe('extractSidecarErrorLines', () => {
     expect(out).not.toContain('booting namespace');
   });
 
+  it('keeps plain-English failure messages (failed to / could not / cannot / unable)', () => {
+    const log = [
+      '[daemon] booting',
+      'DATABASE_URL=postgres://od:s3cr3tpw@db/x',
+      '[od] daemon failed to resolve listening port 8080',
+      'better-sqlite3 was found but could not be loaded',
+      'cannot open config',
+      'unable to bind socket',
+    ].join('\n');
+    const out = extractSidecarErrorLines(log);
+    expect(out).toContain('failed to resolve listening port');
+    expect(out).toContain('could not be loaded');
+    expect(out).toContain('cannot open config');
+    expect(out).toContain('unable to bind socket');
+    // Broadening to failure verbs must not re-admit the secret-bearing config line.
+    expect(out).not.toContain('s3cr3tpw');
+    expect(out).not.toContain('DATABASE_URL');
+  });
+
   it('returns an empty string when nothing looks like an error', () => {
     expect(extractSidecarErrorLines('booting\nlistening on 8080\nready')).toBe('');
   });
