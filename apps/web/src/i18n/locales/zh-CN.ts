@@ -541,9 +541,8 @@ export const zhCN: Dict = {
   "settings.privacyHint": "与 Open Design 团队共享哪些数据",
   "settings.privacyConsentKicker": "帮助我们改进 Open Design",
   "settings.privacyConsentLead":
-    "Open Design 可以将使用数据共享给我们的团队以协助改进。包括:",
-  "settings.privacyConsentFooter":
-    "分享后，我们能更了解 Open Design 在真实工作流里的表现，并优先改进真正影响体验的地方。你可以随时在 设置 → 隐私 中修改这些选项。",
+    "分享使用数据后，我们能更了解 Open Design 在真实工作流里的表现，并优先改进真正影响体验的地方。",
+  "settings.privacyConsentFooter": "你可以随时在 设置 → 隐私 中修改这些选项。",
   "settings.privacyConsentShare": "分享",
   "settings.privacyConsentDecline": "不分享",
   "settings.privacyConsentAccept": "我知道了",
@@ -552,10 +551,10 @@ export const zhCN: Dict = {
   "settings.privacyConsentPolicyLink": "阅读隐私政策",
   "settings.privacyMetrics": "匿名指标",
   "settings.privacyMetricsHint":
-    "运行次数、token 用量、错误率、时长。",
+    "运行次数、token 用量、错误率、耗时等基础使用指标。",
   "settings.privacyContent": "对话和工具内容",
   "settings.privacyContentHint":
-    "prompt、助手回复、工具输入/输出，以及质量回看所需的完整上下文文件。发送前会剥离密钥等敏感信息。",
+    "在剥离密钥等敏感信息后，我们会使用 prompt、助手回复、工具输入/输出，以及质量回看所需的上下文。",
   "settings.privacyInstallationId": "匿名 ID",
   "settings.privacyOptedOut": "已退出",
   "settings.privacyDataDeletion": "删除我的数据",
