@@ -50,7 +50,7 @@ export function PrivacySection({ cfg, setCfg }: Props): JSX.Element {
       ...c,
       installationId: c.installationId ?? generateInstallationId(),
       privacyDecisionAt: Date.now(),
-      telemetry: { metrics: true, content: true },
+      telemetry: { ...(c.telemetry ?? {}), metrics: true, content: true },
     }));
   }
 
@@ -59,7 +59,7 @@ export function PrivacySection({ cfg, setCfg }: Props): JSX.Element {
       ...c,
       installationId: null,
       privacyDecisionAt: Date.now(),
-      telemetry: { metrics: false, content: false },
+      telemetry: { ...(c.telemetry ?? {}), metrics: false, content: false },
     }));
   }
 

@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { useState } from 'react';
+import { useState, type SetStateAction } from 'react';
 
 import { PrivacySection } from '../../src/components/PrivacySection';
 import { I18nProvider } from '../../src/i18n';
@@ -26,11 +26,24 @@ const baseConfig: AppConfig = {
   agentCliEnv: {},
 };
 
-function Harness({ initial }: { initial: AppConfig }) {
+function Harness({
+  initial,
+  onConfig,
+}: {
+  initial: AppConfig;
+  onConfig?: (config: AppConfig) => void;
+}) {
   const [cfg, setCfg] = useState(initial);
+  function setObservedCfg(next: SetStateAction<AppConfig>): void {
+    setCfg((current) => {
+      const resolved = typeof next === 'function' ? next(current) : next;
+      onConfig?.(resolved);
+      return resolved;
+    });
+  }
   return (
     <I18nProvider initial="en">
-      <PrivacySection cfg={cfg} setCfg={setCfg} />
+      <PrivacySection cfg={cfg} setCfg={setObservedCfg} />
     </I18nProvider>
   );
 }
@@ -108,6 +121,33 @@ describe('PrivacySection', () => {
     expect(randomUUID).not.toHaveBeenCalled();
   });
 
+  it('preserves the artifact manifest preference when the settings share choice is clicked', () => {
+    vi.stubGlobal('crypto', { randomUUID: vi.fn(() => 'inst-new') });
+    let persisted: AppConfig | undefined;
+
+    render(
+      <Harness
+        initial={{
+          ...baseConfig,
+          installationId: null,
+          privacyDecisionAt: 1778244000000,
+          telemetry: { metrics: false, content: false, artifactManifest: true },
+        }}
+        onConfig={(config) => {
+          persisted = config;
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Share' }));
+
+    expect(persisted?.telemetry).toEqual({
+      metrics: true,
+      content: true,
+      artifactManifest: true,
+    });
+  });
+
   it('shows the decline choice and telemetry toggles as off when sharing is disabled', () => {
     render(
       <Harness
@@ -152,6 +192,37 @@ describe('PrivacySection', () => {
     expect(screen.getByRole('button', { name: /Conversation and tool content/ }).getAttribute('aria-pressed'))
       .toBe('false');
     expect((screen.getByLabelText('Anonymous ID') as HTMLInputElement).value).toBe('opted out');
+  });
+
+  it('preserves the artifact manifest preference when the settings decline choice is clicked', () => {
+    let persisted: AppConfig | undefined;
+
+    render(
+      <Harness
+        initial={{
+          ...baseConfig,
+          installationId: 'inst-existing',
+          privacyDecisionAt: 1778244000000,
+          telemetry: { metrics: true, content: true, artifactManifest: true },
+        }}
+        onConfig={(config) => {
+          persisted = config;
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: "Don't share" }));
+
+    expect(persisted).toEqual(
+      expect.objectContaining({
+        installationId: null,
+        telemetry: {
+          metrics: false,
+          content: false,
+          artifactManifest: true,
+        },
+      }),
+    );
   });
 
   it('turns both settings toggles on when the settings share choice is clicked', () => {

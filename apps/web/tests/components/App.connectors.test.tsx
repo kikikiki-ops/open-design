@@ -330,6 +330,33 @@ describe('App connectors settings flows', () => {
     expect(randomUUID).not.toHaveBeenCalled();
   });
 
+  it('preserves the artifact manifest preference when the first-run banner share choice is clicked', async () => {
+    mockedLoadConfig.mockReturnValue({
+      ...baseConfig,
+      installationId: 'inst-existing',
+      telemetry: { metrics: false, content: false, artifactManifest: true },
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(mockedSyncConfigToDaemon).toHaveBeenCalled();
+    });
+    mockedSyncConfigToDaemon.mockClear();
+    fireEvent.click(await screen.findByRole('button', { name: 'Share' }));
+
+    await waitFor(() => {
+      expect(mockedSyncConfigToDaemon).toHaveBeenCalledWith(
+        expect.objectContaining({
+          installationId: 'inst-existing',
+          privacyDecisionAt: expect.any(Number),
+          telemetry: { metrics: true, content: true, artifactManifest: true },
+        }),
+        expect.objectContaining({ throwOnError: true }),
+      );
+    });
+  });
+
   it('turns telemetry off when the first-run banner decline choice is clicked', async () => {
     render(<App />);
 
@@ -345,6 +372,33 @@ describe('App connectors settings flows', () => {
           installationId: null,
           privacyDecisionAt: expect.any(Number),
           telemetry: { metrics: false, content: false },
+        }),
+        expect.objectContaining({ throwOnError: true }),
+      );
+    });
+  });
+
+  it('preserves the artifact manifest preference when the first-run banner decline choice is clicked', async () => {
+    mockedLoadConfig.mockReturnValue({
+      ...baseConfig,
+      installationId: 'inst-existing',
+      telemetry: { metrics: true, content: true, artifactManifest: true },
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(mockedSyncConfigToDaemon).toHaveBeenCalled();
+    });
+    mockedSyncConfigToDaemon.mockClear();
+    fireEvent.click(await screen.findByRole('button', { name: "Don't share" }));
+
+    await waitFor(() => {
+      expect(mockedSyncConfigToDaemon).toHaveBeenCalledWith(
+        expect.objectContaining({
+          installationId: null,
+          privacyDecisionAt: expect.any(Number),
+          telemetry: { metrics: false, content: false, artifactManifest: true },
         }),
         expect.objectContaining({ throwOnError: true }),
       );

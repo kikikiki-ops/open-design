@@ -2527,7 +2527,11 @@ function AppInner() {
               ...latestPersistedConfigRef.current,
               installationId,
               privacyDecisionAt: Date.now(),
-              telemetry: { metrics: true, content: true },
+              telemetry: {
+                ...(latestPersistedConfigRef.current.telemetry ?? {}),
+                metrics: true,
+                content: true,
+              },
             });
           }}
           onDecline={() => {
@@ -2535,7 +2539,11 @@ function AppInner() {
               ...latestPersistedConfigRef.current,
               installationId: null,
               privacyDecisionAt: Date.now(),
-              telemetry: { metrics: false, content: false },
+              telemetry: {
+                ...(latestPersistedConfigRef.current.telemetry ?? {}),
+                metrics: false,
+                content: false,
+              },
             });
           }}
         />
