@@ -102,7 +102,7 @@ const BALANCE_FAIL = ${options.failBalanceAtPrompt === true ? 'true' : 'false'};
 const BALANCE_FAIL_ONCE = ${options.failBalanceAtPromptOnce === true ? 'true' : 'false'};
 const MODEL_LIST_INVALID_API_KEY = ${options.failModelListInvalidApiKey === true ? 'true' : 'false'};
 const REQUIRE_LOGIN = ${options.requireLoginConfig === false ? 'false' : 'true'};
-const REQUIRE_SET_MODEL = ${options.requireSetModel === true ? 'true' : 'false'};
+const REQUIRE_SET_MODEL = ${options.requireSetModel === false ? 'false' : 'true'};
 
 function writeMessage(obj) {
   stdout.write(JSON.stringify(obj) + '\\n');

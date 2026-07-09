@@ -70,7 +70,10 @@ import {
   effectiveAgentModelChoice,
   normalizeAgentModelChoice,
 } from './agentModelSelection';
-import { SearchableModelSelect } from './modelOptions';
+import {
+  orderModelOptionsByAvailability,
+  SearchableModelSelect,
+} from './modelOptions';
 import {
   mergeProviderModelOptions,
   providerModelsCacheKey,
@@ -440,13 +443,7 @@ export function InlineModelSwitcher({
   const inlineAgentModelOptions = useMemo(() => {
     const models = currentAgent?.models ?? [];
     if (currentAgent?.id !== 'amr') return models;
-    const enabled: typeof models = [];
-    const disabled: typeof models = [];
-    for (const model of models) {
-      if (model.enabled === false) disabled.push(model);
-      else enabled.push(model);
-    }
-    return [...enabled, ...disabled];
+    return orderModelOptionsByAvailability(models);
   }, [currentAgent]);
   const amrLoggedIn = amrStatus?.loggedIn === true;
 

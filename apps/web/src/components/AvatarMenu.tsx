@@ -10,7 +10,10 @@ import { PlanBadge } from './PlanBadge';
 import { RemixIcon } from './RemixIcon';
 import { orderAgentsWithOpenDesignFirst } from './agentOrdering';
 import { defaultAgentModelId, effectiveAgentModelChoice } from './agentModelSelection';
-import { SearchableModelSelect } from './modelOptions';
+import {
+  orderModelOptionsByAvailability,
+  SearchableModelSelect,
+} from './modelOptions';
 import type { AgentInfo, AppConfig, ExecMode, ProviderModelOption } from '../types';
 import { SUGGESTED_MODELS_BY_PROTOCOL } from '../state/apiProtocols';
 import { KNOWN_PROVIDERS } from '../state/config';
@@ -172,6 +175,11 @@ export function AvatarMenu({
     () => agents.find((a) => a.id === config.agentId) ?? null,
     [agents, config.agentId],
   );
+  const currentAgentModelOptions = useMemo(() => {
+    const models = currentAgent?.models ?? [];
+    if (currentAgent?.id !== 'amr') return models;
+    return orderModelOptionsByAvailability(models);
+  }, [currentAgent]);
 
   const installedAgents = orderAgentsWithOpenDesignFirst(
     agents.filter((a) => a.available && isVisibleLocalCliAgent(a)),
@@ -519,7 +527,7 @@ export function AvatarMenu({
                             model: value,
                           })
                         }
-                        models={currentAgent.models}
+                        models={currentAgentModelOptions}
                         additionalOptions={
                           currentModelId &&
                           !currentAgent.models.some((m) => m.id === currentModelId)

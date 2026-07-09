@@ -28,8 +28,11 @@ import { startServer } from '../../src/server.js';
 import { readAppConfig, writeAppConfig } from '../../src/app-config.js';
 import {
   clearAllVelaLiveAccounts,
+  clearVelaLiveAccountRefreshThrottle,
   parseAmrEntryAnalyticsPayload,
   parseAmrOnboardingProfileAnalyticsPayload,
+  readVelaCredentialRevision,
+  velaLiveAccountCacheKey,
 } from '../../src/integrations/vela.js';
 
 interface StartedServer {
@@ -385,6 +388,61 @@ describe('GET /api/integrations/vela/wallet', () => {
     );
     expect(upgradedStatus.status).toBe(200);
     expect(upgradedStatus.body.account?.plan).toBe('pro');
+
+    const afterPlanChange = await getJson<{
+      source: 'preset' | 'remote';
+      refreshing?: boolean;
+      models: Array<{ id: string }>;
+    }>(`${baseUrl}/api/amr/models`);
+    expect(afterPlanChange.status).toBe(200);
+    expect(afterPlanChange.body.source).toBe('preset');
+    expect(afterPlanChange.body.refreshing).toBe(true);
+  });
+
+  it('preserves model-cache invalidation when forced status refresh joins an in-flight probe', async () => {
+    clearAllVelaLiveAccounts();
+    process.env.FAKE_VELA_BILLING_TIER = 'free';
+    process.env.FAKE_VELA_BILLING_BALANCE_USD = '1.00';
+    process.env.FAKE_VELA_MODEL_LIST_JSON = JSON.stringify({
+      source: 'remote',
+      data: [
+        { id: 'public_model_deepseek_v4_flash', enabled: false },
+      ],
+    });
+    seedLogin('local', {
+      controlKey: 'ck-status-refresh-inflight',
+      runtimeKey: 'rt-status-refresh-inflight',
+      user: { id: 'status-inflight-user', email: 'status-inflight@example.com', plan: 'free' },
+    });
+
+    const firstStatus = await getJson<{ account?: { plan?: string } }>(
+      `${baseUrl}/api/integrations/vela/status?refresh=1`,
+    );
+    expect(firstStatus.status).toBe(200);
+    expect(firstStatus.body.account?.plan).toBe('free');
+
+    const warmed = await waitForAmrModels('remote');
+    expect(warmed.body.models).toEqual([
+      { id: 'deepseek-v4-flash', label: 'deepseek-v4-flash', enabled: false },
+    ]);
+
+    const accountCacheKey = velaLiveAccountCacheKey(
+      readVelaCredentialRevision(process.env, {}),
+    );
+    clearVelaLiveAccountRefreshThrottle(accountCacheKey);
+    process.env.FAKE_VELA_BILLING_TIER = 'pro';
+    process.env.FAKE_VELA_BILLING_DELAY_MS = '150';
+
+    const warmStatus = getJson<{ account?: { plan?: string } }>(
+      `${baseUrl}/api/integrations/vela/status`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    const forcedStatus = await getJson<{ account?: { plan?: string } }>(
+      `${baseUrl}/api/integrations/vela/status?refresh=1`,
+    );
+    expect((await warmStatus).body.account?.plan).toBe('free');
+    expect(forcedStatus.status).toBe(200);
+    expect(forcedStatus.body.account?.plan).toBe('pro');
 
     const afterPlanChange = await getJson<{
       source: 'preset' | 'remote';

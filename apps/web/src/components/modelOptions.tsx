@@ -58,6 +58,18 @@ export function renderModelOptions(models: AgentModelOption[]) {
   );
 }
 
+export function orderModelOptionsByAvailability(
+  models: AgentModelOption[],
+): AgentModelOption[] {
+  const enabled: AgentModelOption[] = [];
+  const disabled: AgentModelOption[] = [];
+  for (const model of models) {
+    if (model.enabled === false) disabled.push(model);
+    else enabled.push(model);
+  }
+  return [...enabled, ...disabled];
+}
+
 function matchesModelSearch(model: AgentModelOption, query: string): boolean {
   const haystack = `${model.id}\n${model.label}`.toLowerCase();
   return haystack.includes(query);

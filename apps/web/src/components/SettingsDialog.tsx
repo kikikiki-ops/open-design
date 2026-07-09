@@ -63,6 +63,7 @@ import { Icon } from './Icon';
 import { defaultAgentModelId, effectiveAgentModelChoice } from './agentModelSelection';
 import {
   CUSTOM_MODEL_SENTINEL,
+  orderModelOptionsByAvailability,
   SearchableModelSelect,
 } from './modelOptions';
 import {
@@ -3617,6 +3618,10 @@ export function SettingsDialog({
     if (!hasModels && !hasReasoning) return null;
     const choice = cfg.agentModels?.[selected.id] ?? {};
     const effectiveChoice = effectiveAgentModelChoice(selected, choice) ?? choice;
+    const modelsForSelect =
+      selected.id === 'amr' && selected.models
+        ? orderModelOptionsByAvailability(selected.models)
+        : selected.models;
     const knownModelIds = selected.models?.map((m) => m.id) ?? [];
     // Adapters opt out via `supportsCustomModel: false` on their
     // RuntimeAgentDef when their CLI has no `--model` flag (Antigravity,
@@ -3698,7 +3703,7 @@ export function SettingsDialog({
                   popoverTestId={`settings-agent-model-popover-${selected.id}`}
                   minSearchableOptions={5}
                   popoverMinWidth={340}
-                  models={selected.models!}
+                  models={modelsForSelect!}
                   onChange={(nextValue) => {
                     if (nextValue === CUSTOM_MODEL_SENTINEL) {
                       setAgentCustomModelIds((prev) => {

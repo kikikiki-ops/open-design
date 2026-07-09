@@ -197,11 +197,15 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
     string,
     Promise<VelaLiveAccount | null>
   >();
+  const inFlightVelaAccountInvalidations = new Set<string>();
   function fetchVelaLiveAccountSingleFlight(
     accountCacheKey: string,
     probe: AmrModelProbe,
     options: { invalidateModelsOnPlanChange?: boolean } = {},
   ): Promise<VelaLiveAccount | null> {
+    if (options.invalidateModelsOnPlanChange === true) {
+      inFlightVelaAccountInvalidations.add(accountCacheKey);
+    }
     const existing = inFlightVelaAccountFetches.get(accountCacheKey);
     if (existing) return existing;
     const pending = (async () => {
@@ -211,7 +215,7 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
       );
       const account = await fetchVelaBillingSummary(probe.launchPath, probe.env);
       if (
-        options.invalidateModelsOnPlanChange === true &&
+        inFlightVelaAccountInvalidations.has(accountCacheKey) &&
         previousAccount &&
         previousAccount.plan !== account.plan
       ) {
@@ -229,6 +233,7 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
       })
       .finally(() => {
         inFlightVelaAccountFetches.delete(accountCacheKey);
+        inFlightVelaAccountInvalidations.delete(accountCacheKey);
       });
     inFlightVelaAccountFetches.set(accountCacheKey, pending);
     return pending;
