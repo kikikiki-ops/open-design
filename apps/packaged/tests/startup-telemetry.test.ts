@@ -334,7 +334,7 @@ describe('reportStartupFailure', () => {
     expect(props.exit_code).toBe(1);
     expect(props.log_path).not.toContain('liudetao');
     // The raw tail is forwarded alongside the extracted fields, scrubbed.
-    expect(props.daemon_log_tail).toContain('ERR_MODULE_NOT_FOUND');
+    expect(props.sidecar_log_tail).toContain('ERR_MODULE_NOT_FOUND');
   });
 
   it('forwards the scrubbed raw daemon log tail when the cause is not an ERR_ code or missing module', async () => {
@@ -363,11 +363,11 @@ describe('reportStartupFailure', () => {
     expect(props.error_code).toBeNull();
     expect(props.missing_module).toBeNull();
     // ...but the raw tail still carries the real cause, with the home dir scrubbed.
-    expect(props.daemon_log_tail).toContain(
+    expect(props.sidecar_log_tail).toContain(
       "TypeError: Cannot read properties of undefined (reading 'port')",
     );
-    expect(props.daemon_log_tail).not.toContain('liudetao');
-    expect(props.daemon_log_tail).toContain('<redacted>');
+    expect(props.sidecar_log_tail).not.toContain('liudetao');
+    expect(props.sidecar_log_tail).toContain('<redacted>');
   });
 
   it('keeps the END of an oversized daemon log so the fatal error is not truncated away', async () => {
@@ -389,7 +389,7 @@ describe('reportStartupFailure', () => {
     const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
     const props = (JSON.parse(init.body as string) as { properties: Record<string, unknown> })
       .properties;
-    const tail = props.daemon_log_tail as string;
+    const tail = props.sidecar_log_tail as string;
     expect(tail).toContain('FATAL: daemon boot aborted at the very end');
     expect(tail).toContain('chars]');
     expect(tail.length).toBeLessThan(bigLog.length);
