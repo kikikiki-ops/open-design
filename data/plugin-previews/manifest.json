@@ -910,6 +910,111 @@
       "durationMs": 6948,
       "holdMs": 2500,
       "hash": "a0f8d4166959302d"
+    },
+    "example-webgl-aurora-veil": {
+      "video": "example-webgl-aurora-veil/aab3d3e61db0a49f/preview.mp4",
+      "poster": "example-webgl-aurora-veil/aab3d3e61db0a49f/poster.jpg",
+      "durationMs": 4967,
+      "holdMs": 2500,
+      "hash": "aab3d3e61db0a49f"
+    },
+    "example-webgl-caustic-pool": {
+      "video": "example-webgl-caustic-pool/5853dceb1ebc6226/preview.mp4",
+      "poster": "example-webgl-caustic-pool/5853dceb1ebc6226/poster.jpg",
+      "durationMs": 5033,
+      "holdMs": 2500,
+      "hash": "5853dceb1ebc6226"
+    },
+    "example-webgl-depth-gallery": {
+      "video": "example-webgl-depth-gallery/7ecf1605fdf186c6/preview.mp4",
+      "poster": "example-webgl-depth-gallery/7ecf1605fdf186c6/poster.jpg",
+      "durationMs": 1267,
+      "holdMs": 1267,
+      "hash": "7ecf1605fdf186c6"
+    },
+    "example-webgl-distortion-grain": {
+      "video": "example-webgl-distortion-grain/92f1904661622fd2/preview.mp4",
+      "poster": "example-webgl-distortion-grain/92f1904661622fd2/poster.jpg",
+      "durationMs": 10067,
+      "holdMs": 2500,
+      "hash": "92f1904661622fd2"
+    },
+    "example-webgl-experience": {
+      "video": "example-webgl-experience/65a19ef8688e550e/preview.mp4",
+      "poster": "example-webgl-experience/65a19ef8688e550e/poster.jpg",
+      "durationMs": 5033,
+      "holdMs": 2500,
+      "hash": "65a19ef8688e550e"
+    },
+    "example-webgl-halftone-drift": {
+      "video": "example-webgl-halftone-drift/29cd057fac0bf129/preview.mp4",
+      "poster": "example-webgl-halftone-drift/29cd057fac0bf129/poster.jpg",
+      "durationMs": 4967,
+      "holdMs": 2500,
+      "hash": "29cd057fac0bf129"
+    },
+    "example-webgl-holographic-foil": {
+      "video": "example-webgl-holographic-foil/7a598e16158181f3/preview.mp4",
+      "poster": "example-webgl-holographic-foil/7a598e16158181f3/poster.jpg",
+      "durationMs": 5133,
+      "holdMs": 2500,
+      "hash": "7a598e16158181f3"
+    },
+    "example-webgl-horizontal-parallax": {
+      "video": "example-webgl-horizontal-parallax/f5e7c1b64c44053f/preview.mp4",
+      "poster": "example-webgl-horizontal-parallax/f5e7c1b64c44053f/poster.jpg",
+      "durationMs": 1267,
+      "holdMs": 1267,
+      "hash": "f5e7c1b64c44053f"
+    },
+    "example-webgl-liquid-iridescence": {
+      "video": "example-webgl-liquid-iridescence/eef0feb947bbc4f2/preview.mp4",
+      "poster": "example-webgl-liquid-iridescence/eef0feb947bbc4f2/poster.jpg",
+      "durationMs": 5067,
+      "holdMs": 2500,
+      "hash": "eef0feb947bbc4f2"
+    },
+    "example-webgl-liquid-metal": {
+      "video": "example-webgl-liquid-metal/3ec80c4f29c76e65/preview.mp4",
+      "poster": "example-webgl-liquid-metal/3ec80c4f29c76e65/poster.jpg",
+      "durationMs": 4933,
+      "holdMs": 2500,
+      "hash": "3ec80c4f29c76e65"
+    },
+    "example-webgl-neon-grid": {
+      "video": "example-webgl-neon-grid/bd39ae725bb4d5c4/preview.mp4",
+      "poster": "example-webgl-neon-grid/bd39ae725bb4d5c4/poster.jpg",
+      "durationMs": 5033,
+      "holdMs": 2500,
+      "hash": "bd39ae725bb4d5c4"
+    },
+    "example-webgl-particle-galaxy": {
+      "video": "example-webgl-particle-galaxy/ff0036e4389f362e/preview.mp4",
+      "poster": "example-webgl-particle-galaxy/ff0036e4389f362e/poster.jpg",
+      "durationMs": 5033,
+      "holdMs": 2500,
+      "hash": "ff0036e4389f362e"
+    },
+    "example-webgl-pixel-reveal-gallery": {
+      "video": "example-webgl-pixel-reveal-gallery/bb70b176af56490e/preview.mp4",
+      "poster": "example-webgl-pixel-reveal-gallery/bb70b176af56490e/poster.jpg",
+      "durationMs": 5400,
+      "holdMs": 2500,
+      "hash": "bb70b176af56490e"
+    },
+    "example-webgl-raymarched-hero": {
+      "video": "example-webgl-raymarched-hero/89573f0c6a9d9220/preview.mp4",
+      "poster": "example-webgl-raymarched-hero/89573f0c6a9d9220/poster.jpg",
+      "durationMs": 5133,
+      "holdMs": 2500,
+      "hash": "89573f0c6a9d9220"
+    },
+    "example-webgl-voronoi-cells": {
+      "video": "example-webgl-voronoi-cells/1802a56be2b7c4b4/preview.mp4",
+      "poster": "example-webgl-voronoi-cells/1802a56be2b7c4b4/poster.jpg",
+      "durationMs": 5133,
+      "holdMs": 2500,
+      "hash": "1802a56be2b7c4b4"
     }
   }
 }
