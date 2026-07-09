@@ -12,6 +12,14 @@
 // only buildAuthHeaders. Hub-only request shapes stay local until the platform
 // publishes canonical resource contracts.
 
+import { createReadStream, createWriteStream } from 'node:fs';
+import fsp from 'node:fs/promises';
+import http from 'node:http';
+import https from 'node:https';
+import path from 'node:path';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+
 import type {
   PublicSnapshotResponse,
   ResourceSnapshotRecord,
@@ -376,6 +384,70 @@ export function createResourceHubClient(options: ResourceHubClientOptions = {}) 
           `PUT to object store failed (${response.status})`,
         );
       }
+    },
+
+    // Stream a file's bytes straight to a presigned target with a known length,
+    // never holding the whole blob in memory. We pipe the file into a raw
+    // http(s) request (rather than fetch) because undici buffers a ReadableStream
+    // request body instead of applying backpressure — piping to the socket keeps
+    // peak memory at the stream's high-water mark. Content-Length is required for
+    // a presigned S3/MinIO PUT and is not a signed header, so we set it freely.
+    async uploadFile(
+      upload: Pick<PreparedUpload, 'url' | 'method'>,
+      filePath: string,
+      size: number,
+    ): Promise<void> {
+      const url = new URL(upload.url);
+      const transport = url.protocol === 'https:' ? https : http;
+      await new Promise<void>((resolve, reject) => {
+        const req = transport.request(
+          url,
+          { method: upload.method, headers: { 'content-length': size } },
+          (res) => {
+            res.resume(); // drain the response so the socket can free
+            const status = res.statusCode ?? 0;
+            if (status >= 200 && status < 300) {
+              res.on('end', resolve);
+            } else {
+              reject(
+                new ResourceHubError(
+                  status,
+                  'blob_upload_failed',
+                  `PUT to object store failed (${status})`,
+                ),
+              );
+            }
+          },
+        );
+        req.on('error', reject);
+        const source = createReadStream(filePath);
+        source.on('error', reject);
+        source.pipe(req);
+      });
+    },
+
+    // Resolve a presigned GET and stream the blob straight to a file, never
+    // buffering it in memory. Parent dirs are created as needed.
+    async downloadToFile(
+      principal: ResourceHubPrincipal,
+      digest: string,
+      destPath: string,
+    ): Promise<void> {
+      const signed = await request<{ url: string; method: string }>(
+        principal,
+        'GET',
+        `/api/v1/resources/blobs/${encodeURIComponent(digest)}/download`,
+      );
+      const response = await fetchImpl(signed.url, { method: signed.method });
+      if (!response.ok || !response.body) {
+        throw new ResourceHubError(
+          response.status,
+          'blob_download_failed',
+          `GET from object store failed (${response.status})`,
+        );
+      }
+      await fsp.mkdir(path.dirname(destPath), { recursive: true });
+      await pipeline(Readable.fromWeb(response.body as never), createWriteStream(destPath));
     },
 
     // Push one blob: prepare (skips if the store already has it), PUT the bytes
