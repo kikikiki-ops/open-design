@@ -1275,7 +1275,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
     };
   }
   function ensureWorkspaceProjection(project: any, ctx: WorkspaceProjectContext, visibility = 'personal') {
-    const existing = getWorkspaceProject(db, project.id);
+    const existing = getWorkspaceProject(db, ctx.workspaceId, project.id);
     return existing ?? ensureWorkspaceProject(db, {
       projectId: project.id,
       workspaceId: ctx.workspaceId,
@@ -1592,6 +1592,9 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         ensureWorkspaceProjection(project, ctx, 'personal');
       }
       const view = typeof req.query.view === 'string' ? req.query.view : 'all';
+      if (view !== 'all' && view !== 'drafts' && view !== 'team') {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'view must be all, drafts, or team');
+      }
       const owner = typeof req.query.owner === 'string' ? req.query.owner : 'all';
       const visibility = typeof req.query.visibility === 'string' ? req.query.visibility : 'all';
       const rows = listWorkspaceProjects(db, ctx.workspaceId);
@@ -1646,8 +1649,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       if (!workspaceMoveAllowed(summary, visibility)) {
         return sendApiError(res, 403, 'PROJECT_DELETE_FORBIDDEN', 'project move forbidden');
       }
-      updateWorkspaceProject(db, project.id, {
-        workspaceId: ctx.workspaceId,
+      updateWorkspaceProject(db, ctx.workspaceId, project.id, {
         visibility,
         updatedByWorkspaceMemberId: ctx.workspaceMemberId,
         resourceHubResourceId: visibility === 'team' ? wp.resourceHubResourceId ?? null : null,
@@ -1682,8 +1684,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       }
       const moveMany = db.transaction((ids: string[]) => {
         for (const id of ids) {
-          updateWorkspaceProject(db, id, {
-            workspaceId: ctx.workspaceId,
+          updateWorkspaceProject(db, ctx.workspaceId, id, {
             visibility,
             updatedByWorkspaceMemberId: ctx.workspaceMemberId,
             resourceHubResourceId: visibility === 'team' ? undefined : null,

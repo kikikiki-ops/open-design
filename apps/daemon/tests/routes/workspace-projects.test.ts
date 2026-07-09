@@ -21,9 +21,13 @@ describe('workspace project routes', () => {
   const workspaceId = `ws-${Date.now()}`;
 
   function headers(memberId: string, extra: Record<string, string> = {}) {
+    return workspaceHeaders(workspaceId, memberId, extra);
+  }
+
+  function workspaceHeaders(targetWorkspaceId: string, memberId: string, extra: Record<string, string> = {}) {
     return {
       'content-type': 'application/json',
-      'x-od-workspace-id': workspaceId,
+      'x-od-workspace-id': targetWorkspaceId,
       'x-od-workspace-member-id': memberId,
       'x-od-workspace-role': 'member',
       ...extra,
@@ -40,8 +44,12 @@ describe('workspace project routes', () => {
   }
 
   async function list(memberId: string, query = '') {
-    const resp = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/projects${query}`, {
-      headers: headers(memberId),
+    return listInWorkspace(workspaceId, memberId, query);
+  }
+
+  async function listInWorkspace(targetWorkspaceId: string, memberId: string, query = '') {
+    const resp = await fetch(`${baseUrl}/api/workspaces/${targetWorkspaceId}/projects${query}`, {
+      headers: workspaceHeaders(targetWorkspaceId, memberId),
     });
     if (resp.status !== 200) {
       throw new Error(`GET workspace projects failed ${resp.status}: ${await resp.text()}`);
@@ -63,6 +71,68 @@ describe('workspace project routes', () => {
       createdByWorkspaceMemberId: 'member-list',
     });
     expect(project.currentUserAccess.canDelete).toBe(true);
+  });
+
+  it('projects the same legacy project independently per workspace', async () => {
+    const projectId = `workspace-multi-${Date.now()}`;
+    const workspaceA = `${workspaceId}-a`;
+    const workspaceB = `${workspaceId}-b`;
+    await createProject(projectId, 'Multi workspace fixture');
+
+    const bodyA = await listInWorkspace(workspaceA, 'member-a', '?view=all');
+    const bodyB = await listInWorkspace(workspaceB, 'member-b', '?view=all');
+
+    expect(bodyA.projects.find((item) => item.id === projectId)).toMatchObject({
+      id: projectId,
+      workspaceId: workspaceA,
+      createdByWorkspaceMemberId: 'member-a',
+    });
+    expect(bodyB.projects.find((item) => item.id === projectId)).toMatchObject({
+      id: projectId,
+      workspaceId: workspaceB,
+      createdByWorkspaceMemberId: 'member-b',
+    });
+  });
+
+  it('validates workspace project views and applies each accepted view', async () => {
+    const suffix = Date.now();
+    const draftId = `workspace-view-draft-${suffix}`;
+    const teamId = `workspace-view-team-${suffix}`;
+    const otherId = `workspace-view-other-${suffix}`;
+    await createProject(draftId, 'Draft view fixture');
+    await list('member-view');
+    await createProject(teamId, 'Team view fixture');
+    await list('member-view');
+    await createProject(otherId, 'Other member view fixture');
+    await list('member-other');
+
+    const moveResp = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/projects/${teamId}/move`, {
+      method: 'POST',
+      headers: headers('member-view'),
+      body: JSON.stringify({ visibility: 'team' }),
+    });
+    expect(moveResp.status).toBe(200);
+
+    const all = await list('member-view', '?view=all');
+    const drafts = await list('member-view', '?view=drafts');
+    const team = await list('member-view', '?view=team');
+
+    expect(all.projects.some((item) => item.id === draftId)).toBe(true);
+    expect(drafts.projects.map((item) => item.id)).toContain(draftId);
+    expect(drafts.projects.map((item) => item.id)).not.toContain(teamId);
+    expect(drafts.projects.map((item) => item.id)).not.toContain(otherId);
+    expect(team.projects.map((item) => item.id)).toContain(teamId);
+    expect(team.projects.map((item) => item.id)).not.toContain(draftId);
+
+    const recent = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/projects?view=recent`, {
+      headers: headers('member-view'),
+    });
+    expect(recent.status).toBe(400);
+
+    const invalid = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/projects?view=personal`, {
+      headers: headers('member-view'),
+    });
+    expect(invalid.status).toBe(400);
   });
 
   it('projects legacy rows for batch operations without requiring a prior list request', async () => {
@@ -199,12 +269,12 @@ describe('workspace project routes', () => {
     const projectId = `workspace-share-permission-${Date.now()}`;
     await createProject(projectId, 'Share permission project');
 
-    const body = await list('member-share-permission', '?view=personal');
+    const body = await list('member-share-permission', '?visibility=personal');
     const project = body.projects.find((item: any) => item.id === projectId);
     expect(project.currentUserAccess.canRename).toBe(true);
     expect(project.currentUserAccess.canMoveToTeam).toBe(true);
 
-    const restrictedList = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/projects?view=personal`, {
+    const restrictedList = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/projects?visibility=personal`, {
       headers: headers('member-share-permission', { 'x-od-workspace-can-share-projects': 'false' }),
     });
     expect(restrictedList.status).toBe(200);
