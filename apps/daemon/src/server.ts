@@ -4341,6 +4341,9 @@ export async function startServer({
     appConfig: appConfigDeps,
     agents: agentDeps,
     validation: validationDeps,
+    // C-lane sync seam for D's project-visibility routes: a personal→team move
+    // calls requestTeamShare on success to publish the project for the team.
+    collabSync: { requestTeamShare: (projectId, ownerMemberId) => collab.requestTeamShare(projectId, ownerMemberId) },
   });
   registerTerminalRoutes(app, {
     db,

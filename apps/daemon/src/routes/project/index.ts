@@ -54,7 +54,7 @@ import { auditDesignSystemPackage } from '../../tools-connectors-cli.js';
 import { parseOrchestratorWorkspace } from '../../workspace-contract.js';
 import { registerProjectConversationRoutes } from './conversations.js';
 
-export interface RegisterProjectRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'paths' | 'projectStore' | 'projectFiles' | 'conversations' | 'templates' | 'status' | 'events' | 'ids' | 'telemetry' | 'appConfig' | 'agents' | 'validation'> {}
+export interface RegisterProjectRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'paths' | 'projectStore' | 'projectFiles' | 'conversations' | 'templates' | 'status' | 'events' | 'ids' | 'telemetry' | 'appConfig' | 'agents' | 'validation' | 'collabSync'> {}
 
 function projectDetailResolvedDir(
   projectsRoot: string,
