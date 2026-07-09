@@ -13,6 +13,7 @@ import {
   FileWorkspace,
   scrollWorkspaceTabsWithWheel,
 } from '../../src/components/FileWorkspace';
+import { I18nProvider } from '../../src/i18n';
 import { DesignFilesPanel } from '../../src/components/DesignFilesPanel';
 import { projectSplitClassName, projectSplitStyle } from '../../src/components/ProjectView';
 import {
@@ -701,7 +702,9 @@ describe('FileWorkspace upload input', () => {
               od: {
                 kind: 'scenario',
                 mode: 'deck',
+                inputs: [{ name: 'audience', label: 'Audience', default: 'founder teams' }],
                 preview: { type: 'html', entry: './preview.html' },
+                useCase: { query: 'Create a clean launch deck for {{audience}}.' },
               },
             },
             fsPath: '/tmp',
@@ -741,11 +744,113 @@ describe('FileWorkspace upload input', () => {
     fireEvent.click(within(card as HTMLElement).getByRole('button', { name: 'Use' }));
 
     await waitFor(() => expect(mockedWriteProjectTextFile).toHaveBeenCalledTimes(1));
-    const [projectId, name, content] = mockedWriteProjectTextFile.mock.calls[0]!;
+    const [projectId, name, content, options] = mockedWriteProjectTextFile.mock.calls[0]!;
     expect(projectId).toBe('project-1');
     expect(name).toBe('clean-deck.html');
     expect(content).not.toContain('id="speaker-notes"');
     expect(content).not.toContain('Use speaker notes');
+    expect(options).toMatchObject({
+      versionSource: 'manual',
+      versionPrompt: 'Create a clean launch deck for founder teams.',
+    });
+    await waitFor(() => expect(onRefreshFiles).toHaveBeenCalledTimes(1));
+  });
+
+  it('localizes page creator content and saves template query as the first version prompt', async () => {
+    const onRefreshFiles = vi.fn();
+    const onTabsStateChange = vi.fn();
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/plugins') {
+        return new Response(JSON.stringify({
+          plugins: [{
+            id: 'emerald-editorial',
+            title: 'Emerald Editorial',
+            version: '0.1.0',
+            sourceKind: 'bundled',
+            source: '/tmp',
+            trust: 'bundled',
+            capabilitiesGranted: [],
+            manifest: {
+              name: 'emerald-editorial',
+              version: '0.1.0',
+              title: 'Emerald Editorial',
+              title_i18n: { 'zh-CN': '祖母绿封面故事' },
+              description: 'Magazine-cover business deck.',
+              description_i18n: { 'zh-CN': '杂志封面叙事商务幻灯片。' },
+              tags: ['product-launch'],
+              od: {
+                kind: 'scenario',
+                mode: 'deck',
+                preview: { type: 'html', entry: './preview.html' },
+                useCase: {
+                  query: {
+                    en: 'Create an emerald editorial business deck.',
+                    'zh-CN': '为产品发布制作一份祖母绿杂志封面风格幻灯片。',
+                  },
+                },
+              },
+            },
+            fsPath: '/tmp',
+            installedAt: 0,
+            updatedAt: 0,
+          }],
+        }), { headers: { 'content-type': 'application/json' } });
+      }
+      if (url === '/api/plugins/emerald-editorial/preview') {
+        return new Response(
+          '<!doctype html><html><body><main>Emerald Editorial</main></body></html>',
+          { headers: { 'content-type': 'text/html' } },
+        );
+      }
+      return new Response('', { status: 404 });
+    }));
+    mockedWriteProjectTextFile.mockImplementation(async (_projectId, name) => workspaceFile(name));
+
+    render(
+      <I18nProvider initial="zh-CN">
+        <FileWorkspace
+          projectId="project-1"
+          projectKind="slide_deck"
+          files={[]}
+          liveArtifacts={[]}
+          onRefreshFiles={onRefreshFiles}
+          isDeck={false}
+          tabsState={{ tabs: [], active: null }}
+          onTabsStateChange={onTabsStateChange}
+        />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId('workspace-pages-menu-trigger'));
+    fireEvent.click(screen.getByRole('menuitem', { name: /新建空白页面/ }));
+
+    const dialog = await screen.findByRole('dialog', { name: '新建页面' });
+    const dialogScope = within(dialog);
+    expect(dialogScope.getByRole('tab', { name: /全部 幻灯片/ })).toBeTruthy();
+    expect(await dialogScope.findByRole('tab', { name: /产品 \/ 销售/ })).toBeTruthy();
+    const title = await dialogScope.findByText('祖母绿封面故事');
+    const card = title.closest('article');
+    expect(card).not.toBeNull();
+    expect(within(card as HTMLElement).getByText('杂志封面叙事商务幻灯片。')).toBeTruthy();
+    fireEvent.click(within(card as HTMLElement).getByRole('button', { name: '使用' }));
+
+    await waitFor(() => expect(mockedWriteProjectTextFile).toHaveBeenCalledTimes(1));
+    const [projectId, name, , options] = mockedWriteProjectTextFile.mock.calls[0]!;
+    expect(projectId).toBe('project-1');
+    expect(name).toBe('祖母绿封面故事.html');
+    expect(options).toMatchObject({
+      versionSource: 'manual',
+      versionPrompt: '为产品发布制作一份祖母绿杂志封面风格幻灯片。',
+    });
+    await waitFor(() =>
+      expect(onTabsStateChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tabs: ['祖母绿封面故事.html'],
+          active: '祖母绿封面故事.html',
+        }),
+      ),
+    );
     await waitFor(() => expect(onRefreshFiles).toHaveBeenCalledTimes(1));
   });
 

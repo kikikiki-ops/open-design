@@ -291,7 +291,9 @@ export function PreviewDrawOverlay({
   }
 
   function onPointerDown(e: PointerEvent) {
-    if (!active || sending) return;
+    if (!active) return;
+    e.preventDefault();
+    if (sending) return;
     (e.target as Element).setPointerCapture?.(e.pointerId);
     const point = pointFromEvent(e);
     if (markTool === 'box') {
@@ -305,7 +307,9 @@ export function PreviewDrawOverlay({
     redraw();
   }
   function onPointerMove(e: PointerEvent) {
-    if (!active || sending) return;
+    if (!active) return;
+    e.preventDefault();
+    if (sending) return;
     if (boxDraftRef.current) {
       boxDraftRef.current.current = pointFromEvent(e);
       scheduleRedraw();
@@ -316,7 +320,9 @@ export function PreviewDrawOverlay({
     scheduleRedraw();
   }
   function onPointerUp(e: PointerEvent) {
-    if (!active || sending) return;
+    if (!active) return;
+    e.preventDefault();
+    if (sending) return;
     // A final synchronous redraw follows; drop any pending move-frame.
     if (redrawFrameRef.current !== null) {
       cancelAnimationFrame(redrawFrameRef.current);
@@ -827,6 +833,7 @@ export function PreviewDrawOverlay({
   return (
     <div
       ref={wrapRef}
+      className={`preview-draw-overlay${active ? ' preview-draw-overlay-active' : ''}`}
       style={{
         position: 'absolute',
         inset: 0,
@@ -850,6 +857,10 @@ export function PreviewDrawOverlay({
             pointerEvents: overlayPointer,
             cursor: active ? 'crosshair' : 'default',
             visibility: chromeHidden ? 'hidden' : 'visible',
+            touchAction: 'none',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            WebkitTouchCallout: 'none',
             zIndex: 80,
           }}
         />
@@ -1217,6 +1228,11 @@ export function PreviewDrawOverlay({
 }
 
 const tooltipStyle = `
+  .preview-draw-overlay-active iframe {
+    pointer-events: none !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+  }
   .preview-draw-icon-action,
   .preview-draw-subtool-action {
     position: relative;

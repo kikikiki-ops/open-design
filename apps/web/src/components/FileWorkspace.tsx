@@ -21,7 +21,7 @@ import {
   trackTabLauncherClick,
 } from '../analytics/events';
 import { deriveUploadCohort } from '../analytics/upload-tracking';
-import { useI18n, useT } from '../i18n';
+import { useI18n, useT, type Locale } from '../i18n';
 import { useStableHandler } from '../lib/use-stable-handler';
 import { isMacPlatform } from '../utils/platform';
 import {
@@ -130,7 +130,9 @@ import {
   type FacetOption,
 } from './plugins-home/facets';
 import { localizePluginDescription, localizePluginTitle } from './plugins-home/localization';
+import { pluginPresetQuery, renderPluginPresetQuery } from './plugins-home/presetSeedPrompt';
 import { inferPluginPreview, type PluginPreviewSpec } from './plugins-home/preview';
+import { pluginSubfacetLabel } from './plugins-home/subfacetLabel';
 import { useInView } from './plugins-home/useInView';
 import { LiveArtifactBadges } from './LiveArtifactBadges';
 import { MissingBrandFontsBanner } from './MissingBrandFontsBanner';
@@ -1455,8 +1457,8 @@ export function FileWorkspace({
     [communityPluginPresets],
   );
   const pagePresetBaseNames = useMemo(
-    () => pagePresetFileBaseNameSet(projectPagePresets),
-    [projectPagePresets],
+    () => pagePresetFileBaseNameSet(projectPagePresets, t, locale),
+    [locale, projectPagePresets, t],
   );
   const pageFileNames = useMemo(() => new Set(persistedTabs), [persistedTabs]);
   const pageFiles = useMemo(
@@ -2580,11 +2582,14 @@ export function FileWorkspace({
   async function createBlankPage(presetId: ProjectPagePresetId) {
     if (pageCreating) return;
     const preset = projectPagePresetById(presetId, projectPagePresets) ?? projectPagePresets[0] ?? PROJECT_PAGE_PRESETS[0]!;
-    const target = nextHtmlPagePath(visibleFiles, preset.fileBaseName);
+    const target = nextHtmlPagePath(visibleFiles, pagePresetFileBaseName(preset, t, locale));
     setPageCreating(true);
     try {
       const content = await contentForPagePreset(target, preset, t, locale);
-      const file = await writeProjectTextFile(projectId, target, content);
+      const file = await writeProjectTextFile(projectId, target, content, {
+        versionSource: 'manual',
+        versionPrompt: pagePresetVersionPrompt(preset, t, locale),
+      });
       if (!file) {
         // Never let a failed create read as a silent no-op click.
         setLauncherToast(t('workspace.pageCreateFailed'));
@@ -6115,15 +6120,16 @@ function iconForPageKind(kind: ProjectPageKind): IconName {
   }
 }
 
-function slugifyPageFileBaseName(value: string): string {
+function slugifyPageFileBaseName(value: string, fallback = 'community-page'): string {
   return value
     .trim()
     .toLowerCase()
-    .normalize('NFKD')
+    .normalize('NFKC')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/[^\p{L}\p{N}._-]+/gu, '-')
+    .replace(/-+/g, '-')
     .replace(/(^-|-$)+/g, '')
-    || 'community-page';
+    || fallback;
 }
 
 function communityPluginPagePresets(records: InstalledPluginRecord[]): ProjectPagePreset[] {
@@ -6160,8 +6166,46 @@ function communityPluginPagePresets(records: InstalledPluginRecord[]): ProjectPa
     });
 }
 
-function pagePresetFileBaseNameSet(presets: ProjectPagePreset[]): Set<string> {
-  return new Set(presets.map((preset) => preset.fileBaseName.toLowerCase()));
+function pagePresetFileBaseName(
+  preset: ProjectPagePreset,
+  t: TranslateFn,
+  locale: Locale,
+): string {
+  const localized = slugifyPageFileBaseName(pagePresetTitle(preset, t, locale), '');
+  return localized || preset.fileBaseName;
+}
+
+function pagePresetVersionPrompt(
+  preset: ProjectPagePreset,
+  t: TranslateFn,
+  locale: Locale,
+): string | null {
+  if (preset.plugin) {
+    const query = pluginPresetQuery(preset.plugin, locale);
+    if (query) {
+      const rendered = renderPluginPresetQuery(preset.plugin, query).trim();
+      if (rendered) return rendered;
+      const raw = query.trim();
+      if (raw) return raw;
+    }
+  }
+  const title = pagePresetTitle(preset, t, locale).trim();
+  const description = pagePresetDescription(preset, t, locale).trim();
+  const fallbackPrompt = [title, description].filter(Boolean).join('\n\n').trim();
+  return fallbackPrompt || null;
+}
+
+function pagePresetFileBaseNameSet(
+  presets: ProjectPagePreset[],
+  t: TranslateFn,
+  locale: Locale,
+): Set<string> {
+  return new Set(
+    presets.flatMap((preset) => [
+      preset.fileBaseName.toLowerCase(),
+      pagePresetFileBaseName(preset, t, locale).toLowerCase(),
+    ]),
+  );
 }
 
 async function contentForPagePreset(
@@ -6246,7 +6290,7 @@ function pageIconName(name: string): IconName {
 }
 
 function nextHtmlPagePath(files: ProjectFile[], baseName: string): string {
-  const safeBaseName = baseName.trim().replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '') || 'page';
+  const safeBaseName = slugifyPageFileBaseName(baseName, 'page');
   const existing = new Set(files.map((file) => normalizeProjectFilePath(file.name).toLowerCase()));
   for (let index = 1; index < 1000; index += 1) {
     const name = index === 1 ? `${safeBaseName}.html` : `${safeBaseName}-${index}.html`;
@@ -7255,7 +7299,9 @@ function PageCreatorDialog({
   const subcategoryCatalog = buildSubcategoryCatalog(allPresetPlugins);
   const subcategoryLabelBySlug = new Map<string, string>();
   for (const options of Object.values(subcategoryCatalog)) {
-    for (const option of options) subcategoryLabelBySlug.set(option.slug, option.label);
+    for (const option of options) {
+      subcategoryLabelBySlug.set(option.slug, pluginSubfacetLabel(option.slug, option.label, t));
+    }
   }
   const subcategoryOptions: FacetOption[] = activeFacetSlug
     ? (subcategoryCatalog[activeFacetSlug] ?? []).filter((option) => option.count > 0)
@@ -7417,7 +7463,7 @@ function PageCreatorDialog({
                     className={`page-creator-subcat${subcategory === option.slug ? ' active' : ''}`}
                     onClick={() => setSubcategory(option.slug)}
                   >
-                    <span>{option.label}</span>
+                    <span>{pluginSubfacetLabel(option.slug, option.label, t)}</span>
                     <span className="page-creator-subcat-count">{option.count}</span>
                   </button>
                 ))}

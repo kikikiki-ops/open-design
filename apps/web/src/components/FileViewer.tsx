@@ -2600,6 +2600,11 @@ type HtmlVersionExportContext = {
   versionId?: string;
 };
 
+type ExportToastState = {
+  message: string;
+  tone: 'default' | 'success' | 'error' | 'loading';
+};
+
 export type DeckKeyboardShortcut = 'next' | 'prev' | 'first' | 'last' | 'reset';
 
 type DeckKeyboardShortcutEvent = Pick<
@@ -2633,6 +2638,8 @@ function FileVersionManagerModal({
   onOpenImageExport,
   onExportZip,
   onExportHtml,
+  exportToast,
+  onExportToastDismiss,
   onClose,
   onRestored,
 }: {
@@ -2645,6 +2652,8 @@ function FileVersionManagerModal({
   onOpenImageExport?: (context: HtmlVersionExportContext) => Promise<void> | void;
   onExportZip?: (context: HtmlVersionExportContext) => void;
   onExportHtml?: (context: HtmlVersionExportContext) => void;
+  exportToast?: ExportToastState | null;
+  onExportToastDismiss?: () => void;
   onClose: () => void;
   onRestored: (content: string, version: ProjectFileVersion) => Promise<void> | void;
 }) {
@@ -2669,10 +2678,7 @@ function FileVersionManagerModal({
   const restoreWrapRef = useRef<HTMLDivElement | null>(null);
   const restorePopoverId = useId();
   const [downloadMenuVersionId, setDownloadMenuVersionId] = useState<string | null>(null);
-  const [versionExportToast, setVersionExportToast] = useState<{
-    message: string;
-    tone: 'loading' | 'success' | 'error';
-  } | null>(null);
+  const [versionExportToast, setVersionExportToast] = useState<ExportToastState | null>(null);
   const [versionImageExportVersionId, setVersionImageExportVersionId] = useState<string | null>(null);
   const [versionImageExportFormat, setVersionImageExportFormat] = useState<ImageExportFormat>('png');
   const [versionImageExportInFlight, setVersionImageExportInFlight] = useState(false);
@@ -2788,6 +2794,7 @@ function FileVersionManagerModal({
   const versionImageExportVersion = versionImageExportVersionId
     ? versionById.get(versionImageExportVersionId) ?? null
     : null;
+  const visibleExportToast = versionExportToast ?? exportToast ?? null;
   const selectedContentMatchesVersion = Boolean(selectedId && selectedContentVersionId === selectedId && selectedContent);
   const restoreDisabled =
     !selectedVersion || selectedVersion.current || restoring || loadingContent || !selectedContentMatchesVersion;
@@ -2995,7 +3002,7 @@ function FileVersionManagerModal({
   ): Promise<void> {
     setDownloadMenuVersionId(null);
     setError(null);
-    setVersionExportToast({ message: t('fileViewer.exportStarted'), tone: 'loading' });
+    setVersionExportToast({ message: t('fileViewer.exportingProgress'), tone: 'loading' });
     const content = await ensureVersionContent(version);
     if (!content) {
       setVersionExportToast({ message: t('fileViewer.exportFailed'), tone: 'error' });
@@ -3039,7 +3046,7 @@ function FileVersionManagerModal({
   ): Promise<void> {
     setDownloadMenuVersionId(null);
     setError(null);
-    setVersionExportToast(null);
+    setVersionExportToast({ message: t('fileViewer.exportingProgress'), tone: 'loading' });
     const content = await ensureVersionContent(version);
     if (!content) {
       setVersionExportToast({ message: t('fileViewer.exportFailed'), tone: 'error' });
@@ -3050,6 +3057,7 @@ function FileVersionManagerModal({
       title: version.current ? file.name.replace(/\.html?$/i, '') || file.name : fileVersionExportTitle(file.name, version),
       ...(version.current ? {} : { versionId: version.id }),
     };
+    setVersionExportToast(null);
     await action(context);
   }
 
@@ -3649,15 +3657,23 @@ function FileVersionManagerModal({
           </div>
         </div>
       ) : null}
-      {versionExportToast ? (
+      {visibleExportToast ? (
         <Toast
           className="file-version-export-toast"
-          message={versionExportToast.message}
-          tone={versionExportToast.tone}
-          role={versionExportToast.tone === 'error' ? 'alert' : 'status'}
-          ttlMs={versionExportToast.tone === 'loading' ? 60000 : 2200}
+          message={visibleExportToast.message}
+          tone={visibleExportToast.tone}
+          role={visibleExportToast.tone === 'error' ? 'alert' : 'status'}
+          ttlMs={visibleExportToast.tone === 'loading' ? 60000 : 2200}
           placement="top"
-          onDismiss={versionExportToast.tone === 'loading' ? undefined : () => setVersionExportToast(null)}
+          onDismiss={visibleExportToast.tone === 'loading'
+            ? undefined
+            : () => {
+                if (versionExportToast) {
+                  setVersionExportToast(null);
+                } else {
+                  onExportToastDismiss?.();
+                }
+              }}
         />
       ) : null}
     </>,
@@ -6507,9 +6523,7 @@ function HtmlViewer({
   const templateExportResolvedRef = useRef(false);
   const screenshotInFlightRef = useRef(false);
   const imageExportInFlightRef = useRef(false);
-  const [exportToast, setExportToast] = useState<
-    { message: string; tone: 'default' | 'success' | 'error' | 'loading' } | null
-  >(null);
+  const [exportToast, setExportToast] = useState<ExportToastState | null>(null);
   const [shareLinkFeedback, setShareLinkFeedback] = useState<'copied' | 'failed' | null>(null);
   const [shareGuideToast, setShareGuideToast] = useState<string | null>(null);
   const [selectedSideCommentIds, setSelectedSideCommentIds] = useState<Set<string>>(() => new Set());
@@ -11730,7 +11744,7 @@ function HtmlViewer({
               ) : null}
               {/* Portaled to <body> so the screenshot/export toast escapes the
                   preview pane's transform + overflow:hidden. */}
-              {exportToast
+              {exportToast && !versionModalOpen
                 ? createPortal(
                     <Toast
                       message={exportToast.message}
@@ -11971,6 +11985,8 @@ function HtmlViewer({
           onOpenImageExport={openImageExportModal}
           onExportZip={triggerZipExport}
           onExportHtml={triggerHtmlExport}
+          exportToast={exportToast}
+          onExportToastDismiss={() => setExportToast(null)}
           onClose={() => setVersionModalOpen(false)}
           onRestored={handleVersionRestored}
         />

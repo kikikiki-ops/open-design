@@ -95,6 +95,10 @@ describe('PreviewDrawOverlay', () => {
     const input = container.querySelector<HTMLInputElement>('.preview-draw-note-input');
 
     expect(canvas?.style.zIndex).toBe('80');
+    expect(canvas?.style.touchAction).toBe('none');
+    expect(canvas?.style.userSelect).toBe('none');
+    expect(container.querySelector('.preview-draw-overlay-active')).toBeTruthy();
+    expect(container.querySelector('style')?.textContent).toContain('.preview-draw-overlay-active iframe');
     expect(dock?.style.zIndex).toBe('91');
     expect(dock?.style.flexDirection).toBe('column');
     expect(dock?.style.left).toBe('50%');
@@ -109,6 +113,21 @@ describe('PreviewDrawOverlay', () => {
     expect(input?.style.flexBasis).toBe('220px');
     expect(input?.style.minWidth).toBe('0px');
     expect(input?.style.maxWidth).toBe('100%');
+  });
+
+  it('prevents preview text selection while drawing on touch-sized frames', () => {
+    const { container } = render(
+      <PreviewDrawOverlay active>
+        <iframe title="preview" />
+      </PreviewDrawOverlay>,
+    );
+
+    const canvas = container.querySelector<HTMLCanvasElement>('canvas');
+    expect(canvas).toBeTruthy();
+
+    expect(fireEvent.pointerDown(canvas!, { clientX: 10, clientY: 10, pointerId: 1 })).toBe(false);
+    expect(fireEvent.pointerMove(canvas!, { clientX: 40, clientY: 40, pointerId: 1 })).toBe(false);
+    expect(fireEvent.pointerUp(canvas!, { clientX: 40, clientY: 40, pointerId: 1 })).toBe(false);
   });
 
   it('queues a note when Enter submits from the draw input', async () => {

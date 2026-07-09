@@ -2884,19 +2884,20 @@
 .home-hero__template-reset {
   appearance: none;
   flex: 0 0 auto;
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-left: -2px;
+  margin-left: -5px;
   border: 0;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: var(--accent);
+  background: transparent;
+  color: var(--text-faint);
   cursor: pointer;
+  opacity: 0.72;
   transition:
-    background-color 120ms var(--ease-out),
+    opacity 120ms var(--ease-out),
     color 120ms var(--ease-out);
 }
 .home-hero__template-reset svg {
@@ -2907,8 +2908,13 @@
 .home-hero__template-reset:hover,
 .home-hero__template-reset:focus-visible {
   outline: none;
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  color: var(--accent);
+  background: transparent;
+  color: var(--text-muted);
+  opacity: 1;
+}
+.home-hero__template-reset:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 2px;
 }
 .home-hero__template-menu {
   position: absolute;

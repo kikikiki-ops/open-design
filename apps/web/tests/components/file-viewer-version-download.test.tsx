@@ -250,6 +250,26 @@ describe('FileViewer version download actions', () => {
     expect(within(toast as HTMLElement).queryByRole('button', { name: 'Dismiss' })).toBeNull();
   });
 
+  it.each([
+    ['Export as standalone HTML', exportProjectAsHtmlMock],
+    ['Download as .zip', exportProjectAsZipMock],
+  ] as const)('shows a loading toast while running the version %s action', async (menuItemName, exporter) => {
+    exporter.mockReturnValueOnce(new Promise(() => {}));
+    const { file } = setupVersionFetch();
+    const versionDialog = await renderVersionDialog(file);
+
+    openVersionDownloadMenu(versionDialog);
+    fireEvent.click(within(versionDialog).getByRole('menuitem', { name: menuItemName }));
+
+    await waitFor(() => {
+      expect(exporter).toHaveBeenCalled();
+    });
+    const toastMessage = await screen.findByText(/Exporting/);
+    const toast = toastMessage.closest('.od-toast');
+    expect(toast).toBeTruthy();
+    expect(within(toast as HTMLElement).queryByRole('button', { name: 'Dismiss' })).toBeNull();
+  });
+
   it('exports historical version images through the main image exporter', async () => {
     isOpenDesignHostAvailableMock.mockReturnValue(true);
     exportProjectImageDataUrlMock.mockResolvedValueOnce({
