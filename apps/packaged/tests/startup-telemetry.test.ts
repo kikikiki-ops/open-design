@@ -171,9 +171,18 @@ describe('scrubSecrets', () => {
     expect(out).toContain('postgres://<redacted>@db.internal');
   });
 
-  it('redacts Authorization bearer tokens and provider api keys', () => {
-    expect(scrubSecrets('Authorization: Bearer sk-ant-api03-ABC123DEF456GHI789')).not.toContain('ABC123DEF456');
+  it('redacts the ENTIRE Authorization header value, not just the scheme word', () => {
+    // Regression (nettee): the key=value branch consumed only "Bearer" and left
+    // the token — "Authorization: Bearer abc" became "<redacted> abc".
+    expect(scrubSecrets('Authorization: Bearer abc12345')).toBe('Authorization: <redacted>');
+    expect(scrubSecrets('Authorization: Basic Zm9vOmJhcg==')).toBe('Authorization: <redacted>');
+    expect(scrubSecrets('Authorization: Bearer abc12345')).not.toContain('abc12345');
+    expect(scrubSecrets('Authorization: Basic Zm9vOmJhcg==')).not.toContain('Zm9vOmJhcg');
+  });
+
+  it('redacts inline provider api keys not under an Authorization header', () => {
     expect(scrubSecrets('using key sk-ant-api03-ABC123DEF456GHI789 now')).toContain('<redacted-token>');
+    expect(scrubSecrets('using key sk-ant-api03-ABC123DEF456GHI789 now')).not.toContain('ABC123DEF456');
   });
 
   it('redacts key=value secrets and bare emails', () => {

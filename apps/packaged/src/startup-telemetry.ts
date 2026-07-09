@@ -186,12 +186,17 @@ export function scrubSecrets(value: string): string {
   return value
     // Credentials embedded in a URL / connection string: scheme://user:pass@host
     .replace(/([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)[^/\s:@]+:[^/\s@]+@/g, "$1<redacted>@")
+    // Authorization header — redact the ENTIRE value (scheme + token) to
+    // end-of-line. The generic key=value rule below would only consume the
+    // scheme word ("Bearer"/"Basic") and leave the credential
+    // ("Authorization: Bearer abc" -> "<redacted> abc"), so handle it first.
+    .replace(/(\bAuthorization\s*[:=]\s*)\S[^\r\n]*/gi, "$1<redacted>")
     // `key = value` / `key: value` secrets (password, token, secret, api_key, …).
     .replace(
-      /\b(pass(?:word|wd)?|pwd|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret|authorization|auth)(\s*[=:]\s*)("?)[^\s"'&]+\3/gi,
+      /\b(pass(?:word|wd)?|pwd|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret)(\s*[=:]\s*)("?)[^\s"'&]+\3/gi,
       "$1$2<redacted>",
     )
-    // Authorization header token values.
+    // Inline Bearer/Basic token values not under an Authorization header.
     .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/g, "$1 <redacted>")
     // Provider API keys by well-known prefix (OpenAI/Anthropic, PostHog, GitHub, Slack, …).
     .replace(/\b(?:sk|pk|rk|phx|phc|ghp|gho|ghs|xox[baprs])[-_][A-Za-z0-9_-]{8,}/g, "<redacted-token>")
