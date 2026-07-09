@@ -93,15 +93,28 @@ vi.mock('../../src/components/SettingsDialog', () => ({
   SettingsDialog: ({
     initial,
     initialSection,
+    onDraftChange,
     onPersistComposioKey,
   }: {
     initial: AppConfig;
     initialSection?: string;
+    onDraftChange?: (config: AppConfig) => void;
     onPersistComposioKey: (composio: AppConfig['composio']) => void;
   }) => (
     <div role="dialog" aria-label="Settings dialog">
       <div>Section: {initialSection}</div>
       <div>Composio tail: {initial.composio?.apiKeyTail ?? 'none'}</div>
+      <button
+        type="button"
+        onClick={() =>
+          onDraftChange?.({
+            ...initial,
+            model: 'claude-draft-before-autosave',
+          })
+        }
+      >
+        Edit settings draft
+      </button>
       <button
         type="button"
         onClick={() =>
@@ -422,6 +435,36 @@ describe('App connectors settings flows', () => {
       expect(screen.getByRole('dialog', { name: 'Settings dialog' })).toBeTruthy();
     });
     expect(container.querySelector('.privacy-consent-banner')).toBeTruthy();
+  });
+
+  it('preserves an open settings draft when the first-run banner share choice is clicked before autosave', async () => {
+    const { container } = render(<App />);
+
+    await waitFor(() => {
+      expect(container.querySelector('.privacy-consent-banner')).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open execution settings' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: 'Settings dialog' })).toBeTruthy();
+    });
+
+    mockedSyncConfigToDaemon.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Edit settings draft' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Share' }));
+
+    await waitFor(() => {
+      expect(mockedSyncConfigToDaemon).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'claude-draft-before-autosave',
+          installationId: expect.any(String),
+          privacyDecisionAt: expect.any(Number),
+          telemetry: { metrics: true, content: true },
+        }),
+        expect.objectContaining({ throwOnError: true }),
+      );
+    });
   });
 
   it('withholds the privacy banner until onboarding completes', async () => {

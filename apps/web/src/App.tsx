@@ -399,6 +399,7 @@ function AppInner() {
   configRef.current = config;
   const latestPersistedConfigRef = useRef(config);
   latestPersistedConfigRef.current = config;
+  const settingsDraftConfigRef = useRef<AppConfig | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Surfaced when a Home-picked working dir could not be applied to a freshly
   // created project (expired/invalid desktop token, daemon rejection). Without
@@ -1188,6 +1189,27 @@ function AppInner() {
       syncConfigToDaemon(persisted, { throwOnError: true }),
     ]);
   }, [daemonMediaProviders, daemonMediaProvidersFetchState]);
+
+  const handleSettingsDraftChange = useCallback((draft: AppConfig) => {
+    settingsDraftConfigRef.current = draft;
+  }, []);
+
+  const handlePrivacyConsentChoice = useCallback((share: boolean) => {
+    const base = settingsDraftConfigRef.current ?? latestPersistedConfigRef.current;
+    const installationId = share
+      ? base.installationId ?? generateInstallationIdSafe()
+      : null;
+    void handleConfigPersist({
+      ...base,
+      installationId,
+      privacyDecisionAt: Date.now(),
+      telemetry: {
+        ...(base.telemetry ?? {}),
+        metrics: share,
+        content: share,
+      },
+    });
+  }, [handleConfigPersist]);
 
   /**
    * Explicit Composio API-key save. Called from the section-local
@@ -2453,6 +2475,7 @@ function AppInner() {
           initialHighlight={settingsHighlight}
           composioConfigLoading={composioConfigLoading}
           onPersist={handleConfigPersist}
+          onDraftChange={handleSettingsDraftChange}
           onPersistComposioKey={handleConfigPersistComposioKey}
           onClose={() => {
             // Closing the dialog is the canonical "I'm done" gesture
@@ -2468,6 +2491,7 @@ function AppInner() {
               setConfig(next);
             }
             setSettingsOpen(false);
+            settingsDraftConfigRef.current = null;
             setSettingsHighlight(null);
           }}
           onRefreshAgents={refreshAgents}
@@ -2521,30 +2545,10 @@ function AppInner() {
             // The banner owns only the privacy decision; it does not drive
             // navigation. Choosing Share keeps the current anonymous identity
             // when one already exists and enables the telemetry surface.
-            const installationId =
-              latestPersistedConfigRef.current.installationId ?? generateInstallationIdSafe();
-            void handleConfigPersist({
-              ...latestPersistedConfigRef.current,
-              installationId,
-              privacyDecisionAt: Date.now(),
-              telemetry: {
-                ...(latestPersistedConfigRef.current.telemetry ?? {}),
-                metrics: true,
-                content: true,
-              },
-            });
+            handlePrivacyConsentChoice(true);
           }}
           onDecline={() => {
-            void handleConfigPersist({
-              ...latestPersistedConfigRef.current,
-              installationId: null,
-              privacyDecisionAt: Date.now(),
-              telemetry: {
-                ...(latestPersistedConfigRef.current.telemetry ?? {}),
-                metrics: false,
-                content: false,
-              },
-            });
+            handlePrivacyConsentChoice(false);
           }}
         />
       </motion.div>

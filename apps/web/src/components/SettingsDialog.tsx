@@ -390,6 +390,7 @@ interface Props {
    * incremental save, not a final commit.
    */
   onPersist: (cfg: AppConfig, options?: { forceMediaProviderSync?: boolean }) => Promise<void> | void;
+  onDraftChange?: (cfg: AppConfig) => void;
   /**
    * Persist the Composio API key separately from the broader autosave
    * loop. Composio secrets need an explicit user gesture so half-typed
@@ -1343,6 +1344,7 @@ export function SettingsDialog({
   onDesignSystemImportRebuildJob,
   providerModelsCache: sharedProviderModelsCache,
   onProviderModelsCacheChange,
+  onDraftChange,
 }: Props) {
   const { t, locale, setLocale } = useI18n();
   const analytics = useAnalytics();
@@ -1364,6 +1366,10 @@ export function SettingsDialog({
     theme: initial.theme ?? 'system',
     accentColor: resolveAccentColor(initial.accentColor),
   });
+
+  useEffect(() => {
+    onDraftChange?.(cfg);
+  }, [cfg, onDraftChange]);
 
   // settings_view — fire on dialog open and on every section switch so the
   // configuration funnel can see which section the user spent time in.
