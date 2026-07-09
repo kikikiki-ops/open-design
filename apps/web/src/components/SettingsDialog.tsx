@@ -1386,17 +1386,17 @@ export function SettingsDialog({
 
   useEffect(() => {
     const previousInitial = previousInitialRef.current;
+    const parentPrivacyChanged =
+      previousInitial.installationId !== initial.installationId ||
+      previousInitial.privacyDecisionAt !== initial.privacyDecisionAt ||
+      !telemetryPrefsEqual(previousInitial.telemetry, initial.telemetry);
     setCfg((current) => {
       const nextAgentCliEnv = reconcileAmrProfileEnv(current.agentCliEnv, initial.agentCliEnv);
       const nextAgentModels = reconcileAmrModelChoice(current.agentModels, previousInitial, initial);
-      const privacyChanged =
-        current.installationId !== initial.installationId ||
-        current.privacyDecisionAt !== initial.privacyDecisionAt ||
-        !telemetryPrefsEqual(current.telemetry, initial.telemetry);
       if (
         nextAgentCliEnv === current.agentCliEnv
         && nextAgentModels === current.agentModels
-        && !privacyChanged
+        && !parentPrivacyChanged
       ) {
         return current;
       }
@@ -1404,7 +1404,7 @@ export function SettingsDialog({
         ...current,
         agentCliEnv: nextAgentCliEnv,
         agentModels: nextAgentModels,
-        ...(privacyChanged
+        ...(parentPrivacyChanged
           ? {
               installationId: initial.installationId,
               privacyDecisionAt: initial.privacyDecisionAt,
@@ -1424,9 +1424,13 @@ export function SettingsDialog({
         previousInitial,
         initial,
       ),
-      installationId: initial.installationId,
-      privacyDecisionAt: initial.privacyDecisionAt,
-      telemetry: initial.telemetry ? { ...initial.telemetry } : undefined,
+      ...(parentPrivacyChanged
+        ? {
+            installationId: initial.installationId,
+            privacyDecisionAt: initial.privacyDecisionAt,
+            telemetry: initial.telemetry ? { ...initial.telemetry } : undefined,
+          }
+        : {}),
     };
     previousInitialRef.current = initial;
   }, [initial]);
