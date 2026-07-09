@@ -26,10 +26,12 @@
 // Payload PII: the free-form crash fields (error_message, error_stack, and the
 // daemon_log_tail slice of the daemon's own log) and every path we send
 // (log_path, native_module_path) run through `scrubUserPaths` to strip the
-// user's home dir, and the free-form text is length-capped. Startup errors are
-// module-resolution / daemon-exit messages and the daemon's startup log lines,
-// not user content, so this bounds the exposure to build/OS strings rather than
-// anything the user typed.
+// user's home dir, and the free-form fields additionally run through
+// `scrubSecrets` to strip credentials/tokens/emails — because the daemon loads
+// config/connector/MCP secrets before it reports ready, so a startup error can
+// echo a connection string or auth header, and this event is sent even for
+// opted-out users. The free-form text is also length-capped. Scrubbing is a
+// best-effort denylist, not a guarantee.
 
 import { readFile } from "node:fs/promises";
 import { readFileSync, statSync } from "node:fs";
@@ -163,10 +165,38 @@ export function scrubUserPaths(value: string): string {
     // running across lines in a multi-line stack. Runs before the POSIX rule
     // because that rule also matches the "/Users/" inside a `C:/Users/` path.
     .replace(/([A-Za-z]:[\\/]Users[\\/])[^\\/\r\n]+/g, "$1<redacted>")
+    // Any `…/Users/<name>`, `…/Profiles/<name>` or `…/home/<name>` segment
+    // regardless of prefix — covers UNC shares (`\\CORP-FS\Profiles\jdoe\…`) and
+    // roaming layouts that the drive-anchored rule above misses. Space-tolerant
+    // (Windows names can contain spaces), line-bounded.
+    .replace(/([\\/](?:Users|Profiles)[\\/])[^\\/\r\n]+/g, "$1<redacted>")
     // POSIX home dirs. Real macOS/Linux home segments cannot contain spaces, so
     // the whitespace boundary is correct here and avoids over-redacting a
     // following word in free-form crash text.
     .replace(/\/(Users|home)\/[^/\s]+/g, "/$1/<redacted>");
+}
+
+// Strip credentials/secrets from free-form telemetry text (daemon log tail,
+// error message/stack). The daemon loads config/connector/MCP tokens before it
+// reports ready, so a startup error can echo a connection string, an auth
+// header, or a `KEY=value` secret — and this event is sent even for opted-out
+// users, so the surface must be scrubbed, not just path-redacted. Best-effort
+// (denylist, never complete), applied ON TOP of scrubUserPaths.
+export function scrubSecrets(value: string): string {
+  return value
+    // Credentials embedded in a URL / connection string: scheme://user:pass@host
+    .replace(/([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)[^/\s:@]+:[^/\s@]+@/g, "$1<redacted>@")
+    // `key = value` / `key: value` secrets (password, token, secret, api_key, …).
+    .replace(
+      /\b(pass(?:word|wd)?|pwd|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret|authorization|auth)(\s*[=:]\s*)("?)[^\s"'&]+\3/gi,
+      "$1$2<redacted>",
+    )
+    // Authorization header token values.
+    .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/g, "$1 <redacted>")
+    // Provider API keys by well-known prefix (OpenAI/Anthropic, PostHog, GitHub, Slack, …).
+    .replace(/\b(?:sk|pk|rk|phx|phc|ghp|gho|ghs|xox[baprs])[-_][A-Za-z0-9_-]{8,}/g, "<redacted-token>")
+    // Bare email addresses.
+    .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "<redacted-email>");
 }
 
 function osName(platform: NodeJS.Platform = process.platform): string {
@@ -366,7 +396,7 @@ export async function reportStartupFailure(
         // has code=1 exits where we read the log but classified neither field;
         // emit a scrubbed, tail-truncated slice of the raw log so ANY exit
         // reason is diagnosable, not just those two shapes.
-        daemonLogTail = truncateTailForTelemetry(scrubUserPaths(tail), DAEMON_LOG_TAIL_MAX);
+        daemonLogTail = truncateTailForTelemetry(scrubSecrets(scrubUserPaths(tail)), DAEMON_LOG_TAIL_MAX);
       }
     }
     const rawMessage =
@@ -403,10 +433,10 @@ export async function reportStartupFailure(
       // payload. These crash-scene fields are why the mac subset can't resolve
       // the module and what the Windows `unknown` bucket actually threw.
       error_message: rawMessage
-        ? truncateForTelemetry(scrubUserPaths(rawMessage), ERROR_MESSAGE_MAX)
+        ? truncateForTelemetry(scrubSecrets(scrubUserPaths(rawMessage)), ERROR_MESSAGE_MAX)
         : null,
       error_stack: rawStack
-        ? truncateForTelemetry(scrubUserPaths(rawStack), ERROR_STACK_MAX)
+        ? truncateForTelemetry(scrubSecrets(scrubUserPaths(rawStack)), ERROR_STACK_MAX)
         : null,
       native_module_present: nativeModulePresent,
       native_module_size: nativeModuleSize,

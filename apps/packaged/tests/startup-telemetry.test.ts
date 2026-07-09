@@ -27,6 +27,7 @@ import {
   reportStartupFailure,
   resolveStartupDistinctId,
   scrubUserPaths,
+  scrubSecrets,
 } from '../src/startup-telemetry.js';
 
 // Verbatim daemon log tail from issue #4638.
@@ -153,6 +154,38 @@ describe('scrubUserPaths', () => {
   it('does not over-redact across lines in a multi-line stack', () => {
     const scrubbed = scrubUserPaths('a C:\\Users\\John Doe\\x\nb /Users/bob/y');
     expect(scrubbed).toBe('a C:\\Users\\<redacted>\\x\nb /Users/<redacted>/y');
+  });
+
+  it('redacts a UNC \\\\server\\Profiles\\<user> segment', () => {
+    expect(scrubUserPaths('\\\\CORP-FS\\Profiles\\jdoe\\od\\config.json')).toBe(
+      '\\\\CORP-FS\\Profiles\\<redacted>\\od\\config.json',
+    );
+    expect(scrubUserPaths('\\\\CORP-FS\\Profiles\\jdoe\\od\\config.json')).not.toContain('jdoe');
+  });
+});
+
+describe('scrubSecrets', () => {
+  it('redacts a password embedded in a connection string', () => {
+    const out = scrubSecrets('DATABASE_URL=postgres://od:s3cr3tpw@db.internal:5432/open');
+    expect(out).not.toContain('s3cr3tpw');
+    expect(out).toContain('postgres://<redacted>@db.internal');
+  });
+
+  it('redacts Authorization bearer tokens and provider api keys', () => {
+    expect(scrubSecrets('Authorization: Bearer sk-ant-api03-ABC123DEF456GHI789')).not.toContain('ABC123DEF456');
+    expect(scrubSecrets('using key sk-ant-api03-ABC123DEF456GHI789 now')).toContain('<redacted-token>');
+  });
+
+  it('redacts key=value secrets and bare emails', () => {
+    expect(scrubSecrets('password=hunter2 token: abc12345')).toBe('password=<redacted> token: <redacted>');
+    expect(scrubSecrets('login failed for user ontf116@gmail.com')).toBe(
+      'login failed for user <redacted-email>',
+    );
+  });
+
+  it('leaves ordinary diagnostic text (stack frames, module paths) intact', () => {
+    const stack = "TypeError: Cannot read properties of undefined (reading 'port')\n    at resolveListenPort (server.mjs:1201:14)";
+    expect(scrubSecrets(stack)).toBe(stack);
   });
 });
 
