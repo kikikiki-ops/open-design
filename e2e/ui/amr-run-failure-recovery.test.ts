@@ -363,18 +363,7 @@ test('[P0] @critical non-AMR model failures promote Open Design AMR and auto-ret
     }
     const raw = route.request().postData();
     if (raw) runRequestBodies.push(JSON.parse(raw) as Record<string, unknown>);
-    await route.fulfill({
-      status: 202,
-      contentType: 'application/json',
-      body: JSON.stringify({ runId: `amr-promotion-retry-${runRequestBodies.length}` }),
-    });
-  });
-  await page.route('**/api/runs/amr-promotion-retry-*/events', async (route) => {
-    await route.fulfill({
-      status: 200,
-      headers: { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' },
-      body: ['event: end', 'data: {"code":0,"status":"succeeded"}', '', ''].join('\n'),
-    });
+    await route.fallback();
   });
 
   const userMsgId = `u-switch-${projectId}`;
@@ -436,6 +425,7 @@ test('[P0] @critical non-AMR model failures promote Open Design AMR and auto-ret
 
   await expect.poll(() => loginRequested, { timeout: T.medium }).toBe(true);
   await expect.poll(() => runRequestBodies.some((body) => body.agentId === 'amr'), { timeout: T.long }).toBe(true);
+  await expect(page.getByText('AMR promotion retry recovered.').first()).toBeVisible({ timeout: T.long });
 });
 
 test('[P0] @critical Settings reopens AMR with the configured profile, account badge, and model catalog', async ({ page }) => {
