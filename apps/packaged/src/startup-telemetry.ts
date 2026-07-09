@@ -184,8 +184,12 @@ export function scrubUserPaths(value: string): string {
 // (denylist, never complete), applied ON TOP of scrubUserPaths.
 export function scrubSecrets(value: string): string {
   return value
-    // Credentials embedded in a URL / connection string: scheme://user:pass@host
-    .replace(/([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)[^/\s:@]+:[^/\s@]+@/g, "$1<redacted>@")
+    // Credentials embedded in a URL / connection string: scheme://user:pass@host.
+    // The password may itself contain '@' (e.g. `user:p@ss@host`), so match the
+    // whole userinfo greedily up to the LAST '@' before the host rather than
+    // stopping at the first '@' (which left `…<redacted>@ss@host` leaking part
+    // of the password). Requires a ':' so a plain `scheme://host` isn't touched.
+    .replace(/([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)[^/\s@]*:[^/\s]*@/g, "$1<redacted>@")
     // Authorization header — redact the ENTIRE value (scheme + token) to
     // end-of-line. The generic key=value rule below would only consume the
     // scheme word ("Bearer"/"Basic") and leave the credential

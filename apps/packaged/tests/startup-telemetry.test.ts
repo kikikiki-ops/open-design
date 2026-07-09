@@ -171,6 +171,13 @@ describe('scrubSecrets', () => {
     expect(out).toContain('postgres://<redacted>@db.internal');
   });
 
+  it('redacts a connection-string password that itself contains @, keeping the host', () => {
+    // Greedy userinfo must consume up to the LAST @ before the host, or part of
+    // the password ("ss") leaks and the host is rewritten.
+    expect(scrubSecrets('postgres://user:p@ss@host/db')).toBe('postgres://<redacted>@host/db');
+    expect(scrubSecrets('postgres://user:p@ss@host/db')).not.toContain('p@ss');
+  });
+
   it('redacts the ENTIRE Authorization header value, not just the scheme word', () => {
     // Regression (nettee): the key=value branch consumed only "Bearer" and left
     // the token — "Authorization: Bearer abc" became "<redacted> abc".
