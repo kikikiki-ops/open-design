@@ -9,6 +9,7 @@ import {
   downloadUpdaterUpdate,
   openUpdaterInstaller,
   quitAfterUpdaterInstallerOpen,
+  releaseNoteCandidatesFromStatus,
   readUpdaterStatus,
 } from '../../src/lib/updater';
 
@@ -131,6 +132,59 @@ describe('web updater model', () => {
     expect(model.shouldPrompt).toBe(false);
     expect(model.upToDate).toBe(true);
     expect(model.hasDownloadedInstaller).toBe(false);
+  });
+
+  it('resolves release-note candidates from metadata without guessing R2 paths', () => {
+    const status = downloadedStatus({
+      metadata: {
+        releaseNotes: {
+          defaultLocale: 'en',
+          files: {
+            en: {
+              html: {
+                contentType: 'text/html; charset=utf-8',
+                url: 'https://releases.example.test/stable/versions/1.2.3/release-notes/en.html',
+              },
+              markdown: {
+                contentType: 'text/markdown; charset=utf-8',
+                url: 'https://releases.example.test/stable/versions/1.2.3/release-notes/en.md',
+              },
+            },
+            'zh-CN': {
+              markdown: {
+                contentType: 'text/markdown; charset=utf-8',
+                url: 'https://releases.example.test/stable/versions/1.2.3/release-notes/zh-CN.md',
+              },
+            },
+          },
+        },
+      },
+    });
+
+    expect(releaseNoteCandidatesFromStatus(status, 'zh-CN')).toEqual([
+      {
+        contentType: 'text/html; charset=utf-8',
+        format: 'html',
+        locale: 'en',
+        url: 'https://releases.example.test/stable/versions/1.2.3/release-notes/en.html',
+      },
+      {
+        contentType: 'text/markdown; charset=utf-8',
+        format: 'markdown',
+        locale: 'zh-CN',
+        url: 'https://releases.example.test/stable/versions/1.2.3/release-notes/zh-CN.md',
+      },
+      {
+        contentType: 'text/markdown; charset=utf-8',
+        format: 'markdown',
+        locale: 'en',
+        url: 'https://releases.example.test/stable/versions/1.2.3/release-notes/en.md',
+      },
+    ]);
+    expect(releaseNoteCandidatesFromStatus(status, 'zh-TW').map((candidate) => candidate.locale)).toEqual([
+      'en',
+      'en',
+    ]);
   });
 
   it('keeps the downloaded installer visible without surfacing newer incoming progress', () => {

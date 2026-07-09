@@ -25,6 +25,7 @@ export type UpdaterFixtureOptions = {
   payloadBody?: Buffer | string;
   payloadPath?: string;
   port?: number;
+  releaseNotes?: "none" | "markdown" | "html" | "mixed";
   version?: string;
 };
 
@@ -40,6 +41,7 @@ export type UpdaterFixtureInfo = {
   payloadSha256: string | null;
   payloadUrl: string | null;
   platform: "mac" | "win";
+  releaseNotes: Record<string, { html?: string; markdown?: string }>;
   sha256: string;
   version: string;
 };
@@ -82,6 +84,12 @@ function serverOrigin(server: Server): string {
   const address = server.address();
   if (address == null || typeof address === "string") throw new Error("updater fixture did not listen on TCP");
   return `http://127.0.0.1:${address.port}`;
+}
+
+function applyCors(response: ServerResponse): void {
+  response.setHeader("access-control-allow-headers", "cache-control,content-type,range");
+  response.setHeader("access-control-allow-methods", "GET,HEAD,OPTIONS");
+  response.setHeader("access-control-allow-origin", "*");
 }
 
 type ParsedRange = { end: number; start: number } | "invalid" | "unsatisfiable" | null;
@@ -206,6 +214,43 @@ function channelMetadata(channel: UpdaterFixtureChannel, version: string): Recor
   return releaseMetadataVersionFields(channel, version);
 }
 
+type FixtureReleaseNote = {
+  body: string;
+  contentType: string;
+  extension: "html" | "md";
+  format: "html" | "markdown";
+  locale: string;
+  name: string;
+};
+
+function fixtureReleaseNotes(mode: UpdaterFixtureOptions["releaseNotes"], version: string): FixtureReleaseNote[] {
+  const selected = mode ?? "none";
+  if (selected === "none") return [];
+  const markdown = (locale: string, title: string): FixtureReleaseNote => ({
+    body: `# ${title}\n\nRelease note fixture for ${version} (${locale}).\n`,
+    contentType: "text/markdown; charset=utf-8",
+    extension: "md",
+    format: "markdown",
+    locale,
+    name: `${locale}.md`,
+  });
+  const html = (locale: string, title: string): FixtureReleaseNote => ({
+    body: `<!doctype html><meta charset="utf-8"><h1>${title}</h1><p>Release note fixture for ${version} (${locale}).</p>`,
+    contentType: "text/html; charset=utf-8",
+    extension: "html",
+    format: "html",
+    locale,
+    name: `${locale}.html`,
+  });
+  const notes = [markdown("en", `Open Design ${version}`), markdown("zh-CN", `Open Design ${version}`)];
+  if (selected === "html") {
+    notes.push(html("en", `Open Design ${version}`), html("zh-CN", `Open Design ${version}`));
+  } else if (selected === "mixed") {
+    notes.push(html("en", `Open Design ${version}`));
+  }
+  return notes;
+}
+
 export async function startUpdaterFixtureServer(options: UpdaterFixtureOptions = {}): Promise<UpdaterFixtureServer> {
   const channel = normalizeChannel(options.channel);
   const host = options.host ?? "127.0.0.1";
@@ -252,9 +297,16 @@ export async function startUpdaterFixtureServer(options: UpdaterFixtureOptions =
   const payloadSha256 = options.payloadPath == null
     ? createHash("sha256").update(payloadBody).digest("hex")
     : await sha256File(options.payloadPath);
+  const releaseNoteFiles = fixtureReleaseNotes(options.releaseNotes, version);
 
   let info: UpdaterFixtureInfo | null = null;
   const server = createServer((request, response) => {
+    applyCors(response);
+    if (request.method === "OPTIONS") {
+      response.statusCode = 204;
+      response.end();
+      return;
+    }
     if (info == null) {
       response.statusCode = 503;
       response.end("fixture not ready");
@@ -303,8 +355,44 @@ export async function startUpdaterFixtureServer(options: UpdaterFixtureOptions =
             signed: false,
           },
         },
+        ...(releaseNoteFiles.length > 0
+          ? {
+              releaseNotes: {
+                defaultLocale: "en",
+                files: Object.fromEntries(
+                  ["en", "zh-CN"].map((locale) => [
+                    locale,
+                    Object.fromEntries(
+                      releaseNoteFiles
+                        .filter((note) => note.locale === locale)
+                        .map((note) => [
+                          note.format,
+                          {
+                            contentType: note.contentType,
+                            extension: note.extension,
+                            format: note.format,
+                            locale: note.locale,
+                            name: note.name,
+                            size: Buffer.byteLength(note.body, "utf8"),
+                            url: `${origin}/${channel}/versions/${version}/release-notes/${encodeURIComponent(note.name)}`,
+                          },
+                        ]),
+                    ),
+                  ]),
+                ),
+                requiredMarkdownLocales: ["en", "zh-CN"],
+                version,
+              },
+            }
+          : {}),
         version: 1,
       }));
+      return;
+    }
+    const releaseNote = releaseNoteFiles.find((note) => path === `/${channel}/versions/${version}/release-notes/${encodeURIComponent(note.name)}`);
+    if (releaseNote != null) {
+      response.setHeader("content-type", releaseNote.contentType);
+      endWithOptionalBody(request, response, releaseNote.body);
       return;
     }
     if (path === `/${channel}/versions/${version}/${artifactPathSegment}`) {
@@ -353,6 +441,19 @@ export async function startUpdaterFixtureServer(options: UpdaterFixtureOptions =
     payloadSha256: includePayload ? payloadSha256 : null,
     payloadUrl,
     platform,
+    releaseNotes: Object.fromEntries(
+      ["en", "zh-CN"].map((locale) => [
+        locale,
+        Object.fromEntries(
+          releaseNoteFiles
+            .filter((note) => note.locale === locale)
+            .map((note) => [
+              note.format,
+              `${origin}/${channel}/versions/${version}/release-notes/${encodeURIComponent(note.name)}`,
+            ]),
+        ),
+      ]),
+    ),
     sha256,
     version,
   };

@@ -1,5 +1,5 @@
 import { execFile as execFileCallback } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { createServer as createHttpsServer } from "node:https";
 import { tmpdir } from "node:os";
@@ -138,6 +138,15 @@ async function writeFakeGhScript(root: string): Promise<string> {
     "utf8",
   );
   return scriptPath;
+}
+
+async function writeReleaseNotesRoot(root: string, releaseVersion: string): Promise<string> {
+  const changelogRoot = join(root, "CHANGELOG");
+  const versionDir = join(changelogRoot, `v${releaseVersion}`);
+  await mkdir(versionDir, { recursive: true });
+  await writeFile(join(versionDir, "en.md"), `# Open Design ${releaseVersion}\n\nEnglish release notes.\n`, "utf8");
+  await writeFile(join(versionDir, "zh-CN.md"), `# Open Design ${releaseVersion}\n\n中文发布说明。\n`, "utf8");
+  return changelogRoot;
 }
 
 async function readPackagedVersion(): Promise<string> {
@@ -354,10 +363,12 @@ describe("tools-release local channel prepare validation", () => {
 
     try {
       const fakeGh = await writeFakeGhScript(ghRoot);
+      const releaseNotesRoot = await writeReleaseNotesRoot(ghRoot, packagedVersion);
       const stable = await runPrepare("stable", {
         GITHUB_REF_NAME: `release/v${packagedVersion}`,
         GITHUB_REPOSITORY: "nexu-io/open-design",
         GITHUB_SHA: "0123456789abcdef0123456789abcdef01234567",
+        OPEN_DESIGN_RELEASE_NOTES_ROOT: releaseNotesRoot,
         OPEN_DESIGN_GH_NODE_SCRIPT: fakeGh,
         OPEN_DESIGN_RELEASE_DRY_RUN: "true",
         OPEN_DESIGN_RELEASES_PUBLIC_ORIGIN: server.origin,
@@ -389,10 +400,12 @@ describe("tools-release local channel prepare validation", () => {
 
     try {
       const fakeGh = await writeFakeGhScript(ghRoot);
+      const releaseNotesRoot = await writeReleaseNotesRoot(ghRoot, packagedVersion);
       const stable = await runPrepare("stable", {
         GITHUB_REF_NAME: `release/v${packagedVersion}`,
         GITHUB_REPOSITORY: "nexu-io/open-design",
         GITHUB_SHA: "0123456789abcdef0123456789abcdef01234567",
+        OPEN_DESIGN_RELEASE_NOTES_ROOT: releaseNotesRoot,
         OPEN_DESIGN_GH_NODE_SCRIPT: fakeGh,
         OPEN_DESIGN_RELEASE_DRY_RUN: "prepublish",
         OPEN_DESIGN_RELEASES_PUBLIC_ORIGIN: server.origin,
@@ -421,10 +434,12 @@ describe("tools-release local channel prepare validation", () => {
 
     try {
       const fakeGh = await writeFakeGhScript(ghRoot);
+      const releaseNotesRoot = await writeReleaseNotesRoot(ghRoot, packagedVersion);
       const stable = await runPrepare("stable", {
         GITHUB_REF_NAME: `release/v${packagedVersion}`,
         GITHUB_REPOSITORY: "nexu-io/open-design",
         GITHUB_SHA: "0123456789abcdef0123456789abcdef01234567",
+        OPEN_DESIGN_RELEASE_NOTES_ROOT: releaseNotesRoot,
         OPEN_DESIGN_GH_NODE_SCRIPT: fakeGh,
         OPEN_DESIGN_RELEASE_DRY_RUN: "false",
         OPEN_DESIGN_RELEASES_PUBLIC_ORIGIN: server.origin,
@@ -451,10 +466,12 @@ describe("tools-release local channel prepare validation", () => {
 
     try {
       const fakeGh = await writeFakeGhScript(ghRoot);
+      const releaseNotesRoot = await writeReleaseNotesRoot(ghRoot, packagedVersion);
       await expect(runPrepare("stable", {
         GITHUB_REF_NAME: `release/v${packagedVersion}`,
         GITHUB_REPOSITORY: "nexu-io/open-design",
         GITHUB_SHA: "0123456789abcdef0123456789abcdef01234567",
+        OPEN_DESIGN_RELEASE_NOTES_ROOT: releaseNotesRoot,
         OPEN_DESIGN_GH_NODE_SCRIPT: fakeGh,
         OPEN_DESIGN_RELEASE_DRY_RUN: "metadata",
         OPEN_DESIGN_RELEASES_PUBLIC_ORIGIN: server.origin,
@@ -463,6 +480,29 @@ describe("tools-release local channel prepare validation", () => {
     } finally {
       await server.close();
       await rm(ghRoot, { force: true, recursive: true });
+    }
+  });
+
+  it("requires stable release-note markdown assets before promotion", async () => {
+    const packagedVersion = await readPackagedVersion();
+    const missingRoot = await mkdtemp(join(tmpdir(), "od-tools-release-missing-notes-"));
+    const ghRoot = await mkdtemp(join(tmpdir(), "od-tools-release-gh-"));
+
+    try {
+      const fakeGh = await writeFakeGhScript(ghRoot);
+      await expect(runPrepare("stable", {
+        GITHUB_REF_NAME: `release/v${packagedVersion}`,
+        GITHUB_REPOSITORY: "nexu-io/open-design",
+        GITHUB_SHA: "0123456789abcdef0123456789abcdef01234567",
+        OPEN_DESIGN_RELEASE_NOTES_ROOT: missingRoot,
+        OPEN_DESIGN_GH_NODE_SCRIPT: fakeGh,
+        OPEN_DESIGN_RELEASE_DRY_RUN: "metadata",
+        OPEN_DESIGN_RELEASES_PUBLIC_ORIGIN: "https://releases.example.test",
+        OPEN_DESIGN_STABLE_PRERELEASE_VERSION: `${packagedVersion}-prerelease.2`,
+      })).rejects.toThrow(/stable release notes directory is required/);
+    } finally {
+      await rm(ghRoot, { force: true, recursive: true });
+      await rm(missingRoot, { force: true, recursive: true });
     }
   });
 

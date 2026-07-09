@@ -71,6 +71,47 @@ describe("updater fixture server", () => {
     }
   });
 
+  it("serves CORS-enabled release-note fixtures through updater metadata", async () => {
+    const server = await startUpdaterFixtureServer({
+      channel: "stable",
+      releaseNotes: "mixed",
+      version: "2.0.0",
+    });
+    try {
+      const metadataResponse = await fetch(server.info.metadataUrl, {
+        headers: { origin: "http://127.0.0.1:33000" },
+      });
+      expect(metadataResponse.headers.get("access-control-allow-origin")).toBe("*");
+      expect(metadataResponse.ok).toBe(true);
+      const metadata = await metadataResponse.json() as {
+        releaseNotes?: {
+          files?: Record<string, {
+            html?: { url?: string };
+            markdown?: { url?: string };
+          }>;
+        };
+      };
+      expect(metadata.releaseNotes?.files?.en?.html?.url).toBe(server.info.releaseNotes.en?.html);
+      expect(metadata.releaseNotes?.files?.["zh-CN"]?.markdown?.url).toBe(server.info.releaseNotes["zh-CN"]?.markdown);
+
+      const options = await fetch(server.info.releaseNotes.en?.html ?? "", {
+        method: "OPTIONS",
+      });
+      expect(options.status).toBe(204);
+      expect(options.headers.get("access-control-allow-methods")).toContain("GET");
+
+      const html = await fetch(server.info.releaseNotes.en?.html ?? "");
+      expect(html.headers.get("content-type")).toContain("text/html");
+      expect(await html.text()).toContain("Release note fixture for 2.0.0");
+
+      const markdown = await fetch(server.info.releaseNotes["zh-CN"]?.markdown ?? "");
+      expect(markdown.headers.get("content-type")).toContain("text/markdown");
+      expect(await markdown.text()).toContain("Release note fixture for 2.0.0");
+    } finally {
+      await server.close();
+    }
+  });
+
   it("serves a local artifact file as the updater installer", async () => {
     const root = await mkdtemp(join(tmpdir(), "open-design-updater-fixture-"));
     const artifactPath = join(root, "Open Design-release-beta-win-setup.exe");

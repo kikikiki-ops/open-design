@@ -15,6 +15,7 @@ import {
   type ReleaseBaseVersionTuple,
   type ReleaseChannel,
 } from "@open-design/release";
+import { assertStableReleaseNotes } from "../release-notes.ts";
 
 const execFile = promisify(execFileCallback);
 
@@ -563,6 +564,10 @@ if (stableBaseVersion.value !== packagedVersion) {
   fail(
     `${stableBaseVersion.source ?? "release base"} version ${stableBaseVersion.value} must match apps/packaged/package.json version ${packagedVersion}`,
   );
+}
+if (channel === "stable") {
+  const releaseNotes = assertStableReleaseNotes(packagedVersion);
+  log(`release notes: ${releaseNotes.map((file) => file.name).join(", ")}`);
 }
 
 const releases = await fetchReleases(repository);

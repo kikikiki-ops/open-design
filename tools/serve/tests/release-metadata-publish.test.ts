@@ -41,9 +41,15 @@ describe("shared release metadata publisher", () => {
         ["preview", "1.2.3-preview.4"],
         ["stable", "1.2.3"],
       ] as const) {
+        const changelogRoot = join(root, channel, "CHANGELOG");
         const manifestDir = join(root, channel, "manifests");
         const metadataDir = join(root, channel, "metadata");
+        const releaseNotesDir = join(changelogRoot, `v${version}`);
         await mkdir(manifestDir, { recursive: true });
+        await mkdir(releaseNotesDir, { recursive: true });
+        await writeFile(join(releaseNotesDir, "en.md"), `# Open Design ${version}\n\nEnglish notes.\n`, "utf8");
+        await writeFile(join(releaseNotesDir, "zh-CN.md"), `# Open Design ${version}\n\n中文说明。\n`, "utf8");
+        await writeFile(join(releaseNotesDir, "en.html"), `<h1>Open Design ${version}</h1>\n`, "utf8");
         const base = {
           channel,
           enabled: true,
@@ -98,6 +104,7 @@ describe("shared release metadata publisher", () => {
           ENABLE_MAC_X64: "false",
           ENABLE_WIN_X64: "true",
           MAC_ARM64_RESULT: "success",
+          OPEN_DESIGN_RELEASE_NOTES_ROOT: changelogRoot,
           RELEASE_ASSET_SUFFIX: "",
           RELEASE_CHANNEL: channel,
           RELEASE_COMMIT: "abc123",
@@ -129,6 +136,12 @@ describe("shared release metadata publisher", () => {
             mac_arm64?: { artifacts?: { payload?: { url?: string } } };
             win_x64?: { artifacts?: { payload?: { url?: string } } };
           };
+          releaseNotes?: {
+            files?: Record<string, {
+              html?: { contentType?: string; url?: string };
+              markdown?: { contentType?: string; url?: string };
+            }>;
+          };
           allReadyTargetsSigned?: boolean;
           signed?: boolean;
           stableVersion?: string;
@@ -145,6 +158,12 @@ describe("shared release metadata publisher", () => {
         expect(metadata.github?.commit).toBe("abc123");
         if (channel === "stable") {
           expect(metadata.stableVersion).toBe("1.2.3");
+          expect(metadata.releaseNotes?.files?.en?.html?.url).toBe("https://releases.example.test/stable/versions/1.2.3/release-notes/en.html");
+          expect(metadata.releaseNotes?.files?.en?.markdown?.contentType).toBe("text/markdown; charset=utf-8");
+          expect(metadata.releaseNotes?.files?.["zh-CN"]?.markdown?.url).toBe("https://releases.example.test/stable/versions/1.2.3/release-notes/zh-CN.md");
+          expect(server.getObject("stable/versions/1.2.3/release-notes/en.md")).not.toBeNull();
+          expect(server.getObject("stable/versions/1.2.3/release-notes/zh-CN.md")).not.toBeNull();
+          expect(server.getObject("stable/versions/1.2.3/release-notes/en.html")).not.toBeNull();
         }
         expect(server.getObject(`${channel}/latest/metadata.json`)).not.toBeNull();
       }

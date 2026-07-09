@@ -13,6 +13,7 @@ type CliOptions = {
   port?: string;
   includePayload?: boolean;
   payloadPath?: string;
+  releaseNotes?: string;
   version?: string;
 };
 
@@ -33,6 +34,12 @@ function parsePlatform(value: string | undefined): "mac" | "win" {
   if (value == null || value.length === 0 || value === "mac") return "mac";
   if (value === "win") return "win";
   throw new Error("--platform must be mac or win");
+}
+
+function parseReleaseNotes(value: string | undefined): "none" | "markdown" | "html" | "mixed" {
+  if (value == null || value.length === 0 || value === "none") return "none";
+  if (value === "markdown" || value === "html" || value === "mixed") return value;
+  throw new Error("--release-notes must be none, markdown, html, or mixed");
 }
 
 async function start(service: string, options: CliOptions): Promise<void> {
@@ -64,6 +71,7 @@ async function start(service: string, options: CliOptions): Promise<void> {
     includePayload: options.includePayload,
     payloadPath: options.payloadPath,
     port: parsePort(options.port),
+    releaseNotes: parseReleaseNotes(options.releaseNotes),
     version: options.version,
   });
   if (options.json === true) {
@@ -100,6 +108,7 @@ cli
   .option("--payload-path <path>", "Serve launcher payload bytes from a real archive")
   .option("--platform <platform>", "Updater platform: mac|win", { default: "mac" })
   .option("--port <port>", "Port to bind, 0 for dynamic", { default: "0" })
+  .option("--release-notes <mode>", "Release notes fixture: none|markdown|html|mixed", { default: "none" })
   .option("--version <version>", "Fixture update version", { default: "99.0.0" })
   .action((service: string, options: CliOptions) => {
     void start(service, options);

@@ -181,6 +181,15 @@ async function readPackagedVersion(): Promise<string> {
   return packageJson.version;
 }
 
+async function writeReleaseNotesRoot(root: string, releaseVersion: string): Promise<string> {
+  const changelogRoot = join(root, "CHANGELOG");
+  const versionDir = join(changelogRoot, `v${releaseVersion}`);
+  await mkdir(versionDir, { recursive: true });
+  await writeFile(join(versionDir, "en.md"), `# Open Design ${releaseVersion}\n\nEnglish release notes.\n`, "utf8");
+  await writeFile(join(versionDir, "zh-CN.md"), `# Open Design ${releaseVersion}\n\n中文发布说明。\n`, "utf8");
+  return changelogRoot;
+}
+
 async function runScopesPrint(eventName: string, eventPayload: unknown, changedFiles: string[] = []): Promise<Record<string, unknown>> {
   const tempDir = await mkdtemp(join(tmpdir(), "od-scopes-"));
   const eventPath = join(tempDir, "event.json");
@@ -1513,6 +1522,8 @@ process.stdin.on("end", () => {
         const notes = await readFile(outputs.notes_file ?? "", "utf8");
         expect(notes).toContain(`R2 metadata: ${origin.replace(/\/+$/, "")}/stable/latest/metadata.json`);
         expect(notes).toContain(`E2E report: ${origin.replace(/\/+$/, "")}/stable/versions/0.13.0/report.zip`);
+        expect(notes).toContain("docs/CHANGELOG/v0.13.0/en.md");
+        expect(notes).toContain(`${origin.replace(/\/+$/, "")}/stable/versions/0.13.0/release-notes/en.md`);
       } finally {
         await rm(runnerTemp, { force: true, recursive: true });
       }
@@ -1533,6 +1544,7 @@ process.stdin.on("end", () => {
 
     try {
       await mkdir(join(runnerTemp, "bin"), { recursive: true });
+      const releaseNotesRoot = await writeReleaseNotesRoot(runnerTemp, baseVersion);
       await writeFakeGhBin(join(runnerTemp, "bin"), []);
       const fakePath = `${join(runnerTemp, "bin")}${delimiter}${process.env.PATH ?? ""}`;
 
@@ -1546,6 +1558,7 @@ process.stdin.on("end", () => {
           NODE_TLS_REJECT_UNAUTHORIZED: "0",
           OPEN_DESIGN_RELEASE_CHANNEL: "stable",
           OPEN_DESIGN_RELEASE_DRY_RUN: "true",
+          OPEN_DESIGN_RELEASE_NOTES_ROOT: releaseNotesRoot,
           OPEN_DESIGN_RELEASES_PUBLIC_ORIGIN: fixture.origin,
           OPEN_DESIGN_GH_NODE_SCRIPT: join(runnerTemp, "bin", "gh"),
           OPEN_DESIGN_STABLE_PRERELEASE_VERSION: prereleaseVersion,

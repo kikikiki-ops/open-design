@@ -18,6 +18,11 @@ import {
   releaseMetadataVersionFields,
   type CountedReleaseChannel,
 } from "@open-design/release";
+import {
+  assertStableReleaseNotes,
+  releaseNotesMetadata,
+  type ReleaseNotePublishedFile,
+} from "../release-notes.ts";
 
 type PlatformManifest = {
   artifacts?: Record<string, { url?: string }>;
@@ -218,6 +223,26 @@ async function publishLatestPlatformObjects(manifests: Record<string, PlatformMa
   }
 }
 
+async function publishStableReleaseNotes(versionPrefix: string): Promise<ReturnType<typeof releaseNotesMetadata> | null> {
+  if (releaseChannel !== "stable") return null;
+  const files = assertStableReleaseNotes(releaseVersion);
+  const published: ReleaseNotePublishedFile[] = [];
+  for (const file of files) {
+    const objectKey = `${versionPrefix}/release-notes/${file.name}`;
+    await upload(file.path, objectKey, "public, max-age=31536000, immutable", file.contentType);
+    published.push({
+      contentType: file.contentType,
+      extension: file.extension,
+      format: file.format,
+      locale: file.locale,
+      name: file.name,
+      size: file.size,
+      url: publicUrl(publicOrigin, `${versionPrefix}/release-notes`, file.name),
+    });
+  }
+  return releaseNotesMetadata(releaseVersion, published);
+}
+
 function enabled(name: string): boolean {
   return process.env[name] === "true";
 }
@@ -292,6 +317,7 @@ if (assetVersionSuffix === "auto") {
   assetVersionSuffix = allReadyTargetsSigned ? ".signed" : ".unsigned";
 }
 const versionPrefix = optional("RELEASE_VERSION_PREFIX", `${releaseChannel}/versions/${releaseVersion}${assetVersionSuffix}`);
+const releaseNotes = await publishStableReleaseNotes(versionPrefix);
 
 const latestMetadataUpdated = releaseState === "complete";
 const metadata = {
@@ -322,6 +348,7 @@ const metadata = {
   },
   readyPlatforms: readyTargets,
   readyTargets,
+  ...(releaseNotes == null ? {} : { releaseNotes }),
   releaseState,
   releaseTargets,
   signed: process.env.RELEASE_SIGNED === "true",

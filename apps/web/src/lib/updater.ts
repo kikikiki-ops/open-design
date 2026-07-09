@@ -23,6 +23,15 @@ export type UpdaterDownloadProgress = {
   totalBytes: number | null;
 };
 
+export type UpdaterReleaseNoteFormat = 'html' | 'markdown';
+
+export type UpdaterReleaseNoteCandidate = {
+  contentType: string | null;
+  format: UpdaterReleaseNoteFormat;
+  locale: string;
+  url: string;
+};
+
 export type UpdaterActionResult =
   | { ok: true; model: UpdaterModel; status: OpenDesignHostUpdaterStatusSnapshot }
   | OpenDesignHostFailure;
@@ -84,6 +93,72 @@ function downloadProgressFromStatus(
     receivedBytes,
     totalBytes,
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value != null && !Array.isArray(value);
+}
+
+function metadataFromStatus(status: OpenDesignHostUpdaterStatusSnapshot | null): Record<string, unknown> | null {
+  if (isRecord(status?.metadata)) return status.metadata;
+  if (isRecord(status?.active?.metadata)) return status.active.metadata;
+  if (isRecord(status?.incoming?.metadata)) return status.incoming.metadata;
+  return null;
+}
+
+function readReleaseNoteCandidate(
+  files: Record<string, unknown>,
+  locale: string,
+  format: UpdaterReleaseNoteFormat,
+): UpdaterReleaseNoteCandidate | null {
+  const localeEntry = files[locale];
+  if (!isRecord(localeEntry)) return null;
+  const entry = localeEntry[format];
+  if (!isRecord(entry)) return null;
+  const url = entry.url;
+  if (typeof url !== 'string' || url.length === 0) return null;
+  const contentType = typeof entry.contentType === 'string' && entry.contentType.length > 0
+    ? entry.contentType
+    : null;
+  return {
+    contentType,
+    format,
+    locale,
+    url,
+  };
+}
+
+export function releaseNoteCandidatesFromStatus(
+  status: OpenDesignHostUpdaterStatusSnapshot | null,
+  locale: string,
+): UpdaterReleaseNoteCandidate[] {
+  const metadata = metadataFromStatus(status);
+  const releaseNotes = isRecord(metadata?.releaseNotes) ? metadata.releaseNotes : null;
+  const files = isRecord(releaseNotes?.files) ? releaseNotes.files : null;
+  if (files == null) return [];
+
+  const defaultLocale =
+    typeof releaseNotes?.defaultLocale === 'string' && releaseNotes.defaultLocale.length > 0
+      ? releaseNotes.defaultLocale
+      : 'en';
+  const currentLocale = locale.length > 0 ? locale : defaultLocale;
+  const ordered: Array<[string, UpdaterReleaseNoteFormat]> = [
+    [currentLocale, 'html'],
+    [defaultLocale, 'html'],
+    [currentLocale, 'markdown'],
+    [defaultLocale, 'markdown'],
+  ];
+  const seen = new Set<string>();
+  const candidates: UpdaterReleaseNoteCandidate[] = [];
+  for (const [candidateLocale, format] of ordered) {
+    const candidate = readReleaseNoteCandidate(files, candidateLocale, format);
+    if (candidate == null) continue;
+    const key = `${candidate.format}:${candidate.url}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    candidates.push(candidate);
+  }
+  return candidates;
 }
 
 export function deriveUpdaterModel(

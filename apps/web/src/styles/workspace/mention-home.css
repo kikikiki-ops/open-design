@@ -381,6 +381,30 @@
   line-height: 1.45;
 }
 
+.updater-popup__release-notes {
+  max-height: 180px;
+  margin-top: 10px;
+  overflow: auto;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--bg-panel);
+}
+
+.updater-popup__release-notes iframe {
+  display: block;
+  width: 100%;
+  min-height: 160px;
+  border: 0;
+  background: #ffffff;
+}
+
+.updater-popup__release-notes .prose-block {
+  padding: 10px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .updater-popup__error {
   color: var(--red) !important;
 }

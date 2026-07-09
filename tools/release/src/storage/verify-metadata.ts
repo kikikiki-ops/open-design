@@ -21,6 +21,9 @@ const metadata = (metadataPath.length > 0
       return response.json();
     })()) as {
   channel?: string;
+  releaseNotes?: {
+    files?: Record<string, { markdown?: { url?: string } }>;
+  };
   releaseState?: string;
   releaseTargets?: Record<string, { artifacts?: Record<string, { url?: string }>; status?: string }>;
   [key: string]: unknown;
@@ -46,6 +49,18 @@ for (const target of ["mac_arm64", "win_x64", "mac_x64", "linux_x64"]) {
   if (result !== "success" || targetMetadata == null) continue;
   if ((target === "mac_arm64" || target === "win_x64") && targetMetadata.artifacts?.payload?.url == null) {
     throw new Error(`metadata target ${target} is missing launcher payload artifact`);
+  }
+}
+
+if (releaseChannel === "stable") {
+  for (const locale of ["en", "zh-CN"]) {
+    const url = metadata.releaseNotes?.files?.[locale]?.markdown?.url;
+    if (url == null) {
+      throw new Error(`stable metadata releaseNotes.files.${locale}.markdown.url is required`);
+    }
+    if (!url.includes(`/stable/versions/${releaseVersion}/release-notes/${locale}.md`)) {
+      throw new Error(`stable metadata release note URL for ${locale} points outside the versioned release-notes prefix: ${url}`);
+    }
   }
 }
 

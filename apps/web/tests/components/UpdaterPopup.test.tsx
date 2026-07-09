@@ -60,11 +60,13 @@ function payloadDownloadedStatus(overrides: Partial<OpenDesignHostUpdaterStatusS
 
 describe('UpdaterPopup', () => {
   let restoreHost: (() => void) | null = null;
+  const originalFetch = globalThis.fetch;
 
   afterEach(() => {
     cleanup();
     restoreHost?.();
     restoreHost = null;
+    globalThis.fetch = originalFetch;
   });
 
   it('stays hidden for non-installable updater states', async () => {
@@ -174,6 +176,76 @@ describe('UpdaterPopup', () => {
     expect(await screen.findByRole('dialog', { name: '更新已就绪' })).toBeTruthy();
     expect(screen.getByTestId('updater-install-button').textContent).toBe('安装并重启');
     expect(screen.getByText('Open Design 1.2.3-beta.4 已就绪。Open Design 会关闭并自动重启。')).toBeTruthy();
+  });
+
+  it('renders fetched release notes through the metadata fallback chain', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/version') {
+        return new Response(JSON.stringify({ version: 'test' }), {
+          headers: { 'content-type': 'application/json' },
+          status: 200,
+        });
+      }
+      if (url.endsWith('/en.html')) {
+        return new Response('', { status: 404 });
+      }
+      return new Response('# 中文更新\n\n- 已支持发布说明。', {
+        headers: { 'content-type': 'text/markdown; charset=utf-8' },
+        status: 200,
+      });
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+    restoreHost = installMockOpenDesignHost({
+      host: {
+        updater: {
+          status: vi.fn(async () => downloadedStatus({
+            metadata: {
+              releaseNotes: {
+                defaultLocale: 'en',
+                files: {
+                  en: {
+                    html: {
+                      contentType: 'text/html; charset=utf-8',
+                      url: 'https://releases.example.test/stable/versions/1.2.3/release-notes/en.html',
+                    },
+                    markdown: {
+                      contentType: 'text/markdown; charset=utf-8',
+                      url: 'https://releases.example.test/stable/versions/1.2.3/release-notes/en.md',
+                    },
+                  },
+                  'zh-CN': {
+                    markdown: {
+                      contentType: 'text/markdown; charset=utf-8',
+                      url: 'https://releases.example.test/stable/versions/1.2.3/release-notes/zh-CN.md',
+                    },
+                  },
+                },
+              },
+            },
+          })),
+        },
+      },
+    });
+
+    render(
+      <I18nProvider initial="zh-CN">
+        <UpdaterPopup />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(await screen.findByTestId('entry-nav-updater'));
+
+    expect(await screen.findByTestId('updater-release-notes')).toBeTruthy();
+    expect(screen.getByText('中文更新')).toBeTruthy();
+    const enHtmlCall = fetchMock.mock.calls.find(([input]) => String(input).endsWith('/en.html'));
+    const zhMarkdownCall = fetchMock.mock.calls.find(([input]) => String(input).endsWith('/zh-CN.md'));
+    expect(enHtmlCall).toEqual(['https://releases.example.test/stable/versions/1.2.3/release-notes/en.html', {
+      headers: { 'Cache-Control': 'no-cache' },
+    }]);
+    expect(zhMarkdownCall).toEqual(['https://releases.example.test/stable/versions/1.2.3/release-notes/zh-CN.md', {
+      headers: { 'Cache-Control': 'no-cache' },
+    }]);
   });
 
   it('dismisses the confirmation prompt before installation starts', async () => {

@@ -28,7 +28,8 @@ cat > "$notes_file" <<EOF
 - branch: $BRANCH_NAME
 - commit: $GITHUB_SHA
 
-See [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/$VERSION_TAG/CHANGELOG.md) for the full release notes.
+See [docs/CHANGELOG/v$RELEASE_VERSION/en.md](https://github.com/${GITHUB_REPOSITORY}/blob/$VERSION_TAG/docs/CHANGELOG/v$RELEASE_VERSION/en.md) for the English release notes.
+Updater release notes are published at $public_origin/$RELEASE_CHANNEL/versions/$RELEASE_VERSION/release-notes/en.md.
 
 This stable release ships mac arm64/x64 DMG and ZIP assets, Windows x64 NSIS installer assets, checksums, updater feed files, and a zipped packaged e2e spec report. Linux AppImage packaging remains optional through the stable Linux lane.
 EOF
