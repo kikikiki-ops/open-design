@@ -5409,15 +5409,12 @@ export async function startServer({
         typeof model !== 'string' ||
         !model.trim() ||
         model.trim().toLowerCase() === 'default';
-      const userSelectedExplicitDefault =
-        typeof model === 'string' && model.trim().toLowerCase() === 'default';
       const defaultRunModel = resolveDefaultModelFromOptions(liveModels);
       if (
         !safeModel ||
-        (safeModel === 'default' && !userSelectedExplicitDefault) ||
+        safeModel === 'default' ||
         (
           userAskedForDefault &&
-          !userSelectedExplicitDefault &&
           !hasDefaultModelEnvOverride &&
           defaultRunModel &&
           (!liveModelIds.has(safeModel) || safeModel !== defaultRunModel)
