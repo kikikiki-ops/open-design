@@ -618,6 +618,36 @@ describe('AMR model loading cache', () => {
       refreshing: true,
     });
   });
+
+  it('drops a cached remote catalog for a single environment when invalidated', async () => {
+    const cache = new AmrModelLoadingCache(60_000);
+    cache.warm('vela:local', async () => [{ id: 'locked-old', label: 'locked-old', enabled: false }]);
+    cache.warm('vela:prod', async () => [{ id: 'remote-prod', label: 'remote-prod' }]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    cache.invalidate('vela:local');
+
+    const local = await cache.get('vela:local', {
+      fetchPreset: async () => [{ id: 'preset-local', label: 'preset-local' }],
+      fetchRemote: async () => [{ id: 'remote-local-new', label: 'remote-local-new', enabled: true }],
+    });
+    const prod = await cache.get('vela:prod', {
+      fetchPreset: async () => {
+        throw new Error('prod preset should not be required');
+      },
+      fetchRemote: async () => [{ id: 'remote-prod-new', label: 'remote-prod-new' }],
+    });
+
+    expect(local).toMatchObject({
+      source: 'preset',
+      models: [{ id: 'preset-local', label: 'preset-local' }],
+      refreshing: true,
+    });
+    expect(prod).toMatchObject({
+      source: 'remote',
+      models: [{ id: 'remote-prod', label: 'remote-prod' }],
+    });
+  });
 });
 
 describe('AMR ACP transport — end-to-end against fake vela stub', () => {

@@ -13,7 +13,6 @@ export function defaultAgentModelId(agent: AgentModelSource): string | null {
   return (
     models.find((model) => model.default === true && model.enabled !== false)?.id ??
     models.find((model) => model.enabled !== false)?.id ??
-    models[0]?.id ??
     null
   );
 }

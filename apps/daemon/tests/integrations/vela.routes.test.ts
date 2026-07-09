@@ -225,6 +225,8 @@ afterEach(() => {
   delete process.env.FAKE_VELA_BILLING_LOG;
   delete process.env.FAKE_VELA_BILLING_DELAY_MS;
   delete process.env.FAKE_VELA_BILLING_UNKNOWN_COMMAND;
+  delete process.env.FAKE_VELA_MODEL_LIST_JSON;
+  delete process.env.FAKE_VELA_MODEL_PRESET_JSON;
   delete process.env.FAKE_VELA_ENV_DUMP_PATH;
   delete process.env.OD_PUBLIC_BASE_URL;
   delete process.env.VELA_RUNTIME_KEY;
@@ -295,6 +297,57 @@ describe('GET /api/integrations/vela/wallet', () => {
       expect(walletApi.requests).toEqual(['Bearer ck-wallet-balance']);
       expect(JSON.stringify(first.body)).not.toContain('ck-wallet-balance');
       expect(JSON.stringify(first.body)).not.toContain('rt-wallet-balance');
+    } finally {
+      await walletApi.close();
+    }
+  });
+
+  it('invalidates the AMR model catalog cache on explicit wallet refresh', async () => {
+    const walletApi = await startWalletApi((_req, res) => {
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify({
+        balanceUsd: '20.0000',
+        updatedAt: '2026-07-09T07:30:00.000Z',
+      }));
+    });
+    process.env.FAKE_VELA_MODEL_LIST_JSON = JSON.stringify({
+      source: 'remote',
+      data: [
+        { id: 'public_model_deepseek_v4_flash', enabled: false },
+      ],
+    });
+    seedLogin('local', {
+      apiUrl: walletApi.url,
+      controlKey: 'ck-wallet-refresh',
+      runtimeKey: 'rt-wallet-refresh',
+      user: { id: 'wallet-user', email: 'wallet@example.com', plan: 'free' },
+    });
+    try {
+      const warmed = await waitForAmrModels('remote');
+      expect(warmed.body.models).toEqual([
+        { id: 'deepseek-v4-flash', label: 'deepseek-v4-flash', enabled: false },
+      ]);
+
+      const refresh = await getJson<{ status: string; balanceUsd: string | null }>(
+        `${baseUrl}/api/integrations/vela/wallet?refresh=1`,
+      );
+      expect(refresh.status).toBe(200);
+      expect(refresh.body.status).toBe('available');
+
+      const afterRefresh = await getJson<{
+        source: 'preset' | 'remote';
+        refreshing?: boolean;
+        models: Array<{ id: string }>;
+      }>(`${baseUrl}/api/amr/models`);
+      expect(afterRefresh.status).toBe(200);
+      expect(afterRefresh.body.source).toBe('preset');
+      expect(afterRefresh.body.refreshing).toBe(true);
+      expect(afterRefresh.body.models.map((model) => model.id)).toEqual([
+        'deepseek-v4-flash',
+        'deepseek-v3.2',
+        'gemini-2.5-flash',
+        'glm-5.1',
+      ]);
     } finally {
       await walletApi.close();
     }
@@ -1707,8 +1760,8 @@ describe('POST /api/integrations/vela/logout', () => {
     expect(first.body.models.map((model) => model.id)).toEqual([
       'deepseek-v4-flash',
       'deepseek-v3.2',
-      'glm-5.1',
       'gemini-2.5-flash',
+      'glm-5.1',
     ]);
 
     const warmed = await waitForAmrModels('remote');
@@ -1735,8 +1788,8 @@ describe('POST /api/integrations/vela/logout', () => {
     expect(afterLogout.body.models.map((model) => model.id)).toEqual([
       'deepseek-v4-flash',
       'deepseek-v3.2',
-      'glm-5.1',
       'gemini-2.5-flash',
+      'glm-5.1',
     ]);
   });
 

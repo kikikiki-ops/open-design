@@ -294,6 +294,14 @@ export function registerVelaRoutes(app: Express, deps: RegisterVelaRoutesDeps): 
         configuredEnv,
         refresh,
       });
+      if (refresh) {
+        try {
+          const modelProbe = resolveAmrModelProbeForEnv(configuredEnv);
+          amrModelLoadingCache.invalidate(modelProbe.cacheKey);
+        } catch (err) {
+          console.warn('[amr] model cache invalidation after wallet refresh failed', err);
+        }
+      }
       res.json(snapshot);
     } catch (err) {
       res.status(500).json({ error: String(err) });
