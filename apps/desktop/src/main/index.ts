@@ -710,7 +710,7 @@ export async function runDesktopMain(
   // observe it. Reported below once the daemon is reachable; marked clean on a
   // graceful shutdown.
   const sessionStatePath = join(dirname(desktopLogPath), "session-state.json");
-  const { previousUncleanSession } = beginDesktopSession({
+  const { previousUncleanSessions } = beginDesktopSession({
     stateFilePath: sessionStatePath,
     sessionId: randomUUID(),
     version: app.getVersion(),
@@ -878,23 +878,23 @@ export async function runDesktopMain(
   options.onDesktopReady?.({ show: () => desktop?.show() });
 
   const discoverDaemonBaseUrl = resolveDaemonBaseUrl(runtime, options);
-  // Report an abnormal exit of the PREVIOUS run now that the daemon is up to
-  // relay it (best-effort; the event carries no user content).
-  if (previousUncleanSession != null) {
-    console.warn("[open-design desktop] previous session ended abnormally (no clean shutdown)", {
-      previousVersion: previousUncleanSession.version,
-      previousStartedAt: previousUncleanSession.startedAt,
+  // Report each abnormal exit of a prior run now that the daemon is up to relay
+  // it (best-effort; the events carry no user content). Each is dropped from the
+  // queue only once the daemon acks it, so a failed report is retried next launch.
+  if (previousUncleanSessions.length > 0) {
+    console.warn("[open-design desktop] prior session(s) ended abnormally (no clean shutdown)", {
+      count: previousUncleanSessions.length,
     });
-    void reportDesktopObservabilityEvent(discoverDaemonBaseUrl, "desktop_unclean_exit", {
-      previous_version: previousUncleanSession.version,
-      previous_session_id: previousUncleanSession.sessionId,
-      previous_started_at: previousUncleanSession.startedAt,
-      current_version: app.getVersion(),
-    }).then((reported) => {
-      // Only drop the carried-forward crash once the daemon acked it; a failed
-      // report is retried on the next launch (it stays in unreportedCrash).
-      if (reported) clearReportedCrash({ stateFilePath: sessionStatePath });
-    });
+    for (const crash of previousUncleanSessions) {
+      void reportDesktopObservabilityEvent(discoverDaemonBaseUrl, "desktop_unclean_exit", {
+        previous_version: crash.version,
+        previous_session_id: crash.sessionId,
+        previous_started_at: crash.startedAt,
+        current_version: app.getVersion(),
+      }).then((reported) => {
+        if (reported) clearReportedCrash({ stateFilePath: sessionStatePath }, crash.sessionId);
+      });
+    }
   }
   // GPU / utility child-process crashes: the window keeps running but degraded
   // (a GPU-process crash is a common cause of a window that then goes blank or
