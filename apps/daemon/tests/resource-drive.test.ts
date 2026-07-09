@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -8,15 +8,11 @@ import type {
   BlobDescriptor,
   Manifest,
   ManifestEntryInput,
+  PreparedUpload,
   PrepareUploadResult,
   ResourceHubPrincipal,
 } from '../src/integrations/resource-hub.js';
-import {
-  type PackedTree,
-  computeManifestDigest,
-  materializeTree,
-  pushTree,
-} from '../src/resource-drive.js';
+import { materializeTree, packTree, pushTree } from '../src/resource-drive.js';
 import { createBlobCache, noopBlobCache } from '../src/resource-cache.js';
 
 const principal: ResourceHubPrincipal = {
@@ -26,21 +22,16 @@ const principal: ResourceHubPrincipal = {
   lifecycleState: 'active',
 };
 
-const bytesOf = (s: string) => new TextEncoder().encode(s);
-// Realistic-shaped digest (long lowercase hex) so the content-addressed cache,
-// which validates the hex, accepts it. Opaque + unique per content otherwise.
-const digestOf = (s: string) =>
-  `sha256:${Buffer.from(s).toString('hex')}`;
-
-// In-memory fake hub client + object store, recording how the drive calls it.
+// In-memory fake hub + object store, recording how the drive calls it. Bytes
+// flow file<->store: uploadFile reads the source file, downloadToFile writes the
+// dest file, so the fake exercises the same streaming surface the real one does.
 function fakeClient() {
   const store = new Map<string, Uint8Array>(); // committed blobs
   const staged = new Map<string, Uint8Array>(); // uploaded, awaiting commit
   const manifests = new Map<string, Manifest>();
-  const calls = { prepare: 0, commit: 0, upload: 0, pull: 0, publish: 0 };
+  const calls = { prepare: 0, commit: 0, upload: 0, download: 0, publish: 0 };
   let inFlight = 0;
   let maxInFlight = 0;
-
   const gate = async () => {
     inFlight++;
     maxInFlight = Math.max(maxInFlight, inFlight);
@@ -70,10 +61,10 @@ function fakeClient() {
         storeLive: true,
       };
     },
-    async uploadBytes(upload: { url: string }, bytes: Uint8Array) {
+    async uploadFile(upload: Pick<PreparedUpload, 'url'>, filePath: string) {
       calls.upload++;
       await gate();
-      staged.set(upload.url.replace('mem://', ''), bytes);
+      staged.set(upload.url.replace('mem://', ''), new Uint8Array(await readFile(filePath)));
     },
     async commitUpload(_p: ResourceHubPrincipal, blobs: BlobDescriptor[]) {
       calls.commit++;
@@ -112,27 +103,26 @@ function fakeClient() {
       if (!m) throw new Error(`no manifest ${digest}`);
       return m;
     },
-    async pullBlob(_p: ResourceHubPrincipal, digest: string) {
-      calls.pull++;
+    async downloadToFile(_p: ResourceHubPrincipal, digest: string, destPath: string) {
+      calls.download++;
       await gate();
       const bytes = store.get(digest);
       if (!bytes) throw new Error(`no blob ${digest}`);
-      return bytes;
+      await mkdir(path.dirname(destPath), { recursive: true });
+      await writeFile(destPath, bytes);
     },
   };
   return { client, store, calls, maxInFlight: () => maxInFlight };
 }
 
-// A packed tree of `n` files (paths a0..a{n-1}), each with distinct content.
-function packOf(n: number): PackedTree {
-  const entries: ManifestEntryInput[] = [];
-  const blobs = new Map<string, Uint8Array>();
+// Build a tree of `n` files on disk; every 5th duplicates content (dedup).
+async function buildTree(root: string, n: number): Promise<void> {
   for (let i = 0; i < n; i++) {
-    const digest = digestOf(`content-${i}`);
-    blobs.set(digest, bytesOf(`content-${i}`));
-    entries.push({ path: `a${i}.txt`, type: 'file', blobDigest: digest });
+    const dir = path.join(root, `d${i % 4}`);
+    await mkdir(dir, { recursive: true });
+    const content = i % 5 === 0 ? 'SHARED-DUP' : `content-${i}`;
+    await writeFile(path.join(dir, `f${i}.txt`), content);
   }
-  return { manifestDigest: computeManifestDigest(entries), entries, blobs };
 }
 
 let tmp: string | null = null;
@@ -142,78 +132,111 @@ afterEach(async () => {
 });
 
 describe('resource-cache', () => {
-  it('round-trips bytes and misses on unknown / malformed digests', async () => {
+  it('addresses, stores and reports blobs by digest; ignores malformed', async () => {
     tmp = await mkdtemp(path.join(os.tmpdir(), 'cache-'));
-    const cache = createBlobCache(tmp);
-    expect(await cache.get('sha256:deadbeef')).toBeNull();
-    await cache.put('sha256:deadbeef', bytesOf('hi'));
-    expect(new TextDecoder().decode((await cache.get('sha256:deadbeef'))!)).toBe('hi');
-    expect(await cache.get('not-a-digest')).toBeNull(); // no colon -> no path
+    const cache = createBlobCache(path.join(tmp, 'cas'));
+    const src = path.join(tmp, 'src.bin');
+    await writeFile(src, 'hello-cache');
+    const digest = 'sha256:deadbeefcafe';
+    expect(await cache.has(digest)).toBe(false);
+    await cache.putFile(digest, src);
+    expect(await cache.has(digest)).toBe(true);
+    expect(await readFile(cache.pathFor(digest)!, 'utf8')).toBe('hello-cache');
+    expect(cache.pathFor('not-a-digest')).toBeNull();
+  });
+});
+
+describe('packTree', () => {
+  it('records file sources (paths + sizes), deduped by digest', async () => {
+    tmp = await mkdtemp(path.join(os.tmpdir(), 'pack-'));
+    await buildTree(tmp, 20);
+    const packed = await packTree(tmp);
+    expect(packed.blobs.size).toBeLessThan(20); // duplicates collapsed
+    for (const source of packed.blobs.values()) {
+      expect(typeof source.path).toBe('string');
+      expect(source.size).toBeGreaterThan(0);
+    }
   });
 });
 
 describe('pushTree', () => {
-  it('uploads missing blobs as ONE prepare + ONE commit, bounded-parallel', async () => {
+  it('streams missing blobs as ONE prepare + ONE commit, bounded-parallel', async () => {
+    tmp = await mkdtemp(path.join(os.tmpdir(), 'push-'));
+    await buildTree(tmp, 24);
     const { client, store, calls, maxInFlight } = fakeClient();
-    const packed = packOf(20);
+    const packed = await packTree(tmp);
 
     await pushTree(client as never, principal, 'r1', packed, { concurrency: 4 });
 
-    expect(calls.prepare).toBe(1); // batched, not per-blob
+    expect(calls.prepare).toBe(1);
     expect(calls.commit).toBe(1);
-    expect(calls.upload).toBe(20);
     expect(calls.publish).toBe(1);
-    expect(store.size).toBe(20);
-    expect(maxInFlight()).toBeLessThanOrEqual(4); // concurrency bound honored
+    expect(calls.upload).toBe(packed.blobs.size); // one PUT per unique blob
+    expect(store.size).toBe(packed.blobs.size);
+    expect(maxInFlight()).toBeLessThanOrEqual(4);
   });
 
   it('re-push of an already-present tree uploads nothing', async () => {
+    tmp = await mkdtemp(path.join(os.tmpdir(), 'push-'));
+    await buildTree(tmp, 12);
     const { client, calls } = fakeClient();
-    const packed = packOf(10);
+    const packed = await packTree(tmp);
     await pushTree(client as never, principal, 'r1', packed, {});
+    const uploads = calls.upload;
     await pushTree(client as never, principal, 'r1', packed, {});
-    expect(calls.upload).toBe(10); // only the first push transferred bytes
+    expect(calls.upload).toBe(uploads); // 2nd push transferred nothing
     expect(calls.prepare).toBe(1); // 2nd push: nothing missing -> no prepare
-    expect(calls.publish).toBe(2); // both pushes still publish a version
+    expect(calls.publish).toBe(2);
   });
 });
 
 describe('materializeTree', () => {
-  it('writes byte-identical files and pulls each blob once (cold)', async () => {
-    const { client } = fakeClient();
-    const packed = packOf(8);
-    await pushTree(client as never, principal, 'r1', packed, {});
+  it('writes byte-identical files, fetching each unique blob once', async () => {
     tmp = await mkdtemp(path.join(os.tmpdir(), 'mat-'));
+    const srcDir = path.join(tmp, 'src');
+    await buildTree(srcDir, 16);
+    const { client, calls } = fakeClient();
+    const packed = await packTree(srcDir);
+    await pushTree(client as never, principal, 'r1', packed, {});
 
-    await materializeTree(client as never, principal, packed.manifestDigest, tmp);
+    const out = path.join(tmp, 'out');
+    await materializeTree(client as never, principal, packed.manifestDigest, out);
 
-    for (let i = 0; i < 8; i++) {
-      expect(await readFile(path.join(tmp, `a${i}.txt`), 'utf8')).toBe(`content-${i}`);
+    for (let i = 0; i < 16; i++) {
+      const rel = path.join(`d${i % 4}`, `f${i}.txt`);
+      expect(await readFile(path.join(out, rel), 'utf8')).toBe(
+        await readFile(path.join(srcDir, rel), 'utf8'),
+      );
     }
+    expect(calls.download).toBe(packed.blobs.size); // deduped: once per digest
   });
 
   it('serves a warm cache without touching the network', async () => {
-    const { client, calls } = fakeClient();
-    const packed = packOf(6);
     tmp = await mkdtemp(path.join(os.tmpdir(), 'mat-'));
-    const cache = createBlobCache(path.join(tmp, 'cache'));
-
+    const srcDir = path.join(tmp, 'src');
+    await buildTree(srcDir, 10);
+    const { client, calls } = fakeClient();
+    const cache = createBlobCache(path.join(tmp, 'cas'));
+    const packed = await packTree(srcDir);
     await pushTree(client as never, principal, 'r1', packed, { cache }); // seeds cache
-    const pullsBefore = calls.pull;
+
+    const before = calls.download;
     await materializeTree(client as never, principal, packed.manifestDigest, path.join(tmp, 'out'), {
       cache,
     });
-    expect(calls.pull).toBe(pullsBefore); // zero pulls: every blob came from cache
+    expect(calls.download).toBe(before); // zero downloads: served from CAS
   });
 
-  it('falls back to pulls with the noop cache', async () => {
-    const { client, calls } = fakeClient();
-    const packed = packOf(5);
-    await pushTree(client as never, principal, 'r1', packed, {});
+  it('falls back to downloads with the noop cache', async () => {
     tmp = await mkdtemp(path.join(os.tmpdir(), 'mat-'));
-    await materializeTree(client as never, principal, packed.manifestDigest, tmp, {
+    const srcDir = path.join(tmp, 'src');
+    await buildTree(srcDir, 8);
+    const { client, calls } = fakeClient();
+    const packed = await packTree(srcDir);
+    await pushTree(client as never, principal, 'r1', packed, {});
+    await materializeTree(client as never, principal, packed.manifestDigest, path.join(tmp, 'out'), {
       cache: noopBlobCache,
     });
-    expect(calls.pull).toBe(5);
+    expect(calls.download).toBe(packed.blobs.size);
   });
 });

@@ -1,6 +1,9 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { createReadStream } from 'node:fs';
 import fsp from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
+import { pipeline } from 'node:stream/promises';
 
 import type {
   ManifestEntryInput,
@@ -15,20 +18,34 @@ import { type BlobCache, noopBlobCache } from './resource-cache.js';
 // knows nothing about design-systems / plugins / skills or WHEN to sync — that
 // is the consumer's concern. Consumers build features ("share a design system")
 // on top of these primitives; this layer stays a neutral cloud drive.
+//
+// Bytes stream file<->store throughout: pack records a file REFERENCE (path +
+// size + streamed digest) rather than the bytes, push streams each file to its
+// presigned PUT, and materialize streams each GET to disk. So peak memory is
+// bounded by the socket buffers, not the tree or the largest file.
 
 const DIGEST_ALGORITHM = 'sha256';
 
-function digestBytes(bytes: Uint8Array): string {
-  return `${DIGEST_ALGORITHM}:${createHash(DIGEST_ALGORITHM)
-    .update(bytes)
-    .digest('hex')}`;
+// A file's bytes, addressed by content but kept on disk (never in memory).
+export interface BlobSource {
+  path: string;
+  size: number;
+}
+
+// Stream a file through the digest algorithm without holding it in memory.
+async function hashFile(filePath: string): Promise<string> {
+  const hash = createHash(DIGEST_ALGORITHM);
+  await pipeline(createReadStream(filePath), hash);
+  return `${DIGEST_ALGORITHM}:${hash.digest('hex')}`;
 }
 
 export interface PackedTree {
   manifestDigest: string;
   entries: ManifestEntryInput[];
-  // Content-addressed file bytes, deduped by digest — the blobs to upload.
-  blobs: Map<string, Uint8Array>;
+  // Content-addressed file sources, deduped by digest — the blobs to upload.
+  // References to files on disk, not their bytes, so a large tree never sits
+  // in memory at once.
+  blobs: Map<string, BlobSource>;
 }
 
 // Canonical manifest digest: sort entries by path and hash a stable
@@ -97,7 +114,7 @@ async function forEachLimit<T>(
 // so empty dirs survive; symlinks are stored by target without following.
 export async function packTree(rootDir: string): Promise<PackedTree> {
   const entries: ManifestEntryInput[] = [];
-  const blobs = new Map<string, Uint8Array>();
+  const blobs = new Map<string, BlobSource>();
 
   async function walk(absDir: string, relDir: string): Promise<void> {
     const dirents = await fsp.readdir(absDir, { withFileTypes: true });
@@ -114,10 +131,9 @@ export async function packTree(rootDir: string): Promise<PackedTree> {
         entries.push({ path: rel, type: 'dir' });
         await walk(abs, rel);
       } else if (dirent.isFile()) {
-        const bytes = new Uint8Array(await fsp.readFile(abs));
-        const digest = digestBytes(bytes);
-        if (!blobs.has(digest)) blobs.set(digest, bytes);
         const stat = await fsp.stat(abs);
+        const digest = await hashFile(abs);
+        if (!blobs.has(digest)) blobs.set(digest, { path: abs, size: stat.size });
         entries.push({
           path: rel,
           type: 'file',
@@ -158,8 +174,8 @@ export async function pushTree(
   ]);
   const descriptors = missing
     .map((digest) => {
-      const bytes = packed.blobs.get(digest);
-      return bytes ? { digest, size: bytes.byteLength } : null;
+      const source = packed.blobs.get(digest);
+      return source ? { digest, size: source.size } : null;
     })
     .filter((d): d is { digest: string; size: number } => d !== null);
 
@@ -168,17 +184,17 @@ export async function pushTree(
     // blobs it is still missing (present[] we skip).
     const prepared = await client.prepareUpload(principal, descriptors);
     await forEachLimit(prepared.uploads, concurrency, async (upload) => {
-      const bytes = packed.blobs.get(upload.digest);
-      if (!bytes) return;
-      await client.uploadBytes(upload, bytes);
+      const source = packed.blobs.get(upload.digest);
+      if (!source) return;
+      await client.uploadFile(upload, source.path, source.size);
     });
     // One commit for the whole batch (the hub HEAD-verifies each object).
     await client.commitUpload(principal, descriptors);
-    // Seed the local cache with what we just pushed so an immediate
-    // materialize of this tree stays local.
+    // Seed the local cache with what we just pushed (copied from the source
+    // file, streamed) so an immediate materialize of this tree stays local.
     await forEachLimit(descriptors, concurrency, async ({ digest }) => {
-      const bytes = packed.blobs.get(digest);
-      if (bytes) await cache.put(digest, bytes);
+      const source = packed.blobs.get(digest);
+      if (source) await cache.putFile(digest, source.path);
     });
   }
 
@@ -212,7 +228,9 @@ export async function materializeTree(
   const manifest = await client.getManifest(principal, manifestDigest);
   const root = path.resolve(destDir);
 
-  const files: { target: string; digest: string; executable: boolean }[] = [];
+  // Group file paths by blob digest: a digest that appears at several paths is
+  // fetched ONCE and copied to each target (duplicate content is common).
+  const byDigest = new Map<string, { target: string; executable: boolean }[]>();
   // Sort by path so parent directories are created before their children.
   for (const entry of [...manifest.entries].sort(byPath)) {
     const target = safeJoin(root, entry.path);
@@ -226,24 +244,50 @@ export async function materializeTree(
       );
       await fsp.symlink(entry.symlinkTarget ?? '', target);
     } else if (entry.type === 'file' && entry.blobDigest) {
-      files.push({
-        target,
-        digest: entry.blobDigest,
-        executable: entry.executable,
-      });
+      const targets = byDigest.get(entry.blobDigest) ?? [];
+      targets.push({ target, executable: entry.executable });
+      byDigest.set(entry.blobDigest, targets);
     }
   }
 
-  await forEachLimit(files, concurrency, async (file) => {
-    let bytes = await cache.get(file.digest);
-    if (!bytes) {
-      bytes = await client.pullBlob(principal, file.digest);
-      await cache.put(file.digest, bytes);
+  await forEachLimit([...byDigest.keys()], concurrency, async (digest) => {
+    // Resolve a local file holding this blob's bytes, streaming from the store
+    // only on a cache miss — never buffering the blob in memory.
+    const source = await ensureLocalBlob(client, principal, cache, digest, root);
+    for (const { target, executable } of byDigest.get(digest) ?? []) {
+      await fsp.mkdir(path.dirname(target), { recursive: true });
+      await fsp.copyFile(source.path, target);
+      if (executable) await fsp.chmod(target, 0o755);
     }
-    await fsp.mkdir(path.dirname(file.target), { recursive: true });
-    await fsp.writeFile(file.target, bytes);
-    if (file.executable) await fsp.chmod(file.target, 0o755);
+    if (source.cleanup) await fsp.rm(source.path, { force: true }).catch(() => {});
   });
+}
+
+// Return a path to a local file holding `digest`'s bytes. Prefers the cache;
+// on a miss streams the blob from the store to disk and seeds the cache. When
+// no cache is configured the blob lands in a temp file the caller must clean up
+// (source.cleanup = true).
+async function ensureLocalBlob(
+  client: ResourceHubClient,
+  principal: ResourceHubPrincipal,
+  cache: BlobCache,
+  digest: string,
+  scratchDir: string,
+): Promise<{ path: string; cleanup: boolean }> {
+  const cachePath = cache.pathFor(digest);
+  if (cachePath) {
+    if (!(await cache.has(digest))) {
+      const tmp = path.join(scratchDir, `.blob-${randomUUID()}`);
+      await client.downloadToFile(principal, digest, tmp);
+      await cache.putFile(digest, tmp);
+      await fsp.rm(tmp, { force: true }).catch(() => {});
+    }
+    return { path: cachePath, cleanup: false };
+  }
+  // No cache: stream straight to a temp file the caller copies out and removes.
+  const tmp = path.join(os.tmpdir(), `od-blob-${randomUUID()}`);
+  await client.downloadToFile(principal, digest, tmp);
+  return { path: tmp, cleanup: true };
 }
 
 // Resolve a ref to its version's manifest and materialize it. Convenience over
