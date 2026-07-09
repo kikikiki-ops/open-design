@@ -989,6 +989,20 @@ interface RendererCrashScreenContext {
 }
 
 const CRASH_REPORT_ISSUES_URL = "https://github.com/nexu-io/open-design/issues/new";
+const SUPPORT_EMAIL = "support@open-design.ai";
+
+// Narrow allowlist for the crash screen's "Email us" action: only a mailto
+// addressed to our own support address opens, so widening `shell:open-external`
+// past http can't be abused into arbitrary-scheme launches. The ?subject/&body
+// query is ignored for the check (URL parses the address into `pathname`).
+export function isSupportMailtoUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "mailto:" && parsed.pathname.toLowerCase() === SUPPORT_EMAIL;
+  } catch {
+    return false;
+  }
+}
 
 function osLabelForReport(platform: NodeJS.Platform): string {
   if (platform === "darwin") return "macOS";
@@ -1030,8 +1044,25 @@ function buildCrashReportUrl(ctx: RendererCrashScreenContext): string {
   return `${CRASH_REPORT_ISSUES_URL}?${new URLSearchParams({ title, body }).toString()}`;
 }
 
+// Prefilled mailto for the "Email us" action — same auto-filled diagnostics as
+// the issue, for users who'd rather email than open a GitHub account.
+function buildCrashMailtoUrl(ctx: RendererCrashScreenContext): string {
+  const subject = `Open Design keeps crashing (renderer ${ctx.reason})`;
+  const body = [
+    "The Open Design desktop app crashed several times in a row on my device.",
+    "",
+    "(If possible, attach the diagnostics file you saved with the “Save logs…” button.)",
+    "",
+    `App version: ${ctx.appVersion}`,
+    `OS: ${osLabelForReport(ctx.platform)} ${ctx.osVersion}`,
+    `Renderer exit: ${ctx.reason}, code ${formatRendererExitCode(ctx.exitCode)}`,
+  ].join("\n");
+  return `mailto:${SUPPORT_EMAIL}?${new URLSearchParams({ subject, body }).toString()}`;
+}
+
 function createRendererCrashHtml(ctx: RendererCrashScreenContext): string {
   const issueUrl = buildCrashReportUrl(ctx);
+  const mailtoUrl = buildCrashMailtoUrl(ctx);
   return `data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html>
 <html>
   <head>
@@ -1099,6 +1130,14 @@ function createRendererCrashHtml(ctx: RendererCrashScreenContext): string {
         margin: 12px 0 0;
         min-height: 16px;
       }
+      .email {
+        color: #8a929a;
+        font-size: 13px;
+        line-height: 1.5;
+        margin: 14px 0 0;
+      }
+      .email a { color: #2b6cb0; text-decoration: none; }
+      .email a:hover { text-decoration: underline; }
       .hint {
         color: #8a929a;
         font-size: 13px;
@@ -1108,7 +1147,8 @@ function createRendererCrashHtml(ctx: RendererCrashScreenContext): string {
       @media (prefers-color-scheme: dark) {
         html, body { background: #1c2024; color: #e6e9ec; }
         .body { color: #aeb6bd; }
-        .hint, .status { color: #7c848b; }
+        .hint, .status, .email { color: #7c848b; }
+        .email a { color: #6ea8e0; }
         .secondary { color: #e6e9ec; border-color: rgba(174, 182, 189, 0.35); }
         .secondary:hover { border-color: rgba(174, 182, 189, 0.6); }
       }
@@ -1124,23 +1164,34 @@ function createRendererCrashHtml(ctx: RendererCrashScreenContext): string {
         <button id="logs" class="secondary">Save logs…</button>
       </div>
       <p class="status" id="status" aria-live="polite"></p>
+      <p class="email" id="email-line">Prefer email? <a href="#" id="email">Contact ${SUPPORT_EMAIL}</a></p>
       <p class="hint">If this keeps happening, quitting and reinstalling Open Design usually resolves it.</p>
     </div>
     <script>
       (function () {
         var issueUrl = ${JSON.stringify(issueUrl)};
+        var mailtoUrl = ${JSON.stringify(mailtoUrl)};
         var host = window.__od__;
         var diag = window.openDesignDesktop;
         var report = document.getElementById("report");
         var logs = document.getElementById("logs");
+        var emailLine = document.getElementById("email-line");
+        var email = document.getElementById("email");
         var status = document.getElementById("status");
         function say(t) { if (status) status.textContent = t; }
-        // Buttons reuse IPC the preload already exposes; if a bridge is missing
-        // (preload failed to load) hide the dead control instead of a no-op.
+        var canOpen = host && typeof host.openExternal === "function";
+        // Actions reuse IPC the preload already exposes; if the bridge is
+        // missing (preload failed to load) hide the dead control instead of a
+        // no-op.
         if (report) {
-          if (host && typeof host.openExternal === "function") {
+          if (canOpen) {
             report.addEventListener("click", function () { host.openExternal(issueUrl); });
           } else { report.style.display = "none"; }
+        }
+        if (email) {
+          if (canOpen) {
+            email.addEventListener("click", function (e) { e.preventDefault(); host.openExternal(mailtoUrl); });
+          } else if (emailLine) { emailLine.style.display = "none"; }
         }
         if (logs) {
           if (diag && typeof diag.exportDiagnostics === "function") {
@@ -1806,7 +1857,9 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
     ipcMain.removeHandler(channel);
   }
   ipcMain.handle("shell:open-external", async (_event, url: string) => {
-    if (!isHttpUrl(url)) return false;
+    // http(s) as before, plus a mailto strictly to our support address (the
+    // crash screen's "Email us"); no other scheme opens.
+    if (!isHttpUrl(url) && !isSupportMailtoUrl(url)) return false;
     try {
       await shell.openExternal(url);
       return true;

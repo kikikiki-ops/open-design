@@ -8,6 +8,7 @@ import {
   RENDERER_CRASH_LOOP_WINDOW_MS,
   RendererCrashLoopBreaker,
 } from "../../src/main/renderer-crash-loop.js";
+import { isSupportMailtoUrl } from "../../src/main/runtime.js";
 
 describe("RendererCrashLoopBreaker", () => {
   test("stays closed while crashes are below the limit inside the window", () => {
@@ -128,16 +129,36 @@ describe("renderer crash-loop breaker wiring", () => {
     expect(runtimeSource).toContain("recovery_attempt:");
   });
 
-  test("the crash screen offers report + save-logs actions via already-exposed IPC", () => {
+  test("the crash screen offers report + save-logs + email actions via already-exposed IPC", () => {
     // Reuse the preload's existing bridges (no new surface): openExternal for a
-    // prefilled GitHub issue, exportDiagnostics for the log bundle.
+    // prefilled GitHub issue / support mailto, exportDiagnostics for the bundle.
     expect(runtimeSource).toContain("issues/new");
     expect(runtimeSource).toContain("window.__od__");
     expect(runtimeSource).toContain("openExternal");
     expect(runtimeSource).toContain("window.openDesignDesktop");
     expect(runtimeSource).toContain("exportDiagnostics");
+    expect(runtimeSource).toContain("support@open-design.ai");
+    expect(runtimeSource).toContain("buildCrashMailtoUrl");
     // Report body prefilled with the version/OS/exit code a triager needs.
     expect(runtimeSource).toContain("buildCrashReportUrl");
     expect(runtimeSource).toContain("formatRendererExitCode");
+  });
+});
+
+describe("isSupportMailtoUrl", () => {
+  test("allows a mailto strictly to the support address (with or without a query)", () => {
+    expect(isSupportMailtoUrl("mailto:support@open-design.ai")).toBe(true);
+    expect(isSupportMailtoUrl("mailto:support@open-design.ai?subject=Crash&body=hi")).toBe(true);
+    // Address comparison is case-insensitive.
+    expect(isSupportMailtoUrl("mailto:Support@Open-Design.AI")).toBe(true);
+  });
+
+  test("rejects any other address or scheme so widening open-external can't be abused", () => {
+    expect(isSupportMailtoUrl("mailto:attacker@evil.com")).toBe(false);
+    expect(isSupportMailtoUrl("mailto:support@evil.com")).toBe(false);
+    expect(isSupportMailtoUrl("https://open-design.ai")).toBe(false);
+    expect(isSupportMailtoUrl("javascript:alert(1)")).toBe(false);
+    expect(isSupportMailtoUrl("file:///etc/passwd")).toBe(false);
+    expect(isSupportMailtoUrl("not a url")).toBe(false);
   });
 });
