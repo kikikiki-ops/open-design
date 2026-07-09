@@ -1211,6 +1211,12 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       workspaceId,
     };
   }
+  class TeamProjectCatalogListError extends Error {
+    constructor(readonly cause: unknown) {
+      super('team project catalog list failed');
+      this.name = 'TeamProjectCatalogListError';
+    }
+  }
   function projectAccess(wp: any, ctx: WorkspaceProjectContext) {
     const frozen = wp.resourceState === 'frozen' || wp.resourceState === 'deleted' || isWorkspaceLocked(ctx);
     const selfCreated = wp.createdByWorkspaceMemberId != null && wp.createdByWorkspaceMemberId === ctx.workspaceMemberId;
@@ -1299,7 +1305,6 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
   function accessForRemoteTeamProject(remote: VelaTeamProjectRecord, ctx: WorkspaceProjectContext) {
     const frozen = remote.access.frozen || isWorkspaceLocked(ctx);
     const canView = remote.access.canView && !frozen && ctx.memberStatus === 'active';
-    const canEdit = remote.access.canEdit && !frozen && ctx.canWriteSyncedFiles && ctx.memberStatus === 'active';
     const disabledReason = frozen
       ? isWorkspaceLocked(ctx)
         ? 'workspace_locked'
@@ -1309,14 +1314,14 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         : 'permission_denied';
     return {
       canOpen: canView,
-      canRename: canEdit,
-      canDelete: canEdit,
-      canDuplicate: canEdit,
+      canRename: false,
+      canDelete: false,
+      canDuplicate: false,
       canMoveToTeam: false,
-      canMoveToPersonal: canEdit,
+      canMoveToPersonal: false,
       canExport: canView,
       canSendTo: canView,
-      canRestoreVersion: canEdit,
+      canRestoreVersion: false,
       ...(disabledReason ? { disabledReason } : {}),
     };
   }
@@ -1357,15 +1362,16 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
   async function listRemoteTeamProjectSummaries(localRows: any[], ctx: WorkspaceProjectContext) {
     if (!teamProjectCatalog) return [];
     const localProjectIds = new Set(localRows.map((row) => row.id));
+    let remoteProjects: VelaTeamProjectRecord[];
     try {
-      const remoteProjects = await teamProjectCatalog.list(workspaceProjectPrincipal(ctx));
-      return remoteProjects
-        .filter((project) => project.access.canView)
-        .filter((project) => !localProjectIds.has(project.projectId))
-        .map((project) => remoteTeamProjectSummary(project, ctx));
-    } catch {
-      return [];
+      remoteProjects = await teamProjectCatalog.list(workspaceProjectPrincipal(ctx));
+    } catch (error) {
+      throw new TeamProjectCatalogListError(error);
     }
+    return remoteProjects
+      .filter((project) => project.access.canView)
+      .filter((project) => !localProjectIds.has(project.projectId))
+      .map((project) => remoteTeamProjectSummary(project, ctx));
   }
   function ensureWorkspaceProjection(project: any, ctx: WorkspaceProjectContext, visibility = 'personal') {
     const existing = getWorkspaceProject(db, ctx.workspaceId, project.id);
@@ -1710,6 +1716,9 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       const body = { projects };
       res.json(body);
     } catch (err: any) {
+      if (err?.name === 'TeamProjectCatalogListError') {
+        return sendApiError(res, 502, 'TEAM_PROJECT_CATALOG_UNAVAILABLE', err.message);
+      }
       sendApiError(res, 500, 'INTERNAL_ERROR', String(err));
     }
   });

@@ -285,7 +285,7 @@ describe('workspace project routes', () => {
           access: {
             canView: true,
             canComment: true,
-            canEdit: false,
+            canEdit: true,
             frozen: false,
           },
         },
@@ -328,7 +328,41 @@ describe('workspace project routes', () => {
           canRename: false,
           canDelete: false,
           canMoveToPersonal: false,
+          canRestoreVersion: false,
           canExport: true,
+        },
+      });
+    } finally {
+      await close(routeServer.server);
+    }
+  });
+
+  it('fails workspace project listing when the remote team catalog is unavailable', async () => {
+    const projectId = `workspace-catalog-fails-${Date.now()}`;
+    const teamProjectCatalog = {
+      list: vi.fn(async () => {
+        throw new Error('catalog unavailable');
+      }),
+      upsert: vi.fn(),
+    };
+    const app = express();
+    app.use(express.json());
+    registerProjectRoutes(app, workspaceProjectRouteDeps({
+      workspaceId,
+      projectId,
+      dbDeleteProject: vi.fn(),
+      removeProjectDir: vi.fn(),
+      teamProjectCatalog,
+    }));
+    const routeServer = await listen(app);
+    try {
+      const resp = await fetch(`${routeServer.url}/api/workspaces/${workspaceId}/projects?view=team`, {
+        headers: headers('member-viewer'),
+      });
+      expect(resp.status).toBe(502);
+      await expect(resp.json()).resolves.toMatchObject({
+        error: {
+          code: 'TEAM_PROJECT_CATALOG_UNAVAILABLE',
         },
       });
     } finally {
