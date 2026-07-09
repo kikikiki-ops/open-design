@@ -34,6 +34,16 @@ const ISSUE_4638_LOG = `Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'bette
     at Object.getPackageJSONURL (node:internal/modules/package_json_reader:301:9)
 [open-design packaged] exited app=daemon pid=45305 code=1 signal=none`;
 
+// A daemon that exits 1 for a reason parseDaemonLogTail cannot classify: no
+// ERR_* code, no "Cannot find module". This is the production code=1 bucket
+// (13 win + 7 mac in 0.14.0) whose log we read but discarded. Includes a home
+// dir to assert the tail is scrubbed.
+const UNCLASSIFIED_DAEMON_LOG = `2026-07-09T10:00:00.000Z [daemon] booting namespace release-stable
+2026-07-09T10:00:01.000Z [daemon] loading config from /Users/liudetao/Library/Application Support/Open Design/namespaces/release-stable/config.json
+TypeError: Cannot read properties of undefined (reading 'port')
+    at resolveListenPort (/Applications/Open Design.app/Contents/Resources/app/prebundled/daemon/chunks/server-PULTSXNL.mjs:1201:14)
+[open-design packaged] exited app=daemon pid=51001 code=1 signal=none`;
+
 // Verbatim shape of what waitForStatus throws (sidecars.ts:206-208).
 const DAEMON_EXIT_MESSAGE =
   'daemon exited before reporting status (code=1, signal=none); see /Users/liudetao/Library/Application Support/Open Design/namespaces/release-stable/logs/daemon/latest.log for details';
@@ -290,6 +300,66 @@ describe('reportStartupFailure', () => {
     expect(props.app_version).toBe('0.11.0');
     expect(props.exit_code).toBe(1);
     expect(props.log_path).not.toContain('liudetao');
+    // The raw tail is forwarded alongside the extracted fields, scrubbed.
+    expect(props.daemon_log_tail).toContain('ERR_MODULE_NOT_FOUND');
+  });
+
+  it('forwards the scrubbed raw daemon log tail when the cause is not an ERR_ code or missing module', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response('ok'));
+    await reportStartupFailure(
+      {
+        error: new Error(DAEMON_EXIT_MESSAGE),
+        isPathAccess: false,
+        posthogKey: 'phc_test',
+        posthogHost: null,
+        distinctId: 'install-123',
+        appVersion: '0.14.0',
+        namespace: 'release-stable',
+        source: 'packaged',
+      },
+      {
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        readLogTail: async () => UNCLASSIFIED_DAEMON_LOG,
+        now: () => '2026-06-23T00:00:00.000Z',
+      },
+    );
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    const props = (JSON.parse(init.body as string) as { properties: Record<string, unknown> })
+      .properties;
+    // The two structured extractors classify nothing for this exit...
+    expect(props.error_code).toBeNull();
+    expect(props.missing_module).toBeNull();
+    // ...but the raw tail still carries the real cause, with the home dir scrubbed.
+    expect(props.daemon_log_tail).toContain(
+      "TypeError: Cannot read properties of undefined (reading 'port')",
+    );
+    expect(props.daemon_log_tail).not.toContain('liudetao');
+    expect(props.daemon_log_tail).toContain('<redacted>');
+  });
+
+  it('keeps the END of an oversized daemon log so the fatal error is not truncated away', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response('ok'));
+    const bigLog = `${'x'.repeat(5000)}\nFATAL: daemon boot aborted at the very end`;
+    await reportStartupFailure(
+      {
+        error: new Error(DAEMON_EXIT_MESSAGE),
+        isPathAccess: false,
+        posthogKey: 'phc_test',
+        posthogHost: null,
+        distinctId: 'd',
+        appVersion: '0.14.0',
+        namespace: 'release-stable',
+        source: 'packaged',
+      },
+      { fetchImpl: fetchImpl as unknown as typeof fetch, readLogTail: async () => bigLog },
+    );
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    const props = (JSON.parse(init.body as string) as { properties: Record<string, unknown> })
+      .properties;
+    const tail = props.daemon_log_tail as string;
+    expect(tail).toContain('FATAL: daemon boot aborted at the very end');
+    expect(tail).toContain('chars]');
+    expect(tail.length).toBeLessThan(bigLog.length);
   });
 
   it('never throws even when the log read blows up', async () => {

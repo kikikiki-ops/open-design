@@ -23,11 +23,13 @@
 // opted-out users (and the main process cannot read daemon consent anyway,
 // since the daemon isn't up). The Settings → Privacy copy MUST call this out.
 //
-// Payload PII: the free-form crash fields (error_message, error_stack) and every
-// path we send (log_path, native_module_path) run through `scrubUserPaths` to
-// strip the user's home dir, and the free-form text is length-capped. Startup
-// errors are module-resolution / daemon-exit messages, not user content, so this
-// bounds the exposure to build/OS strings rather than anything the user typed.
+// Payload PII: the free-form crash fields (error_message, error_stack, and the
+// daemon_log_tail slice of the daemon's own log) and every path we send
+// (log_path, native_module_path) run through `scrubUserPaths` to strip the
+// user's home dir, and the free-form text is length-capped. Startup errors are
+// module-resolution / daemon-exit messages and the daemon's startup log lines,
+// not user content, so this bounds the exposure to build/OS strings rather than
+// anything the user typed.
 
 import { readFile } from "node:fs/promises";
 import { readFileSync, statSync } from "node:fs";
@@ -216,9 +218,22 @@ async function defaultReadLogTail(path: string): Promise<string | null> {
 // Keep the message/stack payload bounded (a stack can be arbitrarily long).
 const ERROR_MESSAGE_MAX = 1000;
 const ERROR_STACK_MAX = 2000;
+// The raw daemon log tail we forward. defaultReadLogTail already reads the last
+// 16KB of the file; this bounds what we actually ship to the fatal error and
+// its stack.
+const DAEMON_LOG_TAIL_MAX = 2500;
 
 function truncateForTelemetry(value: string, max: number): string {
   return value.length > max ? `${value.slice(0, max)}…[+${value.length - max} chars]` : value;
+}
+
+// A log TAIL's most useful lines — the fatal error and its stack — sit at the
+// END, so keep the end when trimming, unlike truncateForTelemetry which keeps
+// the head of a single message/stack.
+function truncateTailForTelemetry(value: string, max: number): string {
+  return value.length > max
+    ? `…[+${value.length - max} chars]${value.slice(value.length - max)}`
+    : value;
 }
 
 // Best-effort probe: does the native module actually exist on THIS machine, and
@@ -338,12 +353,20 @@ export async function reportStartupFailure(
     const classification = classifyStartupFailure(args.error, args.isPathAccess);
     let errorCode: string | undefined;
     let missingModule: string | undefined;
+    let daemonLogTail: string | null = null;
     if (classification.logPath) {
       const tail = await (deps.readLogTail ?? defaultReadLogTail)(classification.logPath);
       if (tail) {
         const parsed = parseDaemonLogTail(tail);
         errorCode = parsed.errorCode;
         missingModule = parsed.missingModule;
+        // parseDaemonLogTail only recognises ERR_* and missing-module lines, so
+        // it captures nothing for the majority of code=1 daemon exits (a plain
+        // Error, a config parse failure, a port bind, an assertion). Production
+        // has code=1 exits where we read the log but classified neither field;
+        // emit a scrubbed, tail-truncated slice of the raw log so ANY exit
+        // reason is diagnosable, not just those two shapes.
+        daemonLogTail = truncateTailForTelemetry(scrubUserPaths(tail), DAEMON_LOG_TAIL_MAX);
       }
     }
     const rawMessage =
@@ -389,6 +412,7 @@ export async function reportStartupFailure(
       native_module_size: nativeModuleSize,
       native_module_path: nativeModulePath,
       log_path: classification.logPath ? scrubUserPaths(classification.logPath) : null,
+      daemon_log_tail: daemonLogTail,
       app_version: args.appVersion,
       namespace: args.namespace,
       source: args.source,

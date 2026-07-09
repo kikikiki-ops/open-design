@@ -712,6 +712,12 @@ export interface PackagedRuntimeFailedProps {
   native_module_path?: string | null;
   // Scrubbed of the user's home dir before send.
   log_path: string | null;
+  // A scrubbed, tail-truncated slice of the daemon's own startup log. error_code
+  // / missing_module only classify ERR_* and missing-module lines, so this is
+  // the only signal for the many code=1 daemon exits whose cause is a plain
+  // Error / config parse / port bind / assertion the log was read for but could
+  // not be classified into a field. Null when there was no daemon log to read.
+  daemon_log_tail?: string | null;
   app_version: string | null;
   namespace: string;
   source: string;
