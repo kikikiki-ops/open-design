@@ -195,9 +195,12 @@ export function scrubSecrets(value: string): string {
     // scheme word ("Bearer"/"Basic") and leave the credential
     // ("Authorization: Bearer abc" -> "<redacted> abc"), so handle it first.
     .replace(/(\bAuthorization\s*[:=]\s*)\S[^\r\n]*/gi, "$1<redacted>")
-    // `key = value` / `key: value` secrets (password, token, secret, api_key, …).
+    // `key = value` / `key: value` secrets (password, token, secret, api_key,
+    // auth, …). `auth` is kept here for bare `auth=…` fields; it can't misfire on
+    // "Authorization"/"author" because a `[=:]` separator must immediately follow
+    // the matched word (the Authorization *header* is handled by the rule above).
     .replace(
-      /\b(pass(?:word|wd)?|pwd|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret)(\s*[=:]\s*)("?)[^\s"'&]+\3/gi,
+      /\b(pass(?:word|wd)?|pwd|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret|auth)(\s*[=:]\s*)("?)[^\s"'&]+\3/gi,
       "$1$2<redacted>",
     )
     // Inline Bearer/Basic token values not under an Authorization header.

@@ -192,6 +192,14 @@ describe('scrubSecrets', () => {
     expect(scrubSecrets('using key sk-ant-api03-ABC123DEF456GHI789 now')).not.toContain('ABC123DEF456');
   });
 
+  it('redacts a bare auth=… / auth: … field without misfiring on author or the header', () => {
+    expect(scrubSecrets('auth=abc12345')).toBe('auth=<redacted>');
+    expect(scrubSecrets('auth: abc12345')).toBe('auth: <redacted>');
+    // A `[=:]` must follow the word, so "author"/"Authorization" don't misfire here.
+    expect(scrubSecrets('author=jane')).toBe('author=jane');
+    expect(scrubSecrets('Authorization: Bearer abc12345')).toBe('Authorization: <redacted>');
+  });
+
   it('redacts key=value secrets and bare emails', () => {
     expect(scrubSecrets('password=hunter2 token: abc12345')).toBe('password=<redacted> token: <redacted>');
     expect(scrubSecrets('login failed for user ontf116@gmail.com')).toBe(
