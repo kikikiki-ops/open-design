@@ -474,12 +474,14 @@ import {
   deleteConversation,
   deletePreviewComment,
   deleteProject as dbDeleteProject,
+  deleteWorkspaceProject,
   deleteTemplate,
   getConversation,
   getDeployment,
   getDeploymentById,
   getMessageTelemetryFinalizationState,
   getProject,
+  countWorkspaceProjectRefs,
   getWorkspaceProject,
   getTemplate,
   ensureWorkspaceProject,
@@ -580,6 +582,7 @@ import { registerCollabContextRoutes } from './routes/collab-context.js';
 import { registerTeamResourceRoutes } from './routes/team-resources.js';
 import { registerTeamResourceShareRoutes } from './routes/team-resource-share.js';
 import { createCollabRuntime } from './collab/runtime.js';
+import { resolveProjectShareDir } from './collab/project-share-dir.js';
 import { createTeamResourceShareService } from './collab/team-resource-share.js';
 import { contextToResourceHubPrincipal } from './collab/resource-hub-publish-adapter.js';
 import { velaTeamProjectCatalogClient } from './integrations/vela-team-projects.js';
@@ -3812,7 +3815,8 @@ export async function startServer({
   // hub when OD_RESOURCE_HUB_URL + workspace member env are set, else a local
   // stub. resolveProjectDir lets the hub adapter pack/land managed projects.
   const collab = createCollabRuntime({
-    resolveProjectDir: (projectId) => resolveProjectDir(PROJECTS_DIR, projectId),
+    resolveProjectDir: (projectId) =>
+      resolveProjectShareDir(PROJECTS_DIR, projectId, getProject(db, projectId), resolveProjectDir),
     teamProjectCatalog: velaTeamProjectCatalogClient,
   });
   registerCollabPresenceRoutes(app, { collab });
@@ -4087,6 +4091,8 @@ export async function startServer({
     ensureWorkspaceProject,
     listWorkspaceProjects,
     updateWorkspaceProject,
+    deleteWorkspaceProject,
+    countWorkspaceProjectRefs,
     insertProject,
     updateProject,
     dbDeleteProject,

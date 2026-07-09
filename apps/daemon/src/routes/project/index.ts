@@ -1149,6 +1149,8 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
     getWorkspaceProject,
     listWorkspaceProjects,
     updateWorkspaceProject,
+    deleteWorkspaceProject,
+    countWorkspaceProjectRefs,
   } = ctx.projectStore;
   const { writeProjectFile, readProjectFile, ensureProject, listFiles, listTabs, setTabs, resolveProjectDir } = ctx.projectFiles;
   const { insertConversation } = ctx.conversations;
@@ -1836,17 +1838,23 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       if (forbidden.length > 0) {
         return sendApiError(res, 403, 'PROJECT_BATCH_CONTAINS_FORBIDDEN_ITEMS', 'batch contains forbidden projects');
       }
-      const deleteMany = db.transaction((ids: string[]) => {
-        for (const id of ids) dbDeleteProject(db, id);
+      const finalProjectIds = projectIds.filter((id: string) => countWorkspaceProjectRefs(db, id) <= 1);
+      const deleteMany = db.transaction((ids: string[], finalIds: string[]) => {
+        for (const id of ids) deleteWorkspaceProject(db, ctx.workspaceId, id);
+        for (const id of finalIds) {
+          if (countWorkspaceProjectRefs(db, id) === 0) dbDeleteProject(db, id);
+        }
       });
-      const stagedDelete = await stageProjectDirsForDelete(PROJECTS_DIR, projectIds, randomId());
+      const stagedDelete = finalProjectIds.length > 0
+        ? await stageProjectDirsForDelete(PROJECTS_DIR, finalProjectIds, randomId())
+        : null;
       try {
-        deleteMany(projectIds);
+        deleteMany(projectIds, finalProjectIds);
       } catch (error) {
-        await stagedDelete.rollback();
+        await stagedDelete?.rollback();
         throw error;
       }
-      await stagedDelete.commit();
+      await stagedDelete?.commit();
       res.json({ ok: true, deletedProjectIds: projectIds });
     } catch (err: any) {
       sendApiError(res, 400, 'BAD_REQUEST', String(err));

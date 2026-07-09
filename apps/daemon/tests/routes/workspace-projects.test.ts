@@ -249,6 +249,32 @@ describe('workspace project routes', () => {
     expect(adminGone.status).toBe(404);
   });
 
+  it('keeps a project available in other workspaces when batch-delete removes one workspace projection', async () => {
+    const suffix = Date.now();
+    const projectId = `workspace-delete-shared-${suffix}`;
+    const workspaceA = `${workspaceId}-delete-a`;
+    const workspaceB = `${workspaceId}-delete-b`;
+    await createProject(projectId, 'Shared delete fixture');
+
+    const bodyA = await listInWorkspace(workspaceA, 'member-delete-a', '?view=all');
+    const bodyB = await listInWorkspace(workspaceB, 'member-delete-b', '?view=all');
+    expect(bodyA.projects.some((item) => item.id === projectId)).toBe(true);
+    expect(bodyB.projects.some((item) => item.id === projectId)).toBe(true);
+
+    const deleteResp = await fetch(`${baseUrl}/api/workspaces/${workspaceA}/projects/batch-delete`, {
+      method: 'POST',
+      headers: workspaceHeaders(workspaceA, 'member-delete-a', { 'x-od-workspace-role': 'admin' }),
+      body: JSON.stringify({ projectIds: [projectId] }),
+    });
+    expect(deleteResp.status).toBe(200);
+
+    const baseProject = await fetch(`${baseUrl}/api/projects/${projectId}`);
+    expect(baseProject.status).toBe(200);
+
+    const afterB = await listInWorkspace(workspaceB, 'member-delete-b', '?view=all');
+    expect(afterB.projects.some((item) => item.id === projectId)).toBe(true);
+  });
+
   it('fails batch-delete when project directory cleanup fails', async () => {
     const projectId = `workspace-delete-cleanup-fails-${Date.now()}`;
     const dbDeleteProject = vi.fn();
@@ -266,6 +292,7 @@ describe('workspace project routes', () => {
       dbDeleteProject,
       removeProjectDir,
       stageProjectDirsForDelete,
+      countWorkspaceProjectRefs: vi.fn(() => 1),
     }));
     const routeServer = await listen(app);
     try {
@@ -514,6 +541,8 @@ function workspaceProjectRouteDeps({
   dbDeleteProject,
   removeProjectDir,
   stageProjectDirsForDelete,
+  deleteWorkspaceProject,
+  countWorkspaceProjectRefs,
   teamProjectCatalog,
   collabSync,
 }: {
@@ -522,6 +551,8 @@ function workspaceProjectRouteDeps({
   dbDeleteProject: ReturnType<typeof vi.fn>;
   removeProjectDir: ReturnType<typeof vi.fn>;
   stageProjectDirsForDelete?: ReturnType<typeof vi.fn>;
+  deleteWorkspaceProject?: ReturnType<typeof vi.fn>;
+  countWorkspaceProjectRefs?: ReturnType<typeof vi.fn>;
   teamProjectCatalog?: unknown;
   collabSync?: unknown;
 }) {
@@ -580,6 +611,8 @@ function workspaceProjectRouteDeps({
         rollback: vi.fn(async () => {}),
         commit: vi.fn(async () => {}),
       })),
+      deleteWorkspaceProject: deleteWorkspaceProject ?? noop,
+      countWorkspaceProjectRefs: countWorkspaceProjectRefs ?? vi.fn(() => 1),
       ensureWorkspaceProject: () => workspaceRow,
       getWorkspaceProject: () => workspaceRow,
       listWorkspaceProjects: () => [workspaceRow],

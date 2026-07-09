@@ -824,6 +824,22 @@ export function updateWorkspaceProject(db: SqliteDb, workspaceId: string, projec
   return getWorkspaceProject(db, workspaceId, projectId);
 }
 
+export function deleteWorkspaceProject(db: SqliteDb, workspaceId: string, projectId: string): void {
+  db.prepare(
+    `DELETE FROM workspace_projects
+      WHERE workspace_id = ? AND project_id = ?`,
+  ).run(workspaceId, projectId);
+}
+
+export function countWorkspaceProjectRefs(db: SqliteDb, projectId: string): number {
+  const row = db.prepare(
+    `SELECT COUNT(*) AS count
+       FROM workspace_projects
+      WHERE project_id = ?`,
+  ).get(projectId) as { count?: number } | undefined;
+  return Number(row?.count ?? 0);
+}
+
 export function listLatestProjectRunStatuses(db: SqliteDb) {
   const rows = db
     .prepare(
