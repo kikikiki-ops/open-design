@@ -86,10 +86,15 @@ export interface CreateCollabRuntimeOptions {
    */
   teamProjectCatalog?: VelaTeamProjectCatalogClient;
   /** Fired after a project is published so the caller can notify online members. */
-  onPublished?: (result: { projectId: string; version: number; reason: string }) => void;
+  onPublished?: (result: {
+    projectId: string;
+    version: number;
+    reason: string;
+    principal: ResourceHubPrincipal | null;
+  }) => void;
   /** Fired when a project's presence set changes (join/leave). */
   onPresenceChange?: (result: { projectId: string; present: PresenceMember[] }) => void;
-  onError?: (result: { projectId: string; error: unknown }) => void;
+  onError?: (result: { projectId: string; error: unknown; principal: ResourceHubPrincipal | null }) => void;
 }
 
 /**
@@ -159,7 +164,7 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
     syncState: 'pending_upload' | 'synced' | 'failed',
   ) {
     void markTeamProject(projectId, syncState).catch((error) => {
-      options.onError?.({ projectId, error });
+      options.onError?.({ projectId, error, principal: sharePrincipals.get(projectId) ?? null });
     });
   }
   // Always track the published head + sync state so members can poll them; also
@@ -172,14 +177,20 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
       published.set(result.projectId, result.version);
       syncStates.set(result.projectId, 'synced');
       markTeamProjectSoon(result.projectId, 'synced');
-      options.onPublished?.(result);
+      options.onPublished?.({
+        ...result,
+        principal: sharePrincipals.get(result.projectId) ?? null,
+      });
     },
     onError: (result) => {
       // A failed publish leaves the prior head standing; surface it as a
       // recoverable sync state rather than wedging the project.
       syncStates.set(result.projectId, 'sync_failed');
       markTeamProjectSoon(result.projectId, 'failed');
-      options.onError?.(result);
+      options.onError?.({
+        ...result,
+        principal: sharePrincipals.get(result.projectId) ?? null,
+      });
     },
   };
   const scheduler = new CollabPublishScheduler(schedulerOptions);

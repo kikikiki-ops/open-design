@@ -3814,10 +3814,24 @@ export async function startServer({
   // The scheduler publishes/pulls through the resource-hub adapter — the real
   // hub when OD_RESOURCE_HUB_URL + workspace member env are set, else a local
   // stub. resolveProjectDir lets the hub adapter pack/land managed projects.
+  function persistWorkspaceProjectSyncState(
+    projectId: string,
+    workspaceId: string | null | undefined,
+    syncState: 'synced' | 'sync_failed',
+  ) {
+    if (!workspaceId) return;
+    updateWorkspaceProject(db, workspaceId, projectId, { syncState });
+  }
   const collab = createCollabRuntime({
     resolveProjectDir: (projectId) =>
       resolveProjectShareDir(PROJECTS_DIR, projectId, getProject(db, projectId), resolveProjectDir),
     teamProjectCatalog: velaTeamProjectCatalogClient,
+    onPublished: ({ projectId, principal }) => {
+      persistWorkspaceProjectSyncState(projectId, principal?.teamId, 'synced');
+    },
+    onError: ({ projectId, principal }) => {
+      persistWorkspaceProjectSyncState(projectId, principal?.teamId, 'sync_failed');
+    },
   });
   registerCollabPresenceRoutes(app, { collab });
   registerCollabSyncRoutes(app, { collab });

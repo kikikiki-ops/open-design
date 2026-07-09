@@ -62,6 +62,17 @@ describe('workspace project routes', () => {
     return resp.json() as Promise<{ projects: Array<any> }>;
   }
 
+  async function waitForWorkspaceProjectSyncState(memberId: string, projectId: string, syncState: string) {
+    let project: any;
+    for (let i = 0; i < 40; i += 1) {
+      const body = await list(memberId, '?view=all');
+      project = body.projects.find((item) => item.id === projectId);
+      if (project?.syncState === syncState) return project;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    return project;
+  }
+
   it('projects legacy rows into a workspace list without assigning ownership to the reader', async () => {
     const projectId = `workspace-list-${Date.now()}`;
     await createProject(projectId, 'Workspace list fixture');
@@ -290,6 +301,13 @@ describe('workspace project routes', () => {
     const batchShare = await batchShareStatus.json() as { syncState: string; ownerMemberId: string | null };
     expect(['pending_upload', 'synced']).toContain(batchShare.syncState);
     expect(batchShare.ownerMemberId).toBe('member-direct');
+    const syncedProject = await waitForWorkspaceProjectSyncState('member-direct', moveProjectId, 'synced');
+    expect(syncedProject).toMatchObject({
+      id: moveProjectId,
+      syncState: 'synced',
+      resourceHubResourceId: `project-${moveProjectId}`,
+    });
+    expect(syncedProject.pendingSyncIntent).toBeUndefined();
 
     const moveBackResp = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/projects/${moveProjectId}/move`, {
       method: 'POST',
