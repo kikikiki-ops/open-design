@@ -313,11 +313,9 @@ export interface ProjectDetailResponse extends ProjectResponse {
 
 export type ProjectVisibility = 'personal' | 'team';
 
-// Local D-lane placeholders until the B-owned CurrentWorkspaceContext is
-// imported into open-design. The route adapter keeps these replaceable.
+// Local D-lane placeholder until the B-owned CurrentWorkspaceContext is
+// imported into open-design. The route adapter keeps this replaceable.
 export type WorkspaceProjectRole = 'owner' | 'admin' | 'member';
-
-export type WorkspaceLifecycleState = 'active' | 'billing_past_due' | 'locked' | 'deleting' | 'deleted';
 
 // C owns project sync orchestration. D exposes this on its read model and emits
 // intent metadata when visibility changes, but it does not upload or mirror
