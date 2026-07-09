@@ -6247,7 +6247,7 @@ Common options:
 async function runWorkspace(args) {
   if (args.length === 0 || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
     console.log(`Usage:
-  od workspace projects list --workspace <id> [--view drafts|team|all] [--json]
+  od workspace projects list --workspace <id> [--view recent|drafts|team|all] [--json]
   od workspace projects move <projectId> --workspace <id> --visibility personal|team [--json]
   od workspace projects batch-delete --workspace <id> --project <id> [--project <id> ...] [--json]
   od workspace projects batch-move --workspace <id> --visibility personal|team --project <id> [--project <id> ...] [--json]

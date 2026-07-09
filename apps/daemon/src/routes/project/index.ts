@@ -1382,8 +1382,8 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       workspaceId: ctx.workspaceId,
       visibility,
       resourceState: 'active',
-      createdByWorkspaceMemberId: ctx.workspaceMemberId,
-      updatedByWorkspaceMemberId: ctx.workspaceMemberId,
+      createdByWorkspaceMemberId: null,
+      updatedByWorkspaceMemberId: null,
       syncState: 'local_only',
       resourceHubResourceId: null,
       cloudTombstonedAt: null,
@@ -1693,8 +1693,8 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         ensureWorkspaceProjection(project, ctx, 'personal');
       }
       const view = typeof req.query.view === 'string' ? req.query.view : 'all';
-      if (view !== 'all' && view !== 'drafts' && view !== 'team') {
-        return sendApiError(res, 400, 'BAD_REQUEST', 'view must be all, drafts, or team');
+      if (view !== 'all' && view !== 'recent' && view !== 'drafts' && view !== 'team') {
+        return sendApiError(res, 400, 'BAD_REQUEST', 'view must be all, recent, drafts, or team');
       }
       const owner = typeof req.query.owner === 'string' ? req.query.owner : 'all';
       const visibility = typeof req.query.visibility === 'string' ? req.query.visibility : 'all';
@@ -1708,6 +1708,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
           if (view === 'drafts') {
             return project.visibility === 'personal' && project.createdByWorkspaceMemberId === ctx.workspaceMemberId;
           }
+          if (view === 'recent') return project.visibility === 'personal';
           if (view === 'team') return project.visibility === 'team';
           if (visibility === 'personal' || visibility === 'team') return project.visibility === visibility;
           if (owner === 'mine') return project.createdByWorkspaceMemberId === ctx.workspaceMemberId;
@@ -1749,6 +1750,9 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       if (!validVisibility(visibility)) {
         return sendApiError(res, 400, 'BAD_REQUEST', 'visibility must be personal or team');
       }
+      if (visibility === 'personal') {
+        return sendApiError(res, 403, 'PROJECT_UNSHARE_UNSUPPORTED', 'moving team projects back to personal is not supported yet');
+      }
       const wp = ensureWorkspaceProjection(project, ctx, 'personal');
       const row = listWorkspaceProjects(db, ctx.workspaceId).find((item: any) => item.id === project.id);
       if (!row || !wp) return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'not found');
@@ -1778,6 +1782,9 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       const projectIds = Array.isArray(req.body?.projectIds) ? req.body.projectIds.filter((id: unknown) => typeof id === 'string') : [];
       if (!validVisibility(visibility) || projectIds.length === 0) {
         return sendApiError(res, 400, 'BAD_REQUEST', 'projectIds and visibility are required');
+      }
+      if (visibility === 'personal') {
+        return sendApiError(res, 403, 'PROJECT_UNSHARE_UNSUPPORTED', 'moving team projects back to personal is not supported yet');
       }
       const rows = workspaceProjectRowsForIds(projectIds, ctx);
       const summaries = projectIds.map((id: string) => {
