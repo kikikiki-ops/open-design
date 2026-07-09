@@ -29,6 +29,21 @@
 
 ---
 
+## Table of Contents
+
+- [What is Open Design](#what-is-open-design)
+- [Product tour](#product-tour)
+- [Platform Compatibility](#platform-compatibility)
+- [Demo](#demo)
+- [Why Open Design](#why-open-design)
+- [Quick start](#quick-start)
+- [Use Open Design from your coding agent](#use-open-design-from-your-coding-agent)
+- [Skills](#skills)
+- [Design Systems](#design-systems)
+- [Contributing](#contributing)
+- [Contributors](#contributors)
+- [License](#license)
+
 ## What is Open Design
 
 🎨 **The open-source Claude Design alternative.** &nbsp;🖥️ **Local-first native desktop app for macOS and Windows.** &nbsp;⚡ **Composable skills, brand-grade `DESIGN.md` design systems, and ready-to-use plugins.** &nbsp;🖼️ Generates **web · desktop · mobile prototypes**, **live dashboards / artifacts**, **decks**, **images**, **video**, plus **HyperFrames** motion graphics. 🔒 Sandboxed iframe preview · HTML / PDF / PPTX / MP4 export. &nbsp;🤖 **Runs on Claude Code · OpenClaw · Codex · Cursor · OpenCode · Qwen · Copilot · Amp · Hermes · Kimi · Antigravity and 22 local CLIs**, or any OpenAI-compatible endpoint via BYOK.
