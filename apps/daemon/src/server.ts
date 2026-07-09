@@ -461,7 +461,7 @@ import {
   sanitizeName,
   sanitizePath,
   searchProjectFiles,
-  resolveProjectDir,
+  stageProjectDirsForDelete,
   resolveProjectFilePath,
   writeProjectFile,
   reconcileHtmlArtifactManifest,
@@ -4091,6 +4091,7 @@ export async function startServer({
     updateProject,
     dbDeleteProject,
     removeProjectDir,
+    stageProjectDirsForDelete,
     validateLinkedDirs,
   };
   const projectFileDeps = {

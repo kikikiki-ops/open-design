@@ -1144,6 +1144,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
     updateProject,
     dbDeleteProject,
     removeProjectDir,
+    stageProjectDirsForDelete,
     ensureWorkspaceProject,
     getWorkspaceProject,
     listWorkspaceProjects,
@@ -1816,8 +1817,14 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       const deleteMany = db.transaction((ids: string[]) => {
         for (const id of ids) dbDeleteProject(db, id);
       });
-      for (const id of projectIds) await removeProjectDir(PROJECTS_DIR, id);
-      deleteMany(projectIds);
+      const stagedDelete = await stageProjectDirsForDelete(PROJECTS_DIR, projectIds, randomId());
+      try {
+        deleteMany(projectIds);
+      } catch (error) {
+        await stagedDelete.rollback();
+        throw error;
+      }
+      await stagedDelete.commit();
       res.json({ ok: true, deletedProjectIds: projectIds });
     } catch (err: any) {
       sendApiError(res, 400, 'BAD_REQUEST', String(err));

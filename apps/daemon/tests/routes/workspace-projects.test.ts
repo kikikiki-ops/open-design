@@ -238,6 +238,9 @@ describe('workspace project routes', () => {
     const removeProjectDir = vi.fn(async () => {
       throw new Error('cleanup failed');
     });
+    const stageProjectDirsForDelete = vi.fn(async () => {
+      throw new Error('cleanup failed');
+    });
     const app = express();
     app.use(express.json());
     registerProjectRoutes(app, workspaceProjectRouteDeps({
@@ -245,6 +248,7 @@ describe('workspace project routes', () => {
       projectId,
       dbDeleteProject,
       removeProjectDir,
+      stageProjectDirsForDelete,
     }));
     const routeServer = await listen(app);
     try {
@@ -254,7 +258,8 @@ describe('workspace project routes', () => {
         body: JSON.stringify({ projectIds: [projectId] }),
       });
       expect(deleteResp.status).toBe(400);
-      expect(removeProjectDir).toHaveBeenCalledWith('projects', projectId);
+      expect(stageProjectDirsForDelete).toHaveBeenCalledWith('projects', [projectId], 'id');
+      expect(removeProjectDir).not.toHaveBeenCalled();
       expect(dbDeleteProject).not.toHaveBeenCalled();
     } finally {
       await close(routeServer.server);
@@ -398,12 +403,14 @@ function workspaceProjectRouteDeps({
   projectId,
   dbDeleteProject,
   removeProjectDir,
+  stageProjectDirsForDelete,
   teamProjectCatalog,
 }: {
   workspaceId: string;
   projectId: string;
   dbDeleteProject: ReturnType<typeof vi.fn>;
   removeProjectDir: ReturnType<typeof vi.fn>;
+  stageProjectDirsForDelete?: ReturnType<typeof vi.fn>;
   teamProjectCatalog?: unknown;
 }) {
   const now = 1;
@@ -457,6 +464,10 @@ function workspaceProjectRouteDeps({
       updateProject: noop,
       dbDeleteProject,
       removeProjectDir,
+      stageProjectDirsForDelete: stageProjectDirsForDelete ?? vi.fn(async () => ({
+        rollback: vi.fn(async () => {}),
+        commit: vi.fn(async () => {}),
+      })),
       ensureWorkspaceProject: () => workspaceRow,
       getWorkspaceProject: () => workspaceRow,
       listWorkspaceProjects: () => [workspaceRow],
