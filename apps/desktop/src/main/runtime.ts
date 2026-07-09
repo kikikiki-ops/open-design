@@ -26,6 +26,7 @@ import { openValidatedDirectory } from "./open-path.js";
 import { exportArtifact as exportArtifactFromHtml } from "./artifact-export.js";
 import { createElectronPdfTarget, exportPdfFromHtml, savePrintReadyDocumentAsPdf } from "./pdf-export.js";
 import { SPLASH_VIDEO_DATA_URL } from "./splash-video.js";
+import { RendererCrashLoopBreaker } from "./renderer-crash-loop.js";
 import type { PrintReadyPdfOptions } from "./pdf-export.js";
 import type { DesktopUpdater } from "./updater.js";
 
@@ -971,6 +972,78 @@ function createPendingHtml(): string {
 }
 
 /**
+ * Last-resort error screen shown when the renderer crash-loop breaker opens.
+ * A deterministic renderer crash reloads-and-crashes forever, leaving a blank
+ * window; parking here gives the user a calm explanation instead. It is a
+ * fully static, dependency-free page (no daemon, no preload, no network) so it
+ * renders even when everything else is wedged, and the failing app bundle
+ * cannot take it down. Recovery is automatic (the poll loop re-arms after a
+ * quiet cooldown); reinstalling is the manual escape hatch.
+ */
+function createRendererCrashHtml(): string {
+  return `data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Open Design</title>
+    <style>
+      :root { color-scheme: light dark; }
+      html, body {
+        background: #f2f4f5;
+        color: #2b3238;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+      }
+      body {
+        align-items: center;
+        display: flex;
+        justify-content: center;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      .panel {
+        max-width: 440px;
+        padding: 32px;
+        text-align: center;
+      }
+      .title {
+        font-size: 17px;
+        font-weight: 600;
+        margin: 0 0 10px;
+      }
+      .body {
+        color: #5b636a;
+        font-size: 14px;
+        line-height: 1.55;
+        margin: 0 0 6px;
+      }
+      .hint {
+        color: #8a929a;
+        font-size: 13px;
+        line-height: 1.5;
+        margin: 14px 0 0;
+      }
+      @media (prefers-color-scheme: dark) {
+        html, body { background: #1c2024; color: #e6e9ec; }
+        .body { color: #aeb6bd; }
+        .hint { color: #7c848b; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="panel">
+      <p class="title">Open Design keeps closing on this device</p>
+      <p class="body">The app window crashed several times in a row, so it has paused to avoid getting stuck reloading.</p>
+      <p class="body">It will try to recover on its own in a few minutes.</p>
+      <p class="hint">If this keeps happening, quitting and reinstalling Open Design usually resolves it.</p>
+    </div>
+  </body>
+</html>`)}`;
+}
+
+/**
  * Boot phases surfaced as a muted status line under the splash logo. The cold
  * boot on a slow machine can hold the splash's settled final frame for many
  * seconds; the stage text, the step counter ("3/7"), the filling progress bar,
@@ -1532,7 +1605,7 @@ function checkOptionsFromHost(options: unknown): { autoDownload?: boolean } | un
 
 async function reportRendererCrash(
   options: DesktopRuntimeOptions,
-  properties: { reason: string; exit_code: number | null },
+  properties: { reason: string; exit_code: number | null; loop_tripped?: boolean },
 ): Promise<void> {
   try {
     // discoverDaemonUrl returns the real http://127.0.0.1:<port> URL the
@@ -1551,6 +1624,9 @@ async function reportRendererCrash(
         properties: {
           reason: properties.reason,
           exit_code: properties.exit_code,
+          // Marks the single crash that tripped the loop breaker, so a crash
+          // loop is one flagged event instead of thousands of anonymous ones.
+          loop_tripped: properties.loop_tripped ?? false,
         },
       }),
     });
@@ -1792,6 +1868,12 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
   // True while a `tick()` is mid-flight, so load failures do not schedule two
   // independent polling loops.
   let ticking = false;
+  // Bounds the reload loop when the renderer crashes deterministically (a
+  // GPU/V8 CHECK, a corrupt profile): without it a wedged device reloads →
+  // crashes → reloads forever, staying blank and flooding telemetry (one
+  // 0.14.0 machine logged 26k renderer-crash events in a day). When it opens we
+  // park on a recoverable error screen and re-arm after a quiet cooldown.
+  const rendererCrashLoop = new RendererCrashLoopBreaker();
 
   const consoleEntries: DesktopConsoleEntry[] = [];
   const petWindow = createDesktopPetWindow(preloadPath, options.osLocale);
@@ -1885,14 +1967,34 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
       reason: details.reason,
       url: window.webContents.getURL(),
     });
-    void reportRendererCrash(options, {
-      reason: details.reason,
-      exit_code: typeof details.exitCode === "number" ? details.exitCode : null,
-    });
-    // A clean-exit is intentional teardown; a crash / OOM / OS kill of a
-    // backgrounded renderer leaves the window blank, so flag it for the poll
-    // loop to reload the app.
-    if (details.reason !== "clean-exit") markRendererFailed();
+    // A clean-exit is intentional teardown; only a crash / OOM / OS kill feeds
+    // the crash-loop breaker and triggers recovery.
+    const isCrash = details.reason !== "clean-exit";
+    const outcome = isCrash
+      ? rendererCrashLoop.recordCrash(Date.now())
+      : { tripped: false, suppressTelemetry: rendererCrashLoop.isOpen(), justOpened: false };
+    // Report every crash up to and including the one that trips the breaker so
+    // the loop is visible in analytics, then go quiet — one wedged device must
+    // not emit tens of thousands of identical events.
+    if (!outcome.suppressTelemetry) {
+      void reportRendererCrash(options, {
+        reason: details.reason,
+        exit_code: typeof details.exitCode === "number" ? details.exitCode : null,
+        loop_tripped: outcome.tripped,
+      });
+    }
+    if (!isCrash) return;
+    if (outcome.tripped) {
+      // Breaker open: stop the poll loop from cycling a deterministic crash.
+      // Show the recoverable error screen once (on the opening crash) instead
+      // of reloading into another blank window; the loop re-arms after the
+      // cooldown so a transient fault still self-heals.
+      if (outcome.justOpened) void showRendererCrashScreen();
+      return;
+    }
+    // A crash / OOM / OS kill of a backgrounded renderer leaves the window
+    // blank, so flag it for the poll loop to reload the app.
+    markRendererFailed();
   });
   // A failed main-frame navigation parks the renderer on chrome-error:// (blank
   // white) with no auto-retry. errorCode -3 (ABORTED) is a normal navigation
@@ -2243,8 +2345,25 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
   // the `rendererFailed` branch) and clears the flag once the load succeeds. If
   // the web server is still unreachable, discovery returns null and the loop
   // naturally backs off to RUNNING_POLL_MS until it returns.
+  // Park the wedged window on a static, self-contained error page (trivial HTML
+  // that the failing app renderer cannot take down) instead of an endless blank
+  // reload. The page tells the user recovery is automatic and offers reinstall
+  // as the manual escape hatch.
+  const showRendererCrashScreen = () => {
+    if (stopped || window.isDestroyed()) return;
+    // Loading the crash screen resets currentUrl so the next successful reload
+    // (after re-arm) is treated as a fresh navigation.
+    currentUrl = null;
+    pendingUrl = null;
+    void window.loadURL(createRendererCrashHtml()).catch(() => undefined);
+    if (!window.isVisible()) window.show();
+  };
+
   const markRendererFailed = () => {
     if (stopped || window.isDestroyed()) return;
+    // Breaker open: stay parked on the crash screen; the tick's cooldown re-arm
+    // is the only path back to reloading.
+    if (rendererCrashLoop.isOpen()) return;
     rendererFailed = true;
     // Mid-tick failures (a rejecting loadURL) are rescheduled by the tick's own
     // catch/success path; scheduling here too would spawn a second poll loop.
@@ -2261,6 +2380,17 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
 
     ticking = true;
     try {
+      // Crash-loop breaker open: park on the crash screen instead of reloading a
+      // deterministically-crashing renderer. Re-arm once the cooldown has
+      // elapsed with no further crash, then fall through for one reload attempt.
+      if (rendererCrashLoop.isOpen()) {
+        if (rendererCrashLoop.rearmIfCooledDown(Date.now())) {
+          rendererFailed = true;
+        } else {
+          schedule(RUNNING_POLL_MS);
+          return;
+        }
+      }
       const url = await options.discoverUrl();
       // Reload when the discovered URL changes, OR when the renderer is in a
       // failed/blank state (URL unchanged but the page died), so a window
