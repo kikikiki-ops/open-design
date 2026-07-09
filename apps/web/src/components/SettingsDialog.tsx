@@ -3731,8 +3731,19 @@ export function SettingsDialog({
                     selected.id === 'amr'
                       ? (option) =>
                           option.enabled === false
-                            ? '请升级后使用高级模型'
+                            ? t('settings.amrModelUpgradeHint')
                             : null
+                      : undefined
+                  }
+                  onDisabledOptionUpgrade={
+                    selected.id === 'amr'
+                      ? () =>
+                          void openExternalUrl(
+                            attributedAmrSettingsUrl(
+                              amrPlansUrlForProfile(amrCardStatus?.profile),
+                              'settings_amr_upgrade',
+                            ),
+                          )
                       : undefined
                   }
                 />

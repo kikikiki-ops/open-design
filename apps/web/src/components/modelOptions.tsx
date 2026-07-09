@@ -2,6 +2,7 @@ import { createPortal } from 'react-dom';
 import { forwardRef, useEffect, useLayoutEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { AgentModelOption } from '../types';
 import { useT } from '../i18n';
+import { Icon } from './Icon';
 import {
   getModelCostTier,
   getModelCapabilityTag,
@@ -73,6 +74,14 @@ interface SearchableModelSelectProps
   popoverClassName?: string;
   additionalOptions?: Array<{ value: string; label: string }>;
   disabledOptionHint?: (option: AgentModelOption) => string | null | undefined;
+  /**
+   * When provided together with a `disabledOptionHint`, a disabled option
+   * renders a Lock icon at its trailing edge instead of the inline hint text.
+   * Hovering the lock surfaces the hint; clicking it invokes this callback
+   * (e.g. open the AMR console upgrade destination). Available models are
+   * unaffected. Shared by InlineModelSwitcher, SettingsDialog, and AvatarMenu.
+   */
+  onDisabledOptionUpgrade?: (option: AgentModelOption) => void;
   minSearchableOptions?: number;
   popoverMinWidth?: number;
 }
@@ -91,6 +100,7 @@ export const SearchableModelSelect = forwardRef<
     popoverClassName,
     additionalOptions,
     disabledOptionHint,
+    onDisabledOptionUpgrade,
     minSearchableOptions = 8,
     popoverMinWidth,
     className,
@@ -309,6 +319,8 @@ export const SearchableModelSelect = forwardRef<
                   const active = option.id === value;
                   const disabled = option.enabled === false;
                   const disabledHint = disabled ? disabledOptionHint?.(option) : null;
+                  const showUpgradeLock =
+                    disabled && !!disabledHint && !!onDisabledOptionUpgrade;
                   const tag = getModelCapabilityTag(option);
                   const tagLabel = tag
                     ? t(MODEL_CAPABILITY_TAG_LABEL_KEYS[tag])
@@ -325,6 +337,75 @@ export const SearchableModelSelect = forwardRef<
                   const optionDescriptionIds = [optionCostId, optionTagId, optionDisabledId]
                     .filter(Boolean)
                     .join(' ') || undefined;
+                  const optionContent = (
+                    <span className="model-select-searchable__option-content">
+                      <span className="model-select-searchable__option-copy">
+                        <span className="model-select-searchable__option-label">
+                          <span id={optionLabelId}>{option.label}</span>
+                          {showUpgradeLock ? (
+                            <button
+                              type="button"
+                              className="model-select-searchable__option-lock-inline od-tooltip"
+                              data-testid="model-option-upgrade-lock"
+                              id={optionDisabledId}
+                              data-tooltip={disabledHint ?? undefined}
+                              data-tooltip-placement="top"
+                              title={disabledHint ?? undefined}
+                              aria-label={disabledHint ?? undefined}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                onDisabledOptionUpgrade?.(option);
+                              }}
+                            >
+                              <Icon name="lock" size={13} />
+                            </button>
+                          ) : null}
+                        </span>
+                        {costLabel ? (
+                          <span
+                            className="model-select-searchable__option-meta"
+                            id={optionCostId}
+                          >
+                            {costLabel}
+                          </span>
+                        ) : null}
+                        {disabledHint && !showUpgradeLock ? (
+                          <span
+                            className="model-select-searchable__option-meta"
+                            id={optionDisabledId}
+                          >
+                            {disabledHint}
+                          </span>
+                        ) : null}
+                      </span>
+                      {tagLabel ? (
+                        <span
+                          className="model-select-searchable__option-badge"
+                          data-tag={tag}
+                          id={optionTagId}
+                        >
+                          {tagLabel}
+                        </span>
+                      ) : null}
+                    </span>
+                  );
+                  if (showUpgradeLock) {
+                    return (
+                      <div
+                        key={option.id}
+                        role="option"
+                        tabIndex={-1}
+                        aria-selected={active}
+                        aria-disabled="true"
+                        aria-labelledby={optionLabelId}
+                        aria-describedby={optionDescriptionIds}
+                        className={`model-select-searchable__option${active ? ' is-active' : ''} is-disabled`}
+                        data-selected={active ? 'true' : undefined}
+                      >
+                        {optionContent}
+                      </div>
+                    );
+                  }
                   return (
                     <button
                       key={option.id}
@@ -343,38 +424,7 @@ export const SearchableModelSelect = forwardRef<
                         setOpen(false);
                       }}
                     >
-                      <span className="model-select-searchable__option-content">
-                        <span className="model-select-searchable__option-copy">
-                          <span className="model-select-searchable__option-label">
-                            <span id={optionLabelId}>{option.label}</span>
-                          </span>
-                          {costLabel ? (
-                            <span
-                              className="model-select-searchable__option-meta"
-                              id={optionCostId}
-                            >
-                              {costLabel}
-                            </span>
-                          ) : null}
-                          {disabledHint ? (
-                            <span
-                              className="model-select-searchable__option-meta"
-                              id={optionDisabledId}
-                            >
-                              {disabledHint}
-                            </span>
-                          ) : null}
-                        </span>
-                        {tagLabel ? (
-                          <span
-                            className="model-select-searchable__option-badge"
-                            data-tag={tag}
-                            id={optionTagId}
-                          >
-                            {tagLabel}
-                          </span>
-                        ) : null}
-                      </span>
+                      {optionContent}
                     </button>
                   );
                 })}

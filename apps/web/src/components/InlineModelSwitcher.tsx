@@ -437,6 +437,17 @@ export function InlineModelSwitcher({
 
   const currentModelLabel =
     currentAgent?.models?.find((m) => m.id === currentModelId)?.label ?? null;
+  const inlineAgentModelOptions = useMemo(() => {
+    const models = currentAgent?.models ?? [];
+    if (currentAgent?.id !== 'amr') return models;
+    const enabled: typeof models = [];
+    const disabled: typeof models = [];
+    for (const model of models) {
+      if (model.enabled === false) disabled.push(model);
+      else enabled.push(model);
+    }
+    return [...enabled, ...disabled];
+  }, [currentAgent]);
   const amrLoggedIn = amrStatus?.loggedIn === true;
 
   useEffect(() => {
@@ -964,7 +975,7 @@ export function InlineModelSwitcher({
                     popoverTestId="inline-model-switcher-agent-model-popover"
                     searchPlaceholder={t('designs.searchPlaceholder')}
                     aria-label={t('inlineSwitcher.modelLabel')}
-                    models={currentAgent.models}
+                    models={inlineAgentModelOptions}
                     value={currentModelId ?? ''}
                     onChange={(nextValue) => {
                       trackExecutionSettingsPopoverClick(analytics.track, {
@@ -994,8 +1005,42 @@ export function InlineModelSwitcher({
                       currentAgent?.id === 'amr'
                         ? (option) =>
                             option.enabled === false
-                              ? '请升级后使用高级模型'
+                              ? t('settings.amrModelUpgradeHint')
                               : null
+                        : undefined
+                    }
+                    onDisabledOptionUpgrade={
+                      currentAgent?.id === 'amr'
+                        ? () => {
+                            const attribution = recordAmrEntry(
+                              analytics.track,
+                              'inline_amr_upgrade',
+                              new Date(),
+                              {
+                                metricsConsent:
+                                  config.telemetry?.metrics === true,
+                              },
+                            );
+                            const deviceId = amrHandoffDeviceId({
+                              metricsConsent:
+                                config.telemetry?.metrics === true,
+                              resolvedDeviceId: getResolvedDeviceId(),
+                              installationId: config.installationId,
+                            });
+                            window.open(
+                              attributedAmrUrl(
+                                amrPlansUrlForProfile(
+                                  amrStatus?.profile ??
+                                    config.agentCliEnv?.amr
+                                      ?.OPEN_DESIGN_AMR_PROFILE,
+                                ),
+                                attribution,
+                                deviceId,
+                              ),
+                              '_blank',
+                              'noopener,noreferrer',
+                            );
+                          }
                         : undefined
                     }
                   />

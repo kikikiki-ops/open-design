@@ -141,4 +141,44 @@ describe('SearchableModelSelect', () => {
     fireEvent.click(disabledOption);
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it('renders a lock affordance for disabled options that opens the upgrade destination', async () => {
+    const onChange = vi.fn();
+    const onDisabledOptionUpgrade = vi.fn();
+    render(
+      <SearchableModelSelect
+        models={[
+          { id: 'deepseek-v4-flash', label: 'deepseek-v4-flash', default: true },
+          { id: 'deepseek-v4-pro', label: 'deepseek-v4-pro', enabled: false },
+        ]}
+        value="deepseek-v4-flash"
+        onChange={onChange}
+        searchPlaceholder="Search models"
+        disabledOptionHint={(option) =>
+          option.enabled === false ? 'Upgrade to use' : null
+        }
+        onDisabledOptionUpgrade={onDisabledOptionUpgrade}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('combobox'));
+
+    // The inline hint text is replaced by the lock affordance whose accessible
+    // name (and tooltip) carry the hint.
+    const disabledOption = await screen.findByRole('option', {
+      name: /^deepseek-v4-pro$/,
+    });
+    expect(disabledOption.hasAttribute('disabled')).toBe(true);
+
+    const lock = screen.getByTestId('model-option-upgrade-lock');
+    expect(lock.getAttribute('aria-label')).toBe('Upgrade to use');
+    expect(lock.getAttribute('title')).toBe('Upgrade to use');
+
+    fireEvent.click(lock);
+    expect(onDisabledOptionUpgrade).toHaveBeenCalledTimes(1);
+    expect(onDisabledOptionUpgrade).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'deepseek-v4-pro' }),
+    );
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });
