@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import type { ComponentProps } from 'react';
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ProjectView,
@@ -3161,6 +3161,219 @@ describe('ProjectView daemon cleanup', () => {
       ),
     ).toBe(false);
     expect(patchPreviewCommentStatus).not.toHaveBeenCalled();
+  });
+
+  it('keeps a live daemon run non-terminal when onDone fires before the daemon finishes, then finalizes from the later daemon status', async () => {
+    const runCreatedAt = Date.now();
+    const daemonTerminalUpdatedAt = runCreatedAt + 10_000;
+    let reattachHandlers: { onDone: () => void } | null = null;
+
+    listConversations.mockResolvedValue([{ id: 'conv-1', title: 'Conversation' }]);
+    listMessages.mockResolvedValue([]);
+    fetchPreviewComments.mockResolvedValue([]);
+    loadTabs.mockResolvedValue({ tabs: [], activeTabId: null });
+    fetchProjectFiles.mockResolvedValue([]);
+    fetchProjectDesignSystemPackageAudit.mockResolvedValue(null);
+    fetchLiveArtifacts.mockResolvedValue([]);
+    fetchSkill.mockResolvedValue(null);
+    fetchDesignSystem.mockResolvedValue(null);
+    getTemplate.mockResolvedValue(null);
+    listActiveChatRuns.mockResolvedValue([]);
+    fetchChatRunStatus
+      .mockResolvedValueOnce({
+        id: 'run-live-onDone-before-terminal',
+        status: 'running',
+        createdAt: runCreatedAt,
+        updatedAt: runCreatedAt + 1,
+        exitCode: null,
+        signal: null,
+      })
+      .mockResolvedValueOnce({
+        id: 'run-live-onDone-before-terminal',
+        status: 'running',
+        createdAt: runCreatedAt,
+        updatedAt: runCreatedAt + 2,
+        exitCode: null,
+        signal: null,
+      })
+      .mockResolvedValueOnce({
+        id: 'run-live-onDone-before-terminal',
+        status: 'succeeded',
+        createdAt: runCreatedAt,
+        updatedAt: daemonTerminalUpdatedAt,
+        exitCode: 0,
+        signal: null,
+      });
+    reattachDaemonRun.mockImplementation(async (input: unknown) => {
+      reattachHandlers = (input as { handlers: { onDone: () => void } }).handlers;
+      return new Promise<void>(() => {});
+    });
+    streamViaDaemon.mockImplementation(async (options: {
+      onRunCreated?: (runId: string) => void;
+      onRunStatus?: (status: NonNullable<ChatMessage['runStatus']>) => void;
+      handlers: { onDone: (fullText?: string) => void };
+    }) => {
+      options.onRunCreated?.('run-live-onDone-before-terminal');
+      options.onRunStatus?.('running');
+      options.handlers.onDone('partial listener completion');
+    });
+
+    chatPaneSpy.mockClear();
+
+    render(
+      <ProjectView
+        project={{ id: 'project-live-onDone-before-terminal', name: 'Project', skillId: null, designSystemId: null } as never}
+        routeFileName={null}
+        config={{ mode: 'daemon', agentId: 'agent-1', notifications: undefined, agentModels: {} } as never}
+        agents={[{ id: 'agent-1', name: 'OpenCode', models: [] } as never]}
+        skills={[]}
+        designTemplates={[]}
+        designSystems={[]}
+        daemonLive
+        onModeChange={() => {}}
+        onAgentChange={() => {}}
+        onAgentModelChange={() => {}}
+        onRefreshAgents={() => {}}
+        onOpenSettings={() => {}}
+        onBack={() => {}}
+        onClearPendingPrompt={() => {}}
+        onTouchProject={() => {}}
+        onProjectChange={() => {}}
+        onProjectsRefresh={() => {}}
+      />,
+    );
+
+    const sendProps = await waitForReadyChatPaneProps();
+    await sendProps!.onSend!('keep waiting until the daemon is actually done', [], []);
+
+    await waitFor(() =>
+      expect(fetchChatRunStatus).toHaveBeenCalledWith('run-live-onDone-before-terminal'),
+    );
+    const preTerminalConversations = chatPaneSpy.mock.calls.at(-1)?.[0]?.conversations as
+      | Array<{ id: string; latestRun?: { status?: string; endedAt?: number } }>
+      | undefined;
+    const preTerminalMessages = chatPaneSpy.mock.calls.at(-1)?.[0]?.messages as
+      | Array<{ role: string; runId?: string; runStatus?: string; endedAt?: number }>
+      | undefined;
+    expect(
+      preTerminalConversations?.find((conversation) => conversation.id === 'conv-1')?.latestRun?.status,
+    ).toBe('running');
+    expect(
+      preTerminalMessages?.find((message) => message.role === 'assistant' && message.runId === 'run-live-onDone-before-terminal')?.runStatus,
+    ).toBe('running');
+
+    await waitFor(() => expect(reattachHandlers).toBeTruthy());
+    await act(async () => {
+      reattachHandlers?.onDone();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      const succeededSave = saveMessage.mock.calls.find(
+        (call) =>
+          call[0] === 'project-live-onDone-before-terminal' &&
+          call[2]?.role === 'assistant' &&
+          call[2]?.runId === 'run-live-onDone-before-terminal' &&
+          call[2]?.runStatus === 'succeeded',
+      );
+      expect(succeededSave).toBeTruthy();
+    });
+    const succeededSave = saveMessage.mock.calls.find(
+      (call) =>
+        call[0] === 'project-live-onDone-before-terminal' &&
+        call[2]?.role === 'assistant' &&
+        call[2]?.runId === 'run-live-onDone-before-terminal' &&
+        call[2]?.runStatus === 'succeeded',
+    );
+    expect(succeededSave?.[2]?.endedAt).toBe(daemonTerminalUpdatedAt);
+
+    const finalizedConversations = chatPaneSpy.mock.calls.at(-1)?.[0]?.conversations as
+      | Array<{ id: string; latestRun?: { status?: string; endedAt?: number } }>
+      | undefined;
+    const finalizedConversation = finalizedConversations?.find(
+      (conversation) => conversation.id === 'conv-1',
+    );
+    expect(finalizedConversation?.latestRun?.status).toBe('succeeded');
+    expect(finalizedConversation?.latestRun?.endedAt).toBe(daemonTerminalUpdatedAt);
+  });
+
+  it('uses the daemon terminal timestamp for a live terminal run-status callback instead of client time', async () => {
+    const runCreatedAt = Date.now();
+    const daemonTerminalUpdatedAt = runCreatedAt + 20_000;
+
+    listConversations.mockResolvedValue([{ id: 'conv-1', title: 'Conversation' }]);
+    listMessages.mockResolvedValue([]);
+    fetchPreviewComments.mockResolvedValue([]);
+    loadTabs.mockResolvedValue({ tabs: [], activeTabId: null });
+    fetchProjectFiles.mockResolvedValue([]);
+    fetchProjectDesignSystemPackageAudit.mockResolvedValue(null);
+    fetchLiveArtifacts.mockResolvedValue([]);
+    fetchSkill.mockResolvedValue(null);
+    fetchDesignSystem.mockResolvedValue(null);
+    getTemplate.mockResolvedValue(null);
+    listActiveChatRuns.mockResolvedValue([]);
+    fetchChatRunStatus.mockResolvedValue({
+      id: 'run-live-terminal-status',
+      status: 'succeeded',
+      createdAt: runCreatedAt,
+      updatedAt: daemonTerminalUpdatedAt,
+      exitCode: 0,
+      signal: null,
+    });
+    streamViaDaemon.mockImplementation(async (options: {
+      onRunCreated?: (runId: string) => void;
+      onRunStatus?: (status: NonNullable<ChatMessage['runStatus']>) => void;
+    }) => {
+      options.onRunCreated?.('run-live-terminal-status');
+      options.onRunStatus?.('succeeded');
+    });
+
+    chatPaneSpy.mockClear();
+
+    render(
+      <ProjectView
+        project={{ id: 'project-live-terminal-status', name: 'Project', skillId: null, designSystemId: null } as never}
+        routeFileName={null}
+        config={{ mode: 'daemon', agentId: 'agent-1', notifications: undefined, agentModels: {} } as never}
+        agents={[{ id: 'agent-1', name: 'OpenCode', models: [] } as never]}
+        skills={[]}
+        designTemplates={[]}
+        designSystems={[]}
+        daemonLive
+        onModeChange={() => {}}
+        onAgentChange={() => {}}
+        onAgentModelChange={() => {}}
+        onRefreshAgents={() => {}}
+        onOpenSettings={() => {}}
+        onBack={() => {}}
+        onClearPendingPrompt={() => {}}
+        onTouchProject={() => {}}
+        onProjectChange={() => {}}
+        onProjectsRefresh={() => {}}
+      />,
+    );
+
+    const sendProps = await waitForReadyChatPaneProps();
+    await sendProps!.onSend!('finalize from daemon status callback', [], []);
+
+    await waitFor(() =>
+      expect(fetchChatRunStatus).toHaveBeenCalledWith('run-live-terminal-status'),
+    );
+    const conversations = chatPaneSpy.mock.calls.at(-1)?.[0]?.conversations as
+      | Array<{ id: string; latestRun?: { status?: string; endedAt?: number } }>
+      | undefined;
+    const conversation = conversations?.find((entry) => entry.id === 'conv-1');
+    expect(conversation?.latestRun?.status).toBe('succeeded');
+    expect(conversation?.latestRun?.endedAt).toBe(daemonTerminalUpdatedAt);
+
+    const messages = chatPaneSpy.mock.calls.at(-1)?.[0]?.messages as
+      | Array<{ role: string; runId?: string; runStatus?: string; endedAt?: number }>
+      | undefined;
+    const assistant = messages?.find(
+      (message) => message.role === 'assistant' && message.runId === 'run-live-terminal-status',
+    );
+    expect(assistant?.runStatus).toBe('succeeded');
+    expect(assistant?.endedAt).toBe(daemonTerminalUpdatedAt);
   });
 
   it('does not persist a live generic disconnect as succeeded with partial streamed text', async () => {
