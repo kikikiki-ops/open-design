@@ -18,6 +18,7 @@ import {
   contextToResourceHubPrincipal,
   createResourceHubPublishAdapterFromEnv,
 } from './resource-hub-publish-adapter.js';
+import type { ResourceHubPrincipal } from '../integrations/resource-hub.js';
 import {
   projectResourceIdFor,
   type VelaTeamProjectCatalogClient,
@@ -53,7 +54,7 @@ export interface CollabRuntime {
    * `ownerMemberId` is the sharer's member id — recorded so a member viewing the
    * project can tell whether it is their own (writer) or someone else's (read-only).
    */
-  requestTeamShare(projectId: string, ownerMemberId?: string): void;
+  requestTeamShare(projectId: string, share?: string | ResourceHubPrincipal): void;
   /** The member who shared this project, or null if not shared here. */
   projectOwnerMemberId(projectId: string): string | null;
   /**
@@ -102,6 +103,7 @@ export interface CreateCollabRuntimeOptions {
 function selectResourcePublishAdapter(
   resolveProjectDir: ((projectId: string) => string | Promise<string>) | undefined,
   workspaceContext: WorkspaceContextProvider,
+  getProjectPrincipal: (projectId?: string) => ResourceHubPrincipal | null | Promise<ResourceHubPrincipal | null>,
 ): ResourcePublishAdapter | null {
   if (!resolveProjectDir) return null;
   if (shouldUseVelaCliResourceTransport()) {
@@ -110,13 +112,19 @@ function selectResourcePublishAdapter(
       hasTeamIdentity: async () => contextHasTeamIdentity(await workspaceContext.current({})),
     });
   }
-  return createResourceHubPublishAdapterFromEnv(resolveProjectDir, async () =>
-    contextToResourceHubPrincipal(await workspaceContext.current({})),
-  );
+  return createResourceHubPublishAdapterFromEnv(resolveProjectDir, getProjectPrincipal);
 }
 
 export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): CollabRuntime {
   const workspaceContext = options.workspaceContext ?? createWorkspaceContextProviderFromEnv();
+  const sharePrincipals = new Map<string, ResourceHubPrincipal>();
+  const getProjectPrincipal = async (projectId?: string) => {
+    if (projectId) {
+      const principal = sharePrincipals.get(projectId);
+      if (principal) return principal;
+    }
+    return contextToResourceHubPrincipal(await workspaceContext.current({}));
+  };
   // Single identity source: whichever transport runs, the team-identity gate
   // derives from the same workspace context the web collab surface reads, so one
   // signed-in identity drives both. Transport precedence: an explicit adapter →
@@ -124,7 +132,7 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
   // → the in-process hub SDK adapter → the local stub.
   const adapter =
     options.adapter ??
-    selectResourcePublishAdapter(options.resolveProjectDir, workspaceContext) ??
+    selectResourcePublishAdapter(options.resolveProjectDir, workspaceContext, getProjectPrincipal) ??
     createStubResourcePublishAdapter();
   const published = new Map<string, number>();
   const syncStates = new Map<string, ProjectSyncState>();
@@ -135,7 +143,7 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
     projectId: string,
     syncState: 'pending_upload' | 'synced' | 'failed',
   ) {
-    const principal = contextToResourceHubPrincipal(await workspaceContext.current({}));
+    const principal = await getProjectPrincipal(projectId);
     if (!principal) return;
     await options.teamProjectCatalog?.upsert(
       {
@@ -187,10 +195,15 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
     publishedVersion: (projectId) => published.get(projectId) ?? null,
     projectSyncState: (projectId) => syncStates.get(projectId) ?? 'local_only',
     projectOwnerMemberId: (projectId) => owners.get(projectId) ?? null,
-    requestTeamShare(projectId, ownerMemberId) {
+    requestTeamShare(projectId, share) {
       // Record the sharer as the project's single writer so members can tell
       // apart their own project from one shared to them.
-      if (ownerMemberId) owners.set(projectId, ownerMemberId);
+      if (typeof share === 'string') {
+        owners.set(projectId, share);
+      } else if (share) {
+        owners.set(projectId, share.memberId);
+        sharePrincipals.set(projectId, share);
+      }
       // Pending until the publish confirms (onPublished → 'synced' / onError →
       // 'sync_failed'). Flushing at a run boundary publishes the stable state.
       syncStates.set(projectId, 'pending_upload');

@@ -1235,7 +1235,9 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       canDelete: canMutate,
       canDuplicate: canMutate,
       canMoveToTeam: canMutate && ctx.canShareProjects && wp.visibility === 'personal',
-      canMoveToPersonal: canMutate && wp.visibility === 'team',
+      // Team→personal needs a real unshare/tombstone seam first; otherwise the
+      // Vela catalog can keep advertising a supposedly personal project.
+      canMoveToPersonal: false,
       canExport: !frozen && ctx.memberStatus === 'active',
       canSendTo: !frozen && ctx.memberStatus === 'active',
       canRestoreVersion: canMutate,
@@ -1734,7 +1736,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
   function requestTeamShares(projectIds: string[], ctx: WorkspaceProjectContext, visibility: 'personal' | 'team') {
     if (visibility !== 'team') return;
     for (const projectId of projectIds) {
-      collabSync.requestTeamShare(projectId, ctx.workspaceMemberId);
+      collabSync.requestTeamShare(projectId, workspaceProjectPrincipal(ctx));
     }
   }
 

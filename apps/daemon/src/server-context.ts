@@ -3,6 +3,7 @@ import type { SkillInfo } from './skills.js';
 import type { DesignSystemSummary } from './design-systems/index.js';
 import type { RoutineRoutesService } from './routes/routine.js';
 import type { OpenDesignPublicMetadataService } from './services/open-design-public-metadata.js';
+import type { ResourceHubPrincipal } from './integrations/resource-hub.js';
 
 export interface HttpDeps {
   createSseResponse: (...args: any[]) => any;
@@ -141,17 +142,18 @@ export interface ServerContext {
   /**
    * C-lane collaboration seam for D's project-visibility routes. After a
    * successful personal→team move (D's move API), D's handler calls
-   * `collabSync.requestTeamShare(projectId, ownerMemberId)` in-process to trigger
+   * `collabSync.requestTeamShare(projectId, principal)` in-process to trigger
    * the team sync: the project is marked pending and published to the resource
    * hub so every teammate can discover + read it. Idempotent (safe to call again
-   * on a re-move). `ownerMemberId` is the member who performed the move — recorded
-   * as the project's single writer so members can tell their own project from a
-   * shared one. D gates the move itself on `canShareProjects`, so this seam does
-   * NOT re-check permission. See routes/collab-sync.ts for the equivalent HTTP
-   * seam (POST /collab/sync-intent) used by the demo surface.
+   * on a re-move). The principal is the same workspace/member that passed D's
+   * route-level permission check, so the side effect cannot publish/catalog
+   * under a different ambient workspace. D gates the move itself on
+   * `canShareProjects`, so this seam does NOT re-check permission. See
+   * routes/collab-sync.ts for the equivalent HTTP seam (POST /collab/sync-intent)
+   * used by the demo surface.
    */
   collabSync: {
-    requestTeamShare(projectId: string, ownerMemberId?: string): void;
+    requestTeamShare(projectId: string, share?: string | ResourceHubPrincipal): void;
   };
   lifecycle: {
     isDaemonShuttingDown: () => boolean;

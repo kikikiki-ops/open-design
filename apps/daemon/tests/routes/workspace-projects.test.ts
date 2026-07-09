@@ -175,15 +175,7 @@ describe('workspace project routes', () => {
       headers: headers('member-direct'),
       body: JSON.stringify({ visibility: 'personal' }),
     });
-    expect(moveBackResp.status).toBe(200);
-    const movedBack = await moveBackResp.json() as { project: any };
-    expect(movedBack.project).toMatchObject({
-      id: moveProjectId,
-      visibility: 'personal',
-      syncState: 'local_only',
-      resourceHubResourceId: null,
-    });
-    expect(typeof movedBack.project.cloudTombstonedAt).toBe('number');
+    expect(moveBackResp.status).toBe(403);
 
     const deleteResp = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/projects/batch-delete`, {
       method: 'POST',
@@ -370,6 +362,40 @@ describe('workspace project routes', () => {
     }
   });
 
+  it('passes the authorized workspace principal into the team-share sync seam', async () => {
+    const projectId = `workspace-share-principal-${Date.now()}`;
+    const requestTeamShare = vi.fn();
+    const app = express();
+    app.use(express.json());
+    registerProjectRoutes(app, workspaceProjectRouteDeps({
+      workspaceId,
+      projectId,
+      dbDeleteProject: vi.fn(),
+      removeProjectDir: vi.fn(),
+      collabSync: { requestTeamShare },
+    }));
+    const routeServer = await listen(app);
+    try {
+      const moveResp = await fetch(`${routeServer.url}/api/workspaces/${workspaceId}/projects/${projectId}/move`, {
+        method: 'POST',
+        headers: headers('member-share-principal', {
+          'x-od-workspace-role': 'admin',
+          'x-od-workspace-lifecycle-state': 'active',
+        }),
+        body: JSON.stringify({ visibility: 'team' }),
+      });
+      expect(moveResp.status).toBe(200);
+      expect(requestTeamShare).toHaveBeenCalledWith(projectId, {
+        memberId: 'member-share-principal',
+        teamId: workspaceId,
+        role: 'admin',
+        lifecycleState: 'active',
+      });
+    } finally {
+      await close(routeServer.server);
+    }
+  });
+
   it('blocks moving frozen team projects back to personal', async () => {
     const projectId = `workspace-frozen-${Date.now()}`;
     await createProject(projectId, 'Frozen project');
@@ -439,6 +465,7 @@ function workspaceProjectRouteDeps({
   removeProjectDir,
   stageProjectDirsForDelete,
   teamProjectCatalog,
+  collabSync,
 }: {
   workspaceId: string;
   projectId: string;
@@ -446,6 +473,7 @@ function workspaceProjectRouteDeps({
   removeProjectDir: ReturnType<typeof vi.fn>;
   stageProjectDirsForDelete?: ReturnType<typeof vi.fn>;
   teamProjectCatalog?: unknown;
+  collabSync?: unknown;
 }) {
   const now = 1;
   const project = {
@@ -544,7 +572,7 @@ function workspaceProjectRouteDeps({
       validateProjectDesignSystemId: async () => ({ ok: true, id: null }),
       validateProjectSkillId: async () => ({ ok: true, id: null }),
     },
-    collabSync: { requestTeamShare: noop },
+    collabSync: collabSync ?? { requestTeamShare: noop },
     teamProjectCatalog,
   } as unknown as Parameters<typeof registerProjectRoutes>[1];
 }
