@@ -980,7 +980,58 @@ function createPendingHtml(): string {
  * cannot take it down. Recovery is automatic (the poll loop re-arms after a
  * quiet cooldown); reinstalling is the manual escape hatch.
  */
-function createRendererCrashHtml(): string {
+interface RendererCrashScreenContext {
+  appVersion: string;
+  platform: NodeJS.Platform;
+  osVersion: string;
+  reason: string;
+  exitCode: number | null;
+}
+
+const CRASH_REPORT_ISSUES_URL = "https://github.com/nexu-io/open-design/issues/new";
+
+function osLabelForReport(platform: NodeJS.Platform): string {
+  if (platform === "darwin") return "macOS";
+  if (platform === "win32") return "Windows";
+  if (platform === "linux") return "Linux";
+  return platform;
+}
+
+function formatRendererExitCode(code: number | null): string {
+  if (code == null) return "unknown";
+  // Renderer exit codes are signed 32-bit; the unsigned hex form (e.g.
+  // 0x80000003 = a V8/Chromium CHECK/breakpoint) is how they're recognizable,
+  // so show both the raw number and the hex.
+  return `${code} (0x${(code >>> 0).toString(16).toUpperCase()})`;
+}
+
+// Prefilled GitHub new-issue URL. The daemon is still alive on a renderer
+// crash, so the "Save logs…" button can produce a diagnostics bundle; this
+// report body asks the user to attach it (neither an issue URL nor mailto can
+// carry a file attachment) and auto-fills the version/OS/exit-code that a
+// triager always needs.
+function buildCrashReportUrl(ctx: RendererCrashScreenContext): string {
+  const title = `Desktop app keeps crashing (renderer ${ctx.reason})`;
+  const body = [
+    "**What happened**",
+    "The Open Design desktop window crashed several times in a row and showed the recovery screen.",
+    "",
+    "**What I was doing when it started** (please add any detail):",
+    "",
+    "",
+    "> Please attach the diagnostics file you saved with the “Save logs…” button on the recovery screen — it has the logs we need.",
+    "",
+    "---",
+    "_Auto-filled:_",
+    `- App version: ${ctx.appVersion}`,
+    `- OS: ${osLabelForReport(ctx.platform)} ${ctx.osVersion}`,
+    `- Renderer exit: ${ctx.reason}, code ${formatRendererExitCode(ctx.exitCode)}`,
+  ].join("\n");
+  return `${CRASH_REPORT_ISSUES_URL}?${new URLSearchParams({ title, body }).toString()}`;
+}
+
+function createRendererCrashHtml(ctx: RendererCrashScreenContext): string {
+  const issueUrl = buildCrashReportUrl(ctx);
   return `data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html>
 <html>
   <head>
@@ -1004,7 +1055,7 @@ function createRendererCrashHtml(): string {
         user-select: none;
       }
       .panel {
-        max-width: 440px;
+        max-width: 460px;
         padding: 32px;
         text-align: center;
       }
@@ -1019,16 +1070,47 @@ function createRendererCrashHtml(): string {
         line-height: 1.55;
         margin: 0 0 6px;
       }
+      .actions {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        margin: 22px 0 0;
+      }
+      button {
+        font: inherit;
+        font-size: 13px;
+        font-weight: 500;
+        border-radius: 8px;
+        padding: 9px 16px;
+        cursor: pointer;
+        border: 1px solid transparent;
+        transition: background 200ms cubic-bezier(0.23, 1, 0.32, 1),
+          border-color 200ms cubic-bezier(0.23, 1, 0.32, 1);
+      }
+      button:disabled { cursor: default; opacity: 0.6; }
+      .primary { background: #2b6cb0; color: #fff; }
+      .primary:hover { background: #2c5f96; }
+      .secondary { background: transparent; color: #2b3238; border-color: rgba(122, 131, 138, 0.4); }
+      .secondary:hover { border-color: rgba(122, 131, 138, 0.7); }
+      .status {
+        color: #8a929a;
+        font-size: 12px;
+        line-height: 1.5;
+        margin: 12px 0 0;
+        min-height: 16px;
+      }
       .hint {
         color: #8a929a;
         font-size: 13px;
         line-height: 1.5;
-        margin: 14px 0 0;
+        margin: 16px 0 0;
       }
       @media (prefers-color-scheme: dark) {
         html, body { background: #1c2024; color: #e6e9ec; }
         .body { color: #aeb6bd; }
-        .hint { color: #7c848b; }
+        .hint, .status { color: #7c848b; }
+        .secondary { color: #e6e9ec; border-color: rgba(174, 182, 189, 0.35); }
+        .secondary:hover { border-color: rgba(174, 182, 189, 0.6); }
       }
     </style>
   </head>
@@ -1037,8 +1119,44 @@ function createRendererCrashHtml(): string {
       <p class="title">Open Design keeps closing on this device</p>
       <p class="body">The app window crashed several times in a row, so it has paused to avoid getting stuck reloading.</p>
       <p class="body">It will try to recover on its own in a few minutes.</p>
+      <div class="actions">
+        <button id="report" class="primary">Report a problem</button>
+        <button id="logs" class="secondary">Save logs…</button>
+      </div>
+      <p class="status" id="status" aria-live="polite"></p>
       <p class="hint">If this keeps happening, quitting and reinstalling Open Design usually resolves it.</p>
     </div>
+    <script>
+      (function () {
+        var issueUrl = ${JSON.stringify(issueUrl)};
+        var host = window.__od__;
+        var diag = window.openDesignDesktop;
+        var report = document.getElementById("report");
+        var logs = document.getElementById("logs");
+        var status = document.getElementById("status");
+        function say(t) { if (status) status.textContent = t; }
+        // Buttons reuse IPC the preload already exposes; if a bridge is missing
+        // (preload failed to load) hide the dead control instead of a no-op.
+        if (report) {
+          if (host && typeof host.openExternal === "function") {
+            report.addEventListener("click", function () { host.openExternal(issueUrl); });
+          } else { report.style.display = "none"; }
+        }
+        if (logs) {
+          if (diag && typeof diag.exportDiagnostics === "function") {
+            logs.addEventListener("click", function () {
+              logs.disabled = true;
+              say("Saving logs…");
+              Promise.resolve(diag.exportDiagnostics()).then(function (r) {
+                if (r && r.ok) say("Logs saved — please attach that file to your report.");
+                else if (r && r.cancelled) say("");
+                else say("Could not save logs.");
+              }).catch(function () { say("Could not save logs."); }).then(function () { logs.disabled = false; });
+            });
+          } else { logs.style.display = "none"; }
+        }
+      })();
+    </script>
   </body>
 </html>`)}`;
 }
@@ -2010,7 +2128,10 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
           "[open-design desktop] renderer crash-loop breaker OPEN — parking; will attempt recovery after cooldown",
           { reason: details.reason, exitCode: details.exitCode },
         );
-        void showRendererCrashScreen();
+        showRendererCrashScreen({
+          reason: details.reason,
+          exitCode: typeof details.exitCode === "number" ? details.exitCode : null,
+        });
       }
       return;
     }
@@ -2369,15 +2490,27 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
   // naturally backs off to RUNNING_POLL_MS until it returns.
   // Park the wedged window on a static, self-contained error page (trivial HTML
   // that the failing app renderer cannot take down) instead of an endless blank
-  // reload. The page tells the user recovery is automatic and offers reinstall
-  // as the manual escape hatch.
-  const showRendererCrashScreen = () => {
+  // reload. The page tells the user recovery is automatic, and offers two
+  // actions wired to IPC the preload already exposes — "Report a problem" opens
+  // a prefilled GitHub issue, "Save logs…" exports the diagnostics bundle (the
+  // daemon is still alive on a renderer crash, so the bundle is available).
+  const showRendererCrashScreen = (crash: { reason: string; exitCode: number | null }) => {
     if (stopped || window.isDestroyed()) return;
     // Loading the crash screen resets currentUrl so the next successful reload
     // (after re-arm) is treated as a fresh navigation.
     currentUrl = null;
     pendingUrl = null;
-    void window.loadURL(createRendererCrashHtml()).catch(() => undefined);
+    void window
+      .loadURL(
+        createRendererCrashHtml({
+          appVersion: app.getVersion(),
+          platform: process.platform,
+          osVersion: release(),
+          reason: crash.reason,
+          exitCode: crash.exitCode,
+        }),
+      )
+      .catch(() => undefined);
     if (!window.isVisible()) window.show();
   };
 

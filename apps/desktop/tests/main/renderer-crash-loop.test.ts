@@ -127,4 +127,17 @@ describe("renderer crash-loop breaker wiring", () => {
     expect(runtimeSource).toContain('reason: "recovery-attempt"');
     expect(runtimeSource).toContain("recovery_attempt:");
   });
+
+  test("the crash screen offers report + save-logs actions via already-exposed IPC", () => {
+    // Reuse the preload's existing bridges (no new surface): openExternal for a
+    // prefilled GitHub issue, exportDiagnostics for the log bundle.
+    expect(runtimeSource).toContain("issues/new");
+    expect(runtimeSource).toContain("window.__od__");
+    expect(runtimeSource).toContain("openExternal");
+    expect(runtimeSource).toContain("window.openDesignDesktop");
+    expect(runtimeSource).toContain("exportDiagnostics");
+    // Report body prefilled with the version/OS/exit code a triager needs.
+    expect(runtimeSource).toContain("buildCrashReportUrl");
+    expect(runtimeSource).toContain("formatRendererExitCode");
+  });
 });
