@@ -382,6 +382,21 @@ describe('workspace project routes', () => {
           code: 'TEAM_PROJECT_CATALOG_UNAVAILABLE',
         },
       });
+
+      teamProjectCatalog.list.mockClear();
+      const personalResp = await fetch(`${routeServer.url}/api/workspaces/${workspaceId}/projects?visibility=personal`, {
+        headers: headers('member-viewer'),
+      });
+      expect(personalResp.status).toBe(200);
+      await expect(personalResp.json()).resolves.toMatchObject({
+        projects: [
+          {
+            id: projectId,
+            visibility: 'personal',
+          },
+        ],
+      });
+      expect(teamProjectCatalog.list).not.toHaveBeenCalled();
     } finally {
       await close(routeServer.server);
     }

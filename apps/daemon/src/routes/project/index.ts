@@ -1699,9 +1699,13 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       const owner = typeof req.query.owner === 'string' ? req.query.owner : 'all';
       const visibility = typeof req.query.visibility === 'string' ? req.query.visibility : 'all';
       const rows = listWorkspaceProjects(db, ctx.workspaceId);
+      const needsRemoteTeamProjects =
+        view === 'team' ||
+        visibility === 'team' ||
+        (view === 'all' && visibility === 'all' && owner === 'all');
       const mergedProjects = [
         ...rows.map((row: any) => normalizeWorkspaceProjectRow(row, ctx)),
-        ...(await listRemoteTeamProjectSummaries(rows, ctx)),
+        ...(needsRemoteTeamProjects ? await listRemoteTeamProjectSummaries(rows, ctx) : []),
       ];
       const projects = mergedProjects
         .filter((project: any) => {
