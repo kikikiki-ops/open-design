@@ -273,9 +273,53 @@ describe('App connectors settings flows', () => {
     const banner = container.querySelector('.privacy-consent-banner');
     expect(banner?.querySelector('.seg-control')).toBeNull();
     expect(banner?.querySelector('.seg-btn.active')).toBeNull();
-    expect(screen.getByRole('button', { name: 'I get it' }).className).toContain(
+    expect(screen.getByRole('button', { name: 'Share' }).className)
+      .toContain('privacy-consent-action--primary');
+    expect(screen.getByRole('button', { name: "Don't share" }).className).toContain(
       'privacy-consent-action',
     );
+  });
+
+  it('keeps telemetry and content sharing enabled when the first-run banner share choice is clicked', async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(mockedSyncConfigToDaemon).toHaveBeenCalled();
+    });
+    mockedSyncConfigToDaemon.mockClear();
+    fireEvent.click(await screen.findByRole('button', { name: 'Share' }));
+
+    await waitFor(() => {
+      expect(mockedSyncConfigToDaemon).toHaveBeenCalledWith(
+        expect.objectContaining({
+          installationId: expect.any(String),
+          privacyDecisionAt: expect.any(Number),
+          telemetry: { metrics: true, content: true },
+        }),
+        expect.objectContaining({ throwOnError: true }),
+      );
+    });
+  });
+
+  it('turns telemetry off when the first-run banner decline choice is clicked', async () => {
+    render(<App />);
+
+    await waitFor(() => {
+      expect(mockedSyncConfigToDaemon).toHaveBeenCalled();
+    });
+    mockedSyncConfigToDaemon.mockClear();
+    fireEvent.click(await screen.findByRole('button', { name: "Don't share" }));
+
+    await waitFor(() => {
+      expect(mockedSyncConfigToDaemon).toHaveBeenCalledWith(
+        expect.objectContaining({
+          installationId: null,
+          privacyDecisionAt: expect.any(Number),
+          telemetry: { metrics: false, content: false },
+        }),
+        expect.objectContaining({ throwOnError: true }),
+      );
+    });
   });
 
   it('keeps the first-run privacy banner mounted while settings is open', async () => {

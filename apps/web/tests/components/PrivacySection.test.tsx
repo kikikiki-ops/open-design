@@ -61,4 +61,97 @@ describe('PrivacySection', () => {
 
     expect((screen.getByLabelText('Anonymous ID') as HTMLInputElement).value).toBe('inst-new');
   });
+
+  it('shows the share choice and telemetry toggles as on when sharing is enabled', () => {
+    render(
+      <Harness
+        initial={{
+          ...baseConfig,
+          installationId: 'inst-existing',
+          privacyDecisionAt: 1778244000000,
+          telemetry: { metrics: true, content: true },
+        }}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Share' }).getAttribute('aria-pressed'))
+      .toBe('true');
+    expect(screen.getByRole('button', { name: "Don't share" }).getAttribute('aria-pressed'))
+      .toBe('false');
+    expect(screen.getByRole('button', { name: /Anonymous metrics/ }).getAttribute('aria-pressed'))
+      .toBe('true');
+    expect(screen.getByRole('button', { name: /Conversation and tool content/ }).getAttribute('aria-pressed'))
+      .toBe('true');
+  });
+
+  it('shows the decline choice and telemetry toggles as off when sharing is disabled', () => {
+    render(
+      <Harness
+        initial={{
+          ...baseConfig,
+          installationId: null,
+          privacyDecisionAt: 1778244000000,
+          telemetry: { metrics: false, content: false },
+        }}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: "Don't share" }).getAttribute('aria-pressed'))
+      .toBe('true');
+    expect(screen.getByRole('button', { name: 'Share' }).getAttribute('aria-pressed'))
+      .toBe('false');
+    expect(screen.getByRole('button', { name: /Anonymous metrics/ }).getAttribute('aria-pressed'))
+      .toBe('false');
+    expect(screen.getByRole('button', { name: /Conversation and tool content/ }).getAttribute('aria-pressed'))
+      .toBe('false');
+    expect((screen.getByLabelText('Anonymous ID') as HTMLInputElement).value).toBe('opted out');
+  });
+
+  it('turns both settings toggles off when the settings decline choice is clicked', () => {
+    render(
+      <Harness
+        initial={{
+          ...baseConfig,
+          installationId: 'inst-existing',
+          privacyDecisionAt: 1778244000000,
+          telemetry: { metrics: true, content: true },
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: "Don't share" }));
+
+    expect(screen.getByRole('button', { name: "Don't share" }).getAttribute('aria-pressed'))
+      .toBe('true');
+    expect(screen.getByRole('button', { name: /Anonymous metrics/ }).getAttribute('aria-pressed'))
+      .toBe('false');
+    expect(screen.getByRole('button', { name: /Conversation and tool content/ }).getAttribute('aria-pressed'))
+      .toBe('false');
+    expect((screen.getByLabelText('Anonymous ID') as HTMLInputElement).value).toBe('opted out');
+  });
+
+  it('turns both settings toggles on when the settings share choice is clicked', () => {
+    vi.stubGlobal('crypto', { randomUUID: vi.fn(() => 'inst-new') });
+
+    render(
+      <Harness
+        initial={{
+          ...baseConfig,
+          installationId: null,
+          privacyDecisionAt: 1778244000000,
+          telemetry: { metrics: false, content: false },
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Share' }));
+
+    expect(screen.getByRole('button', { name: 'Share' }).getAttribute('aria-pressed'))
+      .toBe('true');
+    expect(screen.getByRole('button', { name: /Anonymous metrics/ }).getAttribute('aria-pressed'))
+      .toBe('true');
+    expect(screen.getByRole('button', { name: /Conversation and tool content/ }).getAttribute('aria-pressed'))
+      .toBe('true');
+    expect((screen.getByLabelText('Anonymous ID') as HTMLInputElement).value).toBe('inst-new');
+  });
 });

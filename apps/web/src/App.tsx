@@ -2517,20 +2517,24 @@ function AppInner() {
           transition={{ type: 'spring', stiffness: 400, damping: 28 }}
         >
         <PrivacyConsentModal
-          onAccept={() => {
-            // Default opt-in: clicking "I get it" enables the same telemetry
-            // surface the previous two-button "Share usage data" path opted
-            // into. The banner footer + PrivacySection give the user a
-            // one-click path to flip everything off later.
+          onShare={() => {
             // The banner owns only the privacy decision; it does not drive
-            // navigation. Onboarding is gated by `onboardingCompleted` on
-            // its own and runs in parallel.
+            // navigation. Choosing Share keeps the existing metrics/content
+            // telemetry surface enabled, including downstream trace objects.
             const installationId = generateInstallationIdSafe();
             void handleConfigPersist({
               ...latestPersistedConfigRef.current,
               installationId,
               privacyDecisionAt: Date.now(),
               telemetry: { metrics: true, content: true },
+            });
+          }}
+          onDecline={() => {
+            void handleConfigPersist({
+              ...latestPersistedConfigRef.current,
+              installationId: null,
+              privacyDecisionAt: Date.now(),
+              telemetry: { metrics: false, content: false },
             });
           }}
         />

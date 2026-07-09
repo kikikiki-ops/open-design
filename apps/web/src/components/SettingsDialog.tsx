@@ -424,6 +424,15 @@ interface Props {
   onProviderModelsCacheChange?: Dispatch<SetStateAction<ProviderModelsCache>>;
 }
 
+function telemetryPrefsEqual(
+  a: AppConfig['telemetry'],
+  b: AppConfig['telemetry'],
+): boolean {
+  return a?.metrics === b?.metrics
+    && a?.content === b?.content
+    && a?.artifactManifest === b?.artifactManifest;
+}
+
 export interface AgentRefreshOptions {
   throwOnError?: boolean;
   agentCliEnv?: AppConfig['agentCliEnv'];
@@ -1374,9 +1383,14 @@ export function SettingsDialog({
     setCfg((current) => {
       const nextAgentCliEnv = reconcileAmrProfileEnv(current.agentCliEnv, initial.agentCliEnv);
       const nextAgentModels = reconcileAmrModelChoice(current.agentModels, previousInitial, initial);
+      const privacyChanged =
+        current.installationId !== initial.installationId ||
+        current.privacyDecisionAt !== initial.privacyDecisionAt ||
+        !telemetryPrefsEqual(current.telemetry, initial.telemetry);
       if (
         nextAgentCliEnv === current.agentCliEnv
         && nextAgentModels === current.agentModels
+        && !privacyChanged
       ) {
         return current;
       }
@@ -1384,6 +1398,13 @@ export function SettingsDialog({
         ...current,
         agentCliEnv: nextAgentCliEnv,
         agentModels: nextAgentModels,
+        ...(privacyChanged
+          ? {
+              installationId: initial.installationId,
+              privacyDecisionAt: initial.privacyDecisionAt,
+              telemetry: initial.telemetry ? { ...initial.telemetry } : undefined,
+            }
+          : {}),
       };
     });
     autosaveLastSavedRef.current = {
@@ -1397,6 +1418,9 @@ export function SettingsDialog({
         previousInitial,
         initial,
       ),
+      installationId: initial.installationId,
+      privacyDecisionAt: initial.privacyDecisionAt,
+      telemetry: initial.telemetry ? { ...initial.telemetry } : undefined,
     };
     previousInitialRef.current = initial;
   }, [initial]);

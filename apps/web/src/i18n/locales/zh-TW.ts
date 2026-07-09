@@ -545,7 +545,7 @@ export const zhTW: Dict = {
   "settings.privacyConsentLead":
     "Open Design 可以將使用資料分享給我們的團隊以協助改進。包含:",
   "settings.privacyConsentFooter": "你可以隨時在 設定 → 隱私 中修改這些選項。",
-  "settings.privacyConsentShare": "分享使用資料",
+  "settings.privacyConsentShare": "分享",
   "settings.privacyConsentDecline": "不分享",
   "settings.privacyConsentAccept": "我知道了",
   "settings.privacyConsentBannerFooter":
@@ -553,7 +553,7 @@ export const zhTW: Dict = {
   "settings.privacyConsentPolicyLink": "閱讀隱私政策",
   "settings.privacyMetrics": "匿名指標",
   "settings.privacyMetricsHint":
-    "執行次數、token 用量、錯誤率、時長。不包含 prompt,不包含專案資料。",
+    "執行次數、token 用量、錯誤率、時長。",
   "settings.privacyContent": "對話內容",
   "settings.privacyContentHint":
     "prompt、助手回覆、工具輸入/輸出，以及品質回看所需的完整上下文檔案。傳送前會移除金鑰等敏感資訊。",
