@@ -154,7 +154,7 @@ export function WhatsNewPopup({ active }: { active: boolean }) {
           aria-labelledby="whats-new-popup-title"
           className={styles.card}
           data-testid="whats-new-popup"
-          role="dialog"
+          role="complementary"
           variants={cardIn}
           initial="hidden"
           animate="visible"

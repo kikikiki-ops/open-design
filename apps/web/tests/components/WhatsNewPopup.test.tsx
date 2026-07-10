@@ -76,7 +76,10 @@ describe('WhatsNewPopup fetch/show lifecycle', () => {
     // is intentionally not rendered on the card.
     expect(screen.getByText('Open Design 0.12.1')).toBeTruthy();
     expect(screen.getByText('Design system sync')).toBeTruthy();
-    expect(screen.getByRole('dialog', { name: 'Design system sync' })).toBeTruthy();
+    // A non-modal, dismissible toast is a complementary landmark, NOT a dialog —
+    // so it never collides with `getByRole('dialog')` (e.g. the Settings modal).
+    expect(screen.getByRole('complementary', { name: 'Design system sync' })).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('does not fetch or show while Home is inactive, then shows once it activates', async () => {
