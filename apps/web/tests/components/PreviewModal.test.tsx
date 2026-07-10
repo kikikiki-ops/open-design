@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { PreviewModal } from '../../src/components/PreviewModal';
 
-describe('PreviewModal sandbox isolation', () => {
+describe('PreviewModal', () => {
   it('renders generated previews without same-origin sandbox access', () => {
     const markup = renderToStaticMarkup(
       <PreviewModal

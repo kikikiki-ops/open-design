@@ -57,8 +57,8 @@ export interface PreviewSidebar {
   // Accessible label for the side pane and its stage-edge handles.
   label: string;
   // Side-pane content — caller renders whatever it likes (markdown source
-  // view, swatch grid, etc.). Always optional; when absent the toggle is
-  // not shown.
+  // view, swatch grid, etc.). When the sidebar prop is absent, its stage-edge
+  // handles are not shown.
   content: ReactNode;
   // Default open state on first mount. Defaults to false.
   defaultOpen?: boolean;
