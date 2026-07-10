@@ -15,7 +15,10 @@ interface NormalizedRect { x: number; y: number; width: number; height: number }
 // top-left position normalized to the frame (0..1) so it tracks the artifact as
 // the device frame scales; `text` is the raw multi-line string.
 interface TextMark { id: number; x: number; y: number; text: string }
+interface Rect { x: number; y: number; width: number; height: number }
 type MarkTool = 'box' | 'pen' | 'text';
+type DrawDockLayout = 'floating' | 'docked';
+type DrawDockSide = 'right' | 'left' | 'bottom' | 'top';
 interface CaptureTarget {
   filePath?: string;
   elementId?: string;
@@ -83,10 +86,38 @@ const TEXT_FONT_FRACTION = 0.03;
 const TEXT_LINE_HEIGHT = 1.25;
 const TEXT_MIN_FONT_PX = 12;
 const TEXT_FONT_FAMILY = 'system-ui, -apple-system, BlinkMacSystemFont, sans-serif';
+const DRAW_DOCK_GAP = 12;
+const DRAW_DOCK_MARGIN = 16;
+const DRAW_DOCK_MIN_WIDTH = 320;
+const DRAW_DOCK_MIN_HEIGHT = 120;
 
 // Render `node` into `host` via a portal when one is provided, otherwise inline.
 function maybePortal(node: ReactNode, host: HTMLElement | null) {
   return host ? createPortal(node, host) : node;
+}
+
+function clamp(value: number, min: number, max: number) {
+  if (max < min) return min;
+  return Math.min(Math.max(value, min), max);
+}
+
+function rectsOverlap(a: Rect, b: Rect) {
+  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+}
+
+function dockPlacementEquals(
+  a: { layout: DrawDockLayout; side: DrawDockSide | null; style: CSSProperties },
+  b: { layout: DrawDockLayout; side: DrawDockSide | null; style: CSSProperties },
+) {
+  return (
+    a.layout === b.layout &&
+    a.side === b.side &&
+    a.style.left === b.style.left &&
+    a.style.top === b.style.top &&
+    a.style.bottom === b.style.bottom &&
+    a.style.transform === b.style.transform &&
+    a.style.maxWidth === b.style.maxWidth
+  );
 }
 
 export function PreviewDrawOverlay({
@@ -176,7 +207,22 @@ export function PreviewDrawOverlay({
     action: AnnotationAction;
     message: string;
   } | null>(null);
+  const dockRef = useRef<HTMLDivElement | null>(null);
+  const [layoutRevision, setLayoutRevision] = useState(0);
+  const [dockPlacement, setDockPlacement] = useState<{
+    layout: DrawDockLayout;
+    side: DrawDockSide | null;
+    style: CSSProperties;
+  }>({
+    layout: 'docked',
+    side: null,
+    style: previewDrawDockDockedStyle,
+  });
   const sending = pendingAction !== null;
+
+  const bumpLayoutRevision = useCallback(() => {
+    setLayoutRevision((value) => value + 1);
+  }, []);
 
   const redraw = useCallback(() => {
     const cvs = canvasRef.current;
@@ -408,6 +454,7 @@ export function PreviewDrawOverlay({
       // Commit the drawn region; ignore accidental micro-drags (click without move).
       if (next.width >= 0.006 && next.height >= 0.006) {
         selectionBoxesRef.current = [...selectionBoxesRef.current, next];
+        bumpLayoutRevision();
       }
       syncHistoryState();
       redraw();
@@ -417,6 +464,7 @@ export function PreviewDrawOverlay({
     if (drawingRef.current.points.length > 1) {
       strokesRef.current.push(drawingRef.current);
       undoneStrokesRef.current = [];
+      bumpLayoutRevision();
       syncHistoryState();
     }
     drawingRef.current = null;
@@ -442,6 +490,7 @@ export function PreviewDrawOverlay({
     commitTextMarks([]);
     syncHistoryState();
     redraw();
+    bumpLayoutRevision();
   }
 
   function resetTextEditingState() {
@@ -664,6 +713,7 @@ export function PreviewDrawOverlay({
       boxDraftRef.current = null;
       syncHistoryState();
       redraw();
+      bumpLayoutRevision();
       onToolbarClick?.('undo');
       return;
     }
@@ -671,6 +721,7 @@ export function PreviewDrawOverlay({
       selectionBoxesRef.current = selectionBoxesRef.current.slice(0, -1);
       syncHistoryState();
       redraw();
+      bumpLayoutRevision();
       onToolbarClick?.('undo');
       return;
     }
@@ -681,6 +732,7 @@ export function PreviewDrawOverlay({
     drawingRef.current = null;
     syncHistoryState();
     redraw();
+    bumpLayoutRevision();
   }
 
   function redoStroke() {
@@ -692,6 +744,7 @@ export function PreviewDrawOverlay({
     drawingRef.current = null;
     syncHistoryState();
     redraw();
+    bumpLayoutRevision();
   }
 
   function closeOverlay() {
@@ -711,18 +764,29 @@ export function PreviewDrawOverlay({
     setPreviewIndex(null);
     syncHistoryState();
     redraw();
+    bumpLayoutRevision();
   }, [active, redraw]);
 
-  function boxBounds(): { x: number; y: number; width: number; height: number } | null {
+  function normalizedRectToCanvasRect(box: NormalizedRect): Rect | null {
     const rect = canvasRef.current?.getBoundingClientRect();
-    const boxes = selectionBoxesRef.current;
-    if (!rect || rect.width <= 0 || rect.height <= 0 || boxes.length === 0) return null;
+    if (!rect || rect.width <= 0 || rect.height <= 0) return null;
+    return {
+      x: box.x * rect.width,
+      y: box.y * rect.height,
+      width: Math.max(1, box.width * rect.width),
+      height: Math.max(1, box.height * rect.height),
+    };
+  }
+
+  function boxBounds(): Rect | null {
+    const boxes = selectionBoxesRef.current.map((box) => normalizedRectToCanvasRect(box)).filter((box): box is Rect => Boolean(box));
+    if (boxes.length === 0) return null;
     // Collapse every committed box into one enclosing rect so the annotation
     // bounds still describe a single region for the downstream capture crop.
-    const left = Math.min(...boxes.map((box) => box.x)) * rect.width;
-    const top = Math.min(...boxes.map((box) => box.y)) * rect.height;
-    const right = Math.max(...boxes.map((box) => box.x + box.width)) * rect.width;
-    const bottom = Math.max(...boxes.map((box) => box.y + box.height)) * rect.height;
+    const left = Math.min(...boxes.map((box) => box.x));
+    const top = Math.min(...boxes.map((box) => box.y));
+    const right = Math.max(...boxes.map((box) => box.x + box.width));
+    const bottom = Math.max(...boxes.map((box) => box.y + box.height));
     return {
       x: left,
       y: top,
@@ -731,11 +795,15 @@ export function PreviewDrawOverlay({
     };
   }
 
-  function strokeBounds(): { x: number; y: number; width: number; height: number } | null {
+  function lastBoxBounds(): Rect | null {
+    const last = selectionBoxesRef.current.at(-1);
+    return last ? normalizedRectToCanvasRect(last) : null;
+  }
+
+  function strokeRect(stroke: Stroke | null | undefined): Rect | null {
     const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect || rect.width <= 0 || rect.height <= 0) return null;
-    const points = strokesRef.current.flatMap((stroke) => stroke.points);
-    if (points.length === 0) return null;
+    const points = stroke?.points ?? [];
+    if (!rect || rect.width <= 0 || rect.height <= 0 || points.length === 0) return null;
     const xs = points.map((point) => point.x * rect.width);
     const ys = points.map((point) => point.y * rect.height);
     const minX = Math.min(...xs);
@@ -780,6 +848,19 @@ export function PreviewDrawOverlay({
     const right = Math.max(...rects.map((item) => item.right));
     const bottom = Math.max(...rects.map((item) => item.bottom));
     return { x: left, y: top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) };
+  }
+
+  function strokeBounds(): Rect | null {
+    const points = strokesRef.current.flatMap((stroke) => stroke.points);
+    return strokeRect(points.length > 0 ? { points } : null);
+  }
+
+  function lastStrokeBounds(): Rect | null {
+    return strokeRect(strokesRef.current.at(-1));
+  }
+
+  function anchorBounds(): Rect | null {
+    return lastBoxBounds() ?? lastStrokeBounds() ?? captureTarget?.position ?? null;
   }
 
   function annotationBounds(): { x: number; y: number; width: number; height: number } | undefined {
@@ -1033,6 +1114,147 @@ export function PreviewDrawOverlay({
     );
   }, [active, toolbarHost]);
 
+  useLayoutEffect(() => {
+    if (!active) {
+      setDockPlacement((current) => (
+        current.layout === 'docked' && current.side === null && dockPlacementEquals(current, {
+          layout: 'docked',
+          side: null,
+          style: previewDrawDockDockedStyle,
+        })
+          ? current
+          : { layout: 'docked', side: null, style: previewDrawDockDockedStyle }
+      ));
+      return;
+    }
+
+    const wrap = wrapRef.current;
+    const dock = dockRef.current;
+    const host = resolvedToolbarHost ?? wrap;
+    const anchor = anchorBounds();
+    if (!wrap || !dock || !host || !anchor) {
+      setDockPlacement((current) => (
+        current.layout === 'docked' && current.side === null && current.style === previewDrawDockDockedStyle
+          ? current
+          : { layout: 'docked', side: null, style: previewDrawDockDockedStyle }
+      ));
+      return;
+    }
+
+    const hostRect = host.getBoundingClientRect();
+    const wrapRect = wrap.getBoundingClientRect();
+    const dockRect = dock.getBoundingClientRect();
+    if (
+      hostRect.width <= DRAW_DOCK_MARGIN * 2 ||
+      hostRect.height <= DRAW_DOCK_MARGIN * 2 ||
+      dockRect.width <= 0 ||
+      dockRect.height <= 0 ||
+      hostRect.width < Math.max(DRAW_DOCK_MIN_WIDTH, dockRect.width) + DRAW_DOCK_MARGIN * 2 ||
+      hostRect.height < Math.max(DRAW_DOCK_MIN_HEIGHT, dockRect.height) + DRAW_DOCK_MARGIN * 2
+    ) {
+      setDockPlacement((current) => (
+        current.layout === 'docked' && current.side === null && current.style === previewDrawDockDockedStyle
+          ? current
+          : { layout: 'docked', side: null, style: previewDrawDockDockedStyle }
+      ));
+      return;
+    }
+
+    const anchorInHost: Rect = {
+      x: wrapRect.left - hostRect.left + anchor.x,
+      y: wrapRect.top - hostRect.top + anchor.y,
+      width: anchor.width,
+      height: anchor.height,
+    };
+    const safeLeft = DRAW_DOCK_MARGIN;
+    const safeTop = DRAW_DOCK_MARGIN;
+    const safeRight = Math.max(safeLeft, hostRect.width - dockRect.width - DRAW_DOCK_MARGIN);
+    const safeBottom = Math.max(safeTop, hostRect.height - dockRect.height - DRAW_DOCK_MARGIN);
+    const centeredLeft = anchorInHost.x + anchorInHost.width / 2 - dockRect.width / 2;
+    const centeredTop = anchorInHost.y + anchorInHost.height / 2 - dockRect.height / 2;
+    const candidates: Array<{ side: DrawDockSide; left: number; top: number; fits: boolean }> = [
+      {
+        side: 'right',
+        left: anchorInHost.x + anchorInHost.width + DRAW_DOCK_GAP,
+        top: centeredTop,
+        fits: anchorInHost.x + anchorInHost.width + DRAW_DOCK_GAP + dockRect.width <= hostRect.width - DRAW_DOCK_MARGIN,
+      },
+      {
+        side: 'left',
+        left: anchorInHost.x - DRAW_DOCK_GAP - dockRect.width,
+        top: centeredTop,
+        fits: anchorInHost.x - DRAW_DOCK_GAP - dockRect.width >= DRAW_DOCK_MARGIN,
+      },
+      {
+        side: 'bottom',
+        left: centeredLeft,
+        top: anchorInHost.y + anchorInHost.height + DRAW_DOCK_GAP,
+        fits: anchorInHost.y + anchorInHost.height + DRAW_DOCK_GAP + dockRect.height <= hostRect.height - DRAW_DOCK_MARGIN,
+      },
+      {
+        side: 'top',
+        left: centeredLeft,
+        top: anchorInHost.y - DRAW_DOCK_GAP - dockRect.height,
+        fits: anchorInHost.y - DRAW_DOCK_GAP - dockRect.height >= DRAW_DOCK_MARGIN,
+      },
+    ];
+
+    let nextPlacement: { layout: DrawDockLayout; side: DrawDockSide | null; style: CSSProperties } = {
+      layout: 'docked',
+      side: null,
+      style: previewDrawDockDockedStyle,
+    };
+
+    for (const candidate of candidates) {
+      if (!candidate.fits) continue;
+      const clampedLeft = clamp(candidate.left, safeLeft, safeRight);
+      const clampedTop = clamp(candidate.top, safeTop, safeBottom);
+      const candidateRect: Rect = {
+        x: clampedLeft,
+        y: clampedTop,
+        width: dockRect.width,
+        height: dockRect.height,
+      };
+      if (rectsOverlap(candidateRect, anchorInHost)) continue;
+      nextPlacement = {
+        layout: 'floating',
+        side: candidate.side,
+        style: {
+          position: 'absolute',
+          left: `${Math.round(clampedLeft)}px`,
+          top: `${Math.round(clampedTop)}px`,
+          transform: 'none',
+          bottom: 'auto',
+          maxWidth: `${Math.max(0, hostRect.width - DRAW_DOCK_MARGIN * 2)}px`,
+        },
+      };
+      break;
+    }
+
+    setDockPlacement((current) => (dockPlacementEquals(current, nextPlacement) ? current : nextPlacement));
+  }, [
+    active,
+    resolvedToolbarHost,
+    captureTarget,
+    layoutRevision,
+    imagePreviews.length,
+    captureWarning?.message,
+  ]);
+
+  useLayoutEffect(() => {
+    if (!active || typeof ResizeObserver === 'undefined') return undefined;
+    const wrap = wrapRef.current;
+    const dock = dockRef.current;
+    const host = resolvedToolbarHost ?? wrap;
+    if (!wrap || !dock || !host) return undefined;
+    const recompute = () => setLayoutRevision((value) => value + 1);
+    const ro = new ResizeObserver(recompute);
+    ro.observe(wrap);
+    ro.observe(dock);
+    if (host !== wrap) ro.observe(host);
+    return () => ro.disconnect();
+  }, [active, resolvedToolbarHost]);
+
   const overlayPointer = active ? 'auto' : 'none';
   const showCanvas = active || hasInk || hasBox || hasText;
   const textLayerVisible = active || hasText;
@@ -1246,7 +1468,16 @@ export function PreviewDrawOverlay({
       {active ? maybePortal(
         <>
           <style>{tooltipStyle}</style>
-          <div className="preview-draw-dock" style={previewDrawDockStyle}>
+          <div
+            ref={dockRef}
+            className="preview-draw-dock"
+            data-draw-layout={dockPlacement.layout}
+            data-draw-side={dockPlacement.side ?? undefined}
+            style={{
+              ...previewDrawDockBaseStyle,
+              ...dockPlacement.style,
+            }}
+          >
           {captureWarning ? (
             <div
               role="status"
@@ -1851,18 +2082,21 @@ const closeButtonStyle: CSSProperties = {
 // strip, and toolbar with real spacing. Absolute per-element `bottom` offsets
 // used to collide once the toolbar wrapped taller, so the image strip visually
 // covered the controls; a flex column keeps them apart at any height.
-const previewDrawDockStyle: CSSProperties = {
+const previewDrawDockBaseStyle: CSSProperties = {
   position: 'absolute',
-  left: '50%',
-  bottom: 14,
-  transform: 'translateX(-50%)',
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
-  gap: 6,
-  maxWidth: 'min(720px, calc(100% - 32px))',
+  gap: 8,
   zIndex: 91,
   pointerEvents: 'none',
+};
+
+const previewDrawDockDockedStyle: CSSProperties = {
+  left: 'calc(50% - 52px)',
+  bottom: 16,
+  transform: 'translateX(-50%)',
+  maxWidth: 'min(760px, calc(100% - 144px))',
 };
 
 const submitSplitStyle: CSSProperties = {

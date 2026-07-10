@@ -47,8 +47,8 @@ interface Props {
     action: PluginShareAction,
   ) => void;
   // 'rich' (default) keeps the hover-overlay metadata card. 'gallery'
-  // is the minimal live-preview tile: a top bar (dot + name + open
-  // fullscreen) over an eagerly-rendered example.html iframe.
+  // is the minimal preview tile: a top bar (dot + name + open fullscreen)
+  // over the same lazy PreviewSurface used by the rich cards.
   layout?: 'rich' | 'gallery';
 }
 
@@ -114,12 +114,11 @@ export function PluginCard({
   }
 
   if (layout === 'gallery') {
-    // Live-preview tile: a macOS-window-style bar (status dot + plugin
-    // name) over an eagerly-rendered example.html iframe. The whole tile
-    // opens the detail surface.
-    // Decks render inside a 16:9 frame; tag them (data-od-mode) so the gallery
-    // preview swaps the tall scroll-preview viewport for a 16:9 box. The iframe
-    // is scaled to fit via `galleryFrameRef` + useDeckPreviewScale (hoisted above).
+    // Gallery tile: a macOS-window-style bar (status dot + plugin name) over
+    // a lazily-mounted preview. The whole tile opens the detail surface.
+    // Decks render a fixed 16:9 stage; tag them so the gallery preview uses a
+    // 16:9 frame instead of the tall scroll-preview viewport (which would
+    // letterbox the stage and show a dark band above/below the slide).
     return (
       <article
         role="listitem"
@@ -147,7 +146,6 @@ export function PluginCard({
             pluginId={record.id}
             pluginTitle={title}
             preview={preview}
-            eager
           />
           <div className="plugins-home__gallery-actions">
             <button
