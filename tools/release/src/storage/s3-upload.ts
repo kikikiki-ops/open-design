@@ -11,7 +11,8 @@ export type StorageConfig = {
 };
 
 type PutObjectOptions = StorageConfig & {
-  bodyPath: string;
+  body?: Buffer;
+  bodyPath?: string;
   cacheControl: string;
   contentType: string;
   headers?: Record<string, string>;
@@ -123,7 +124,10 @@ export async function putStorageObject(options: PutObjectOptions): Promise<void>
 }
 
 export async function putStorageObjectWithStatus(options: PutObjectOptions): Promise<{ body: string; ok: boolean; status: number; url: string }> {
-  const body = readFileSync(options.bodyPath);
+  if (options.body == null && options.bodyPath == null) {
+    throw new Error("PUT storage object requires body or bodyPath");
+  }
+  const body = options.body == null ? readFileSync(options.bodyPath ?? "") : Buffer.from(options.body);
   const payloadHash = hash(body);
   const { canonicalUri, url } = objectUrl(options, options.objectKey);
   // x-amz-date is filled in per attempt inside signedFetchWithRetry so the

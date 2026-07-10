@@ -1267,6 +1267,38 @@ process.stdin.on("end", () => {
     expect(prereleaseWorkflow).toContain("Required when ref is not release/vX.Y.Z");
   });
 
+  it("[P2] publishes release notes through one channel-neutral tools-release pipeline", async () => {
+    const workflows = await Promise.all([
+      readFile(releaseBetaWorkflowPath, "utf8"),
+      readFile(releaseBetaSelfHostedWorkflowPath, "utf8"),
+      readFile(releasePrereleaseWorkflowPath, "utf8"),
+      readFile(releasePreviewWorkflowPath, "utf8"),
+      readFile(releaseStableWorkflowPath, "utf8"),
+    ]);
+
+    for (const workflow of workflows) {
+      expect(workflow).toContain("tools-release prepare-release-note");
+      expect(workflow).toContain("tools-release publish-release-note");
+      expect(workflow).toContain("tools-release verify-release-note");
+      expect(workflow).toContain("RELEASE_NOTE_MANIFEST_PATH:");
+      expect(workflow.indexOf("tools-release prepare-release-note")).toBeLessThan(
+        workflow.indexOf("tools-release publish-release-note"),
+      );
+      expect(workflow.indexOf("tools-release publish-release-note")).toBeLessThan(
+        workflow.indexOf("tools-release verify-release-note"),
+      );
+      expect(workflow.indexOf("tools-release verify-release-note")).toBeLessThan(
+        workflow.indexOf("tools-release publish-metadata"),
+      );
+    }
+
+    const stableWorkflow = workflows[4] ?? "";
+    expect(stableWorkflow).toContain("Validate stable release note policy");
+    expect(stableWorkflow).toContain(
+      "RELEASE_PUBLISH_SIDE_EFFECTS: ${{ needs.metadata.outputs.publish_side_effects_enabled }}",
+    );
+  });
+
   it("[P2] requires stable release dispatch to use the release version branch", async () => {
     const [workflow, script] = await Promise.all([
       readFile(releaseStableWorkflowPath, "utf8"),
