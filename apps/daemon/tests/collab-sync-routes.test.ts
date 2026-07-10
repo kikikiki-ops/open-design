@@ -8,6 +8,7 @@ import {
 } from '@open-design/contracts';
 import { createCollabRuntime, type CollabRuntime } from '../src/collab/runtime.js';
 import type { WorkspaceContextProvider } from '../src/collab/workspace-context.js';
+import { projectResourceIdFor } from '../src/integrations/vela-team-projects.js';
 import { registerCollabSyncRoutes } from '../src/routes/collab-sync.js';
 
 /** A fixed team context whose `canShareProjects` bit is forced to the tested
@@ -214,6 +215,48 @@ describe('collab sync routes', () => {
     );
     expect(runtime.projectSyncState(projectId, workspaceA)).toBe('sync_failed');
     expect(runtime.projectSyncState(projectId, workspaceB)).toBe('sync_failed');
+  });
+
+  it('keeps team-project catalog resource ids scoped per workspace principal', async () => {
+    const teamProjectCatalog = {
+      list: vi.fn(),
+      upsert: vi.fn(async () => null),
+    };
+    runtime = createCollabRuntime({
+      teamProjectCatalog,
+    });
+    const projectId = 'landing';
+    const workspaceA = {
+      memberId: 'member-a',
+      teamId: 'workspace-a',
+      role: 'admin' as const,
+      lifecycleState: 'active' as const,
+    };
+    const workspaceB = {
+      memberId: 'member-b',
+      teamId: 'workspace-b',
+      role: 'admin' as const,
+      lifecycleState: 'active' as const,
+    };
+
+    runtime.requestTeamShare(projectId, workspaceA);
+    runtime.requestTeamShare(projectId, workspaceB);
+
+    for (let i = 0; i < 40 && teamProjectCatalog.upsert.mock.calls.length < 2; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    const resourceIds = (
+      teamProjectCatalog.upsert.mock.calls as unknown as Array<[{
+        resourceId?: string;
+      }]>
+    ).map((call) => call[0]?.resourceId);
+    expect(resourceIds).toEqual(
+      expect.arrayContaining([
+        projectResourceIdFor(projectId, workspaceA),
+        projectResourceIdFor(projectId, workspaceB),
+      ]),
+    );
+    expect(projectResourceIdFor(projectId, workspaceA)).not.toBe(projectResourceIdFor(projectId, workspaceB));
   });
 
   it('publishes on request and advances the published version monotonically', async () => {

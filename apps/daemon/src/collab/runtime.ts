@@ -212,7 +212,7 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
       await options.teamProjectCatalog?.upsert(
         {
           projectId,
-          resourceId: projectResourceIdFor(projectId),
+          resourceId: projectResourceIdFor(projectId, principal),
           syncState,
         },
         principal,

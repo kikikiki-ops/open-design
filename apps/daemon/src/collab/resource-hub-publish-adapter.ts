@@ -39,8 +39,8 @@ export interface ResourceHubPublishAdapterOptions {
   resolveProjectDir: (projectId: string) => string | Promise<string>;
   /** Where a member materializes pulled content. Defaults to the project dir. */
   resolvePullDir?: (projectId: string) => string | Promise<string>;
-  /** projectId → hub resourceId. Colon-free (the hub routes it as a path param). */
-  resourceIdFor?: (projectId: string) => string;
+  /** (projectId, principal) → hub resourceId. Colon-free (the hub routes it as a path param). */
+  resourceIdFor?: (projectId: string, principal?: ResourceHubPrincipal | null) => string;
   /**
    * Hub resource kind. Defaults to `project`; a design-system or plugin share
    * passes its own kind so the same publish/pull machinery serves every
@@ -63,7 +63,7 @@ export function createResourceHubPublishAdapter(
   // The resource must exist before a version is published. Get-or-create keeps
   // publish idempotent across the first and later shares of a project.
   async function ensureResourceId(principal: ResourceHubPrincipal, projectId: string): Promise<string> {
-    const resourceId = resourceIdFor(projectId);
+    const resourceId = resourceIdFor(projectId, principal);
     try {
       const existing = await client.getResource(principal, resourceId);
       return existing.id;
@@ -89,7 +89,7 @@ export function createResourceHubPublishAdapter(
     async syncLatest({ projectId, principal: inputPrincipal }) {
       const principal = inputPrincipal ?? await getPrincipal(projectId);
       if (!principal) return null;
-      const resourceId = resourceIdFor(projectId);
+      const resourceId = resourceIdFor(projectId, principal);
       let ref;
       try {
         ref = await client.getRef(principal, resourceId, PUBLISHED_REF);
@@ -106,7 +106,7 @@ export function createResourceHubPublishAdapter(
     async pull({ projectId, principal: inputPrincipal }) {
       const principal = inputPrincipal ?? await getPrincipal(projectId);
       if (!principal) return; // no team identity → nothing to pull
-      await materializeRef(client, principal, resourceIdFor(projectId), PUBLISHED_REF, await resolvePullDir(projectId));
+      await materializeRef(client, principal, resourceIdFor(projectId, principal), PUBLISHED_REF, await resolvePullDir(projectId));
     },
   };
 }

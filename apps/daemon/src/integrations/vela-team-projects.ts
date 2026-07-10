@@ -61,8 +61,13 @@ interface VelaTeamProjectCatalogClientOptions {
   timeoutMs?: number;
 }
 
-export function projectResourceIdFor(projectId: string): string {
-  return `project-${projectId}`;
+export function projectResourceIdFor(projectId: string, principal?: ResourceHubPrincipal | null): string {
+  if (!principal) return `project-${projectId}`;
+  const scoped = Buffer.from(
+    JSON.stringify([principal.teamId, principal.memberId, projectId]),
+    'utf8',
+  ).toString('base64url');
+  return `project-${scoped}`;
 }
 
 export function projectSyncStateToVela(state: ProjectSyncState): VelaTeamProjectSyncState {
@@ -139,8 +144,9 @@ export function createVelaTeamProjectCatalogClient(
       return request<VelaTeamProjectRecord>(
         resolved,
         'PUT',
-        `/api/v1/team-projects/${encodeURIComponent(input.projectId)}`,
+        `/api/v1/team-projects/${encodeURIComponent(input.resourceId)}`,
         {
+          projectId: input.projectId,
           resourceId: input.resourceId,
           displayName: input.displayName,
           syncState: input.syncState,

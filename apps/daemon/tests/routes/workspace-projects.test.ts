@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { startServer } from '../../src/server.js';
 import { registerProjectRoutes } from '../../src/routes/project/index.js';
+import { projectResourceIdFor } from '../../src/integrations/vela-team-projects.js';
 
 describe('workspace project routes', () => {
   let server: http.Server;
@@ -36,6 +37,14 @@ describe('workspace project routes', () => {
       'x-od-workspace-member-id': memberId,
       'x-od-workspace-role': 'member',
       ...extra,
+    };
+  }
+  function workspacePrincipal(memberId: string, targetWorkspaceId = workspaceId, role: 'owner' | 'admin' | 'member' = 'member') {
+    return {
+      memberId,
+      teamId: targetWorkspaceId,
+      role,
+      lifecycleState: 'active' as const,
     };
   }
 
@@ -262,7 +271,7 @@ describe('workspace project routes', () => {
       id: moveProjectId,
       visibility: 'team',
       syncState: 'pending_upload',
-      resourceHubResourceId: `project-${moveProjectId}`,
+      resourceHubResourceId: projectResourceIdFor(moveProjectId, workspacePrincipal('member-direct', workspaceId, 'admin')),
       cloudTombstonedAt: null,
       createdByWorkspaceMemberId: 'member-direct',
       pendingSyncIntent: {
@@ -305,7 +314,7 @@ describe('workspace project routes', () => {
     expect(syncedProject).toMatchObject({
       id: moveProjectId,
       syncState: 'synced',
-      resourceHubResourceId: `project-${moveProjectId}`,
+      resourceHubResourceId: projectResourceIdFor(moveProjectId, workspacePrincipal('member-direct', workspaceId, 'admin')),
       createdByWorkspaceMemberId: 'member-direct',
     });
     expect(syncedProject.pendingSyncIntent).toBeUndefined();

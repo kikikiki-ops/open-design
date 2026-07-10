@@ -1811,7 +1811,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         visibility,
         createdByWorkspaceMemberId: ownerForTeamShare(summary, ctx, visibility),
         updatedByWorkspaceMemberId: ctx.workspaceMemberId,
-        resourceHubResourceId: visibility === 'team' ? projectResourceIdFor(project.id) : null,
+        resourceHubResourceId: visibility === 'team' ? projectResourceIdFor(project.id, workspaceProjectPrincipal(ctx)) : null,
         cloudTombstonedAt: visibility === 'team' ? null : Date.now(),
         syncState: visibility === 'team' ? 'pending_upload' : 'local_only',
       });
@@ -1853,7 +1853,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
             visibility,
             createdByWorkspaceMemberId: ownerForTeamShare(summary, ctx, visibility),
             updatedByWorkspaceMemberId: ctx.workspaceMemberId,
-            resourceHubResourceId: visibility === 'team' ? projectResourceIdFor(id) : null,
+            resourceHubResourceId: visibility === 'team' ? projectResourceIdFor(id, workspaceProjectPrincipal(ctx)) : null,
             cloudTombstonedAt: visibility === 'team' ? null : Date.now(),
             syncState: visibility === 'team' ? 'pending_upload' : 'local_only',
           });
