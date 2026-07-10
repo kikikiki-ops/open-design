@@ -706,6 +706,7 @@ export const zhTW: Dict = {
   "homeHero.moreShortcuts": "更多",
   "homeHero.railAria": "選擇專案類別或入門捷徑",
   "homeHero.subTypeAria": "選擇子類型",
+  "homeHero.subTypeMore": "更多",
   "homeHero.confirmReplaceTitle": "取代目前的提示詞？",
   "homeHero.confirmReplaceBody": "使用 {title} 將取代目前輸入框中的文字。",
   "homeHero.confirmReplace": "取代",

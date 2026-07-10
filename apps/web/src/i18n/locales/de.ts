@@ -682,6 +682,7 @@ export const de: Dict = {
   'homeHero.moreShortcuts': 'Mehr',
   'homeHero.railAria': 'Wähle eine Projektkategorie oder einen Starter-Shortcut',
   'homeHero.subTypeAria': 'Wähle einen Untertyp',
+  'homeHero.subTypeMore': 'Mehr',
   'homeHero.confirmReplaceTitle': 'Aktuellen Prompt ersetzen?',
   'homeHero.confirmReplaceBody': 'Wenn du {title} verwendest, wird der aktuelle Text im Eingabefeld ersetzt.',
   'homeHero.confirmReplace': 'Ersetzen',

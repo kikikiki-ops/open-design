@@ -682,6 +682,7 @@ export const ptBR: Dict = {
   'homeHero.moreShortcuts': 'Mais',
   'homeHero.railAria': 'Escolha uma categoria de projeto ou atalho inicial',
   'homeHero.subTypeAria': 'Escolha um subtipo',
+  'homeHero.subTypeMore': 'Mais',
   'homeHero.confirmReplaceTitle': 'Substituir o prompt atual?',
   'homeHero.confirmReplaceBody': 'Usar {title} substituirá o texto que está atualmente no campo de entrada.',
   'homeHero.confirmReplace': 'Substituir',

@@ -682,6 +682,7 @@ export const pl: Dict = {
   'homeHero.moreShortcuts': 'Więcej',
   'homeHero.railAria': 'Wybierz kategorię projektu lub skrót startowy',
   'homeHero.subTypeAria': 'Wybierz podtyp',
+  'homeHero.subTypeMore': 'Więcej',
   'homeHero.confirmReplaceTitle': 'Zastąpić bieżący prompt?',
   'homeHero.confirmReplaceBody': 'Użycie {title} zastąpi tekst znajdujący się obecnie w polu wprowadzania.',
   'homeHero.confirmReplace': 'Zastąp',

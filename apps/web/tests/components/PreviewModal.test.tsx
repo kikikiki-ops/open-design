@@ -66,4 +66,24 @@ describe('PreviewModal sandbox isolation', () => {
     expect(markup).toContain('allow-popups');
     expect(markup).toContain('allow-popups-to-escape-sandbox');
   });
+
+  it('keeps sidebar access on the stage without rendering a header button', () => {
+    const markup = renderToStaticMarkup(
+      <PreviewModal
+        title="Plugin preview"
+        views={[{ id: 'preview', label: 'Preview', html: '<p>Preview</p>' }]}
+        sidebar={{
+          label: 'Plugin info',
+          content: <p>Manifest details</p>,
+        }}
+        exportTitleFor={() => 'plugin-preview'}
+        onClose={() => {}}
+      />,
+    );
+
+    expect(markup).toContain('ds-modal-stage-handle is-expand');
+    expect(markup).toContain('aria-label="Show Plugin info"');
+    expect(markup).not.toContain('>Plugin info</button>');
+    expect(markup).not.toContain('aria-pressed=');
+  });
 });

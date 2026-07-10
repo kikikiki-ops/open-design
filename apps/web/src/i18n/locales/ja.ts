@@ -682,6 +682,7 @@ export const ja: Dict = {
   'homeHero.moreShortcuts': 'その他',
   'homeHero.railAria': 'プロジェクトカテゴリーまたはスターターショートカットを選択',
   'homeHero.subTypeAria': 'サブタイプを選択',
+  'homeHero.subTypeMore': 'その他',
   'homeHero.confirmReplaceTitle': '現在のプロンプトを置き換えますか？',
   'homeHero.confirmReplaceBody': '{title} を使用すると、入力欄の現在のテキストが置き換えられます。',
   'homeHero.confirmReplace': '置き換える',

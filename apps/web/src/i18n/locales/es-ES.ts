@@ -682,6 +682,7 @@ export const esES: Dict = {
   'homeHero.moreShortcuts': 'Más',
   'homeHero.railAria': 'Elige una categoría de proyecto o un atajo inicial',
   'homeHero.subTypeAria': 'Elige un subtipo',
+  'homeHero.subTypeMore': 'Más',
   'homeHero.confirmReplaceTitle': '¿Reemplazar el prompt actual?',
   'homeHero.confirmReplaceBody': 'Usar {title} reemplazará el texto que hay actualmente en la entrada.',
   'homeHero.confirmReplace': 'Reemplazar',

@@ -682,6 +682,7 @@ export const ar: Dict = {
   'homeHero.moreShortcuts': 'المزيد',
   'homeHero.railAria': 'اختر فئة مشروع أو اختصار بداية',
   'homeHero.subTypeAria': 'اختر نوعًا فرعيًا',
+  'homeHero.subTypeMore': 'المزيد',
   'homeHero.confirmReplaceTitle': 'استبدال الموجّه الحالي؟',
   'homeHero.confirmReplaceBody': 'سيؤدي استخدام {title} إلى استبدال النص الموجود حاليًا في حقل الإدخال.',
   'homeHero.confirmReplace': 'استبدال',

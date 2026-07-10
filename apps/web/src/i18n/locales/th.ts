@@ -682,6 +682,7 @@ export const th: Dict = {
   'homeHero.moreShortcuts': 'เพิ่มเติม',
   'homeHero.railAria': 'เลือกหมวดหมู่โปรเจกต์หรือทางลัดเริ่มต้น',
   'homeHero.subTypeAria': 'เลือกประเภทย่อย',
+  'homeHero.subTypeMore': 'เพิ่มเติม',
   'homeHero.confirmReplaceTitle': 'แทนที่ prompt ปัจจุบันหรือไม่?',
   'homeHero.confirmReplaceBody': 'การใช้ {title} จะแทนที่ข้อความที่อยู่ในช่องป้อนข้อมูลในขณะนี้',
   'homeHero.confirmReplace': 'แทนที่',

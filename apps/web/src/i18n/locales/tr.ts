@@ -682,6 +682,7 @@ export const tr: Dict = {
   'homeHero.moreShortcuts': 'Daha fazla',
   'homeHero.railAria': 'Bir proje kategorisi veya başlangıç kısayolu seçin',
   'homeHero.subTypeAria': 'Bir alt tür seçin',
+  'homeHero.subTypeMore': 'Daha fazla',
   'homeHero.confirmReplaceTitle': 'Geçerli istem değiştirilsin mi?',
   'homeHero.confirmReplaceBody': '{title} kullanmak, girişte şu anda bulunan metni değiştirecek.',
   'homeHero.confirmReplace': 'Değiştir',

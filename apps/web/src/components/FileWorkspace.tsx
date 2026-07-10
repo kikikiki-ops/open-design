@@ -23,6 +23,7 @@ import {
 import { deriveUploadCohort } from '../analytics/upload-tracking';
 import { useI18n, useT, type Locale } from '../i18n';
 import { useStableHandler } from '../lib/use-stable-handler';
+import { useDeckPreviewScale } from '../lib/use-deck-preview-scale';
 import { isMacPlatform } from '../utils/platform';
 import {
   deleteProjectFile,
@@ -7125,16 +7126,27 @@ function PageCreatorPresetFrame({
 }) {
   const preview = preset.pluginPreview;
   const { ref, inView } = useInView<HTMLSpanElement>({ rootMargin: '520px', once: false });
-  // Decks ship a fixed 16:9 stage that scales itself to its viewport. The fixed
-  // 480×300 scale-0.4 crop below is tuned for tall webpage previews and would
-  // clip a deck to a cramped top-left corner. Tag deck presets so the frame
-  // becomes a 16:9 box the iframe fills natively — the stage then fits the whole
-  // slide edge-to-edge (matches the Community gallery deck treatment).
+  // Decks preview at a fixed 1280×720 logical viewport (DECK_PREVIEW_DESIGN_WIDTH)
+  // that is visually scaled down to the 16:9 frame. The fixed 480×300 scale-0.4
+  // crop below is tuned for tall webpage previews and would clip a deck to a
+  // cramped top-left corner. Tag deck presets so the frame becomes a 16:9 box.
+  // Letting the iframe fill it natively (transform:none) only works for decks
+  // that self-scale to their viewport; a fixed-pixel-canvas template
+  // (`.deck{width:100vw;height:100vh}` + fixed-px content, no fit script) then
+  // renders full-size in the tiny iframe and overflows into a cramped mess.
+  // Rendering at the design width and scaling to fit — the same approach as
+  // PreviewModal — previews every template proportionally regardless of whether
+  // it ships a self-scaling stage.
   const odMode = (preset.plugin?.manifest?.od as { mode?: unknown } | undefined)?.mode;
   const isDeck = odMode === 'deck' || preset.category === 'slides';
   const frameClass = isDeck
     ? 'page-creator-card-frame page-creator-card-frame--deck'
     : 'page-creator-card-frame';
+
+  // Publishes `--deck-preview-scale` (frame width / 1280) so the fixed-size deck
+  // iframe shrinks to exactly the card width — the frame is 16:9, so scaling by
+  // width fits both axes. Shares the frame's `useInView` ref (same element).
+  useDeckPreviewScale(ref, isDeck);
 
   if (preset.source === 'blank') {
     return (
@@ -7593,9 +7605,17 @@ function PageCreatorDialog({
             onMouseDown={(event) => event.stopPropagation()}
           >
             <header className="page-template-preview-head">
-              <div>
+              <div className="page-template-preview-heading">
                 <p className="page-creator-kicker">{t('workspace.pageCreatorPreview')}</p>
-                <h3>{pagePresetTitle(modalPreviewPreset, t, locale)}</h3>
+                <div className="page-template-preview-title-row">
+                  <h3>{pagePresetTitle(modalPreviewPreset, t, locale)}</h3>
+                  <span className="page-creator-source">{presetTagLabel(modalPreviewPreset)}</span>
+                </div>
+                {pagePresetDescription(modalPreviewPreset, t, locale) ? (
+                  <p className="page-template-preview-desc">
+                    {pagePresetDescription(modalPreviewPreset, t, locale)}
+                  </p>
+                ) : null}
               </div>
               <button
                 type="button"

@@ -682,6 +682,7 @@ export const ko: Dict = {
   'homeHero.moreShortcuts': '더보기',
   'homeHero.railAria': '프로젝트 카테고리 또는 시작 단축키 선택',
   'homeHero.subTypeAria': '하위 유형 선택',
+  'homeHero.subTypeMore': '더 보기',
   'homeHero.confirmReplaceTitle': '현재 프롬프트를 바꿀까요?',
   'homeHero.confirmReplaceBody': '{title}을(를) 사용하면 현재 입력란의 텍스트가 대체됩니다.',
   'homeHero.confirmReplace': '바꾸기',

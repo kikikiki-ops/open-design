@@ -682,6 +682,7 @@ export const fa: Dict = {
   'homeHero.moreShortcuts': 'بیشتر',
   'homeHero.railAria': 'یک دسته پروژه یا میانبر شروع را انتخاب کنید',
   'homeHero.subTypeAria': 'یک زیرنوع را انتخاب کنید',
+  'homeHero.subTypeMore': 'بیشتر',
   'homeHero.confirmReplaceTitle': 'دستور فعلی جایگزین شود؟',
   'homeHero.confirmReplaceBody': 'استفاده از {title} متنی را که اکنون در ورودی است جایگزین می‌کند.',
   'homeHero.confirmReplace': 'جایگزینی',

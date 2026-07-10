@@ -1582,6 +1582,16 @@
   white-space: nowrap;
   flex-shrink: 0;
 }
+/* Uniform control height so the accent "Use" CTA and the ghost actions (Share,
+   etc.) read as one aligned row — the accent button used to sit a hair taller
+   than the ghost buttons because of their different intrinsic padding. */
+.ds-modal-actions > button,
+.ds-modal-actions .share-menu > button,
+.ds-modal-actions .ds-modal-primary-action-group,
+.ds-modal-actions .ds-modal-primary-action-group > button {
+  height: 34px;
+  box-sizing: border-box;
+}
 .ds-modal-stage {
   flex: 1;
   min-height: 0;
@@ -1733,7 +1743,7 @@
 
 /* Custom (non-iframe) stage container — used by the plugin media
    detail variant so image / video / audio plugins share the
-   same modal chrome (header, sidebar toggle, fullscreen, share)
+   same modal chrome (header, sidebar handles, fullscreen, share)
    as HTML and design-system plugins. The container fills the
    stage frame and centers its child media element. */
 .ds-modal-stage-custom {
@@ -2105,14 +2115,6 @@
   border: 1px solid rgba(0, 0, 0, 0.12);
   vertical-align: middle;
 }
-/* Plugin detail suppresses the header sidebar toggle on desktop (the
-   preview-edge handle opens the info panel there). Hide it on desktop but
-   expose it again on small screens, where the edge handle is hidden and
-   would otherwise leave the collapsed info panel unreachable. */
-.ds-modal-sidebar-toggle--compact-only {
-  display: none;
-}
-
 @media (max-width: 760px) {
   .ds-modal-backdrop { padding: 0; }
   .ds-modal { border-radius: 0; }
@@ -2127,10 +2129,34 @@
     min-width: 0;
     max-width: none;
   }
-  /* On stacked layout the side handles (which assume horizontal split)
-     would float over content awkwardly — fall back to the header toggle. */
-  .ds-modal-stage-handle { display: none; }
-  .ds-modal-sidebar-toggle--compact-only { display: inline-flex; }
+  /* The header no longer carries a sidebar button. Keep the stage-edge
+     handles available in the stacked layout so the pane remains reachable. */
+  .ds-modal-stage-handle.is-expand {
+    top: auto;
+    right: 50%;
+    bottom: 0;
+    width: 56px;
+    height: 18px;
+    transform: translateX(50%);
+    border-right: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: 8px 8px 0 0;
+  }
+  .ds-modal-stage-handle.is-expand > span { transform: rotate(-90deg); }
+  .ds-modal-stage-handle.is-collapse {
+    position: sticky;
+    top: 0;
+    left: 50%;
+    width: 56px;
+    height: 18px;
+    transform: translateX(-50%);
+    border-top: none;
+    border-left: 1px solid var(--border);
+    border-radius: 0 0 8px 8px;
+    flex-shrink: 0;
+    align-self: center;
+  }
+  .ds-modal-stage-handle.is-collapse > span { transform: rotate(-90deg); }
 }
 
 /* Examples gallery toolbar — filter pills + richer card metadata */

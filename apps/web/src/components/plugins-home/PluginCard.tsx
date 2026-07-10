@@ -12,10 +12,11 @@
 // gallery-clean while the active state surfaces everything the user
 // needs to commit.
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { VisuallyHidden } from '@open-design/components';
 import type { InstalledPluginRecord } from '@open-design/contracts';
 import { useI18n } from '../../i18n';
+import { useDeckPreviewScale } from '../../lib/use-deck-preview-scale';
 import type { PluginShareAction } from '../../state/projects';
 import { Icon } from '../Icon';
 import { TrustBadge } from '../TrustBadge';
@@ -96,6 +97,17 @@ export function PluginCard({
   const canDuplicate = Boolean(onDuplicate) && canDuplicatePluginPreview(record);
   const duplicateDisabled = isDuplicatePending || pendingDuplicateAny || pendingAny || shareBusy;
 
+  // Gallery deck tiles render the iframe at a fixed 1280 design width scaled to
+  // fit the 16:9 frame, so a template's first slide previews proportionally
+  // instead of overflowing (see useDeckPreviewScale). Hooks stay top-level;
+  // the ref only attaches (and the observer only runs) on the gallery deck path.
+  const odMode = (record.manifest?.od as { mode?: unknown } | undefined)?.mode;
+  const galleryFrameRef = useRef<HTMLDivElement>(null);
+  useDeckPreviewScale(
+    galleryFrameRef,
+    layout === 'gallery' && odMode === 'deck' && preview.kind === 'html',
+  );
+
   function pickUseAction(action: PluginUseAction) {
     setUseMenuOpen(false);
     onUse(record, action);
@@ -105,10 +117,9 @@ export function PluginCard({
     // Live-preview tile: a macOS-window-style bar (status dot + plugin
     // name) over an eagerly-rendered example.html iframe. The whole tile
     // opens the detail surface.
-    // Decks render a fixed 16:9 stage; tag them so the gallery preview uses a
-    // 16:9 frame instead of the tall scroll-preview viewport (which would
-    // letterbox the stage and show a dark band above/below the slide).
-    const odMode = (record.manifest?.od as { mode?: unknown } | undefined)?.mode;
+    // Decks render inside a 16:9 frame; tag them (data-od-mode) so the gallery
+    // preview swaps the tall scroll-preview viewport for a 16:9 box. The iframe
+    // is scaled to fit via `galleryFrameRef` + useDeckPreviewScale (hoisted above).
     return (
       <article
         role="listitem"
@@ -131,33 +142,7 @@ export function PluginCard({
         // so screen readers don't announce a bare "listitem" as actionable.
         onClick={() => onOpenDetails(record)}
       >
-        <div className="plugins-home__gallery-bar">
-          <span className="plugins-home__gallery-dot" aria-hidden />
-          <button
-            type="button"
-            className="plugins-home__gallery-name"
-            title={title}
-            aria-label={t('pluginCard.detailsAria', { title })}
-            onClick={(event) => {
-              event.stopPropagation();
-              onOpenDetails(record);
-            }}
-            // The accessible, focusable control that opens the detail modal;
-            // also the e2e/visual hook equivalent to the rich card's Details.
-            data-testid={`plugins-home-details-${record.id}`}
-          >
-            {title}
-          </button>
-          {categoryLabel ? (
-            <span
-              className="plugins-home__gallery-category"
-              data-testid={`plugins-home-category-${record.id}`}
-            >
-              {categoryLabel}
-            </span>
-          ) : null}
-        </div>
-        <div className="plugins-home__gallery-frame">
+        <div className="plugins-home__gallery-frame" ref={galleryFrameRef}>
           <PreviewSurface
             pluginId={record.id}
             pluginTitle={title}
@@ -197,6 +182,43 @@ export function PluginCard({
               </button>
             ) : null}
           </div>
+        </div>
+        <div className="plugins-home__gallery-bar">
+          <div className="plugins-home__gallery-bar-row">
+            <span className="plugins-home__gallery-dot" aria-hidden />
+            <button
+              type="button"
+              className="plugins-home__gallery-name"
+              title={title}
+              aria-label={t('pluginCard.detailsAria', { title })}
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenDetails(record);
+              }}
+              // The accessible, focusable control that opens the detail modal;
+              // also the e2e/visual hook equivalent to the rich card's Details.
+              data-testid={`plugins-home-details-${record.id}`}
+            >
+              {title}
+            </button>
+            {categoryLabel ? (
+              <span
+                className="plugins-home__gallery-category"
+                data-testid={`plugins-home-category-${record.id}`}
+              >
+                {categoryLabel}
+              </span>
+            ) : null}
+          </div>
+          {description ? (
+            <p
+              className="plugins-home__gallery-desc"
+              title={description}
+              data-testid={`plugins-home-gallery-desc-${record.id}`}
+            >
+              {description}
+            </p>
+          ) : null}
         </div>
       </article>
     );

@@ -682,6 +682,7 @@ export const hu: Dict = {
   'homeHero.moreShortcuts': 'Továbbiak',
   'homeHero.railAria': 'Válassz projektkategóriát vagy kezdő gyorsindítót',
   'homeHero.subTypeAria': 'Válassz altípust',
+  'homeHero.subTypeMore': 'Több',
   'homeHero.confirmReplaceTitle': 'Lecseréled a jelenlegi promptot?',
   'homeHero.confirmReplaceBody': 'A(z) {title} használata lecseréli a beviteli mezőben jelenleg lévő szöveget.',
   'homeHero.confirmReplace': 'Csere',
