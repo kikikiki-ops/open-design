@@ -578,6 +578,8 @@ export const zhCN: Dict = {
   "settings.runtimePackaged": "已打包应用",
   "settings.runtimeDevelopment": "开发环境",
   "settings.versionUnavailable": "守护进程离线时无法获取版本详情。",
+  "settings.allowSilentUpdates": "允许静默更新",
+  "settings.allowSilentUpdatesDesc": "启动时自动应用已下载的 payload 更新。安装器更新仍会先询问。",
   "settings.installLatest": "安装最新版本",
   "settings.alreadyLatest": "当前为最新版本",
   "settings.mcpTitle": "MCP 服务器",
@@ -3880,6 +3882,7 @@ export const zhCN: Dict = {
     "安装器已打开。Open Design 正在退出，以便你完成更新。",
   "updater.installerOpened": "安装器已打开",
   "updater.later": "稍后",
+  "updater.allowSilentUpdates": "允许静默更新",
   "updater.openFailedFallback": "无法打开安装器。",
   "updater.installRestart": "安装并重启",
   "updater.installingRestart": "正在安装并重启…",
@@ -3899,6 +3902,9 @@ export const zhCN: Dict = {
   "updater.readyVersion":
     "Open Design {version} 已就绪。Open Design 会关闭并打开安装器。",
   "updater.upToDate": "您已经是最新版本啦",
+
+  "whatsNew.cta": "看看有什么新功能",
+  "whatsNew.dismissAria": "关闭更新亮点",
 
   'designBrowser.copyScreenshot': '复制截图',
   'designBrowser.hardReload': '强制刷新',

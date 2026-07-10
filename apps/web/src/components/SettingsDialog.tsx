@@ -5642,6 +5642,24 @@ export function SettingsDialog({
               ) : (
                 <div className="empty-card">{t('settings.versionUnavailable')}</div>
               )}
+              <div className="settings-about-diagnostics settings-about-silent-updates">
+                <label className="settings-about-toggle">
+                  <input
+                    checked={cfg.allowSilentUpdates === true}
+                    type="checkbox"
+                    onChange={(event) =>
+                      setCfg((current) => ({
+                        ...current,
+                        allowSilentUpdates: event.currentTarget.checked,
+                      }))
+                    }
+                  />
+                  <span className="settings-about-toggle-copy">
+                    <span>{t('settings.allowSilentUpdates')}</span>
+                    <span className="hint">{t('settings.allowSilentUpdatesDesc')}</span>
+                  </span>
+                </label>
+              </div>
               <div className="settings-about-diagnostics">
                 <div className="settings-about-diagnostics-text">
                   <h4>{t('diagnostics.exportTitle')}</h4>

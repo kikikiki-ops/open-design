@@ -529,6 +529,8 @@ export interface Dict {
   'settings.runtimePackaged': string;
   'settings.runtimeDevelopment': string;
   'settings.versionUnavailable': string;
+  'settings.allowSilentUpdates': string;
+  'settings.allowSilentUpdatesDesc': string;
   'settings.installLatest': string;
   'settings.alreadyLatest': string;
   'settings.updateCheck': string;
@@ -948,6 +950,7 @@ export interface Dict {
   'updater.installerOpenBody': string;
   'updater.installerOpened': string;
   'updater.later': string;
+  'updater.allowSilentUpdates': string;
   'updater.openFailedFallback': string;
   'updater.installRestart': string;
   'updater.installingRestart': string;
@@ -963,6 +966,12 @@ export interface Dict {
   'updater.readyGeneric': string;
   'updater.readyVersion': string;
   'updater.upToDate': string;
+
+  // Post-update "what's new" card on the home surface. Release-configured
+  // copy comes from the release feed; these keys cover the card chrome and
+  // the generic fallback when a version ships without highlights.
+  'whatsNew.cta': string;
+  'whatsNew.dismissAria': string;
 
   // Newsletter email field on the onboarding About-you step.
   'newsletter.label': string;

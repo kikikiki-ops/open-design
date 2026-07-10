@@ -214,6 +214,7 @@ export function createChatRunService({
     mediaExecution: run.mediaExecution ?? normalizeMediaExecutionPolicyForRun(null),
     toolBundle: summarizeRunToolBundle(run.toolBundle),
     ...(run.promptCache ? { promptCache: run.promptCache } : {}),
+    ...(run.nativeSessionRecovery ? { nativeSessionRecovery: run.nativeSessionRecovery } : {}),
     ...(run.browserUse ? { browserUse: run.browserUse } : {}),
   });
 

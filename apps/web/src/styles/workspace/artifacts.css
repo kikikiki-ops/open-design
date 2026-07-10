@@ -500,6 +500,33 @@
   margin: 0;
   font-size: 12px;
 }
+.settings-about-silent-updates {
+  align-items: center;
+}
+.settings-about-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+.settings-about-toggle input {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+.settings-about-toggle-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.settings-about-toggle-copy .hint {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.45;
+}
 .diagnostics-export-row {
   display: flex;
   flex-direction: column;

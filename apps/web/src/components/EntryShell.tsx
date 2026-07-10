@@ -96,6 +96,7 @@ import { BrandsTab } from './BrandsTab';
 import { EntryNavRail, type EntryView as EntryViewKind } from './EntryNavRail';
 import { LibrarySection } from './LibrarySection';
 import { UpdaterPopup } from './UpdaterPopup';
+import { WhatsNewPopup } from './WhatsNewPopup';
 import { AmrBalanceDialog } from './AmrBalanceDialog';
 import { AmrLowBalanceDialog, type AmrLowBalanceDecision } from './AmrLowBalanceDialog';
 import { checkAmrBalanceGate } from '../runtime/amr-balance-gate';
@@ -1058,7 +1059,13 @@ export function EntryShell({
                 </span>
               </button>
             </div>
-            <UpdaterPopup />
+            <UpdaterPopup
+              allowSilentUpdates={config.allowSilentUpdates}
+              onAllowSilentUpdatesChange={(allowSilentUpdates) =>
+                onConfigPersist({ ...config, allowSilentUpdates })
+              }
+            />
+            <WhatsNewPopup active={view === 'home'} />
             {avatarMenu}
             {amrBalanceGateBlock ? (
               <AmrBalanceDialog
