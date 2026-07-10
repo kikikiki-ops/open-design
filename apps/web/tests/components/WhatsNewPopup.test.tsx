@@ -72,7 +72,10 @@ describe('WhatsNewPopup fetch/show lifecycle', () => {
     await waitFor(() => {
       expect(screen.getByTestId('whats-new-popup')).toBeTruthy();
     });
-    expect(screen.getByText('Design system sync')).toBeTruthy();
+    expect(screen.getByText('Import, edit and sync design systems.')).toBeTruthy();
+    // The title is no longer rendered as visible copy (it moved to the card's
+    // aria-label); the dialog is still labelled by it for screen readers.
+    expect(screen.getByRole('dialog', { name: 'Design system sync' })).toBeTruthy();
   });
 
   it('does not fetch or show while Home is inactive, then shows once it activates', async () => {

@@ -152,7 +152,7 @@ export function WhatsNewPopup({ active }: { active: boolean }) {
     <AnimatePresence>
       {active && card != null ? (
         <motion.section
-          aria-labelledby="whats-new-popup-title"
+          aria-label={card.title}
           className={styles.card}
           data-testid="whats-new-popup"
           role="dialog"
@@ -161,24 +161,16 @@ export function WhatsNewPopup({ active }: { active: boolean }) {
           animate="visible"
           exit="exit"
         >
-          <div className={styles.header}>
-            <span className={styles.headerIcon} aria-hidden>
-              <Icon name="info" size={15} strokeWidth={2} />
-            </span>
-            <h2 className={styles.title} id="whats-new-popup-title">
-              {card.title}
-            </h2>
-            <Button
-              aria-label={t('whatsNew.dismissAria')}
-              className={styles.close}
-              data-testid="whats-new-dismiss"
-              size="icon"
-              variant="ghost"
-              onClick={dismiss}
-            >
-              <Icon name="close" size={14} strokeWidth={2} />
-            </Button>
-          </div>
+          <Button
+            aria-label={t('whatsNew.dismissAria')}
+            className={styles.close}
+            data-testid="whats-new-dismiss"
+            size="icon"
+            variant="ghost"
+            onClick={dismiss}
+          >
+            <Icon name="close" size={14} strokeWidth={2} />
+          </Button>
           <div className={styles.content}>
             <div className={styles.main}>
               <p className={styles.body}>{card.body}</p>

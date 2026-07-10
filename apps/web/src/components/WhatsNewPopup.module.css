@@ -19,31 +19,17 @@
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.18);
 }
 
-.header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.headerIcon {
-  display: inline-flex;
-  flex: 0 0 auto;
-  color: var(--text-muted, var(--text));
-}
-
-.title {
-  flex: 1 1 auto;
-  min-width: 0;
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.35;
-  color: var(--text, #1f2328);
-}
-
+/* Floated top-right over the card so the copy can start at the top edge once
+   the title row is gone; the panel background keeps the ✕ legible over the
+   illustration. */
 .close {
-  flex: 0 0 auto;
-  align-self: flex-start;
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1;
+  background: var(--bg-panel, var(--bg, #fff));
+  border: 1px solid var(--border, #d0d7de);
+  border-radius: 9px;
 }
 
 /* Body copy and CTA share the left column; the image stretches to its full
