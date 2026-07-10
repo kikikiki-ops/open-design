@@ -347,8 +347,8 @@ function enrichVelaModelsFromOpenCodeCatalog(
     const price = lookupOpenCodeModelPrice(catalog, model.id);
     if (!price) return model;
     const metadata = {
-      ...(model.metadata ?? {}),
       ...(price.metadata ?? {}),
+      ...(model.metadata ?? {}),
     };
     return {
       ...model,

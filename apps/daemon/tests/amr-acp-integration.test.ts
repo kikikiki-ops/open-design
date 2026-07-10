@@ -296,7 +296,7 @@ describe('AMR runtime def', () => {
         FAKE_VELA_MODEL_LIST_JSON: JSON.stringify({
           source: 'remote',
           data: [
-            { id: 'claude-fable-5' },
+            { id: 'claude-fable-5', metadata: { cost: 'medium', capability: 'best_quality' } },
             { id: 'claude-opus-4.6' },
             { id: 'mimo-v2.5-pro' },
             { id: 'gemini-3-flash-preview' },
@@ -310,7 +310,7 @@ describe('AMR runtime def', () => {
           label: 'claude-fable-5',
           inputPriceUsdPerMillion: 10,
           outputPriceUsdPerMillion: 50,
-          metadata: { cost: 'very_high' },
+          metadata: { cost: 'medium', capability: 'best_quality' },
         },
         {
           id: 'claude-opus-4.6',
