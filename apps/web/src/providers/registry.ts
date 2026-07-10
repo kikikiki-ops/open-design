@@ -1660,6 +1660,15 @@ export function projectFileUrl(projectId: string, name: string): string {
   return projectRawUrl(projectId, name);
 }
 
+function encodeProjectPathForUrl(filePath: string): string {
+  return filePath
+    .replace(/\\/g, '/')
+    .split('/')
+    .filter((segment) => segment.length > 0)
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
+}
+
 export interface ProjectFilePreviewSection {
   title: string;
   lines: string[];
@@ -1676,8 +1685,10 @@ export async function fetchProjectFilePreview(
   name: string,
 ): Promise<ProjectFilePreview | null> {
   try {
+    const safePath = encodeProjectPathForUrl(name);
+    if (!safePath) return null;
     const resp = await fetch(
-      `/api/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(name)}/preview`,
+      `/api/projects/${encodeURIComponent(projectId)}/files/${safePath}/preview`,
     );
     if (!resp.ok) return null;
     return (await resp.json()) as ProjectFilePreview;
@@ -1729,17 +1740,13 @@ export async function fetchProjectFileTextPreview(
   name: string,
   options?: { limit?: number; cacheBustKey?: string | number },
 ): Promise<ProjectFileTextPreviewResponse | null> {
-  const segments = name
-    .split('/')
-    .filter((segment) => segment.length > 0)
-    .map(encodeURIComponent)
-    .join('/');
-  if (!segments) return null;
+  const safePath = encodeProjectPathForUrl(name);
+  if (!safePath) return null;
   const params = new URLSearchParams();
   if (options?.limit != null) params.set('limit', String(options.limit));
   if (options?.cacheBustKey != null) params.set('cacheBust', String(options.cacheBustKey));
   const query = params.toString();
-  const url = `/api/projects/${encodeURIComponent(projectId)}/text-preview/${segments}${query ? `?${query}` : ''}`;
+  const url = `/api/projects/${encodeURIComponent(projectId)}/text-preview/${safePath}${query ? `?${query}` : ''}`;
 
   try {
     const resp = await fetch(url, { cache: 'no-store' });
@@ -2139,10 +2146,7 @@ export async function uploadProjectFiles(
 export function projectRawUrl(projectId: string, filePath: string): string {
   // Encode each path segment individually so a slash inside the file
   // path stays a path separator, not %2F.
-  const safePath = filePath
-    .split('/')
-    .map((seg) => encodeURIComponent(seg))
-    .join('/');
+  const safePath = encodeProjectPathForUrl(filePath);
   return `/api/projects/${encodeURIComponent(projectId)}/raw/${safePath}`;
 }
 

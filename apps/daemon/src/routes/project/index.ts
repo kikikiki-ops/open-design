@@ -2863,7 +2863,12 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
   }
 
   function encodeProjectPathForUrl(filePath: string): string {
-    return filePath.split('/').map((segment) => encodeURIComponent(segment)).join('/');
+    return filePath
+      .replace(/\\/g, '/')
+      .split('/')
+      .filter((segment) => segment.length > 0)
+      .map((segment) => encodeURIComponent(segment))
+      .join('/');
   }
 
   async function maybeResolveVitePreviewHtml({
@@ -3335,13 +3340,16 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
     }
   });
 
-  app.get('/api/projects/:id/files/:name/preview', async (req, res) => {
+  app.get(/^\/api\/projects\/([^/]+)\/files\/(.+)\/preview$/u, async (req, res) => {
     try {
-      const project = getProject(db, req.params.id);
+      const params = req.params as unknown as { 0?: string; 1?: string };
+      const projectId = String(params[0] ?? '');
+      const relPath = String(params[1] ?? '');
+      const project = getProject(db, projectId);
       const file = await readProjectFile(
         PROJECTS_DIR,
-        req.params.id,
-        req.params.name,
+        projectId,
+        relPath,
         project?.metadata,
       );
       const preview = await buildDocumentPreview(file);

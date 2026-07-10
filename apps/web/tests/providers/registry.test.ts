@@ -16,10 +16,13 @@ import {
   fetchPluginExampleHtml,
   fetchPluginPreviewHtml,
   fetchProjectDesignSystemPackageAudit,
+  fetchProjectFilePreview,
   fetchProjectFileText,
+  fetchProjectFileTextPreview,
   fetchSkillExample,
   isDeployProviderId,
   openFolderDialog,
+  projectRawUrl,
   updateDeployConfig,
   uploadProjectFiles,
   writeProjectTextFileDetailed,
@@ -151,6 +154,63 @@ describe('writeProjectTextFileDetailed', () => {
       code: 'ARTIFACT_REGRESSION',
       message: 'new artifact is smaller than the prior version',
     });
+  });
+});
+
+describe('project file preview URLs', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('normalizes Windows separators when building raw project file URLs', () => {
+    expect(projectRawUrl('project 1', String.raw`preview\index.html`))
+      .toBe('/api/projects/project%201/raw/preview/index.html');
+    expect(projectRawUrl('project 1', String.raw`preview\assets\hero image.png`))
+      .toBe('/api/projects/project%201/raw/preview/assets/hero%20image.png');
+  });
+
+  it('fetches document previews through normalized project path segments', async () => {
+    const preview = { kind: 'document', title: 'Artifact', sections: [] };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(preview), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchProjectFilePreview('project 1', String.raw`preview\artifact.docx`))
+      .resolves.toEqual(preview);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/projects/project%201/files/preview/artifact.docx/preview',
+    );
+  });
+
+  it('fetches text previews through normalized project path segments', async () => {
+    const textPreview = {
+      text: '<!doctype html>',
+      truncated: false,
+      size: 15,
+      limit: 1024,
+      mime: 'text/html',
+      kind: 'html',
+      poweredPreview: { required: false, scannedBytes: 15, complete: true },
+    };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(textPreview), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchProjectFileTextPreview('project 1', String.raw`preview\index.html`, {
+      cacheBustKey: 'mtime',
+      limit: 4096,
+    })).resolves.toEqual(textPreview);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/projects/project%201/text-preview/preview/index.html?limit=4096&cacheBust=mtime',
+      { cache: 'no-store' },
+    );
   });
 });
 

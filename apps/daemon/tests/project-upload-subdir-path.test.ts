@@ -11,7 +11,7 @@
 // a subdirectory in the desired name must survive name resolution.
 
 import { describe, expect, it } from 'vitest';
-import { sanitizeName, sanitizePath } from '../src/projects.js';
+import { sanitizeName, sanitizePath, validateProjectPath } from '../src/projects.js';
 
 describe('project upload name resolution preserves subdirectories', () => {
   it('sanitizeName flattens a subdirectory path (the pre-fix behavior)', () => {
@@ -22,6 +22,11 @@ describe('project upload name resolution preserves subdirectories', () => {
   it('sanitizePath keeps the subdirectory the design-kit uploader intends', () => {
     expect(sanitizePath('imagery/hero.png')).toBe('imagery/hero.png');
     expect(sanitizePath('logos/wordmark.svg')).toBe('logos/wordmark.svg');
+  });
+
+  it('normalizes Windows separators to project-relative URL paths', () => {
+    expect(validateProjectPath(String.raw`preview\index.html`)).toBe('preview/index.html');
+    expect(validateProjectPath(String.raw`preview\assets\hero.png`)).toBe('preview/assets/hero.png');
   });
 
   it('sanitizePath rejects traversal and sanitizes each segment', () => {
