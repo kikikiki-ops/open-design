@@ -513,7 +513,6 @@ describe('composeSystemPrompt — slim layered ordering (cache-stable prefix)', 
       promptCoreVariant: 'slim',
       freeformDeckSignal: true,
       mediaHintSignal: true,
-      connectedExternalMcp: [{ id: 'vela' }],
     });
     // Line-anchored: the charter QUOTES some headings in prose (e.g.
     // \`## Project metadata\` in the turn-1 tailoring rule), so a bare
@@ -534,7 +533,9 @@ describe('composeSystemPrompt — slim layered ordering (cache-stable prefix)', 
     const memory = at('## Personal memory');
     const ds = at('## Active design system — Brand');
     const metadataAt = at('## Project metadata');
-    const mcp = at('## External MCP servers — already authenticated');
+    // The connected-external-MCP directive is no longer composed here:
+    // server.ts re-sends it in the per-turn slice so live OAuth token state
+    // stays out of the cached stable prefix.
     // Turn-variable blocks last, before the recency-pinned guard.
     const maybeDeck = at('## If this brief is a slide deck');
     const mediaHint = at('## Media generation (if asked)');
@@ -545,8 +546,7 @@ describe('composeSystemPrompt — slim layered ordering (cache-stable prefix)', 
     expect(localeAt).toBeLessThan(memory);
     expect(memory).toBeLessThan(ds);
     expect(ds).toBeLessThan(metadataAt);
-    expect(metadataAt).toBeLessThan(mcp);
-    expect(mcp).toBeLessThan(maybeDeck);
+    expect(metadataAt).toBeLessThan(maybeDeck);
     expect(maybeDeck).toBeLessThan(mediaHint);
     expect(mediaHint).toBeLessThan(guard);
   });

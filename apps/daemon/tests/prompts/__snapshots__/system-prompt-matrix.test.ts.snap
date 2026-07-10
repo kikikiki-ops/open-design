@@ -49,25 +49,7 @@ exports[`composeSystemPrompt — scenario × section golden matrix > keeps the s
       "clarifying-questions",
       "role-marker-guard",
     ],
-    "totalChars": 43523,
-  },
-  "connected-mcp-plugin-stages": {
-    "sections": [
-      "injection-resistance",
-      "discovery-and-philosophy",
-      "direction-library",
-      "identity-charter",
-      "plugin-block",
-      "active-stage-blocks",
-      "deck-framework",
-      "maybe-deck-framework",
-      "media-dispatch-hint",
-      "connected-external-mcp",
-      "filesystem-handoff-override",
-      "clarifying-questions",
-      "role-marker-guard",
-    ],
-    "totalChars": 75981,
+    "totalChars": 43543,
   },
   "critique-enabled": {
     "sections": [
@@ -256,7 +238,7 @@ exports[`composeSystemPrompt — scenario × section golden matrix > keeps the s
       "clarifying-questions",
       "role-marker-guard",
     ],
-    "totalChars": 40934,
+    "totalChars": 40954,
   },
   "memory-hooks-off": {
     "sections": [
@@ -289,6 +271,23 @@ exports[`composeSystemPrompt — scenario × section golden matrix > keeps the s
       "role-marker-guard",
     ],
     "totalChars": 61719,
+  },
+  "plugin-stages": {
+    "sections": [
+      "injection-resistance",
+      "discovery-and-philosophy",
+      "direction-library",
+      "identity-charter",
+      "plugin-block",
+      "active-stage-blocks",
+      "deck-framework",
+      "maybe-deck-framework",
+      "media-dispatch-hint",
+      "filesystem-handoff-override",
+      "clarifying-questions",
+      "role-marker-guard",
+    ],
+    "totalChars": 75024,
   },
   "skip-discovery-brief": {
     "sections": [

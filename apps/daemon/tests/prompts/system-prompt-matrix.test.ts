@@ -66,7 +66,6 @@ const SECTION_MARKERS = [
   ['codex-imagegen-override', '## Codex built-in imagegen override'],
   ['critique-panel', '## Panelist role definitions'],
   ['active-ds-visual-direction-override', '## Active design system visual direction'],
-  ['connected-external-mcp', '## External MCP servers — already authenticated'],
   ['filesystem-handoff-override', '## Filesystem handoff'],
   ['clarifying-questions', '## Clarifying questions mid-conversation'],
   ['role-marker-guard', '## CRITICAL: Never fabricate conversation turns'],
@@ -257,9 +256,11 @@ const SCENARIOS: ReadonlyArray<[name: string, input: ComposeInput]> = [
     },
   ],
   [
-    'connected-mcp-plugin-stages',
+    // The connected-external-MCP directive is no longer part of
+    // composeSystemPrompt: server.ts re-sends it in the per-turn slice so live
+    // OAuth token state stays out of the cached stable prefix.
+    'plugin-stages',
     {
-      connectedExternalMcp: [{ id: 'vela', label: 'Vela AMR' }],
       pluginBlock: '\n\n## Active plugin\n\nThe user applied snapshot-plugin.',
       activeStageBlocks: ['\n\n## Active stage: discovery\n\nAsk audience.'],
       executionProfile: 'filesystem',
