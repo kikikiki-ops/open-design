@@ -2428,6 +2428,7 @@ export function FileWorkspace({
       className={[
         'workspace',
         designSystemProject ? 'has-design-system-tab' : '',
+        browserSnapshotToast ? 'has-browser-snapshot-toast' : '',
       ].filter(Boolean).join(' ')}
       data-testid="file-workspace"
     >
@@ -2679,17 +2680,19 @@ export function FileWorkspace({
         />
       ) : null}
       {browserSnapshotToast ? (
-        <Toast
-          message={browserSnapshotToast.message}
-          details={browserSnapshotToast.details}
-          actionLabel={browserSnapshotToast.actionLabel}
-          className={browserSnapshotToast.className}
-          onAction={browserSnapshotToast.onAction}
-          role={browserSnapshotToast.role}
-          tone={browserSnapshotToast.tone}
-          ttlMs={browserSnapshotToast.ttlMs}
-          onDismiss={() => setBrowserSnapshotToast(null)}
-        />
+        <div className="workspace-toast-anchor">
+          <Toast
+            message={browserSnapshotToast.message}
+            details={browserSnapshotToast.details}
+            actionLabel={browserSnapshotToast.actionLabel}
+            className={browserSnapshotToast.className}
+            onAction={browserSnapshotToast.onAction}
+            role={browserSnapshotToast.role}
+            tone={browserSnapshotToast.tone}
+            ttlMs={browserSnapshotToast.ttlMs}
+            onDismiss={() => setBrowserSnapshotToast(null)}
+          />
+        </div>
       ) : launcherToast ? (
         <Toast
           message={launcherToast}
