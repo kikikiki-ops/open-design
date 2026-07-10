@@ -24,12 +24,18 @@ function jsonResponse(payload: unknown, status = 200): Response {
 }
 
 describe('whatsNewSourceUrl', () => {
-  it('defaults to the dedicated hosted document', () => {
-    expect(whatsNewSourceUrl({})).toBe(DEFAULT_WHATS_NEW_URL);
+  it('uses the dedicated hosted document on release channels', () => {
+    expect(whatsNewSourceUrl({}, 'stable')).toBe(DEFAULT_WHATS_NEW_URL);
+    expect(whatsNewSourceUrl({}, 'beta')).toBe(DEFAULT_WHATS_NEW_URL);
   });
 
-  it('honors OD_WHATS_NEW_URL for fixtures and tests', () => {
-    expect(whatsNewSourceUrl({ OD_WHATS_NEW_URL: 'https://fixture.local/whats-new.json' })).toBe(
+  it('resolves to null on non-release channels (development/CI show no card)', () => {
+    expect(whatsNewSourceUrl({}, 'development')).toBeNull();
+    expect(whatsNewSourceUrl({}, '')).toBeNull();
+  });
+
+  it('honors OD_WHATS_NEW_URL for fixtures and tests regardless of channel', () => {
+    expect(whatsNewSourceUrl({ OD_WHATS_NEW_URL: 'https://fixture.local/whats-new.json' }, 'development')).toBe(
       'https://fixture.local/whats-new.json',
     );
   });
@@ -73,12 +79,25 @@ describe('createWhatsNewService', () => {
         return jsonResponse(DOC);
       },
     });
-    const first = await service.readWhatsNew();
-    const second = await service.readWhatsNew();
+    const first = await service.readWhatsNew('stable');
+    const second = await service.readWhatsNew('stable');
     expect(first.id).toBe('0.13.0');
     expect(first.content?.title).toBe('Design system sync');
     expect(second.content?.title).toBe('Design system sync');
     expect(calls).toBe(1);
+  });
+
+  it('skips the network entirely on non-release channels', async () => {
+    const service = createWhatsNewService({
+      env: {},
+      fetchImpl: async () => {
+        throw new Error('must not fetch');
+      },
+    });
+    const result = await service.readWhatsNew('development');
+    expect(result.id).toBeNull();
+    expect(result.content).toBeNull();
+    expect(result.stale).toBe(false);
   });
 
   it('resolves to null content instead of failing when the document is unreachable', async () => {
@@ -88,7 +107,7 @@ describe('createWhatsNewService', () => {
         throw new Error('offline');
       },
     });
-    const result = await service.readWhatsNew();
+    const result = await service.readWhatsNew('stable');
     expect(result.id).toBeNull();
     expect(result.content).toBeNull();
     expect(result.stale).toBe(true);
@@ -99,7 +118,7 @@ describe('createWhatsNewService', () => {
       env: {},
       fetchImpl: async () => jsonResponse({ error: 'nope' }, 404),
     });
-    const result = await service.readWhatsNew();
+    const result = await service.readWhatsNew('stable');
     expect(result.content).toBeNull();
     expect(result.stale).toBe(true);
   });

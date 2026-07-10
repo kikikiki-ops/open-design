@@ -19,8 +19,13 @@ in release `metadata.json`. To change what users see, edit that one file.
 
 - The daemon proxies it at `GET /api/whats-new` (also `od whats-new [--json]`),
   so the web UI and CLI read the exact same payload.
+- The card is a **release feature**: the daemon only fetches the document on
+  real release channels (`beta`, `prerelease`, `preview`, `stable`). Development
+  and CI builds resolve to no card and never hit the network, so the card never
+  intrudes on tests or unreleased builds.
 - `OD_WHATS_NEW_URL` overrides the source for local development and tests (for
-  example a `tools-serve` fixture endpoint).
+  example a `tools-serve` fixture endpoint), and opts any channel in — set it to
+  preview the card on a dev build.
 
 ## Show-once behavior
 
