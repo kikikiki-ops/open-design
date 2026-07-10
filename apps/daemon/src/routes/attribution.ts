@@ -134,7 +134,9 @@ export function createAttributionService(deps: Omit<RegisterAttributionRoutesDep
     });
     if (!ledger) {
       await persistPendingIfNeeded(attribution, true);
-      return response('pending_ledger', { found: true, pending: true });
+      const result = response('pending_ledger', { found: true, pending: true });
+      await captureClaimResult(result, attribution.source, attribution.platform, installationId);
+      return result;
     }
     if (ledger.status === 'not_found') {
       await writeInstallationFile(installationDir, {
