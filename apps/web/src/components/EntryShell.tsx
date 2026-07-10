@@ -95,7 +95,6 @@ import { BrandsTab } from './BrandsTab';
 import { EntryNavRail, type EntryView as EntryViewKind } from './EntryNavRail';
 import { LibrarySection } from './LibrarySection';
 import { UpdaterPopup } from './UpdaterPopup';
-import { WhatsNewPopup } from './WhatsNewPopup';
 import { GithubStarBadge } from './GithubStarBadge';
 import {
   formatDiscordPresenceCount,
@@ -903,7 +902,6 @@ export function EntryShell({
                 onConfigPersist({ ...config, allowSilentUpdates })
               }
             />
-            <WhatsNewPopup active={view === 'home'} />
             {avatarMenu}
           </div>
           <div

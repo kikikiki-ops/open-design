@@ -137,16 +137,6 @@ export interface UpdatePromptSurfaceViewProps {
   app_version_after?: string;
 }
 
-// Post-update "what's new" card on the home surface; fires once per version
-// when the card becomes visible after an update.
-export interface WhatsNewPopupSurfaceViewProps {
-  page_name: 'home';
-  area: 'whats_new_popup';
-  app_version: string;
-  /** True when release-configured highlights were shown, false for the generic fallback copy. */
-  has_release_notes: boolean;
-}
-
 // Impression of the HTML file version history modal. Fires once per open so
 // the versions funnel has a denominator (toolbar clicks → exposures →
 // version_item browsing → restore result). `entry_from` mirrors the opening
@@ -176,6 +166,4 @@ export type SurfaceViewProps =
   | UpdateIndicatorSurfaceViewProps
   | ReferenceBoardSurfaceViewProps
   | UpdatePromptSurfaceViewProps
-  | WhatsNewPopupSurfaceViewProps
   | FileVersionModalSurfaceViewProps;
-
