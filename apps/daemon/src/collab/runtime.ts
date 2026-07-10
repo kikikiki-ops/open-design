@@ -55,6 +55,8 @@ export interface CollabRuntime {
    * project can tell whether it is their own (writer) or someone else's (read-only).
    */
   requestTeamShare(projectId: string, share?: string | ResourceHubPrincipal): void;
+  /** Restore a persisted team share into runtime bookkeeping without publishing. */
+  rememberTeamShare(projectId: string, share: ResourceHubPrincipal, syncState?: ProjectSyncState): void;
   /** The member who shared this project, or null if not shared here. */
   projectOwnerMemberId(projectId: string, principal?: ResourceHubPrincipal | null): string | null;
   /**
@@ -201,6 +203,22 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
   // this to their own id to know whether they view the project read-only.
   const owners = new Map<string, string>();
   const scopedOwners = new Map<string, string>();
+  function rememberTeamShare(
+    projectId: string,
+    share: ResourceHubPrincipal,
+    syncState: ProjectSyncState = 'pending_upload',
+  ) {
+    owners.set(projectId, share.memberId);
+    scopedOwners.set(scopedProjectKey(projectId, share), share.memberId);
+    let principals = sharePrincipals.get(projectId);
+    if (!principals) {
+      principals = new Map();
+      sharePrincipals.set(projectId, principals);
+    }
+    principals.set(share.teamId, share);
+    syncStates.set(projectId, syncState);
+    syncStates.set(scopedProjectKey(projectId, share), syncState);
+  }
   async function markTeamProject(
     projectId: string,
     syncState: 'pending_upload' | 'synced' | 'failed',
@@ -318,24 +336,18 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
       if (principal) return scopedOwners.get(scopedProjectKey(projectId, principal)) ?? owners.get(projectId) ?? null;
       return owners.get(projectId) ?? null;
     },
+    rememberTeamShare,
     requestTeamShare(projectId, share) {
       // Record the sharer as the project's single writer so members can tell
       // apart their own project from one shared to them.
       if (typeof share === 'string') {
         owners.set(projectId, share);
       } else if (share) {
-        owners.set(projectId, share.memberId);
-        scopedOwners.set(scopedProjectKey(projectId, share), share.memberId);
-        let principals = sharePrincipals.get(projectId);
-        if (!principals) {
-          principals = new Map();
-          sharePrincipals.set(projectId, principals);
-        }
-        principals.set(share.teamId, share);
+        rememberTeamShare(projectId, share, 'pending_upload');
       }
       // Pending until the publish confirms (onPublished → 'synced' / onError →
       // 'sync_failed'). Flushing at a run boundary publishes the stable state.
-      syncStates.set(projectId, 'pending_upload');
+      if (typeof share === 'string' || !share) syncStates.set(projectId, 'pending_upload');
       if (share && typeof share !== 'string') {
         const key = scopedProjectKey(projectId, share);
         syncStates.set(key, 'pending_upload');

@@ -1353,7 +1353,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       updatedAt,
     };
     return {
-      id: remote.projectId,
+      id: remote.resourceId,
       name,
       workspaceId: ctx.workspaceId,
       visibility: 'team',
@@ -1371,16 +1371,22 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
   }
   async function listRemoteTeamProjectSummaries(localRows: any[], ctx: WorkspaceProjectContext) {
     if (!teamProjectCatalog) return [];
-    const localProjectIds = new Set(localRows.map((row) => row.id));
+    const localResourceIds = new Set(localRows.map((row) => row.resourceHubResourceId).filter(Boolean));
     let remoteProjects: VelaTeamProjectRecord[];
     try {
       remoteProjects = await teamProjectCatalog.list(workspaceProjectPrincipal(ctx));
     } catch (error) {
       throw new TeamProjectCatalogListError(error);
     }
+    const seenResourceIds = new Set<string>();
     return remoteProjects
       .filter((project) => project.access.canView)
-      .filter((project) => !localProjectIds.has(project.projectId))
+      .filter((project) => !localResourceIds.has(project.resourceId))
+      .filter((project) => {
+        if (seenResourceIds.has(project.resourceId)) return false;
+        seenResourceIds.add(project.resourceId);
+        return true;
+      })
       .map((project) => remoteTeamProjectSummary(project, ctx));
   }
   function ensureWorkspaceProjection(project: any, ctx: WorkspaceProjectContext, visibility = 'personal') {

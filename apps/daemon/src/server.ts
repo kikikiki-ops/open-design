@@ -500,6 +500,7 @@ import {
   listMessages,
   listPreviewComments,
   listProjects,
+  listTeamWorkspaceProjectShares,
   listWorkspaceProjects,
   listRoutines,
   listRoutineRuns,
@@ -3833,6 +3834,22 @@ export async function startServer({
       persistWorkspaceProjectSyncState(projectId, principal?.teamId, 'sync_failed');
     },
   });
+  for (const share of listTeamWorkspaceProjectShares(db)) {
+    const ownerMemberId = share.createdByWorkspaceMemberId ?? share.updatedByWorkspaceMemberId;
+    if (!share.projectId || !share.workspaceId || !ownerMemberId) continue;
+    collab.rememberTeamShare(
+      share.projectId,
+      {
+        memberId: ownerMemberId,
+        teamId: share.workspaceId,
+        role: 'member',
+        lifecycleState: 'active',
+      },
+      share.syncState === 'synced' || share.syncState === 'sync_failed' || share.syncState === 'pending_upload'
+        ? share.syncState
+        : 'pending_upload',
+    );
+  }
   registerCollabPresenceRoutes(app, { collab });
   registerCollabSyncRoutes(app, { collab });
   registerCollabContextRoutes(app, { workspaceContext: collab.workspaceContext });

@@ -752,6 +752,21 @@ export function listWorkspaceProjects(db: SqliteDb, workspaceId: string) {
     .all(workspaceId) as DbRow[];
 }
 
+export function listTeamWorkspaceProjectShares(db: SqliteDb) {
+  return db
+    .prepare(
+      `SELECT project_id AS projectId,
+              workspace_id AS workspaceId,
+              created_by_workspace_member_id AS createdByWorkspaceMemberId,
+              updated_by_workspace_member_id AS updatedByWorkspaceMemberId,
+              sync_state AS syncState
+         FROM workspace_projects
+        WHERE visibility = 'team'
+          AND resource_state != 'deleted'`,
+    )
+    .all() as DbRow[];
+}
+
 export function ensureWorkspaceProject(db: SqliteDb, input: DbRow) {
   const now = Date.now();
   const existing = getWorkspaceProject(db, input.workspaceId, input.projectId);

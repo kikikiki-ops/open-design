@@ -498,13 +498,14 @@ describe('workspace project routes', () => {
   it('merges Vela team-project catalog entries as read-only member-discovery projects', async () => {
     const localProjectId = `workspace-local-${Date.now()}`;
     const remoteProjectId = `workspace-remote-${Date.now()}`;
+    const remoteResourceId = `project-remote-${remoteProjectId}`;
     const teamProjectCatalog = {
       list: vi.fn(async () => [
         {
           id: `catalog-${remoteProjectId}`,
           workspaceId,
           projectId: remoteProjectId,
-          resourceId: `project-${remoteProjectId}`,
+          resourceId: remoteResourceId,
           ownerMemberId: 'member-owner',
           displayName: 'Remote shared project',
           syncState: 'synced',
@@ -545,12 +546,12 @@ describe('workspace project routes', () => {
       });
       expect(body.projects).toHaveLength(1);
       expect(body.projects[0]).toMatchObject({
-        id: remoteProjectId,
+        id: remoteResourceId,
         name: 'Remote shared project',
         visibility: 'team',
         resourceState: 'active',
         createdByWorkspaceMemberId: 'member-owner',
-        resourceHubResourceId: `project-${remoteProjectId}`,
+        resourceHubResourceId: remoteResourceId,
         syncState: 'synced',
         currentUserAccess: {
           canOpen: true,
@@ -561,6 +562,78 @@ describe('workspace project routes', () => {
           canExport: true,
         },
       });
+      expect(body.projects[0].project.id).toBe(remoteProjectId);
+    } finally {
+      await close(routeServer.server);
+    }
+  });
+
+  it('keeps remote team-project discovery entries distinct from local-id collisions', async () => {
+    const collidingProjectId = `workspace-collide-${Date.now()}`;
+    const remoteA = `resource-a-${collidingProjectId}`;
+    const remoteB = `resource-b-${collidingProjectId}`;
+    const teamProjectCatalog = {
+      list: vi.fn(async () => [
+        {
+          id: `catalog-a-${collidingProjectId}`,
+          workspaceId,
+          projectId: collidingProjectId,
+          resourceId: remoteA,
+          ownerMemberId: 'member-owner-a',
+          displayName: 'Remote A',
+          syncState: 'synced',
+          lastSyncedVersionId: 'version-a',
+          createdAt: new Date(10).toISOString(),
+          updatedAt: new Date(20).toISOString(),
+          access: {
+            canView: true,
+            canComment: true,
+            canEdit: true,
+            frozen: false,
+          },
+        },
+        {
+          id: `catalog-b-${collidingProjectId}`,
+          workspaceId,
+          projectId: collidingProjectId,
+          resourceId: remoteB,
+          ownerMemberId: 'member-owner-b',
+          displayName: 'Remote B',
+          syncState: 'synced',
+          lastSyncedVersionId: 'version-b',
+          createdAt: new Date(11).toISOString(),
+          updatedAt: new Date(21).toISOString(),
+          access: {
+            canView: true,
+            canComment: true,
+            canEdit: true,
+            frozen: false,
+          },
+        },
+      ]),
+      upsert: vi.fn(),
+    };
+    const app = express();
+    app.use(express.json());
+    registerProjectRoutes(app, workspaceProjectRouteDeps({
+      workspaceId,
+      projectId: collidingProjectId,
+      dbDeleteProject: vi.fn(),
+      removeProjectDir: vi.fn(),
+      teamProjectCatalog,
+    }));
+    const routeServer = await listen(app);
+    try {
+      const resp = await fetch(`${routeServer.url}/api/workspaces/${workspaceId}/projects?view=team`, {
+        headers: headers('member-viewer'),
+      });
+      expect(resp.status).toBe(200);
+      const body = await resp.json() as { projects: Array<any> };
+      expect(body.projects.map((project: any) => project.id)).toEqual(
+        expect.arrayContaining([remoteA, remoteB]),
+      );
+      expect(new Set(body.projects.map((project: any) => project.id)).size).toBe(body.projects.length);
+      expect(body.projects.every((project: any) => project.project.id === collidingProjectId)).toBe(true);
     } finally {
       await close(routeServer.server);
     }
@@ -569,13 +642,14 @@ describe('workspace project routes', () => {
   it('includes remote team-project catalog entries in owner-scoped lists', async () => {
     const localProjectId = `workspace-local-owner-${Date.now()}`;
     const remoteProjectId = `workspace-remote-owner-${Date.now()}`;
+    const remoteResourceId = `project-remote-${remoteProjectId}`;
     const teamProjectCatalog = {
       list: vi.fn(async () => [
         {
           id: `catalog-${remoteProjectId}`,
           workspaceId,
           projectId: remoteProjectId,
-          resourceId: `project-${remoteProjectId}`,
+          resourceId: remoteResourceId,
           ownerMemberId: 'member-owner',
           displayName: 'Remote owned project',
           syncState: 'synced',
@@ -609,7 +683,7 @@ describe('workspace project routes', () => {
       expect(resp.status).toBe(200);
       const body = await resp.json() as { projects: Array<any> };
       expect(teamProjectCatalog.list).toHaveBeenCalled();
-      expect(body.projects.some((item: any) => item.id === remoteProjectId)).toBe(true);
+      expect(body.projects.some((item: any) => item.id === remoteResourceId)).toBe(true);
     } finally {
       await close(routeServer.server);
     }

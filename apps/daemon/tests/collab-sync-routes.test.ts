@@ -259,6 +259,43 @@ describe('collab sync routes', () => {
     expect(projectResourceIdFor(projectId, workspaceA)).not.toBe(projectResourceIdFor(projectId, workspaceB));
   });
 
+  it('restores persisted team-share principals after runtime restart', async () => {
+    const projectId = 'shared-after-restart';
+    const workspace = {
+      memberId: 'member-owner',
+      teamId: 'workspace-restart',
+      role: 'member' as const,
+      lifecycleState: 'active' as const,
+    };
+    const initialPublish = vi.fn(async () => ({ version: 1 }));
+    runtime = createCollabRuntime({
+      adapter: { publish: initialPublish },
+    });
+    runtime.requestTeamShare(projectId, workspace);
+    for (let i = 0; i < 40 && initialPublish.mock.calls.length < 1; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    runtime.dispose();
+
+    const publish = vi.fn(async () => ({ version: 2 }));
+    runtime = createCollabRuntime({
+      adapter: { publish },
+    });
+    runtime.rememberTeamShare(projectId, workspace, 'synced');
+
+    expect(runtime.projectOwnerMemberId(projectId, workspace)).toBe('member-owner');
+    runtime.scheduler.notifyChanged(projectId, 'change');
+    runtime.scheduler.runBoundary(projectId);
+
+    for (let i = 0; i < 40 && publish.mock.calls.length < 1; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(publish).toHaveBeenCalledWith(expect.objectContaining({
+      projectId,
+      principal: workspace,
+    }));
+  });
+
   it('publishes on request and advances the published version monotonically', async () => {
     const api = await startSyncServer();
     expect((await api.json('/api/projects/p1/collab/status')).body.publishedVersion).toBeNull();
