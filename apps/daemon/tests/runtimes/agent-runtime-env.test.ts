@@ -6,6 +6,7 @@ import { SIDECAR_ENV } from '@open-design/sidecar-proto';
 import {
   createAgentRuntimeEnv,
   createAgentRuntimeToolPrompt,
+  createDaemonDataDirConfiguredAgentEnv,
   createOpenDesignToolEnv,
 } from '../../src/server.js';
 import { applyAgentLaunchEnv } from '../../src/runtimes/launch.js';
@@ -99,12 +100,15 @@ describe('agent runtime tool environment', () => {
       null,
       '/opt/open-design/bin/node',
     );
+    const configuredAgentEnv = createDaemonDataDirConfiguredAgentEnv({
+      OD_DATA_DIR: '/stale/configured/data',
+    });
 
     const env = {
       ...spawnEnvForAgent(
-        'codex',
+        'amr',
         base,
-        { OD_DATA_DIR: '/stale/configured/data' },
+        configuredAgentEnv,
       ),
       ...createOpenDesignToolEnv({
         daemonUrl: 'http://127.0.0.1:7456',
@@ -114,6 +118,9 @@ describe('agent runtime tool environment', () => {
     };
 
     expect(env.OD_DATA_DIR).toBe(process.env.OD_DATA_DIR);
+    expect(env.OPENCODE_TEST_HOME).toBe(
+      path.join(process.env.OD_DATA_DIR ?? '', 'amr', 'opencode-home'),
+    );
     expect(env.OD_PROJECT_ID).toBe('project-1');
     expect(env.OD_PROJECT_DIR).toBe('/tmp/project');
   });
