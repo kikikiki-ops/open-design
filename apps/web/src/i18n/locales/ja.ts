@@ -1568,6 +1568,7 @@ export const ja: Dict = {
   'designs.status.queued': 'キュー中',
   'designs.status.running': '実行中',
   'designs.status.awaitingInput': '入力待ち',
+  'designs.status.incomplete': '未完了',
   'designs.status.succeeded': '完了',
   'designs.status.published': '公開済み',
   'designs.status.failed': '失敗',

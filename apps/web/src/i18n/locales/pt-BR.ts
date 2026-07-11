@@ -1568,6 +1568,7 @@ export const ptBR: Dict = {
   'designs.status.queued': 'Na fila',
   'designs.status.running': 'Em execução',
   'designs.status.awaitingInput': 'Aguardando resposta',
+  'designs.status.incomplete': 'Incompleto',
   'designs.status.succeeded': 'Concluído',
   'designs.status.published': 'Publicado',
   'designs.status.failed': 'Falhou',

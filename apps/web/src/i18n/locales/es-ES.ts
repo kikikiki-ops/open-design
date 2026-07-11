@@ -1568,6 +1568,7 @@ export const esES: Dict = {
   'designs.status.queued': 'En cola',
   'designs.status.running': 'En ejecución',
   'designs.status.awaitingInput': 'Necesita respuesta',
+  'designs.status.incomplete': 'Incompleto',
   'designs.status.succeeded': 'Completado',
   'designs.status.published': 'Publicado',
   'designs.status.failed': 'Fallido',

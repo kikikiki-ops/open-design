@@ -1568,6 +1568,7 @@ export const it: Dict = {
   'designs.status.queued': 'In coda',
   'designs.status.running': 'In corso',
   'designs.status.awaitingInput': 'Input richiesto',
+  'designs.status.incomplete': 'Incompleto',
   'designs.status.succeeded': 'Completato',
   'designs.status.published': 'Pubblicato',
   'designs.status.failed': 'Fallito',

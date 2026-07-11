@@ -1568,6 +1568,7 @@ export const tr: Dict = {
   'designs.status.queued': 'Sırada',
   'designs.status.running': 'Çalışıyor',
   'designs.status.awaitingInput': 'Girdi gerekli',
+  'designs.status.incomplete': 'Tamamlanmadı',
   'designs.status.succeeded': 'Tamamlandı',
   'designs.status.published': 'Yayımlandı',
   'designs.status.failed': 'Başarısız',

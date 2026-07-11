@@ -1675,6 +1675,7 @@ export const zhCN: Dict = {
   "designs.status.queued": "等待中",
   "designs.status.running": "运行中",
   "designs.status.awaitingInput": "等待回复",
+  "designs.status.incomplete": "未完成",
   "designs.status.succeeded": "已完成",
   "designs.status.published": "已发布",
   "designs.status.failed": "失败",

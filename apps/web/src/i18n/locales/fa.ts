@@ -1568,6 +1568,7 @@ export const fa: Dict = {
   'designs.status.queued': 'در صف',
   'designs.status.running': 'در حال اجرا',
   'designs.status.awaitingInput': 'نیازمند ورودی',
+  'designs.status.incomplete': 'ناتمام',
   'designs.status.succeeded': 'تکمیل شد',
   'designs.status.published': 'منتشر شد',
   'designs.status.failed': 'ناموفق',

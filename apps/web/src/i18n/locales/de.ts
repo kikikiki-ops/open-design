@@ -1568,6 +1568,7 @@ export const de: Dict = {
   'designs.status.queued': 'In Warteschlange',
   'designs.status.running': 'Läuft',
   'designs.status.awaitingInput': 'Eingabe nötig',
+  'designs.status.incomplete': 'Unvollständig',
   'designs.status.succeeded': 'Abgeschlossen',
   'designs.status.published': 'Veröffentlicht',
   'designs.status.failed': 'Fehlgeschlagen',

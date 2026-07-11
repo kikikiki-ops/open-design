@@ -1568,6 +1568,7 @@ export const ru: Dict = {
   'designs.status.queued': 'В очереди',
   'designs.status.running': 'Выполняется',
   'designs.status.awaitingInput': 'Нужен ввод',
+  'designs.status.incomplete': 'Не завершено',
   'designs.status.succeeded': 'Завершено',
   'designs.status.published': 'Опубликовано',
   'designs.status.failed': 'Ошибка',

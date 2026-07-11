@@ -2,6 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { todoSnapshotHasUnfinishedWork } from '@open-design/contracts';
 import { normalizeMediaExecutionPolicyForRun } from '../media/policy.js';
 import {
   normalizeRunToolBundleForRun,
@@ -103,6 +104,14 @@ export function createChatRunService({
       cancelRequested: false,
       retryRestartTimer: null,
       stdinOpen: false,
+      // Work-completeness signals (#1247 / #1060), folded from agent events by
+      // captureRunWorkCompletenessSignals (server.ts). `lastTodoSnapshot` is the
+      // most recent TodoWrite `todos` array; `truncatedMidTurn` records a
+      // max_tokens cut-off. At terminal time finish() derives
+      // `endedWithUnfinishedWork` from them via the canonical predicate.
+      lastTodoSnapshot: null,
+      truncatedMidTurn: false,
+      endedWithUnfinishedWork: false,
       eventsLogPath: runsLogDir ? path.join(runsLogDir, id, 'events.jsonl') : null,
       eventsLogStream: null,
       // Set once finish() has closed the log stream, so a late post-finish emit
@@ -209,6 +218,7 @@ export function createChatRunService({
     failureCategory: run.failureCategory ?? null,
     failureDetail: run.failureDetail ?? null,
     resumable: run.resumable ?? false,
+    endedWithUnfinishedWork: !!run.endedWithUnfinishedWork,
     eventsLogPath: run.eventsLogPath ?? null,
     workspace: projectWorkspaceProvenance(run.projectMetadata),
     mediaExecution: run.mediaExecution ?? normalizeMediaExecutionPolicyForRun(null),
@@ -224,6 +234,14 @@ export function createChatRunService({
     run.exitCode = code;
     run.signal = signal;
     run.updatedAt = Date.now();
+    // Derive the work-completeness flag once, at the single terminal choke point,
+    // from the signals the agent-event handler folded onto the run. Uses the
+    // canonical predicate so it can never diverge from the web chat footer
+    // (#1247 / #1060). A truncated turn (max_tokens) counts as unfinished even
+    // if the last TodoWrite looked done. Absence of any TodoWrite snapshot keeps
+    // the flag false, so a text-only answer stays "Completed".
+    run.endedWithUnfinishedWork =
+      Boolean(run.truncatedMidTurn) || todoSnapshotHasUnfinishedWork(run.lastTodoSnapshot);
     // Release run-scoped resources the starter registered (e.g. the minted
     // tool-token grant + agent event-sink entries). This runs on EVERY
     // terminal path — including a startup throw that never reached the child
@@ -239,6 +257,7 @@ export function createChatRunService({
       signal,
       status,
       resumable: run.resumable ?? false,
+      endedWithUnfinishedWork: run.endedWithUnfinishedWork,
       failureCategory: run.failureCategory ?? null,
       failureDetail: run.failureDetail ?? null,
     });

@@ -2110,6 +2110,7 @@ export interface Dict {
   'designs.status.queued': string;
   'designs.status.running': string;
   'designs.status.awaitingInput': string;
+  'designs.status.incomplete': string;
   'designs.status.succeeded': string;
   'designs.status.failed': string;
   'designs.status.canceled': string;

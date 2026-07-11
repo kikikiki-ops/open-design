@@ -1423,8 +1423,16 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
   });
 
   function projectStatusFromRun(run: any) {
+    const normalized = normalizeProjectDisplayStatus(run.status);
+    // A just-finished in-memory run overrides the DB-derived status for its
+    // project (it is newer), so it must carry the same incomplete signal the
+    // persisted projection derives — otherwise the pill flashes "Completed" for
+    // the ~30 min the run stays in memory before the DB-derived `incomplete`
+    // takes over (#1247 / #1060). run.endedWithUnfinishedWork is set at finish().
+    const value =
+      normalized === 'succeeded' && run.endedWithUnfinishedWork ? 'incomplete' : normalized;
     return {
-      value: normalizeProjectDisplayStatus(run.status),
+      value,
       updatedAt: run.updatedAt,
       runId: run.id,
     };

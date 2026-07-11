@@ -1568,6 +1568,7 @@ export const th: Dict = {
   'designs.status.queued': 'อยู่ในคิว',
   'designs.status.running': 'กำลังทำงาน',
   'designs.status.awaitingInput': 'ต้องการข้อมูลเพิ่ม',
+  'designs.status.incomplete': 'ไม่สมบูรณ์',
   'designs.status.succeeded': 'สำเร็จ',
   'designs.status.published': 'เผยแพร่แล้ว',
   'designs.status.failed': 'ล้มเหลว',

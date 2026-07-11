@@ -1568,6 +1568,7 @@ export const ar: Dict = {
   'designs.status.queued': 'في الانتظار',
   'designs.status.running': 'جاري التشغيل',
   'designs.status.awaitingInput': 'يحتاج مدخلات',
+  'designs.status.incomplete': 'غير مكتمل',
   'designs.status.succeeded': 'اكتمل',
   'designs.status.published': 'تم النشر',
   'designs.status.failed': 'فشل',

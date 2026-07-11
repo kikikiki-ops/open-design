@@ -1568,6 +1568,7 @@ export const hu: Dict = {
   'designs.status.queued': 'Sorban',
   'designs.status.running': 'Fut',
   'designs.status.awaitingInput': 'Bevitelre vár',
+  'designs.status.incomplete': 'Befejezetlen',
   'designs.status.succeeded': 'Befejezve',
   'designs.status.published': 'Közzétéve',
   'designs.status.failed': 'Sikertelen',

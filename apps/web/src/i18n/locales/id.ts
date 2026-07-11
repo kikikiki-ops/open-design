@@ -1568,6 +1568,7 @@ export const id: Dict = {
   'designs.status.queued': 'Dalam antrean',
   'designs.status.running': 'Berjalan',
   'designs.status.awaitingInput': 'Menunggu input',
+  'designs.status.incomplete': 'Belum selesai',
   'designs.status.succeeded': 'Selesai',
   'designs.status.published': 'Diterbitkan',
   'designs.status.failed': 'Gagal',
