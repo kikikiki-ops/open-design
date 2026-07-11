@@ -2,8 +2,13 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { createAgentRuntimeEnv, createAgentRuntimeToolPrompt } from '../src/server.js';
+import {
+  createAgentRuntimeEnv,
+  createAgentRuntimeToolPrompt,
+  createOpenDesignToolEnv,
+} from '../src/server.js';
 import { applyAgentLaunchEnv } from '../src/runtimes/launch.js';
+import { spawnEnvForAgent } from '../src/runtimes/env.js';
 
 describe('agent runtime tool environment', () => {
   it('injects daemon URL and run-scoped tool token into agent sessions', () => {
@@ -84,6 +89,32 @@ describe('agent runtime tool environment', () => {
     );
 
     expect(env.OD_DATA_DIR).toBe(process.env.OD_DATA_DIR);
+  });
+
+  it('keeps wrapper media commands on the daemon data dir even when configured agent env is stale', () => {
+    const base = createAgentRuntimeEnv(
+      { PATH: '/bin', OD_DATA_DIR: '/stale/process/data' },
+      'http://127.0.0.1:7456',
+      null,
+      '/opt/open-design/bin/node',
+    );
+
+    const env = {
+      ...spawnEnvForAgent(
+        'codex',
+        base,
+        { OD_DATA_DIR: '/stale/configured/data' },
+      ),
+      ...createOpenDesignToolEnv({
+        daemonUrl: 'http://127.0.0.1:7456',
+        projectDir: '/tmp/project',
+        projectId: 'project-1',
+      }),
+    };
+
+    expect(env.OD_DATA_DIR).toBe(process.env.OD_DATA_DIR);
+    expect(env.OD_PROJECT_ID).toBe('project-1');
+    expect(env.OD_PROJECT_DIR).toBe('/tmp/project');
   });
 
   it('describes daemon URL and token availability without exposing the token', () => {

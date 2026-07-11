@@ -1482,6 +1482,29 @@ export function createAgentRuntimeToolPrompt(
   ].join('\n');
 }
 
+export function createOpenDesignToolEnv({
+  daemonUrl,
+  projectDir,
+  projectId,
+}: {
+  daemonUrl: string;
+  projectDir?: string | null;
+  projectId?: string | null;
+}): NodeJS.ProcessEnv {
+  return {
+    OD_BIN,
+    OD_DATA_DIR: RUNTIME_DATA_DIR,
+    OD_NODE_BIN,
+    OD_DAEMON_URL: daemonUrl,
+    ...(typeof projectId === 'string' && projectId && projectDir
+      ? {
+          OD_PROJECT_ID: projectId,
+          OD_PROJECT_DIR: projectDir,
+        }
+      : {}),
+  };
+}
+
 function normalizeRunContextSelection(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const stringList = (items) => {
@@ -10163,17 +10186,11 @@ export async function startServer({
       ));
       return design.runs.finish(run, 'failed', 1, null);
     }
-    const odMediaEnv = {
-      OD_BIN,
-      OD_NODE_BIN,
-      OD_DAEMON_URL: daemonUrl,
-      ...(typeof projectId === 'string' && projectId && cwd
-        ? {
-            OD_PROJECT_ID: projectId,
-            OD_PROJECT_DIR: cwd,
-          }
-        : {}),
-    };
+    const odMediaEnv = createOpenDesignToolEnv({
+      daemonUrl,
+      projectDir: cwd,
+      projectId: typeof projectId === 'string' ? projectId : null,
+    });
     if (run.cancelRequested || design.runs.isTerminal(run.status)) {
       revokeToolToken('child_exit');
       unregisterChatAgentEventSink();
