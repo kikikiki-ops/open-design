@@ -31,6 +31,91 @@ describe('DISCOVERY_AND_PHILOSOPHY (contracts copy) — TodoWrite plan item coun
     const prompt = composeSystemPrompt({});
     expect(prompt).not.toMatch(/5[–\-]10\s+short\s+imperative/);
   });
+
+  it('uses a bare, self-contained Ask mode override that drops the discovery layer and charter', () => {
+    const prompt = composeSystemPrompt({ sessionMode: 'chat' });
+
+    expect(prompt).toContain('# Ask mode — bare conversation');
+    expect(prompt).toContain('https://github.com/nexu-io/open-design');
+    expect(prompt).toContain('https://open-design.ai/');
+    expect(prompt).toContain('https://discord.gg/mHAjSMV6gz');
+    expect(prompt).toContain('Do not emit a default discovery `<question-form>`');
+    // Ask mode is deliberately light: neither the ~3k-token discovery layer nor
+    // the full designer charter is composed in. That omission IS the feature —
+    // it is what makes Ask cheaper than Design/Plan.
+    expect(prompt).not.toContain(DISCOVERY_AND_PHILOSOPHY);
+    expect(prompt).not.toContain('# Identity and workflow charter (background)');
+  });
+
+  it('uses a top-level Plan mode override that suppresses artifact discovery forms', () => {
+    const prompt = composeSystemPrompt({ sessionMode: 'plan', metadata: { kind: 'prototype' } as any });
+
+    expect(prompt).toContain('# Plan mode — editable document first');
+    expect(prompt).toContain('do NOT emit `<question-form id="discovery">`');
+    expect(prompt).toContain('`<question-form id="task-type">`');
+    expect(prompt).toContain('Quick brief — 30 seconds');
+    expect(prompt).toContain('<question-form id="plan-brief">');
+    expect(prompt).toContain('substantial plan-document work still starts with a real TodoWrite/task-list tool call');
+    expect(prompt).toContain('show progress through the Todo card');
+    expect(prompt.indexOf('# Plan mode — editable document first')).toBeLessThan(
+      prompt.indexOf(DISCOVERY_AND_PHILOSOPHY),
+    );
+  });
+});
+
+describe('DISCOVERY_AND_PHILOSOPHY (contracts copy) — prompt routing parity', () => {
+  it('uses the single-shot task-type form shape from the daemon prompt', () => {
+    expect(DISCOVERY_AND_PHILOSOPHY).toContain('<question-form id="task-type"');
+    for (const id of ['taskType', 'audience', 'brand', 'scale', 'constraints']) {
+      expect(DISCOVERY_AND_PHILOSOPHY).toContain(`"id": "${id}"`);
+    }
+    expect(DISCOVERY_AND_PHILOSOPHY).toContain(
+      'This form is intentionally a **single-shot brief**',
+    );
+    expect(DISCOVERY_AND_PHILOSOPHY).toMatch(
+      /do NOT emit a second `<question-form id="discovery">` \/ "Quick brief — 30 seconds" form/,
+    );
+  });
+
+  it('routes task-type form answers through the same RULE 2 / RULE 3 path as discovery answers', () => {
+    expect(DISCOVERY_AND_PHILOSOPHY).toMatch(
+      /\[form answers — discovery\][^.]*\[form answers — task-type\]/,
+    );
+    expect(DISCOVERY_AND_PHILOSOPHY).toContain(
+      'Proceed directly to RULE 2 (treating the submitted `brand` value the same way as a `discovery` answer) and then RULE 3.',
+    );
+  });
+
+  it('keeps artifact emission conditional on writing a new canonical HTML file', () => {
+    expect(DISCOVERY_AND_PHILOSOPHY).toContain('## Artifact emission is conditional');
+    expect(DISCOVERY_AND_PHILOSOPHY).toContain(
+      'only when this turn wrote a new canonical HTML file',
+    );
+    expect(DISCOVERY_AND_PHILOSOPHY).toContain(
+      'If this turn only edited an existing HTML file',
+    );
+  });
+
+  it('defaults generated deliverables to semantic filenames after active skills', () => {
+    const prompt = composeSystemPrompt({
+      skillName: 'simple-deck',
+      skillBody: 'Copy assets/template.html to index.html, then fill the deck.',
+    });
+
+    expect(prompt).toContain('## Semantic output file names');
+    expect(prompt).toContain('Do not call every new artifact `index.html`');
+    expect(prompt).toContain('adapt the destination to a semantic filename');
+    expect(prompt.indexOf('## Semantic output file names')).toBeGreaterThan(
+      prompt.indexOf('## Active skill — simple-deck'),
+    );
+  });
+
+  it('does not make index.html the fixed deck-framework destination', () => {
+    const prompt = composeSystemPrompt({ skillMode: 'deck' });
+
+    expect(prompt).not.toContain('Copy the canonical skeleton below as index.html');
+    expect(prompt).toContain('semantically named deck HTML file');
+  });
 });
 
 describe('composeSystemPrompt', () => {
@@ -113,5 +198,19 @@ describe('composeSystemPrompt', () => {
     expect(prompt.indexOf('## Active design system visual direction')).toBeGreaterThan(
       prompt.indexOf('### direction-picker'),
     );
+  });
+
+  it('does not include the HTML discovery layer for media surfaces', () => {
+    const prompt = composeSystemPrompt({
+      metadata: {
+        kind: 'image',
+        imageModel: 'fal/imagen4',
+        imageAspect: '16:9',
+      } as any,
+    });
+
+    expect(prompt).not.toContain('# OD core directives');
+    expect(prompt).not.toContain('<question-form id="discovery"');
+    expect(prompt).toContain('## Media generation contract');
   });
 });
