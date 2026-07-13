@@ -22,7 +22,10 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { attachAcpSession, detectAcpModels } from '../src/acp.js';
-import { classifyAmrAccountFailure } from '../src/integrations/vela-errors.js';
+import {
+  DEFAULT_AMR_RECHARGE_URL,
+  classifyAmrAccountFailure,
+} from '../src/integrations/vela-errors.js';
 import { AmrModelLoadingCache } from '../src/runtimes/amr-model-cache.js';
 import {
   amrAgentDef,
@@ -827,6 +830,7 @@ describe('AMR ACP transport — end-to-end against fake vela stub', () => {
     expect(classifyAmrAccountFailure(message)).toMatchObject({
       code: 'AMR_INSUFFICIENT_BALANCE',
       action: 'recharge',
+      actionUrl: DEFAULT_AMR_RECHARGE_URL,
     });
   });
 
@@ -869,6 +873,7 @@ describe('AMR ACP transport — end-to-end against fake vela stub', () => {
     expect(payload?.error?.details).toMatchObject({
       kind: 'amr_account',
       action: 'recharge',
+      actionUrl: DEFAULT_AMR_RECHARGE_URL,
     });
     expect(String(payload?.message ?? '')).toContain('AMR Cloud reported insufficient balance');
   });
@@ -920,6 +925,7 @@ describe('AMR ACP transport — end-to-end against fake vela stub', () => {
     expect(payload?.error?.details).toMatchObject({
       kind: 'amr_account',
       action: 'recharge',
+      actionUrl: DEFAULT_AMR_RECHARGE_URL,
       promoted_by: 'open_design_acp_retry_status',
     });
     expect(String(payload?.message ?? '')).toContain('AMR Cloud reported insufficient balance');
@@ -959,6 +965,7 @@ describe('AMR ACP transport — end-to-end against fake vela stub', () => {
     expect(payload?.error?.details).toMatchObject({
       kind: 'amr_account',
       action: 'recharge',
+      actionUrl: DEFAULT_AMR_RECHARGE_URL,
       promoted_by: 'open_design_acp_stderr_retry_status',
     });
     expect(String(payload?.message ?? '')).toContain('AMR Cloud reported insufficient balance');
@@ -999,6 +1006,7 @@ describe('AMR ACP transport — end-to-end against fake vela stub', () => {
     expect(payload?.error?.details).toMatchObject({
       kind: 'amr_account',
       action: 'recharge',
+      actionUrl: DEFAULT_AMR_RECHARGE_URL,
       promoted_by: 'open_design_acp_stderr_retry_status',
     });
   });

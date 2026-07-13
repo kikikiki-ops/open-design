@@ -52,7 +52,7 @@ describe('AMR insufficient balance run failures', () => {
       const events = await readRunEvents(webUrl, run.runId);
       expect(events).toContain('AMR_INSUFFICIENT_BALANCE');
       expect(events).toContain(
-        'Recharge your AMR wallet, then retry this run.',
+        'https://open-design.ai/amr/wallet?source=open_design',
       );
 
       const messages = await listMessages(webUrl, project.project.id, project.conversationId);

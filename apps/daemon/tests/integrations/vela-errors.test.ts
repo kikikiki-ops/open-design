@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  DEFAULT_AMR_RECHARGE_URL,
   amrAccountFailureDetails,
   classifyAmrAccountFailure,
   classifyAmrAccountFailureDetails,
@@ -16,11 +17,13 @@ describe('AMR account failure classification', () => {
     expect(failure).toMatchObject({
       code: 'AMR_INSUFFICIENT_BALANCE',
       action: 'recharge',
+      actionUrl: DEFAULT_AMR_RECHARGE_URL,
     });
-    expect(failure?.message).toContain('Recharge your AMR wallet, then retry this run.');
+    expect(failure?.message).toContain(DEFAULT_AMR_RECHARGE_URL);
     expect(amrAccountFailureDetails(failure!)).toEqual({
       kind: 'amr_account',
       action: 'recharge',
+      actionUrl: DEFAULT_AMR_RECHARGE_URL,
     });
   });
 
@@ -37,6 +40,7 @@ describe('AMR account failure classification', () => {
     expect(failure).toMatchObject({
       code: 'AMR_INSUFFICIENT_BALANCE',
       action: 'recharge',
+      actionUrl: DEFAULT_AMR_RECHARGE_URL,
     });
   });
 
@@ -127,6 +131,7 @@ describe('AMR account failure classification', () => {
       expect(classifyAmrAccountFailure(text)).toMatchObject({
         code: 'AMR_INSUFFICIENT_BALANCE',
         action: 'recharge',
+        actionUrl: DEFAULT_AMR_RECHARGE_URL,
       });
     }
   });
@@ -141,6 +146,7 @@ describe('AMR account failure classification', () => {
     expect(failure).toMatchObject({
       code: 'AMR_INSUFFICIENT_BALANCE',
       action: 'recharge',
+      actionUrl: DEFAULT_AMR_RECHARGE_URL,
     });
   });
 
