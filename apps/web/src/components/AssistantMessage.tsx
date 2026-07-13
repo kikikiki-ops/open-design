@@ -3006,8 +3006,8 @@ function toolFamily(name: string): string {
   if (name === "Grep") return "grep";
   if (name === "Bash") return "bash";
   if (isTodoWriteToolName(name)) return "todo";
-  if (name === "WebFetch" || name === "web_fetch") return "fetch";
-  if (name === "WebSearch" || name === "web_search") return "search";
+  if (name === "WebFetch" || name === "web_fetch" || name === "webfetch") return "fetch";
+  if (name === "WebSearch" || name === "web_search" || name === "websearch") return "search";
   return name.toLowerCase();
 }
 
