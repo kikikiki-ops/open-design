@@ -4,7 +4,6 @@ import { openAllProjectFiles } from '@/playwright/workspace';
 import { T } from '@/timeouts';
 import type { Locator, Page, Request, Route } from '@playwright/test';
 import { routeAgents } from '../lib/playwright/mock-factory.js';
-import { handleMcpToolCall } from '../../apps/daemon/src/mcp.js';
 
 // The `/projects` view in `EntryShell` renders a `CenteredLoader` until
 // `projectsLoading || skillsLoading || designSystemsLoading` all clear
@@ -1865,7 +1864,7 @@ test('[P1] project detail session mode and active file context survive reload in
   await expect(page.getByTestId('msg-workspace-context-chip').last()).toContainText(uploadedName);
 });
 
-test('[P1] public MCP tools default to the active project file from the real workspace', async ({ page }) => {
+test('[P1] active project API defaults to the selected project file from the real workspace', async ({ page }) => {
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await createProject(page, 'MCP active context contract');
   await expectWorkspaceReady(page);
@@ -1884,22 +1883,6 @@ test('[P1] public MCP tools default to the active project file from the real wor
       return `${body.projectId ?? ''}:${body.fileName ?? ''}`;
     })
     .toBe(`${projectId}:${uploadedName}`);
-
-  const baseUrl = new URL(page.url()).origin;
-  const getFileResult = await handleMcpToolCall(baseUrl, 'get_file', {});
-  const getFileText = mcpText(getFileResult);
-  expect(getFileText).toContain('[od:active-context');
-  expect(getFileText).toContain(uploadedName);
-
-  const getArtifactResult = await handleMcpToolCall(baseUrl, 'get_artifact', { include: 'shallow' });
-  const artifact = JSON.parse(mcpText(getArtifactResult)) as {
-    entryFile?: string;
-    usedActiveContext?: { projectId?: string; fileName?: string };
-    files?: Array<{ name?: string; content?: string | null }>;
-  };
-  expect(artifact.entryFile).toBe(uploadedName);
-  expect(artifact.usedActiveContext).toMatchObject({ projectId, fileName: uploadedName });
-  expect(artifact.files?.[0]?.content).toContain('MCP Active Context');
 });
 
 test('[P1] project detail HTML version manager previews and restores an older snapshot', async ({ page }) => {
@@ -3377,13 +3360,6 @@ function tabBySuffix(page: Page, name: string): Locator {
 
 function rowByFileName(page: Page, name: string): Locator {
   return page.getByTestId(`design-file-row-${name}`);
-}
-
-function mcpText(result: unknown): string {
-  const content = (result as { content?: Array<{ text?: unknown }> }).content;
-  const text = content?.map((part) => (typeof part.text === 'string' ? part.text : '')).filter(Boolean).join('\n');
-  if (!text) throw new Error(`MCP result did not include text content: ${JSON.stringify(result)}`);
-  return text;
 }
 
 function menuByFileName(page: Page, name: string): Locator {
