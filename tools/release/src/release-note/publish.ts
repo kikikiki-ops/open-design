@@ -51,8 +51,8 @@ for (const entry of plan.entries) {
   }
   const existing = await getStorageObject({ ...storage, objectKey });
   if (existing == null) throw new Error(`release note object disappeared after immutable PUT conflict: ${objectKey}`);
-  const existingSize = Buffer.byteLength(existing.text, "utf8");
-  const existingSha256 = createHash("sha256").update(existing.text, "utf8").digest("hex");
+  const existingSize = existing.bytes.byteLength;
+  const existingSha256 = createHash("sha256").update(existing.bytes).digest("hex");
   if (existingSize !== entry.size || existingSha256 !== entry.sha256) {
     throw new Error(`immutable release note already exists with different content: ${objectKey}`);
   }

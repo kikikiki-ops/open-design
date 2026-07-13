@@ -168,7 +168,7 @@ export async function putStorageObjectWithStatus(options: PutObjectOptions): Pro
   };
 }
 
-export async function getStorageObject(options: GetObjectOptions): Promise<{ etag: string; text: string } | null> {
+export async function getStorageObject(options: GetObjectOptions): Promise<{ bytes: Buffer; etag: string; text: string } | null> {
   const payloadHash = hash("");
   const { canonicalUri, url } = objectUrl(options, options.objectKey);
   const headers: Record<string, string> = {
@@ -199,9 +199,11 @@ export async function getStorageObject(options: GetObjectOptions): Promise<{ eta
     const text = await response.text().catch(() => "");
     throw new Error(`GET ${url} failed with HTTP ${response.status}${text.length > 0 ? `: ${text}` : ""}`);
   }
+  const bytes = Buffer.from(await response.arrayBuffer());
   return {
+    bytes,
     etag: response.headers.get("etag") ?? "",
-    text: await response.text(),
+    text: bytes.toString("utf8"),
   };
 }
 

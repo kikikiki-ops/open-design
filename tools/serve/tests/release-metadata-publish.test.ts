@@ -29,12 +29,18 @@ function runNode(args: string[], options: { cwd: string; env: NodeJS.ProcessEnv 
   });
 }
 
-async function writeReleaseNote(root: string, version: string, locale: string, body = "A fixture release note."): Promise<void> {
+async function writeReleaseNote(
+  root: string,
+  version: string,
+  locale: string,
+  body = "A fixture release note.",
+  options: { bom?: boolean } = {},
+): Promise<void> {
   const directory = join(root, `v${version}`);
   await mkdir(directory, { recursive: true });
   await writeFile(
     join(directory, `${locale}.md`),
-    `---\ntitle: Open Design ${version}\ndescription: Release notes for ${version}.\n---\n\n## Changes\n\n${body}\n`,
+    `${options.bom === true ? "\uFEFF" : ""}---\ntitle: Open Design ${version}\ndescription: Release notes for ${version}.\n---\n\n## Changes\n\n${body}\n`,
     "utf8",
   );
 }
@@ -57,7 +63,7 @@ describe("shared release metadata publisher", () => {
         const releaseNotePlanPath = join(metadataDir, "release-note-plan.json");
         const releaseNoteManifestPath = join(metadataDir, "release-note-publication.json");
         await mkdir(manifestDir, { recursive: true });
-        await writeReleaseNote(releaseNoteRoot, version, "en");
+        await writeReleaseNote(releaseNoteRoot, version, "en", "A fixture release note.", { bom: channel === "beta" });
         await writeReleaseNote(releaseNoteRoot, version, "zh-CN");
         const base = {
           channel,

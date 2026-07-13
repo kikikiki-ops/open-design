@@ -35,8 +35,8 @@ if (publishSideEffectsEnabled && publication.state === "published") {
     const objectKey = `${versionPrefix}/release-notes/${entry.name}`;
     const object = await getStorageObject({ ...storage, objectKey });
     if (object == null) throw new Error(`published release note is missing: ${objectKey}`);
-    const size = Buffer.byteLength(object.text, "utf8");
-    const sha256 = createHash("sha256").update(object.text, "utf8").digest("hex");
+    const size = object.bytes.byteLength;
+    const sha256 = createHash("sha256").update(object.bytes).digest("hex");
     if (size !== entry.size || sha256 !== entry.sha256) {
       throw new Error(`published release note failed integrity verification: ${objectKey}`);
     }
