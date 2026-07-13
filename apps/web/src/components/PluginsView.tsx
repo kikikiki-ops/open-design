@@ -70,6 +70,11 @@ const USER_SOURCE_KINDS = new Set<PluginSourceKind>([
   'local',
 ]);
 
+function isPersonalPluginRecord(plugin: InstalledPluginRecord): boolean {
+  if (!USER_SOURCE_KINDS.has(plugin.sourceKind)) return false;
+  return !plugin.source.startsWith('team:plugin:');
+}
+
 const PLUGINS_TABS: ReadonlyArray<{
   id: PluginsTab;
 }> = [
@@ -182,7 +187,7 @@ export function PluginsView({
   }, []);
 
   const userPlugins = useMemo(
-    () => plugins.filter((plugin) => USER_SOURCE_KINDS.has(plugin.sourceKind)),
+    () => plugins.filter(isPersonalPluginRecord),
     [plugins],
   );
   const availablePlugins = useMemo(
@@ -913,7 +918,7 @@ export function ExtensionsMarketplace({
   }, []);
 
   const userPlugins = useMemo(
-    () => plugins.filter((plugin) => USER_SOURCE_KINDS.has(plugin.sourceKind)),
+    () => plugins.filter(isPersonalPluginRecord),
     [plugins],
   );
   const availablePlugins = useMemo(
