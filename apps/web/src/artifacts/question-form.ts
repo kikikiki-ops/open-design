@@ -638,7 +638,7 @@ function parseDefaultValue(
       ? question.defaultValue
       : typeof question.defaultValue === 'number' || typeof question.defaultValue === 'boolean'
         ? String(question.defaultValue)
-      : typeof question.default === 'string'
+      : typeof question.default === 'string' || Array.isArray(question.default)
         ? question.default
         : typeof question.default === 'number' || typeof question.default === 'boolean'
           ? String(question.default)
