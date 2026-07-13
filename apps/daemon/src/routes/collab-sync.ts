@@ -1,5 +1,5 @@
 import type { Express } from 'express';
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { ProjectMetadata, ProjectSyncIntentEvent, TeamProject } from '@open-design/contracts';
@@ -86,6 +86,14 @@ const SYNC_INTENT_EVENTS: ReadonlySet<ProjectSyncIntentEvent> = new Set([
 const PULLED_PROJECT_PLACEHOLDER_NAME = '共享项目';
 const PUBLIC_FILE_RESOURCE_KIND = 'project';
 const PUBLIC_FILE_REF = 'published';
+
+interface PublicFilePublication {
+  url: string;
+  slug: string;
+  fileName: string;
+}
+
+const publicFilePublications = new Map<string, PublicFilePublication>();
 
 function cleanPulledProjectName(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -177,6 +185,7 @@ function headerPrincipalForRequest(req: { get(name: string): string | undefined 
 }
 
 function normalizePublicFilePath(raw: string): string | null {
+  if (raw.includes('\\')) return null;
   let decoded: string;
   try {
     decoded = raw
@@ -186,6 +195,7 @@ function normalizePublicFilePath(raw: string): string | null {
   } catch {
     return null;
   }
+  if (decoded.includes('\\')) return null;
   const normalized = decoded.replace(/^\/+/, '').replace(/\/+/g, '/');
   if (
     !normalized ||
@@ -195,6 +205,20 @@ function normalizePublicFilePath(raw: string): string | null {
     return null;
   }
   return normalized;
+}
+
+async function resolvePublicSourceFile(projectDir: string, filePath: string): Promise<string> {
+  const [projectRoot, candidate] = await Promise.all([
+    realpath(projectDir),
+    realpath(path.join(projectDir, filePath)),
+  ]);
+  const relative = path.relative(projectRoot, candidate);
+  if (relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))) {
+    return candidate;
+  }
+  const error = new Error('public file path escapes project root') as NodeJS.ErrnoException;
+  error.code = 'EACCES';
+  throw error;
 }
 
 function publicFileResourceIdFor(
@@ -207,6 +231,10 @@ function publicFileResourceIdFor(
     'utf8',
   ).toString('base64url');
   return `project-file-${scoped}`;
+}
+
+function publicFilePublicationKey(projectId: string, filePath: string, principal: ResourceHubPrincipal): string {
+  return JSON.stringify([principal.teamId, principal.memberId, projectId, filePath]);
 }
 
 function encodePublicFileUrlPath(filePath: string): string {
@@ -393,9 +421,9 @@ export function registerCollabSyncRoutes(app: Express, deps: RegisterCollabSyncR
     }
 
     const projectDir = resolveProjectDir(projectId);
-    const sourceFile = path.join(projectDir, filePath);
     let data: Buffer;
     try {
+      const sourceFile = await resolvePublicSourceFile(projectDir, filePath);
       data = await readFile(sourceFile);
     } catch (error) {
       const code = (error as NodeJS.ErrnoException)?.code;
@@ -438,11 +466,13 @@ export function registerCollabSyncRoutes(app: Express, deps: RegisterCollabSyncR
       if (!snapshot) {
         return res.status(502).json({ error: 'PUBLIC_SNAPSHOT_UNAVAILABLE' });
       }
-      return res.json({
+      const publication = {
         url: publicSnapshotFileUrl(baseUrl, snapshot.slug, filePath),
         slug: snapshot.slug,
         fileName: filePath,
-      });
+      };
+      publicFilePublications.set(publicFilePublicationKey(projectId, filePath, principal), publication);
+      return res.json(publication);
     } catch (error) {
       console.warn('[od] failed to publish public project file:', error);
       return res.status(502).json({ error: 'PUBLIC_FILE_PUBLISH_UNAVAILABLE' });
@@ -484,11 +514,39 @@ export function registerCollabSyncRoutes(app: Express, deps: RegisterCollabSyncR
         slug,
         '--json',
       ]);
+      publicFilePublications.delete(publicFilePublicationKey(projectId, filePath, principal));
       return res.json({ ok: true, slug, fileName: filePath });
     } catch (error) {
       console.warn('[od] failed to unpublish public project file:', error);
       return res.status(502).json({ error: 'PUBLIC_FILE_UNPUBLISH_UNAVAILABLE' });
     }
+  });
+
+  app.get(/^\/api\/projects\/([^/]+)\/files\/(.+)\/publish-public$/u, async (req, res) => {
+    const params = req.params as unknown as { 0?: string; 1?: string };
+    const projectId = String(params[0] ?? '');
+    const filePath = normalizePublicFilePath(String(params[1] ?? ''));
+    if (!projectId || !filePath) {
+      return res.status(400).json({ error: 'invalid_file_path' });
+    }
+    const principal = await principalForRequest(req);
+    if (!principal) {
+      return res.status(409).json({ error: 'WORKSPACE_IDENTITY_REQUIRED' });
+    }
+    if (!await canShareProjectsForRequest(req)) {
+      return res.status(403).json({ error: 'WORKSPACE_PROJECT_SHARE_DENIED' });
+    }
+    const sharedProjectResult = await resolveSharedProjectForPublicFile(resolveSharedProject, projectId);
+    if (!sharedProjectResult.ok) {
+      return res.status(503).json({ error: 'WORKSPACE_PROJECT_OWNERSHIP_UNAVAILABLE' });
+    }
+    const sharedProject = sharedProjectResult.project;
+    if (sharedProject?.ownerMemberId && sharedProject.ownerMemberId !== principal.memberId) {
+      return res.status(403).json({ error: 'WORKSPACE_PROJECT_PUBLISH_DENIED' });
+    }
+    return res.json({
+      publication: publicFilePublications.get(publicFilePublicationKey(projectId, filePath, principal)) ?? null,
+    });
   });
 
   app.post('/api/projects/:id/collab/sync-intent', async (req, res) => {

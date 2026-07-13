@@ -67,6 +67,7 @@ import {
   fetchProjectFileVersions,
   fetchProjectFilePreview,
   fetchProjectFiles,
+  fetchProjectFilePublicPublication,
   fetchProjectFileText,
   uploadProjectFiles,
   liveArtifactPreviewUrl,
@@ -5304,6 +5305,8 @@ function ReactComponentViewer({
   const [publishingPublicFile, setPublishingPublicFile] = useState(false);
   const [publishLinkFeedback, setPublishLinkFeedback] = useState<'copied' | 'failed' | null>(null);
   const filePublished = publishedFileUrl.length > 0;
+  const publicFileRequestSeqRef = useRef(0);
+  const publicFileIdentityRef = useRef({ projectId, fileName: file.name });
   const shareRef = useRef<HTMLDivElement | null>(null);
   // HTML entries that load this file as a Babel module. `null` = still
   // checking; `[]` = standalone artifact; non-empty = a module of a
@@ -5406,41 +5409,85 @@ function ReactComponentViewer({
   }, [viewerOnly]);
 
   useEffect(() => {
+    publicFileIdentityRef.current = { projectId, fileName: file.name };
+    const requestSeq = ++publicFileRequestSeqRef.current;
+    let cancelled = false;
     setPublishedFileUrl('');
     setPublishedFileSlug('');
     setPublishingPublicFile(false);
     setPublishLinkFeedback(null);
+    void fetchProjectFilePublicPublication(projectId, file.name)
+      .then((publication) => {
+        const current = publicFileIdentityRef.current;
+        if (
+          cancelled ||
+          publicFileRequestSeqRef.current !== requestSeq ||
+          current.projectId !== projectId ||
+          current.fileName !== file.name
+        ) {
+          return;
+        }
+        setPublishedFileUrl(publication?.url ?? '');
+        setPublishedFileSlug(publication?.slug ?? '');
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
   }, [projectId, file.name]);
 
   async function publishCurrentFilePublic() {
     if (viewerOnly || publishingPublicFile) return;
+    const requestProjectId = projectId;
+    const requestFileName = file.name;
+    const requestSeq = ++publicFileRequestSeqRef.current;
     setPublishingPublicFile(true);
     setPublishLinkFeedback(null);
     try {
-      const response = await publishProjectFilePublic(projectId, file.name);
+      const response = await publishProjectFilePublic(requestProjectId, requestFileName);
+      const current = publicFileIdentityRef.current;
+      if (
+        publicFileRequestSeqRef.current !== requestSeq ||
+        current.projectId !== requestProjectId ||
+        current.fileName !== requestFileName
+      ) {
+        return;
+      }
       setPublishedFileUrl(response.url);
       setPublishedFileSlug(response.slug);
     } catch (error) {
       console.warn('[FileViewer] failed to publish public file', error);
-      setPublishLinkFeedback('failed');
+      if (publicFileRequestSeqRef.current === requestSeq) setPublishLinkFeedback('failed');
     } finally {
-      setPublishingPublicFile(false);
+      if (publicFileRequestSeqRef.current === requestSeq) setPublishingPublicFile(false);
     }
   }
 
   async function unpublishCurrentFilePublic() {
     if (!publishedFileSlug || publishingPublicFile) return;
+    const requestProjectId = projectId;
+    const requestFileName = file.name;
+    const requestSlug = publishedFileSlug;
+    const requestSeq = ++publicFileRequestSeqRef.current;
     setPublishingPublicFile(true);
     setPublishLinkFeedback(null);
     try {
-      await unpublishProjectFilePublic(projectId, file.name, publishedFileSlug);
+      await unpublishProjectFilePublic(requestProjectId, requestFileName, requestSlug);
+      const current = publicFileIdentityRef.current;
+      if (
+        publicFileRequestSeqRef.current !== requestSeq ||
+        current.projectId !== requestProjectId ||
+        current.fileName !== requestFileName
+      ) {
+        return;
+      }
       setPublishedFileUrl('');
       setPublishedFileSlug('');
     } catch (error) {
       console.warn('[FileViewer] failed to unpublish public file', error);
-      setPublishLinkFeedback('failed');
+      if (publicFileRequestSeqRef.current === requestSeq) setPublishLinkFeedback('failed');
     } finally {
-      setPublishingPublicFile(false);
+      if (publicFileRequestSeqRef.current === requestSeq) setPublishingPublicFile(false);
     }
   }
 
@@ -6231,6 +6278,8 @@ function HtmlViewer({
   const [publishingPublicFile, setPublishingPublicFile] = useState(false);
   const [publishLinkFeedback, setPublishLinkFeedback] = useState<'copied' | 'failed' | null>(null);
   const filePublished = publishedFileUrl.length > 0;
+  const publicFileRequestSeqRef = useRef(0);
+  const publicFileIdentityRef = useRef({ projectId, fileName: file.name });
   // False when closed; otherwise records which entry opened the modal so the
   // surface_view impression can carry entry_from.
   const [versionModalOpen, setVersionModalOpen] = useState<false | 'toolbar' | 'more_menu'>(false);
@@ -6318,41 +6367,85 @@ function HtmlViewer({
   }, [deployMenuOpen]);
 
   useEffect(() => {
+    publicFileIdentityRef.current = { projectId, fileName: file.name };
+    const requestSeq = ++publicFileRequestSeqRef.current;
+    let cancelled = false;
     setPublishedFileUrl('');
     setPublishedFileSlug('');
     setPublishingPublicFile(false);
     setPublishLinkFeedback(null);
+    void fetchProjectFilePublicPublication(projectId, file.name)
+      .then((publication) => {
+        const current = publicFileIdentityRef.current;
+        if (
+          cancelled ||
+          publicFileRequestSeqRef.current !== requestSeq ||
+          current.projectId !== projectId ||
+          current.fileName !== file.name
+        ) {
+          return;
+        }
+        setPublishedFileUrl(publication?.url ?? '');
+        setPublishedFileSlug(publication?.slug ?? '');
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
   }, [projectId, file.name]);
 
   async function publishCurrentFilePublic() {
     if (viewerOnly || publishingPublicFile) return;
+    const requestProjectId = projectId;
+    const requestFileName = file.name;
+    const requestSeq = ++publicFileRequestSeqRef.current;
     setPublishingPublicFile(true);
     setPublishLinkFeedback(null);
     try {
-      const response = await publishProjectFilePublic(projectId, file.name);
+      const response = await publishProjectFilePublic(requestProjectId, requestFileName);
+      const current = publicFileIdentityRef.current;
+      if (
+        publicFileRequestSeqRef.current !== requestSeq ||
+        current.projectId !== requestProjectId ||
+        current.fileName !== requestFileName
+      ) {
+        return;
+      }
       setPublishedFileUrl(response.url);
       setPublishedFileSlug(response.slug);
     } catch (error) {
       console.warn('[FileViewer] failed to publish public file', error);
-      setPublishLinkFeedback('failed');
+      if (publicFileRequestSeqRef.current === requestSeq) setPublishLinkFeedback('failed');
     } finally {
-      setPublishingPublicFile(false);
+      if (publicFileRequestSeqRef.current === requestSeq) setPublishingPublicFile(false);
     }
   }
 
   async function unpublishCurrentFilePublic() {
     if (!publishedFileSlug || publishingPublicFile) return;
+    const requestProjectId = projectId;
+    const requestFileName = file.name;
+    const requestSlug = publishedFileSlug;
+    const requestSeq = ++publicFileRequestSeqRef.current;
     setPublishingPublicFile(true);
     setPublishLinkFeedback(null);
     try {
-      await unpublishProjectFilePublic(projectId, file.name, publishedFileSlug);
+      await unpublishProjectFilePublic(requestProjectId, requestFileName, requestSlug);
+      const current = publicFileIdentityRef.current;
+      if (
+        publicFileRequestSeqRef.current !== requestSeq ||
+        current.projectId !== requestProjectId ||
+        current.fileName !== requestFileName
+      ) {
+        return;
+      }
       setPublishedFileUrl('');
       setPublishedFileSlug('');
     } catch (error) {
       console.warn('[FileViewer] failed to unpublish public file', error);
-      setPublishLinkFeedback('failed');
+      if (publicFileRequestSeqRef.current === requestSeq) setPublishLinkFeedback('failed');
     } finally {
-      setPublishingPublicFile(false);
+      if (publicFileRequestSeqRef.current === requestSeq) setPublishingPublicFile(false);
     }
   }
 

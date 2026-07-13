@@ -1394,6 +1394,29 @@ export async function publishProjectFilePublic(
   return (await resp.json()) as WebPublicProjectFileResponse;
 }
 
+export async function fetchProjectFilePublicPublication(
+  projectId: string,
+  fileName: string,
+): Promise<WebPublicProjectFileResponse | null> {
+  const resp = await fetch(
+    `/api/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(fileName)}/publish-public`,
+  );
+  if (!resp.ok) {
+    const payload = (await resp.json().catch(() => null)) as
+      | { error?: { message?: string } | string; message?: string }
+      | null;
+    const errorMessage =
+      typeof payload?.error === 'object'
+        ? payload.error.message
+        : typeof payload?.error === 'string'
+          ? payload.error
+          : payload?.message;
+    throw new Error(errorMessage || `Fetch publish state failed (${resp.status})`);
+  }
+  const payload = (await resp.json()) as { publication?: WebPublicProjectFileResponse | null };
+  return payload.publication ?? null;
+}
+
 export async function unpublishProjectFilePublic(
   projectId: string,
   fileName: string,

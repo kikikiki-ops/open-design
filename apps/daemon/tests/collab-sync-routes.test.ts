@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import http from 'node:http';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
@@ -280,6 +280,19 @@ describe('collab sync routes', () => {
     );
     expect(runtime.projectSyncState(projectId, workspaceA)).toBe('sync_failed');
     expect(runtime.projectSyncState(projectId, workspaceB)).toBe('sync_failed');
+  });
+
+  it('preserves existing sync state when rememberTeamShare only seeds ownership', () => {
+    runtime = createCollabRuntime();
+    const workspace = {
+      memberId: 'member-a',
+      teamId: 'workspace-a',
+      role: 'admin' as const,
+      lifecycleState: 'active' as const,
+    };
+    runtime.rememberTeamShare('p1', workspace, 'sync_failed');
+    runtime.rememberTeamShare('p1', workspace);
+    expect(runtime.projectSyncState('p1', workspace)).toBe('sync_failed');
   });
 
   it('keeps team-project catalog resource ids scoped per workspace principal', async () => {
@@ -633,6 +646,82 @@ describe('collab sync routes', () => {
     expect(res.status).toBe(502);
     expect(res.body.error).toBe('PUBLIC_FILE_URL_UNAVAILABLE');
     expect(resolveProjectDir).not.toHaveBeenCalled();
+    expect(runVelaResourceCommand).not.toHaveBeenCalled();
+  });
+
+  it('hydrates and clears public file publication state', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'od-public-file-'));
+    tempDirs.push(dir);
+    await writeFile(path.join(dir, 'index.html'), '<h1>Published</h1>');
+    vi.mocked(readVelaControlApiContext).mockReturnValue({
+      profile: 'test',
+      apiUrl: 'https://hub.example.test',
+      controlKey: 'ctrl-test',
+      user: null,
+      configMtimeMs: null,
+    });
+    vi.mocked(runVelaResourceCommand).mockImplementation(async (args) => {
+      if (args[0] === 'snapshot') {
+        return JSON.stringify({
+          slug: 'public-slug',
+          name: 'index.html',
+          kind: 'project',
+          versionId: 'v1',
+          createdAt: new Date(1).toISOString(),
+        });
+      }
+      return JSON.stringify({ version: 1 });
+    });
+    const api = await startSyncServer(fixedShareContextProvider(true), {
+      resolveProjectDir: () => dir,
+      resolveSharedProject: async () => null,
+    });
+
+    const publish = await api.json('/api/projects/p1/files/index.html/publish-public', { method: 'POST' });
+    const current = await api.json('/api/projects/p1/files/index.html/publish-public');
+    const unpublish = await api.json('/api/projects/p1/files/index.html/publish-public', {
+      method: 'DELETE',
+      body: { slug: 'public-slug' },
+    });
+    const afterUnpublish = await api.json('/api/projects/p1/files/index.html/publish-public');
+
+    const publication = {
+      url: 'https://hub.example.test/api/v1/public/snapshots/public-slug/files/index.html',
+      slug: 'public-slug',
+      fileName: 'index.html',
+    };
+    expect(publish.status).toBe(200);
+    expect(publish.body).toEqual(publication);
+    expect(current.body.publication).toEqual(publication);
+    expect(unpublish.status).toBe(200);
+    expect(afterUnpublish.body.publication).toBeNull();
+  });
+
+  it('rejects escaped and symlinked public file paths before publishing', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'od-public-file-'));
+    const outsideDir = await mkdtemp(path.join(tmpdir(), 'od-public-outside-'));
+    tempDirs.push(dir, outsideDir);
+    await writeFile(path.join(outsideDir, 'secret.html'), '<h1>Secret</h1>');
+    await symlink(path.join(outsideDir, 'secret.html'), path.join(dir, 'secret-link.html'));
+    vi.mocked(readVelaControlApiContext).mockReturnValue({
+      profile: 'test',
+      apiUrl: 'https://hub.example.test',
+      controlKey: 'ctrl-test',
+      user: null,
+      configMtimeMs: null,
+    });
+    const api = await startSyncServer(fixedShareContextProvider(true), {
+      resolveProjectDir: () => dir,
+      resolveSharedProject: async () => null,
+    });
+
+    const backslash = await api.json('/api/projects/p1/files/nested%5Csecret.html/publish-public', { method: 'POST' });
+    const symlinked = await api.json('/api/projects/p1/files/secret-link.html/publish-public', { method: 'POST' });
+
+    expect(backslash.status).toBe(400);
+    expect(backslash.body.error).toBe('invalid_file_path');
+    expect(symlinked.status).toBe(400);
+    expect(symlinked.body.error).toBe('FILE_UNAVAILABLE');
     expect(runVelaResourceCommand).not.toHaveBeenCalled();
   });
 

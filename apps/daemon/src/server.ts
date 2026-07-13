@@ -3932,7 +3932,7 @@ export async function startServer({
       const ctx = await collab.workspaceContext.current({});
       const principal = contextToResourceHubPrincipal(ctx);
       if (!principal || owner !== principal.memberId) return false;
-      collab.rememberTeamShare(projectId, principal, 'synced');
+      collab.rememberTeamShare(projectId, principal);
       return true;
     },
     subscribeFiles: (projectId, onChange) => {
