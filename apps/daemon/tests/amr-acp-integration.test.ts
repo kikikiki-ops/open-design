@@ -959,7 +959,6 @@ describe('AMR ACP transport — end-to-end against fake vela stub', () => {
     expect(classifyAmrAccountFailure(message)).toMatchObject({
       code: 'AMR_INSUFFICIENT_BALANCE',
       action: 'recharge',
-      actionUrl: 'https://open-design.ai/amr/wallet?source=open_design',
     });
   });
 

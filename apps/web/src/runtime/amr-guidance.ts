@@ -14,6 +14,7 @@ export const AMR_RECHARGE_URL = AMR_CONSOLE_URL;
 const AMR_CONSOLE_URL_BY_PROFILE: Record<string, string> = {
   prod: AMR_CONSOLE_URL,
   test: 'https://vela.powerformer.net/wallet?source=open_design',
+  'feature-test': 'https://amr-feature.powerformer.net/wallet?source=open_design',
   local: 'http://localhost:5173/wallet?source=open_design',
 };
 
@@ -35,6 +36,7 @@ export function amrPlansUrlForProfile(profile: string | null | undefined): strin
 
 export function amrProfileBadgeLabel(profile: string | null | undefined): string | null {
   if (profile === 'test') return 'TEST';
+  if (profile === 'feature-test') return 'FEATURE TEST';
   if (profile === 'local') return 'LOCAL';
   return null;
 }

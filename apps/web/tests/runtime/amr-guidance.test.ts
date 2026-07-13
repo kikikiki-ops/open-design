@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { amrRechargeUrlForProfile, resolveRunFailureUi } from '../../src/runtime/amr-guidance';
+import { amrProfileBadgeLabel, amrRechargeUrlForProfile, resolveRunFailureUi } from '../../src/runtime/amr-guidance';
 
 describe('amrRechargeUrlForProfile', () => {
   it('matches the selected AMR profile wallet origin', () => {
@@ -9,12 +9,19 @@ describe('amrRechargeUrlForProfile', () => {
     expect(amrRechargeUrlForProfile('test')).toBe(
       'https://vela.powerformer.net/wallet?source=open_design',
     );
+    expect(amrRechargeUrlForProfile('feature-test')).toBe(
+      'https://amr-feature.powerformer.net/wallet?source=open_design',
+    );
     expect(amrRechargeUrlForProfile('local')).toBe(
       'http://localhost:5173/wallet?source=open_design',
     );
     expect(amrRechargeUrlForProfile(' unknown ')).toBe(
       'https://open-design.ai/amr/wallet?source=open_design',
     );
+  });
+
+  it('labels the feature-test profile distinctly', () => {
+    expect(amrProfileBadgeLabel('feature-test')).toBe('FEATURE TEST');
   });
 });
 

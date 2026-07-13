@@ -19,16 +19,11 @@ export interface AmrAccountFailureSignal {
   stderrTail?: unknown;
 }
 
-// `source=open_design` tags the wallet landing page_view so vela analytics can
-// attribute the recharge visit to Open Design.
-export const DEFAULT_AMR_RECHARGE_URL =
-  'https://open-design.ai/amr/wallet?source=open_design';
-
 const AMR_AUTH_REQUIRED_MESSAGE =
   'AMR sign-in is required. Sign in to AMR Cloud again, then retry this run.';
 
 const AMR_INSUFFICIENT_BALANCE_MESSAGE =
-  `AMR Cloud reported insufficient balance for this model. Recharge your AMR wallet at ${DEFAULT_AMR_RECHARGE_URL}, then retry this run.`;
+  'AMR Cloud reported insufficient balance for this model. Recharge your AMR wallet, then retry this run.';
 
 const AMR_TIER_UPGRADE_REQUIRED_MESSAGE =
   'Your current AMR plan does not include this model or request type. Upgrade your AMR plan, or switch to an available model and retry.';
@@ -79,7 +74,6 @@ export function classifyAmrAccountFailureDetails(details: unknown): AmrAccountFa
       code: 'AMR_INSUFFICIENT_BALANCE',
       message: AMR_INSUFFICIENT_BALANCE_MESSAGE,
       action: 'recharge',
-      actionUrl: DEFAULT_AMR_RECHARGE_URL,
     };
   }
 
@@ -135,7 +129,6 @@ export function classifyAmrAccountFailure(text: string): AmrAccountFailure | nul
       code: 'AMR_INSUFFICIENT_BALANCE',
       message: AMR_INSUFFICIENT_BALANCE_MESSAGE,
       action: 'recharge',
-      actionUrl: DEFAULT_AMR_RECHARGE_URL,
     };
   }
 
