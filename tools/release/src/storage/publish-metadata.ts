@@ -323,8 +323,9 @@ const versionPrefix = optional("RELEASE_VERSION_PREFIX", `${releaseChannel}/vers
 
 const latestMetadataUpdated = releaseState === "complete";
 const releaseNote = readReleaseNoteMetadata();
+const releaseFields = releaseMetadataFields();
 const metadata = {
-  ...releaseMetadataFields(),
+  ...releaseFields,
   channel: releaseChannel,
   expectedPlatforms: expectedTargets,
   expectedTargets,

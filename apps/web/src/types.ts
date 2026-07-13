@@ -8,6 +8,9 @@ import type {
   AgentTestRequest,
   AppVersionInfo,
   AppVersionResponse,
+  WhatsNewContent,
+  WhatsNewLocaleContent,
+  WhatsNewResponse,
   AudioKind,
   ChatAttachment,
   ChatCommentAttachment,
@@ -519,6 +522,15 @@ export interface ExamplePreview {
   html: string;
 }
 
+export type ModelCost = 'low' | 'medium' | 'high' | 'very_high';
+
+export type ModelCapability = 'standard' | 'advanced' | 'best_quality';
+
+export interface ModelMetadata {
+  cost?: ModelCost;
+  capability?: ModelCapability;
+}
+
 export interface AgentModelOption {
   id: string;
   label: string;
@@ -526,6 +538,7 @@ export interface AgentModelOption {
   default?: boolean;
   inputPriceUsdPerMillion?: number;
   outputPriceUsdPerMillion?: number;
+  metadata?: ModelMetadata;
 }
 
 export type Surface = 'web' | 'image' | 'video' | 'audio';
@@ -562,6 +575,9 @@ export type {
   AgentTestRequest,
   AppVersionInfo,
   AppVersionResponse,
+  WhatsNewContent,
+  WhatsNewLocaleContent,
+  WhatsNewResponse,
   AudioKind,
   ConnectionTestKind,
   ConnectionTestProtocol,
