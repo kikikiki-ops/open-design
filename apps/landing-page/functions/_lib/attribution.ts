@@ -13,8 +13,23 @@ export interface KvBinding {
   put(key: string, value: string, options?: { expirationTtl?: number }): Promise<unknown>;
 }
 
+export interface D1StatementResult {
+  meta?: { changes?: number };
+}
+
+export interface D1Statement {
+  bind(...values: unknown[]): D1Statement;
+  first<T = Record<string, unknown>>(): Promise<T | null>;
+  run(): Promise<D1StatementResult>;
+}
+
+export interface AttributionConsumptionDb {
+  prepare(query: string): D1Statement;
+}
+
 export interface AttributionEnv {
   ATTRIBUTION_KV?: KvBinding;
+  ATTRIBUTION_DB?: AttributionConsumptionDb;
   ATTRIBUTION_CONSUME_TOKEN?: string;
 }
 
@@ -69,8 +84,44 @@ export function requireKv(env: AttributionEnv): KvBinding | null {
   return env.ATTRIBUTION_KV ?? null;
 }
 
+export function requireConsumptionDb(env: AttributionEnv): AttributionConsumptionDb | null {
+  return env.ATTRIBUTION_DB ?? null;
+}
+
 export function recordKey(token: string): string {
   return `download-attribution:${token}`;
+}
+
+export async function consumeTokenAtomically(input: {
+  db: AttributionConsumptionDb;
+  token: string;
+  kind: 'download' | 'client_web_bridge';
+  consumedBy: string | null;
+  now?: string;
+}): Promise<{ won: boolean; consumedBy: string | null }> {
+  const now = input.now ?? new Date().toISOString();
+  const insert = await input.db.prepare(
+    `INSERT INTO attribution_token_consumptions (token, kind, consumed_by, consumed_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(token, kind) DO NOTHING`,
+  ).bind(input.token, input.kind, input.consumedBy, now).run();
+  if ((insert.meta?.changes ?? 0) === 1) return { won: true, consumedBy: input.consumedBy };
+  const claimed = await input.db.prepare(
+    `SELECT consumed_by AS consumedBy
+     FROM attribution_token_consumptions
+     WHERE token = ? AND kind = ?`,
+  ).bind(input.token, input.kind).first<{ consumedBy?: unknown }>();
+  return { won: false, consumedBy: typeof claimed?.consumedBy === 'string' ? claimed.consumedBy : null };
+}
+
+export async function releaseAtomicConsumption(input: {
+  db: AttributionConsumptionDb;
+  token: string;
+  kind: 'download' | 'client_web_bridge';
+}): Promise<void> {
+  await input.db.prepare(
+    'DELETE FROM attribution_token_consumptions WHERE token = ? AND kind = ?',
+  ).bind(input.token, input.kind).run();
 }
 
 export function cleanString(value: unknown, max = 2048): string | null {

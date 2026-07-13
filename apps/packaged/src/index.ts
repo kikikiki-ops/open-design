@@ -224,6 +224,7 @@ async function main(): Promise<void> {
     void claimPackagedDownloadAttribution({
       attribution: downloadAttribution,
       daemonUrl: sidecars.daemon.url,
+      installerObservationRoot: paths.installerObservationRoot,
       logger: packagedLogger,
     });
   }

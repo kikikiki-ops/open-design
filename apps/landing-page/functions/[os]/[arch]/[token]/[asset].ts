@@ -27,14 +27,14 @@ export const onRequest: PagesFunction<AttributionEnv, {
     method: request.method,
     headers: { Accept: request.headers.get('accept') ?? '*/*' },
   });
-  if (!upstream.ok || !upstream.body) {
+  if (!upstream.ok || (request.method === 'GET' && !upstream.body)) {
     return json(502, { error: 'download_upstream_unavailable' });
   }
   const headers = new Headers(upstream.headers);
   headers.set('Cache-Control', 'private, no-store');
   headers.set('Content-Disposition', `attachment; filename="${params.asset.replace(/"/g, '')}"`);
   for (const [key, value] of Object.entries(corsHeaders())) headers.set(key, value);
-  return new Response(upstream.body, {
+  return new Response(request.method === 'HEAD' ? null : upstream.body, {
     status: upstream.status,
     headers,
   });

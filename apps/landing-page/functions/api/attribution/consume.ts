@@ -1,7 +1,11 @@
 import {
+  ATTRIBUTION_TTL_SECONDS,
   json,
   optionsResponse,
+  consumeTokenAtomically,
   recordKey,
+  releaseAtomicConsumption,
+  requireConsumptionDb,
   requireKv,
   validToken,
   type AttributionEnv,
@@ -19,6 +23,8 @@ export const onRequest: PagesFunction<AttributionEnv> = async ({ request, env })
   }
   const kv = requireKv(env);
   if (!kv) return json(503, { error: 'attribution_store_unconfigured' });
+  const db = requireConsumptionDb(env);
+  if (!db) return json(503, { error: 'attribution_consumption_store_unconfigured' });
   const body = await request.json().catch(() => null);
   const token = body && typeof body === 'object' && !Array.isArray(body) && typeof (body as Record<string, unknown>).token === 'string'
     ? (body as { token: string }).token
@@ -27,13 +33,25 @@ export const onRequest: PagesFunction<AttributionEnv> = async ({ request, env })
     ? (body as { installationId: string }).installationId
     : null;
   if (!validToken(token) || !installationId) return json(400, { error: 'invalid_claim' });
+  const consumed = await consumeTokenAtomically({
+    db,
+    token,
+    kind: 'download',
+    consumedBy: installationId,
+  });
+  if (!consumed.won) {
+    return json(200, { status: consumed.consumedBy === installationId ? 'already_consumed_same' : 'already_consumed_other' });
+  }
   const raw = await kv.get(recordKey(token));
-  if (!raw) return json(200, { status: 'not_found' });
+  if (!raw) {
+    await releaseAtomicConsumption({ db, token, kind: 'download' });
+    return json(200, { status: 'not_found' });
+  }
   const record = JSON.parse(raw) as AttributionRecord;
   if (record.consumedBy && record.consumedBy !== installationId) {
+    await releaseAtomicConsumption({ db, token, kind: 'download' });
     return json(200, { status: 'already_consumed_other' });
   }
-  const status = record.consumedBy === installationId ? 'already_consumed_same' : 'consumed';
   const next: AttributionRecord = {
     ...record,
     consumedBy: installationId,
@@ -41,7 +59,7 @@ export const onRequest: PagesFunction<AttributionEnv> = async ({ request, env })
   };
   await kv.put(recordKey(token), JSON.stringify(next), { expirationTtl: ATTRIBUTION_TTL_SECONDS });
   return json(200, {
-    status,
+    status: record.consumedBy === installationId ? 'already_consumed_same' : 'consumed',
     webDistinctId: record.webDistinctId,
     properties: record.properties,
   });

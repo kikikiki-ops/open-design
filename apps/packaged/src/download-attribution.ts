@@ -5,13 +5,14 @@ import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { promisify } from "node:util";
 
-import { ATTRIBUTION_CLAIM_PATH } from "@open-design/contracts";
+import { ATTRIBUTION_CLAIM_PATH, type AttributionClaimResponse } from "@open-design/contracts";
 
 import type { PackagedDesktopLogger } from "./logging.js";
 import type { PackagedNamespacePaths } from "./paths.js";
 
 const execFileAsync = promisify(execFile);
 const OBSERVATION_FILE = "download-attribution.json";
+const HANDLED_OBSERVATION_FILE = "download-attribution-handled.json";
 
 export type PackagedDownloadAttribution = {
   token: string;
@@ -44,26 +45,44 @@ export async function discoverPackagedDownloadAttribution(
   logger?: Pick<PackagedDesktopLogger, "warn"> | null,
 ): Promise<PackagedDownloadAttribution | null> {
   const observed = await readInstallerObservation(paths.installerObservationRoot);
-  if (observed) return observed;
-  if (process.platform === "darwin") return discoverMacWhereFromsAttribution(logger);
+  const handledToken = await readHandledToken(paths.installerObservationRoot);
+  if (observed) return observed.token === handledToken ? null : observed;
+  if (process.platform === "darwin") {
+    const discovered = await discoverMacWhereFromsAttribution(logger);
+    return discovered?.token === handledToken ? null : discovered;
+  }
   return null;
 }
 
 export async function claimPackagedDownloadAttribution(input: {
   attribution: PackagedDownloadAttribution | null;
   daemonUrl: string;
+  installerObservationRoot?: string;
   logger?: Pick<PackagedDesktopLogger, "warn"> | null;
 }): Promise<void> {
   if (!input.attribution) return;
   try {
-    await fetch(`${input.daemonUrl.replace(/\/+$/, "")}${ATTRIBUTION_CLAIM_PATH}`, {
+    const response = await fetch(`${input.daemonUrl.replace(/\/+$/, "")}${ATTRIBUTION_CLAIM_PATH}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input.attribution),
     });
+    const claim = response.ok ? await response.json().catch(() => null) : null;
+    if (input.installerObservationRoot && isTerminalClaim(claim)) {
+      await writeHandledToken(input.installerObservationRoot, input.attribution.token);
+    }
   } catch (error) {
     input.logger?.warn("failed to claim packaged download attribution", { error });
   }
+}
+
+function isTerminalClaim(value: unknown): value is AttributionClaimResponse {
+  if (!value || typeof value !== "object") return false;
+  const status = (value as { status?: unknown }).status;
+  return status === "claimed"
+    || status === "already_claimed"
+    || status === "shared_installer"
+    || status === "not_found";
 }
 
 async function readInstallerObservation(root: string): Promise<PackagedDownloadAttribution | null> {
@@ -85,6 +104,20 @@ async function readInstallerObservation(root: string): Promise<PackagedDownloadA
   } catch {
     return null;
   }
+}
+
+async function readHandledToken(root: string): Promise<string | null> {
+  try {
+    const parsed = JSON.parse(await readFile(join(root, HANDLED_OBSERVATION_FILE), "utf8")) as Record<string, unknown>;
+    return typeof parsed.token === "string" ? parsed.token : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeHandledToken(root: string, token: string): Promise<void> {
+  await mkdir(root, { recursive: true });
+  await writeFile(join(root, HANDLED_OBSERVATION_FILE), JSON.stringify({ token, handledAt: new Date().toISOString() }));
 }
 
 async function discoverMacWhereFromsAttribution(
