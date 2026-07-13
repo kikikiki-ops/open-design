@@ -63,7 +63,11 @@ const repoRoot = path.resolve(__dirname, '../../../..');
 // question ships a brief-inferred recommended `default` so the user can
 // submit the form unchanged (one bullet + `"default"` anchor in the example
 // form + updated description copy).
-const SLIM_CORE_BYTE_BUDGET = 15_872;
+// Bumped from 15_872 for the imagery fallback chain: when no image
+// generation is wired up (or the generate call fails), the run falls back to
+// web search / web fetch to pull a real photo into the project instead of
+// shipping an empty slot or a schematic box.
+const SLIM_CORE_BYTE_BUDGET = 16_128;
 
 describe('renderSlimCoreCharter — byte budget', () => {
   it('stays under the byte budget in both execution profiles', () => {
@@ -98,6 +102,18 @@ describe('renderSlimCoreCharter — frozen protocol markers', () => {
     // The example form anchors the pattern with a concrete default.
     expect(charter).toContain('"default": "pick_direction"');
     expect(charter).toContain('Prefilled with my read of the brief — adjust anything, then send.');
+  });
+
+  it('keeps the imagery fallback chain intact', () => {
+    // Production-value imagery resolves in order: OD media tool → the
+    // runtime's native image generation → web search / web fetch pulling a
+    // real photo into the project. The fallback exists so a run without any
+    // image generation still ships real imagery instead of an empty slot,
+    // and it must keep the no-hot-link file rule.
+    expect(charter).toContain('media generate --surface image');
+    expect(charter).toContain("your own runtime's native image generation");
+    expect(charter).toContain('fall back to your web search / web fetch tools');
+    expect(charter).toContain('reference it by relative path — never hot-link the remote URL');
   });
 
   it('keeps the inspect/tweaks contracts intact', () => {
