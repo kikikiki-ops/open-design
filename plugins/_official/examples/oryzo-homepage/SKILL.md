@@ -31,6 +31,7 @@ Most of the site is bundled locally under `assets/`. Three things load over the 
 
 - **Large media on the repository-assets CDN** (`repo-assets.open-design.ai`): the 3D splat (`props.sog`, ~3 MB), the main Three.js bundle (`hoisted.js`, ~1.1 MB), and the Rive WASM runtime (~1.8 MB) — each exceeds the 1 MB in-repo blob limit, so they are served from the CDN and fetched with CORS.
 - **A Vimeo-hosted testimonial video** (`player.vimeo.com`) embedded in one section — a hosted video that can't be bundled.
+- **Two footer legal links** (Terms, Privacy) point to the originals on `oryzo.ai` — those documents belong to Oryzo/Lusion, so they are linked rather than copied into the repo.
 
 ## Using it
 
