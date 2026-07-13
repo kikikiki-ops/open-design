@@ -126,7 +126,7 @@ export function RecentProjectsStrip({
   const { context: workspaceContext } = useWorkspaceContext();
   const selfMemberId = workspaceContext?.workspaceMemberId ?? null;
   const collaborationAvailable =
-    collaborationEnabled ?? workspaceContext?.workspaceType === 'team';
+    collaborationEnabled ?? workspaceContext?.permissions.canShareProjects === true;
   const canInvite =
     canAssignInviteRoles ?? workspaceContext?.permissions.canInviteMembers === true;
   const canManageCollection =

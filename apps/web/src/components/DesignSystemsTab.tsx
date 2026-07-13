@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, VisuallyHidden } from '@open-design/components';
 import { useAnalytics } from '../analytics/provider';
 import {
@@ -111,6 +111,14 @@ function systemMatchesQuery(
     summary.includes(query) ||
     categoryLabel.includes(query)
   );
+}
+
+function setsEqual<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): boolean {
+  if (a.size !== b.size) return false;
+  for (const item of a) {
+    if (!b.has(item)) return false;
+  }
+  return true;
 }
 
 export function DesignSystemsTab({
@@ -323,24 +331,40 @@ export function DesignSystemsTab({
   // Load the set of design systems already shared to the team. Off-team (or with
   // the hub unconfigured) this returns an empty list, so the team collection is
   // simply empty and the share action is available but a no-op.
-  async function refreshTeamShared() {
+  const refreshTeamShared = useCallback(async (options: { refreshSystems?: boolean } = {}) => {
     try {
-      const res = await fetch('/api/workspace/design-systems/team');
+      const res = await fetch('/api/workspace/design-systems/team', { cache: 'no-store' });
       if (!res.ok) return;
       const body = (await res.json()) as { ids?: unknown };
       if (Array.isArray(body.ids)) {
-        setTeamSharedIds(new Set(body.ids.filter((id): id is string => typeof id === 'string')));
-        await onSystemsRefresh?.();
+        const next = new Set(body.ids.filter((id): id is string => typeof id === 'string'));
+        setTeamSharedIds((prev) => setsEqual(prev, next) ? prev : next);
+        if (options.refreshSystems) await onSystemsRefresh?.();
       }
     } catch {
       // Non-fatal: leave the team collection empty on a transient failure.
     }
-  }
+  }, [onSystemsRefresh]);
 
   useEffect(() => {
     void refreshTeamShared();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [refreshTeamShared]);
+
+  useEffect(() => {
+    const refreshVisible = () => {
+      if (document.visibilityState === 'visible') void refreshTeamShared();
+    };
+    const interval = window.setInterval(refreshVisible, 10_000);
+    window.addEventListener('focus', refreshVisible);
+    window.addEventListener('pageshow', refreshVisible);
+    document.addEventListener('visibilitychange', refreshVisible);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshVisible);
+      window.removeEventListener('pageshow', refreshVisible);
+      document.removeEventListener('visibilitychange', refreshVisible);
+    };
+  }, [refreshTeamShared]);
 
   // Promote a personal design system into the team scope. The daemon packs and
   // pushes it to the resource hub; on success it appears in the team collection.
@@ -354,7 +378,7 @@ export function DesignSystemsTab({
       });
       const body = (await res.json().catch(() => ({}))) as { shared?: boolean };
       if (res.ok && body.shared) {
-        setTeamSharedIds((prev) => new Set(prev).add(system.id));
+        await refreshTeamShared({ refreshSystems: true });
         notifyAction('success', t('ds.actionDone'));
       } else if (res.ok) {
         // Reached the daemon but there is no team identity to share under.

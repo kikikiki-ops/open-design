@@ -131,9 +131,10 @@ export function createCollabCloudService(deps: CollabCloudServiceDeps): CollabCl
     displayName: string;
   } | null> {
     const context = await deps.workspaceContext.current({});
-    if (!context || context.workspaceType !== 'team' || !context.teamId) return null;
+    const workspaceResourceScope = context?.teamId ?? context?.workspaceId;
+    if (!context || !workspaceResourceScope) return null;
     return {
-      teamId: context.teamId,
+      teamId: workspaceResourceScope,
       memberId: context.workspaceMemberId,
       role: context.role,
       displayName: context.displayName?.trim() || context.workspaceMemberId,

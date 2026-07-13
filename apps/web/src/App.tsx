@@ -19,6 +19,7 @@ import type {
   ChatSessionMode,
   RunContextSelection,
   WorkspaceTeamProjectsResponse,
+  WorkspaceCollabContext,
 } from '@open-design/contracts';
 import { DEFAULT_UNSELECTED_SCENARIO_PLUGIN_ID } from '@open-design/contracts';
 import { EntryView } from './components/EntryView';
@@ -71,9 +72,10 @@ import {
 } from './providers/daemon';
 import { AMR_LOGIN_STATUS_EVENT } from './components/amrLoginPolling';
 import { CollabDemoView } from './collab/CollabDemoView';
+import { useWorkspaceContext } from './collab/useWorkspaceContext';
 import { CommunityView } from './components/CommunityView';
 import { seedHomeComposerPrompt } from './components/HomeView';
-import { goBack, navigate, useRoute } from './router';
+import { goBack, navigate, useRoute, type Route } from './router';
 import {
   fetchDaemonConfig,
   DEFAULT_PET,
@@ -109,6 +111,7 @@ import { useModalWindowDragGuard } from './hooks/useModalWindowDragGuard';
 import type {
   PluginShareAction,
   PluginShareProjectOutcome,
+  WorkspaceProjectListView,
 } from './state/projects';
 import type { OpenDesignHostProjectImportSuccess } from '@open-design/host';
 import { useI18n } from './i18n';
@@ -150,6 +153,13 @@ const APP_CONFIG_CHANGED_EVENT = 'open-design:app-config-changed';
 const AMR_AGENT_ID = 'amr';
 const AMR_PROFILE_ENV_KEY = 'OPEN_DESIGN_AMR_PROFILE';
 const AGENT_FOCUS_REFRESH_THROTTLE_MS = 10_000;
+
+function workspaceProjectListViewForRoute(route: Route): WorkspaceProjectListView {
+  if (route.kind === 'home' && route.view === 'all-projects') return 'all';
+  if (route.kind === 'home' && route.view === 'drafts') return 'drafts';
+  if (route.kind === 'project') return 'all';
+  return 'recent';
+}
 
 export function shouldSyncMediaProvidersOnSave(
   mediaProviders: AppConfig['mediaProviders'],
@@ -396,6 +406,20 @@ function AppInner() {
   const iframeKeepAlivePool = useIframeKeepAlivePool();
   const clientType = useMemo(() => detectClientType(), []);
   useModalWindowDragGuard();
+  const { context: workspaceContext } = useWorkspaceContext();
+  const workspaceContextRef = useRef<WorkspaceCollabContext | null>(null);
+  workspaceContextRef.current = workspaceContext;
+  const listCurrentWorkspaceProjects = useCallback(
+    (options?: { throwOnError?: boolean; workspaceView?: WorkspaceProjectListView }) => {
+      const context = workspaceContextRef.current;
+      return listProjects({
+        ...options,
+        workspaceContext: context,
+        workspaceView: context ? options?.workspaceView ?? 'recent' : undefined,
+      });
+    },
+    [],
+  );
   // Observability marker. `apps/web/src/observability/white-screen.ts`
   // keys its "app actually mounted" success condition on this attribute
   // because the dynamic-import loading shell (`<div class="od-loading-shell">
@@ -500,6 +524,7 @@ function AppInner() {
   // can't overwrite the saved state with `''` before hydration lands.
   const [composioConfigLoading, setComposioConfigLoading] = useState(true);
   const route = useRoute();
+  const workspaceProjectView = workspaceProjectListViewForRoute(route);
   const analytics = useAnalytics();
 
   const beginAgentStreamRequest = useCallback(() => {
@@ -905,7 +930,7 @@ function AppInner() {
       });
 
       const request = beginProjectListRequest();
-      void listProjects().then((list) => {
+      void listCurrentWorkspaceProjects({ workspaceView: workspaceProjectView }).then((list) => {
         if (cancelled) return;
         reconcileFetchedProjects(list, request);
         setProjectsLoading(false);
@@ -1023,6 +1048,8 @@ function AppInner() {
     beginAgentStreamRequest,
     beginProjectListRequest,
     isCurrentAgentStreamRequest,
+    listCurrentWorkspaceProjects,
+    workspaceProjectView,
     reconcileFetchedProjects,
   ]);
 
@@ -1108,15 +1135,41 @@ function AppInner() {
 
   const refreshProjects = useCallback(async () => {
     const request = beginProjectListRequest();
-    const list = await listProjects();
+    const list = await listCurrentWorkspaceProjects({ workspaceView: workspaceProjectView });
     reconcileFetchedProjects(list, request);
-  }, [beginProjectListRequest, reconcileFetchedProjects]);
+  }, [beginProjectListRequest, listCurrentWorkspaceProjects, reconcileFetchedProjects, workspaceProjectView]);
 
   const refreshProjectsStrict = useCallback(async () => {
     const request = beginProjectListRequest();
-    const list = await listProjects({ throwOnError: true });
+    const list = await listCurrentWorkspaceProjects({
+      throwOnError: true,
+      workspaceView: workspaceProjectView,
+    });
     reconcileFetchedProjects(list, request);
-  }, [beginProjectListRequest, reconcileFetchedProjects]);
+  }, [beginProjectListRequest, listCurrentWorkspaceProjects, reconcileFetchedProjects, workspaceProjectView]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const request = beginProjectListRequest();
+    setProjectsLoading(true);
+    void listCurrentWorkspaceProjects({ workspaceView: workspaceProjectView })
+      .then((list) => {
+        if (cancelled) return;
+        reconcileFetchedProjects(list, request);
+      })
+      .finally(() => {
+        if (!cancelled) setProjectsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    workspaceContext?.workspaceId,
+    beginProjectListRequest,
+    listCurrentWorkspaceProjects,
+    reconcileFetchedProjects,
+    workspaceProjectView,
+  ]);
 
   const refreshDesignSystems = useCallback(async () => {
     const list = await fetchDesignSystems();
@@ -1432,6 +1485,7 @@ function AppInner() {
             ? { appliedPluginSnapshotId: input.appliedPluginSnapshotId }
             : {}),
           ...(input.pluginInputs ? { pluginInputs: input.pluginInputs } : {}),
+          workspaceContext: workspaceContextRef.current,
         });
       } catch (err) {
         const errorCode =
@@ -1794,7 +1848,7 @@ function AppInner() {
       };
       setProjects((curr) => [stub, ...curr.filter((p) => p.id !== stub.id)]);
       const request = beginProjectListRequest();
-      const list = await listProjects();
+      const list = await listCurrentWorkspaceProjects({ workspaceView: workspaceProjectView });
       reconcileFetchedProjects(list, request);
     }
     navigate({
@@ -1802,7 +1856,7 @@ function AppInner() {
       projectId: result.projectId,
       fileName: null,
     });
-  }, [beginProjectListRequest, rememberLocalProject, reconcileFetchedProjects]);
+  }, [beginProjectListRequest, listCurrentWorkspaceProjects, rememberLocalProject, reconcileFetchedProjects, workspaceProjectView]);
 
   const handleOpenProject = useCallback(async (id: string, fileName?: string): Promise<boolean> => {
     const routeFileName = fileName ?? null;
@@ -1827,7 +1881,7 @@ function AppInner() {
         }
       }
       const request = beginProjectListRequest();
-      const list = await listProjects();
+      const list = await listCurrentWorkspaceProjects({ workspaceView: 'all' });
       reconcileFetchedProjects(list, request);
       const fetchedProject = locallyDeletedProjectIdsRef.current.has(id)
         ? undefined
@@ -1843,7 +1897,7 @@ function AppInner() {
     }
     setProjectOpenError(t('project.missing'));
     return false;
-  }, [beginProjectListRequest, reconcileFetchedProjects, t]);
+  }, [beginProjectListRequest, listCurrentWorkspaceProjects, reconcileFetchedProjects, t]);
 
   useEffect(() => {
     if (!config.pet?.enabled || !daemonLive) {
@@ -2060,7 +2114,7 @@ function AppInner() {
         }
       }
       const request = beginProjectListRequest();
-      const list = await listProjects().catch(() => []);
+      const list = await listCurrentWorkspaceProjects({ workspaceView: 'all' }).catch(() => []);
       if (cancelled) return;
       const applied = reconcileFetchedProjects(list, request);
       if (!applied) return;
@@ -2078,7 +2132,7 @@ function AppInner() {
     return () => {
       cancelled = true;
     };
-  }, [route, loadedActiveProject, projects, daemonLive, beginProjectListRequest, reconcileFetchedProjects, t]);
+  }, [route, loadedActiveProject, projects, daemonLive, beginProjectListRequest, listCurrentWorkspaceProjects, reconcileFetchedProjects, t]);
 
   const openSettings = useCallback((
     section: SettingsSection = 'execution',

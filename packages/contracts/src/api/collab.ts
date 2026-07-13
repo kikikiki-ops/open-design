@@ -235,6 +235,34 @@ export interface WorkspaceContextResponse {
   context: WorkspaceCollabContext | null;
 }
 
+/** A workspace visible to the signed-in Vela identity. Mirrors B's directory item. */
+export interface WorkspaceDirectoryItem {
+  workspaceId: string;
+  workspaceName: string;
+  workspaceIconKey?: string;
+  workspaceType: WorkspaceType;
+  workspaceMemberId: string;
+  role: CollabMemberRole;
+  memberStatus: WorkspaceMemberStatus;
+  lifecycleState: WorkspaceLifecycleState;
+}
+
+/** GET /api/workspace/directory. OD's local workspace switcher data source. */
+export interface WorkspaceDirectoryResponse {
+  items: WorkspaceDirectoryItem[];
+  activeWorkspaceId: string | null;
+}
+
+/** PUT /api/workspace/active. Selects OD's local active workspace. */
+export interface WorkspaceActiveRequest {
+  workspaceId: string;
+}
+
+export interface WorkspaceActiveResponse {
+  activeWorkspaceId: string;
+  context: WorkspaceCollabContext;
+}
+
 // —— Derivation helpers — a verbatim mirror of B's vela
 // packages/shared/src/workspace-context.ts. Both the daemon's dev context stub
 // and the real B proxy derive permissions/seat summary through these, so C never

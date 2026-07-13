@@ -27,17 +27,16 @@ export const WORKSPACE_SETTINGS_ENTRY_IDS: readonly WorkspaceSettingsEntryId[] =
 ];
 
 /**
- * Whether the Settings shell shows the Workspace region at all. True only for a
- * team workspace whose viewer may see workspace settings (`canViewWorkspaceSettings`
- * — a read-level bit, so it stays true when the workspace is locked). Off-team,
- * personal, signed-out, or B-unavailable → no Workspace region.
+ * Whether the Settings shell shows the Workspace region at all. True for any
+ * workspace whose viewer may see workspace settings (`canViewWorkspaceSettings`
+ * — a read-level bit, so it stays true when the workspace is locked). Signed
+ * out / B-unavailable → no Workspace region.
  */
 export function canShowWorkspaceSettings(
   context: WorkspaceCollabContext | null | undefined,
 ): boolean {
   return Boolean(
     context &&
-      context.workspaceType === 'team' &&
       context.permissions.canViewWorkspaceSettings,
   );
 }

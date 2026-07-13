@@ -78,6 +78,13 @@ export interface RegisterCollabSyncRoutesDeps {
   resolveProjectDir?: (projectId: string) => string;
   resolvePullDir?: (projectId: string) => string;
   readManifest?: (projectDir: string) => Promise<PulledProjectManifest | null>;
+  onTeamShareStateChanged?: (input: {
+    projectId: string;
+    principal?: ResourceHubPrincipal | null;
+    visibility: 'personal' | 'team';
+    ownerMemberId?: string | null;
+    updatedByMemberId?: string | null;
+  }) => void;
 }
 
 const SYNC_INTENT_EVENTS: ReadonlySet<ProjectSyncIntentEvent> = new Set([
@@ -605,6 +612,13 @@ export function registerCollabSyncRoutes(app: Express, deps: RegisterCollabSyncR
         });
         return res.status(502).json({ error: 'TEAM_PROJECT_CATALOG_UNAVAILABLE' });
       }
+      deps.onTeamShareStateChanged?.({
+        projectId,
+        principal,
+        visibility: 'team',
+        ownerMemberId: sharerMemberId ?? null,
+        updatedByMemberId: sharerMemberId ?? null,
+      });
       return res.json({
         ok: true,
         syncState: projectSyncState(projectId, principal),
@@ -629,6 +643,13 @@ export function registerCollabSyncRoutes(app: Express, deps: RegisterCollabSyncR
         return res.status(502).json({ error: 'TEAM_PROJECT_CATALOG_UNAVAILABLE' });
       }
       await requestTeamUnshare(projectId, principal);
+      deps.onTeamShareStateChanged?.({
+        projectId,
+        principal,
+        visibility: 'personal',
+        ownerMemberId,
+        updatedByMemberId: callerMemberId ?? null,
+      });
     }
 
     res.json({ ok: true, syncState: projectSyncState(projectId, principal) });

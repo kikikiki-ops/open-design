@@ -154,6 +154,7 @@ export interface ServerContext {
    */
   collabSync: {
     requestTeamShare(projectId: string, share?: string | ResourceHubPrincipal): Promise<{ version: number | null }>;
+    requestTeamUnshare(projectId: string, share?: string | ResourceHubPrincipal): Promise<void>;
   };
   lifecycle: {
     isDaemonShuttingDown: () => boolean;

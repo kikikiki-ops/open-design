@@ -22,6 +22,8 @@ import type {
   PluginShareAction,
   ProjectPluginFolderInstallRequest,
   TerminalSession,
+  WorkspaceCollabContext,
+  WorkspaceProjectsResponse,
 } from '@open-design/contracts';
 import { randomUUID } from '../utils/uuid';
 import type {
@@ -36,12 +38,48 @@ import type {
 export type { PluginInstallOutcome } from '@open-design/contracts';
 export type { PluginShareAction } from '@open-design/contracts';
 
-export async function listProjects(options?: { throwOnError?: boolean }): Promise<Project[]> {
+export type WorkspaceProjectListView = 'all' | 'recent' | 'drafts' | 'team';
+
+export function workspaceProjectHeaders(context: WorkspaceCollabContext): HeadersInit {
+  return {
+    'x-od-workspace-id': context.workspaceId,
+    'x-od-workspace-type': context.workspaceType,
+    'x-od-workspace-member-id': context.workspaceMemberId,
+    'x-od-workspace-role': context.role,
+    'x-od-workspace-lifecycle-state': context.lifecycleState,
+    'x-od-workspace-member-status': context.memberStatus,
+    'x-od-workspace-can-share-projects': String(context.permissions.canShareProjects),
+    'x-od-workspace-can-write-synced-files': String(context.permissions.canWriteSyncedFiles),
+  };
+}
+
+function omitWorkspaceContext<T extends { workspaceContext?: WorkspaceCollabContext | null }>(
+  input: T,
+): Omit<T, 'workspaceContext'> {
+  const { workspaceContext: _workspaceContext, ...rest } = input;
+  return rest;
+}
+
+export async function listProjects(options?: {
+  throwOnError?: boolean;
+  workspaceContext?: WorkspaceCollabContext | null;
+  workspaceView?: WorkspaceProjectListView;
+}): Promise<Project[]> {
   try {
-    const resp = await fetch('/api/projects');
+    const context = options?.workspaceContext ?? null;
+    const resp = context
+      ? await fetch(
+          `/api/workspaces/${encodeURIComponent(context.workspaceId)}/projects?view=${encodeURIComponent(options?.workspaceView ?? 'drafts')}`,
+          { headers: workspaceProjectHeaders(context) },
+        )
+      : await fetch('/api/projects');
     if (!resp.ok) {
       if (options?.throwOnError) throw new Error(`projects ${resp.status}`);
       return [];
+    }
+    if (context) {
+      const json = (await resp.json()) as WorkspaceProjectsResponse;
+      return (json.projects ?? []).map((summary) => summary.project as Project);
     }
     const json = (await resp.json()) as { projects: Project[] };
     return json.projects ?? [];
@@ -97,6 +135,7 @@ export async function createProject(input: {
   pluginId?: string;
   appliedPluginSnapshotId?: string;
   pluginInputs?: Record<string, unknown>;
+  workspaceContext?: WorkspaceCollabContext | null;
 }): Promise<{ project: Project; conversationId: string; appliedPluginSnapshotId?: string }> {
   try {
     // `randomUUID` falls back to `crypto.getRandomValues` / `Math.random`
@@ -108,8 +147,11 @@ export async function createProject(input: {
     const id = randomUUID();
     const resp = await fetch('/api/projects', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, ...input }),
+      headers: {
+        'Content-Type': 'application/json',
+        ...(input.workspaceContext ? workspaceProjectHeaders(input.workspaceContext) : {}),
+      },
+      body: JSON.stringify({ id, ...omitWorkspaceContext(input) }),
     });
     if (!resp.ok) {
       let message = 'Could not create project';

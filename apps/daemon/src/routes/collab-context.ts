@@ -9,7 +9,10 @@ import type {
   WorkspaceTeamBillingPlanId,
   WorkspaceBillingResponse,
   WorkspaceBillingSummary,
+  WorkspaceDirectoryItem,
+  WorkspaceDirectoryResponse,
   WorkspaceContextResponse,
+  WorkspaceActiveResponse,
   WorkspaceInviteCreateResponse,
   WorkspaceInviteCreateResult,
   WorkspaceInviteRole,
@@ -34,6 +37,7 @@ import {
   fetchVelaBillingCatalog,
   fetchVelaBillingSummary,
 } from '../integrations/vela-billing.js';
+import { listVelaWorkspaceDirectory } from '../collab/vela-workspace-context.js';
 
 export interface RegisterCollabContextRoutesDeps {
   workspaceContext: WorkspaceContextProvider;
@@ -62,6 +66,17 @@ export interface RegisterCollabContextRoutesDeps {
    * B's roster is the real source; the collab-cloud directory stands in for it.
    */
   listMembers?: () => Promise<CollabCloudMemberDirectoryEntry[]>;
+  /**
+   * OD-local active workspace selection. Vela Web lists/creates workspaces but
+   * does not choose which workspace this local OD daemon is operating in.
+   */
+  activeWorkspace?: {
+    get(): string | null;
+    set(workspaceId: string): Promise<void>;
+    clear(): Promise<void>;
+  };
+  /** Injectable for tests; defaults to the Vela workspace directory API. */
+  listWorkspaceDirectory?: () => Promise<WorkspaceDirectoryItem[]>;
 }
 
 const ASSIGNABLE_ROLES = new Set<WorkspaceInviteRole>(['admin', 'member']);
@@ -119,6 +134,8 @@ export function registerCollabContextRoutes(app: Express, deps: RegisterCollabCo
   const listTeamProjects =
     deps.listTeamProjects ?? createTeamProjectsLister({ workspaceContext });
   const listMembers = deps.listMembers ?? (async () => []);
+  const listWorkspaceDirectory =
+    deps.listWorkspaceDirectory ?? (() => listVelaWorkspaceDirectory());
 
   // Desktop invite hand-off ("桌面唤起和本地恢复"): the desktop app parses the
   // opendesign:// invite deeplink and POSTs the nonce here. The daemon consumes
@@ -148,7 +165,7 @@ export function registerCollabContextRoutes(app: Express, deps: RegisterCollabCo
     const authorization = req.header('authorization') ?? undefined;
     const context = await workspaceContext.current({ authorization });
     const workspaceId = context?.workspaceId?.trim() ?? '';
-    if (!workspaceId || context?.workspaceType !== 'team') {
+    if (!context || !workspaceId) {
       return res.status(409).json({ error: 'no_workspace' });
     }
     if (!context.permissions.canInviteMembers) {
@@ -177,6 +194,48 @@ export function registerCollabContextRoutes(app: Express, deps: RegisterCollabCo
     const authorization = req.header('authorization') ?? undefined;
     const context = await workspaceContext.current({ authorization });
     const body: WorkspaceContextResponse = { context };
+    res.json(body);
+  });
+
+  app.get('/api/workspace/directory', async (req, res) => {
+    const authorization = req.header('authorization') ?? undefined;
+    const [items, context] = await Promise.all([
+      listWorkspaceDirectory().catch(() => []),
+      workspaceContext.current({ authorization }).catch(() => null),
+    ]);
+    const activeWorkspaceId =
+      deps.activeWorkspace?.get() ??
+      context?.workspaceId ??
+      items.find((item) => item.workspaceType === 'team')?.workspaceId ??
+      items[0]?.workspaceId ??
+      null;
+    const body: WorkspaceDirectoryResponse = { items, activeWorkspaceId };
+    res.json(body);
+  });
+
+  app.put('/api/workspace/active', async (req, res) => {
+    if (!deps.activeWorkspace) {
+      return res.status(404).json({ error: 'workspace selection is not available' });
+    }
+    const raw = req.body as { workspaceId?: unknown } | null;
+    const workspaceId = typeof raw?.workspaceId === 'string' ? raw.workspaceId.trim() : '';
+    if (!workspaceId) return res.status(400).json({ error: 'missing_workspace_id' });
+
+    const directory = await listWorkspaceDirectory().catch(() => []);
+    if (!directory.some((item) => item.workspaceId === workspaceId)) {
+      return res.status(404).json({ error: 'workspace_not_visible' });
+    }
+
+    const authorization = req.header('authorization') ?? undefined;
+    const previous = deps.activeWorkspace.get();
+    await deps.activeWorkspace.set(workspaceId);
+    const context = await workspaceContext.current({ authorization }).catch(() => null);
+    if (!context || context.workspaceId !== workspaceId) {
+      if (previous) await deps.activeWorkspace.set(previous);
+      else await deps.activeWorkspace.clear();
+      return res.status(404).json({ error: 'workspace_context_unavailable' });
+    }
+    const body: WorkspaceActiveResponse = { activeWorkspaceId: workspaceId, context };
     res.json(body);
   });
 

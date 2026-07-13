@@ -21,6 +21,7 @@ export class TeamResourceShareForbiddenError extends Error {
 
 export interface TeamResourceShareRecord {
   id: string;
+  hubResourceId?: string;
   title?: string;
   description?: string;
   ownerMemberId?: string;
@@ -84,7 +85,13 @@ export function createTeamResourceShareService(
   // Distinct, colon-free id namespace on the shared hub. The caller's id (e.g.
   // `user:palette-x`) is sanitized to path-safe chars — the hub routes the
   // resource id as a path param, so a colon would 404.
-  const resourceIdFor = (id: string) => `${options.idPrefix}-${id.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+  const sanitizeResourceIdSegment = (value: string) => value.replace(/[^a-zA-Z0-9_-]/g, '-');
+  const scopedIdPrefixFor = (principal?: ResourceHubPrincipal | null) =>
+    principal?.teamId
+      ? `${options.idPrefix}-${sanitizeResourceIdSegment(principal.teamId)}`
+      : options.idPrefix;
+  const resourceIdFor = (id: string, principal?: ResourceHubPrincipal | null) =>
+    `${scopedIdPrefixFor(principal)}-${sanitizeResourceIdSegment(id)}`;
   // Ids shared this session. The published resources are the durable record on
   // the hub; this is the fast local view the team collection reads until a hub
   // listing query lands.
@@ -132,13 +139,17 @@ export function createTeamResourceShareService(
       if (!principal) return [];
       try {
         const out = await (options.run ?? defaultRun)(['shared', '--json']);
-        const resources = parseSharedResourceRecords(out, options.kind, options.idPrefix);
+        const scopedResources = parseSharedResourceRecords(out, options.kind, scopedIdPrefixFor(principal));
+        const legacyResources = principal.workspaceType === 'personal'
+          ? []
+          : parseSharedResourceRecords(out, options.kind, options.idPrefix);
+        const byId = new Map<string, TeamResourceShareRecord>();
+        for (const resource of legacyResources) byId.set(resource.id, resource);
+        for (const resource of scopedResources) byId.set(resource.id, resource);
+        const resources = [...byId.values()];
+        shared.clear();
         for (const resource of resources) shared.add(resource.id);
-        const byId = new Map(resources.map((resource) => [resource.id, resource]));
-        for (const id of shared) {
-          if (!byId.has(id)) byId.set(id, { id });
-        }
-        return [...byId.values()]
+        return resources
           .map((resource) => ({
             ...resource,
             canUnshare: canManageSharedResource(principal, resource),
@@ -203,12 +214,18 @@ export function parseSharedResourceRecords(
     const title = stringValue(metadata.title) || stringValue(metadata.name);
     const description = stringValue(metadata.description);
     const ownerMemberId = stringValue(resource.ownerMemberId);
-    records.set(localId, {
+    const record: TeamResourceShareRecord = {
       id: localId,
       ...(title ? { title } : {}),
       ...(description ? { description } : {}),
       ...(ownerMemberId ? { ownerMemberId } : {}),
+    };
+    Object.defineProperty(record, 'hubResourceId', {
+      value: resource.id,
+      enumerable: false,
+      configurable: true,
     });
+    records.set(localId, record);
   }
   return [...records.values()].sort((a, b) => a.id.localeCompare(b.id));
 }

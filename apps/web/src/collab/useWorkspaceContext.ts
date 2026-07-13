@@ -9,11 +9,12 @@ import type {
 } from '@open-design/contracts';
 
 // One shared read of the workspace context (`GET /api/workspace/context`) for the
-// navigation shell. The daemon proxies B's `CurrentWorkspaceContext`; `context` is
-// null off-team (personal, signed out, or B unavailable). Every team surface in the
-// entry shell (nav rail, workspace switcher, gating) consumes THIS one read so the
-// two-state shell never re-derives role/permission judgements or fans out duplicate
-// fetches. See `packages/contracts/src/api/collab.ts` for the shape.
+// navigation shell. The daemon proxies B's `CurrentWorkspaceContext`; `context`
+// is non-null for both personal and team workspaces when the local AMR identity
+// is available, and null when signed out / offline / B unavailable. Every
+// workspace surface in the entry shell consumes THIS one read so the shell never
+// re-derives role/permission judgements or fans out duplicate fetches. See
+// `packages/contracts/src/api/collab.ts` for the shape.
 export interface WorkspaceContextState {
   context: WorkspaceCollabContext | null;
   loading: boolean;

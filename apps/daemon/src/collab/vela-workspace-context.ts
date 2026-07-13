@@ -6,6 +6,7 @@ import type {
   CollabMemberRole,
   WorkspaceBillingState,
   WorkspaceCollabContext,
+  WorkspaceDirectoryItem,
   WorkspaceLifecycleState,
   WorkspaceMemberStatus,
   WorkspacePermissions,
@@ -13,7 +14,7 @@ import type {
   WorkspaceSeatSummary,
   WorkspaceType,
 } from '@open-design/contracts';
-import { readVelaControlApiContext } from '../integrations/vela.js';
+import { readVelaControlApiContext, type VelaUser } from '../integrations/vela.js';
 import {
   createDevWorkspaceContextProvider,
   resolveWorkspaceSettingsUrl,
@@ -57,6 +58,8 @@ interface VelaWorkspaceContextOptions {
   fetch?: typeof fetch;
   /** Injectable for tests; defaults to reading ~/.amr/config.json + env. */
   readSession?: typeof readVelaControlApiContext;
+  /** OD-local active workspace selection. Vela Web does not own this. */
+  getActiveWorkspaceId?: () => string | null | undefined;
   timeoutMs?: number;
 }
 
@@ -113,20 +116,57 @@ export function mapVelaWorkspaceContext(input: unknown): WorkspaceCollabContext 
   if (lastActive) context.lastActiveWorkspaceId = lastActive;
   // The team workspace IS the team scope; carry its id as teamId so the resource
   // hub principal derives from this one context.
+  const settingsUrl = resolveWorkspaceSettingsUrl(
+    workspaceId,
+    (raw as { workspaceSettingsUrl?: unknown }).workspaceSettingsUrl,
+  );
+  if (settingsUrl) context.workspaceSettingsUrl = settingsUrl;
+
   if (workspaceType === 'team') {
     context.teamId = workspaceId;
-    // Team management (members/billing/dashboard) is in the cloud console; carry
-    // its URL (B's field when present, else built from OD_VELA_WEB_URL) so the
-    // client's one settings entry links out to it.
-    const settingsUrl = resolveWorkspaceSettingsUrl(
-      workspaceId,
-      (raw as { workspaceSettingsUrl?: unknown }).workspaceSettingsUrl,
-    );
-    if (settingsUrl) context.workspaceSettingsUrl = settingsUrl;
   }
+  const workspaceName = str((raw as { workspaceName?: unknown }).workspaceName);
+  if (workspaceName && workspaceType === 'team') context.teamName = workspaceName;
   const displayName = str((raw as { displayName?: unknown }).displayName);
   if (displayName) context.displayName = displayName;
   return context;
+}
+
+export function mapVelaWorkspaceDirectory(input: unknown): WorkspaceDirectoryItem[] {
+  if (!input || typeof input !== 'object') return [];
+  const raw = input as { items?: unknown };
+  if (!Array.isArray(raw.items)) return [];
+  const items: WorkspaceDirectoryItem[] = [];
+  for (const entry of raw.items) {
+    const mapped = mapVelaWorkspaceDirectoryItem(entry);
+    if (mapped) items.push(mapped);
+  }
+  return items;
+}
+
+function mapVelaWorkspaceDirectoryItem(input: unknown): WorkspaceDirectoryItem | null {
+  if (!input || typeof input !== 'object') return null;
+  const raw = input as Record<string, unknown>;
+  const workspaceId = str(raw.workspaceId);
+  const workspaceName = str(raw.workspaceName);
+  const workspaceMemberId = str(raw.workspaceMemberId);
+  if (!workspaceId || !workspaceName || !workspaceMemberId) return null;
+  if (!WORKSPACE_TYPES.has(raw.workspaceType as WorkspaceType)) return null;
+  if (!ROLES.has(raw.role as CollabMemberRole)) return null;
+  if (!MEMBER_STATUSES.has(raw.memberStatus as WorkspaceMemberStatus)) return null;
+  if (!LIFECYCLE_STATES.has(raw.lifecycleState as WorkspaceLifecycleState)) return null;
+  const item: WorkspaceDirectoryItem = {
+    workspaceId,
+    workspaceName,
+    workspaceType: raw.workspaceType as WorkspaceType,
+    workspaceMemberId,
+    role: raw.role as CollabMemberRole,
+    memberStatus: raw.memberStatus as WorkspaceMemberStatus,
+    lifecycleState: raw.lifecycleState as WorkspaceLifecycleState,
+  };
+  const workspaceIconKey = str(raw.workspaceIconKey);
+  if (workspaceIconKey) item.workspaceIconKey = workspaceIconKey;
+  return item;
 }
 
 /**
@@ -147,7 +187,10 @@ export function createVelaWorkspaceContextProvider(
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), timeoutMs);
       try {
-        const response = await fetchImpl(new URL(WORKSPACE_CURRENT_PATH, session.apiUrl), {
+        const url = new URL(WORKSPACE_CURRENT_PATH, session.apiUrl);
+        const workspaceId = options.getActiveWorkspaceId?.()?.trim();
+        if (workspaceId) url.searchParams.set('workspaceId', workspaceId);
+        const response = await fetchImpl(url, {
           method: 'GET',
           headers: { authorization: `Bearer ${session.controlKey}` },
           signal: controller.signal,
@@ -155,7 +198,12 @@ export function createVelaWorkspaceContextProvider(
         // 401 = signed out at the vela layer; anything non-2xx → single-player.
         if (!response.ok) return null;
         const body: unknown = await response.json();
-        return mapVelaWorkspaceContext(body);
+        const context = mapVelaWorkspaceContext(body);
+        if (context && !context.displayName) {
+          const displayName = velaUserDisplayName(session.user);
+          if (displayName) context.displayName = displayName;
+        }
+        return context;
       } catch {
         // Never let a workspace-context failure throw into collab — degrade to
         // single-player. A transient B outage must not break the local editor.
@@ -167,6 +215,39 @@ export function createVelaWorkspaceContextProvider(
   };
 }
 
+function velaUserDisplayName(user: VelaUser | null): string {
+  const name = str(user?.name);
+  if (name) return name;
+  const email = str(user?.email);
+  if (email) return email;
+  return str(user?.id);
+}
+
+export async function listVelaWorkspaceDirectory(
+  options: VelaWorkspaceContextOptions = {},
+): Promise<WorkspaceDirectoryItem[]> {
+  const fetchImpl = options.fetch ?? fetch;
+  const readSession = options.readSession ?? readVelaControlApiContext;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const session = readSession();
+  if (!session || !session.controlKey || !session.apiUrl) return [];
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetchImpl(new URL('/api/v1/workspaces', session.apiUrl), {
+      method: 'GET',
+      headers: { authorization: `Bearer ${session.controlKey}` },
+      signal: controller.signal,
+    });
+    if (!response.ok) return [];
+    return mapVelaWorkspaceDirectory(await response.json());
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 /**
  * Select the workspace-context provider for this run. `OD_WORKSPACE_CONTEXT_SOURCE
  * =vela` opts into the real B-backed provider (production / e2e against a live
@@ -175,9 +256,10 @@ export function createVelaWorkspaceContextProvider(
  */
 export function createWorkspaceContextProviderFromEnv(
   env: NodeJS.ProcessEnv = process.env,
+  options: Pick<VelaWorkspaceContextOptions, 'getActiveWorkspaceId'> = {},
 ): WorkspaceContextProvider {
   if (env.OD_WORKSPACE_CONTEXT_SOURCE?.trim() === 'vela') {
-    return createVelaWorkspaceContextProvider();
+    return createVelaWorkspaceContextProvider(options);
   }
   return createDevWorkspaceContextProvider();
 }

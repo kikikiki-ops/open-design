@@ -89,9 +89,9 @@ export interface CollabRuntime {
 export interface CreateCollabRuntimeOptions {
   adapter?: ResourcePublishAdapter;
   /** Managed-project directory resolver, so the real hub adapter can pack/land. */
-  resolveProjectDir?: (projectId: string) => string;
+  resolveProjectDir?: (projectId: string) => string | Promise<string>;
   /** Pull destination for a project that may not have a local database row yet. */
-  resolvePullDir?: (projectId: string) => string;
+  resolvePullDir?: (projectId: string) => string | Promise<string>;
   /** Resource-index metadata for team project discovery/cards. */
   describeProject?: (projectId: string) => Record<string, unknown> | null | Promise<Record<string, unknown> | null>;
   /** Workspace-context provider. Defaults to a dev provider until wired to an identity source. */

@@ -5047,6 +5047,12 @@
   text-decoration: none;
 }
 .entry-nav-rail__menu-item:hover { background: var(--bg-subtle); }
+.entry-nav-rail__menu-item:disabled { cursor: default; }
+.entry-nav-rail__menu-item:disabled:hover { background: transparent; }
+.entry-nav-rail__menu-item.is-muted {
+  cursor: default;
+  color: var(--text-muted);
+}
 .entry-nav-rail__menu-item.is-open { background: var(--bg-subtle); }
 .entry-nav-rail__menu-item svg { color: var(--text-soft); flex: 0 0 auto; }
 .entry-nav-rail__menu-item.is-primary { background: var(--selected); color: #fff; }
@@ -5154,7 +5160,19 @@
 .entry-nav-rail__menu-item.is-current { font-weight: 600; }
 .entry-nav-rail__menu-item.is-current svg { color: var(--accent); }
 
-.entry-nav-rail__menu-item.is-current svg { margin-left: auto; }
+.entry-nav-rail__menu-item.is-current > svg:last-child { margin-left: 0; }
+.entry-nav-rail__workspace-menu-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.entry-nav-rail__workspace-menu-role {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
 
 /* Credits popover — ported verbatim from the design demo. */
 .credits-panel {

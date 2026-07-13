@@ -1,4 +1,13 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type Dispatch,
+  type SetStateAction,
+} from 'react';
 import { Dialog } from '@open-design/components';
 import {
   PLUGIN_SHARE_ACTION_PLUGIN_IDS,
@@ -69,6 +78,33 @@ const USER_SOURCE_KINDS = new Set<PluginSourceKind>([
   'url',
   'local',
 ]);
+
+function setsEqual<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): boolean {
+  if (a.size !== b.size) return false;
+  for (const item of a) {
+    if (!b.has(item)) return false;
+  }
+  return true;
+}
+
+function sharedResourceMetaEqual(
+  a: ReadonlyMap<string, SharedResourceCardMeta>,
+  b: ReadonlyMap<string, SharedResourceCardMeta>,
+): boolean {
+  if (a.size !== b.size) return false;
+  for (const [key, next] of b) {
+    const prev = a.get(key);
+    if (!prev) return false;
+    if (
+      prev.title !== next.title ||
+      prev.description !== next.description ||
+      prev.canUnshare !== next.canUnshare
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
 
 function isPersonalPluginRecord(plugin: InstalledPluginRecord): boolean {
   if (!USER_SOURCE_KINDS.has(plugin.sourceKind)) return false;
@@ -875,23 +911,21 @@ export function ExtensionsMarketplace({
     return () => window.removeEventListener('open-design:plugins-changed', refresh);
   }, []);
 
-  // Team-shared ids per kind. Off-team / offline just leaves the set empty so
-  // the 团队 scope shows a clean empty state instead of erroring.
-  useEffect(() => {
-    let cancelled = false;
+  const refreshSharedResources = useCallback(async () => {
     const loadShared = async (
       basePath: string,
-      setter: (ids: ReadonlySet<string>) => void,
-      metaSetter: (meta: ReadonlyMap<string, SharedResourceCardMeta>) => void,
+      setter: Dispatch<SetStateAction<ReadonlySet<string>>>,
+      metaSetter: Dispatch<SetStateAction<ReadonlyMap<string, SharedResourceCardMeta>>>,
     ) => {
       try {
-        const res = await fetch(`/api/workspace/${basePath}/team`);
+        const res = await fetch(`/api/workspace/${basePath}/team`, { cache: 'no-store' });
         if (!res.ok) return;
         const body = (await res.json()) as { ids?: unknown; resources?: unknown };
-        if (!cancelled && Array.isArray(body.ids)) {
-          setter(new Set(body.ids.filter((id): id is string => typeof id === 'string')));
+        if (Array.isArray(body.ids)) {
+          const nextIds = new Set(body.ids.filter((id): id is string => typeof id === 'string'));
+          setter((prev) => setsEqual(prev, nextIds) ? prev : nextIds);
         }
-        if (!cancelled && Array.isArray(body.resources)) {
+        if (Array.isArray(body.resources)) {
           const meta = new Map<string, SharedResourceCardMeta>();
           for (const resource of body.resources) {
             if (!resource || typeof resource !== 'object') continue;
@@ -906,18 +940,38 @@ export function ExtensionsMarketplace({
               ...(typeof record.canUnshare === 'boolean' ? { canUnshare: record.canUnshare } : {}),
             });
           }
-          metaSetter(meta);
+          metaSetter((prev) => sharedResourceMetaEqual(prev, meta) ? prev : meta);
         }
       } catch {
-        // Off-team / offline → empty collection.
+        // Off-team / offline → keep the last known collection until the next
+        // successful read, avoiding a flicker when the workspace proxy is slow.
       }
     };
-    void loadShared('plugins', setSharedPluginIds, setSharedPluginMeta);
-    void loadShared('skills', setSharedSkillIds, setSharedSkillMeta);
-    return () => {
-      cancelled = true;
-    };
+    await Promise.all([
+      loadShared('plugins', setSharedPluginIds, setSharedPluginMeta),
+      loadShared('skills', setSharedSkillIds, setSharedSkillMeta),
+    ]);
   }, []);
+
+  // Team-shared ids per kind. Off-team / offline just leaves the set empty so
+  // the 团队 scope shows a clean empty state instead of erroring. Re-read while
+  // the page is visible so owner/admin unshares in another client converge.
+  useEffect(() => {
+    void refreshSharedResources();
+    const refreshVisible = () => {
+      if (document.visibilityState === 'visible') void refreshSharedResources();
+    };
+    const interval = window.setInterval(refreshVisible, 10_000);
+    window.addEventListener('focus', refreshVisible);
+    window.addEventListener('pageshow', refreshVisible);
+    document.addEventListener('visibilitychange', refreshVisible);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshVisible);
+      window.removeEventListener('pageshow', refreshVisible);
+      document.removeEventListener('visibilitychange', refreshVisible);
+    };
+  }, [refreshSharedResources]);
 
   const userPlugins = useMemo(
     () => plugins.filter(isPersonalPluginRecord),
@@ -938,19 +992,13 @@ export function ExtensionsMarketplace({
     setSharingId(id);
     setMenuId(null);
     const basePath = kind === 'plugins' ? 'plugins' : 'skills';
-    const setShared = kind === 'plugins' ? setSharedPluginIds : setSharedSkillIds;
     try {
       const res = await fetch(`/api/workspace/${basePath}/${encodeURIComponent(id)}/share`, {
         method: 'POST',
       });
       const body = (await res.json().catch(() => ({}))) as { shared?: boolean };
       if (res.ok && body.shared) {
-        setShared((prev) => new Set(prev).add(id));
-        if (kind === 'plugins') {
-          setSharedPluginMeta((prev) => new Map(prev).set(id, { id, title, canUnshare: true }));
-        } else {
-          setSharedSkillMeta((prev) => new Map(prev).set(id, { id, title, canUnshare: true }));
-        }
+        await refreshSharedResources();
         setToast({ message: t('pluginsView.shareSuccess', { title }), tone: 'success' });
       } else {
         setToast({ message: t('pluginsView.shareUnavailable', { title }), tone: 'error' });
@@ -967,31 +1015,13 @@ export function ExtensionsMarketplace({
     setUnsharingId(id);
     setMenuId(null);
     const basePath = kind === 'plugins' ? 'plugins' : 'skills';
-    const setShared = kind === 'plugins' ? setSharedPluginIds : setSharedSkillIds;
     try {
       const res = await fetch(`/api/workspace/${basePath}/${encodeURIComponent(id)}/share`, {
         method: 'DELETE',
       });
       const body = (await res.json().catch(() => ({}))) as { unshared?: boolean };
       if (res.ok && body.unshared) {
-        setShared((prev) => {
-          const next = new Set(prev);
-          next.delete(id);
-          return next;
-        });
-        if (kind === 'plugins') {
-          setSharedPluginMeta((prev) => {
-            const next = new Map(prev);
-            next.delete(id);
-            return next;
-          });
-        } else {
-          setSharedSkillMeta((prev) => {
-            const next = new Map(prev);
-            next.delete(id);
-            return next;
-          });
-        }
+        await refreshSharedResources();
         setToast({ message: t('pluginsView.unshareSuccess', { title }), tone: 'success' });
       } else {
         setToast({ message: t('pluginsView.unshareUnavailable', { title }), tone: 'error' });
@@ -3082,40 +3112,52 @@ function TeamPanel({
   const [sharingId, setSharingId] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
+  const refreshTeamPanelShared = useCallback(async (cancelled: () => boolean = () => false) => {
     const loadShared = async (
       basePath: string,
       setter: (ids: ReadonlySet<string>) => void,
     ) => {
       try {
-        const res = await fetch(`/api/workspace/${basePath}/team`);
+        const res = await fetch(`/api/workspace/${basePath}/team`, { cache: 'no-store' });
         if (!res.ok) return;
         const body = (await res.json()) as { ids?: unknown };
-        if (!cancelled && Array.isArray(body.ids)) {
+        if (!cancelled() && Array.isArray(body.ids)) {
           setter(new Set(body.ids.filter((id): id is string => typeof id === 'string')));
         }
       } catch {
         // Off-team / offline → leave the collection empty.
       }
     };
-    void (async () => {
-      const userSkills = (await fetchSkills()).filter((s) => s.source === 'user');
-      if (!cancelled) setSkills(userSkills);
-      await Promise.all([
-        loadShared('plugins', setSharedPluginIds),
-        loadShared('skills', setSharedSkillIds),
-      ]);
-    })();
+    const userSkills = (await fetchSkills()).filter((s) => s.source === 'user');
+    if (!cancelled()) setSkills(userSkills);
+    await Promise.all([
+      loadShared('plugins', setSharedPluginIds),
+      loadShared('skills', setSharedSkillIds),
+    ]);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void refreshTeamPanelShared(() => cancelled);
+    const refreshVisible = () => {
+      if (document.visibilityState === 'visible') void refreshTeamPanelShared(() => cancelled);
+    };
+    const interval = window.setInterval(refreshVisible, 10_000);
+    window.addEventListener('focus', refreshVisible);
+    window.addEventListener('pageshow', refreshVisible);
+    document.addEventListener('visibilitychange', refreshVisible);
     return () => {
       cancelled = true;
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refreshVisible);
+      window.removeEventListener('pageshow', refreshVisible);
+      document.removeEventListener('visibilitychange', refreshVisible);
     };
-  }, []);
+  }, [refreshTeamPanelShared]);
 
   async function share(
     basePath: string,
     id: string,
-    setShared: (update: (prev: ReadonlySet<string>) => ReadonlySet<string>) => void,
   ) {
     if (sharingId) return;
     setSharingId(id);
@@ -3126,7 +3168,7 @@ function TeamPanel({
       });
       const body = (await res.json().catch(() => ({}))) as { shared?: boolean };
       if (res.ok && body.shared) {
-        setShared((prev) => new Set(prev).add(id));
+        await refreshTeamPanelShared();
       } else {
         setFailed(true);
       }
@@ -3176,7 +3218,7 @@ function TeamPanel({
           <div className="plugins-view__available-list">
             {plugins.map((record) =>
               renderRow(record.id, record.title, sharedPluginIds.has(record.id), () =>
-                void share('plugins', record.id, setSharedPluginIds),
+                void share('plugins', record.id),
               ),
             )}
           </div>
@@ -3188,7 +3230,7 @@ function TeamPanel({
           <div className="plugins-view__available-list">
             {skills.map((skill) =>
               renderRow(skill.id, localizeSkillName(locale, skill), sharedSkillIds.has(skill.id), () =>
-                void share('skills', skill.id, setSharedSkillIds),
+                void share('skills', skill.id),
               ),
             )}
           </div>

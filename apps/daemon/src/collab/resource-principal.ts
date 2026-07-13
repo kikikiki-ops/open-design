@@ -6,20 +6,23 @@ import type { WorkspaceCollabContext } from '@open-design/contracts';
  */
 export interface ResourceHubPrincipal {
   memberId: string;
+  /** Workspace-scoped resource id. Historically named teamId by the Vela CLI. */
   teamId: string;
   role: WorkspaceCollabContext['role'];
   lifecycleState: WorkspaceCollabContext['lifecycleState'];
+  workspaceType?: WorkspaceCollabContext['workspaceType'];
 }
 
 /** Derive resource scope from the one login-backed workspace context. */
 export function contextToResourceHubPrincipal(
   context: WorkspaceCollabContext | null,
 ): ResourceHubPrincipal | null {
-  if (!context || context.workspaceType !== 'team' || !context.teamId) return null;
+  if (!context?.workspaceId || !context.workspaceMemberId) return null;
   return {
     memberId: context.workspaceMemberId,
-    teamId: context.teamId,
+    teamId: context.teamId ?? context.workspaceId,
     role: context.role,
     lifecycleState: context.lifecycleState,
+    workspaceType: context.workspaceType,
   };
 }

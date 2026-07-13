@@ -127,6 +127,44 @@ describe('team resource share permission gate', () => {
     expect(service.isShared('mock-team-expert-kit')).toBe(true);
   });
 
+  it('reconciles stale local shared ids when Vela reports the resource removed', async () => {
+    let remoteHasSkill = true;
+    const run = async (args: string[]): Promise<string> => {
+      if (args[0] === 'push') return JSON.stringify({ version: 1 });
+      expect(args).toEqual(['shared', '--json']);
+      return JSON.stringify({
+        resources: remoteHasSkill
+          ? [
+            {
+              id: 'skill-mock-team-expert-kit',
+              kind: 'skill',
+              deletedAt: null,
+              ownerMemberId: 'wm-1',
+            },
+          ]
+          : [],
+      });
+    };
+    const service = createTeamResourceShareService({
+      kind: 'skill',
+      idPrefix: 'skill',
+      resolveDir: () => '/tmp/skill',
+      getPrincipal: () => principal,
+      getCanShare: () => true,
+      run,
+      env: { OD_WORKSPACE_CONTEXT_SOURCE: 'vela' },
+    });
+
+    expect(await service.share('mock-team-expert-kit')).toEqual({ version: 1 });
+    expect(await service.sharedIds()).toEqual(['mock-team-expert-kit']);
+    expect(service.isShared('mock-team-expert-kit')).toBe(true);
+
+    remoteHasSkill = false;
+
+    expect(await service.sharedIds()).toEqual([]);
+    expect(service.isShared('mock-team-expert-kit')).toBe(false);
+  });
+
   it('marks resources unshareable for non-owner non-uploader members', async () => {
     const run = async (): Promise<string> => JSON.stringify({
       resources: [

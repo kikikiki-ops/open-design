@@ -6357,6 +6357,9 @@ Common options:
   }
   const workspaceHeaders = {
     'x-od-workspace-id': workspaceId,
+    'x-od-workspace-type': typeof flags['workspace-type'] === 'string' && flags['workspace-type'].trim()
+      ? flags['workspace-type'].trim()
+      : 'personal',
     'x-od-workspace-member-id': workspaceMemberId,
     ...(typeof flags.role === 'string' && flags.role.trim() ? { 'x-od-workspace-role': flags.role.trim() } : {}),
     ...(typeof flags['app-user'] === 'string' && flags['app-user'].trim() ? { 'x-od-app-user-id': flags['app-user'].trim() } : {}),

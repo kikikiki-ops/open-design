@@ -189,7 +189,7 @@ export function shouldUseVelaCliResourceTransport(env: NodeJS.ProcessEnv = proce
     env.OD_COLLAB_TRANSPORT?.trim() === 'vela-cli';
 }
 
-/** Derive the team-identity gate from the one workspace context (team + live). */
+/** Derive the resource-identity gate from the one workspace context. */
 export function contextHasTeamIdentity(context: WorkspaceCollabContext | null): boolean {
-  return Boolean(context && context.workspaceType === 'team' && context.teamId);
+  return Boolean(context?.workspaceId && context.workspaceMemberId);
 }

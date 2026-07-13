@@ -1178,6 +1178,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
   const { collabSync, teamProjectCatalog } = ctx;
   type WorkspaceProjectContext = {
     workspaceId: string;
+    workspaceType: 'personal' | 'team';
     appUserId: string;
     workspaceMemberId: string;
     role: 'owner' | 'admin' | 'member';
@@ -1204,12 +1205,14 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
   function workspaceProjectContext(req: any, workspaceId: string): WorkspaceProjectContext | null {
     const workspaceMemberId = headerValue(req, 'x-od-workspace-member-id');
     if (!workspaceMemberId) return null;
+    const workspaceTypeHeader = headerValue(req, 'x-od-workspace-type');
     const lifecycleState = headerValue(req, 'x-od-workspace-lifecycle-state') ?? 'active';
     const role = headerValue(req, 'x-od-workspace-role') ?? 'member';
     const legacyWriteEnabled = headerBool(req, 'x-od-workspace-write-enabled', true);
     const canWriteSyncedFiles = headerBool(req, 'x-od-workspace-can-write-synced-files', legacyWriteEnabled);
     return {
       workspaceId,
+      workspaceType: workspaceTypeHeader === 'team' ? 'team' : 'personal',
       appUserId: headerValue(req, 'x-od-app-user-id') ?? 'local-user',
       workspaceMemberId,
       role: role === 'owner' || role === 'admin' ? role : 'member',
@@ -1229,7 +1232,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
   }
   function pendingSyncIntent(projectId: string, workspaceId: string, visibility: 'personal' | 'team') {
     return {
-      event: visibility === 'team' ? 'project_team_share_requested' : 'project_visibility_changed',
+      event: visibility === 'team' ? 'project_team_share_requested' : 'project_team_unshare_requested',
       projectId,
       workspaceId,
     };
@@ -1258,9 +1261,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       canDelete: canMutate,
       canDuplicate: canMutate,
       canMoveToTeam: canMutate && ctx.canShareProjects && wp.visibility === 'personal',
-      // Team→personal needs a real unshare/tombstone seam first; otherwise the
-      // Vela catalog can keep advertising a supposedly personal project.
-      canMoveToPersonal: false,
+      canMoveToPersonal: canMutate && ctx.canShareProjects && wp.visibility === 'team',
       canExport: !frozen && ctx.memberStatus === 'active',
       canSendTo: !frozen && ctx.memberStatus === 'active',
       canRestoreVersion: canMutate,
@@ -1368,7 +1369,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       updatedAt,
     };
     return {
-      id: remote.resourceId,
+      id: remote.projectId,
       name,
       workspaceId: ctx.workspaceId,
       visibility: 'team',
@@ -1432,6 +1433,16 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
     }
     return projectVisibleForLocations({ metadata }, locations);
   }
+
+  function workspaceProjectRowBelongsToCurrentWorkspace(row: any, ctx: WorkspaceProjectContext): boolean {
+    if (ctx.workspaceType !== 'team') return true;
+    // Legacy rows created before workspace isolation may have been projected into
+    // a team workspace as personal projects with no owner. They actually belong
+    // to the user's personal workspace, so suppress them in team views without
+    // deleting any local data. Real team-workspace drafts carry an owner member.
+    return !(row.workspaceVisibility === 'personal' && row.createdByWorkspaceMemberId == null);
+  }
+
   function workspaceProjectRowsForIds(
     projectIds: string[],
     ctx: WorkspaceProjectContext,
@@ -1439,9 +1450,32 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
   ) {
     for (const id of projectIds) {
       const project = getProject(db, id);
-      if (project && projectVisibleForLocations(project, locations)) ensureWorkspaceProjection(project, ctx, 'personal');
+      if (ctx.workspaceType === 'personal' && project && projectVisibleForLocations(project, locations)) {
+        ensureWorkspaceProjection(project, ctx, 'personal');
+      }
     }
-    return listWorkspaceProjects(db, ctx.workspaceId).filter((row: any) => workspaceProjectRowVisibleForLocations(row, locations));
+    return listWorkspaceProjects(db, ctx.workspaceId)
+      .filter((row: any) => workspaceProjectRowBelongsToCurrentWorkspace(row, ctx))
+      .filter((row: any) => workspaceProjectRowVisibleForLocations(row, locations));
+  }
+
+  function workspaceProjectCreatedByCurrentMember(project: any, ctx: WorkspaceProjectContext): boolean {
+    if (project.createdByWorkspaceMemberId === ctx.workspaceMemberId) return true;
+    return (
+      ctx.workspaceType === 'personal' &&
+      project.visibility === 'personal' &&
+      project.createdByWorkspaceMemberId == null
+    );
+  }
+
+  function seedPersonalWorkspaceProjects(
+    ctx: WorkspaceProjectContext,
+    locations: Array<{ id: string; path: string; builtIn?: boolean }>,
+  ) {
+    if (ctx.workspaceType !== 'personal') return;
+    for (const project of listProjects(db).filter((item: any) => projectVisibleForLocations(item, locations))) {
+      ensureWorkspaceProjection(project, ctx, 'personal');
+    }
   }
   async function loadPluginRegistryView() {
     const [skills, designSystems] = await Promise.all([
@@ -1736,16 +1770,16 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         return res.json(body);
       }
       const locations = await configuredProjectLocations();
-      for (const project of listProjects(db).filter((item: any) => projectVisibleForLocations(item, locations))) {
-        ensureWorkspaceProjection(project, ctx, 'personal');
-      }
+      seedPersonalWorkspaceProjects(ctx, locations);
       const view = typeof req.query.view === 'string' ? req.query.view : 'all';
       if (view !== 'all' && view !== 'recent' && view !== 'drafts' && view !== 'team') {
         return sendApiError(res, 400, 'BAD_REQUEST', 'view must be all, recent, drafts, or team');
       }
       const owner = typeof req.query.owner === 'string' ? req.query.owner : 'all';
       const visibility = typeof req.query.visibility === 'string' ? req.query.visibility : 'all';
-      const rows = listWorkspaceProjects(db, ctx.workspaceId).filter((row: any) => workspaceProjectRowVisibleForLocations(row, locations));
+      const rows = listWorkspaceProjects(db, ctx.workspaceId)
+        .filter((row: any) => workspaceProjectRowBelongsToCurrentWorkspace(row, ctx))
+        .filter((row: any) => workspaceProjectRowVisibleForLocations(row, locations));
       const queryCanIncludeTeam =
         view !== 'drafts' &&
         view !== 'recent' &&
@@ -1758,14 +1792,15 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       ];
       const projects = mergedProjects
         .filter((project: any) => {
+          const createdByCurrentMember = workspaceProjectCreatedByCurrentMember(project, ctx);
           if (view === 'drafts') {
-            if (project.visibility !== 'personal' || project.createdByWorkspaceMemberId !== ctx.workspaceMemberId) return false;
+            if (project.visibility !== 'personal' || !createdByCurrentMember) return false;
           }
           if (view === 'recent' && project.visibility !== 'personal') return false;
           if (view === 'team' && project.visibility !== 'team') return false;
           if ((visibility === 'personal' || visibility === 'team') && project.visibility !== visibility) return false;
-          if (owner === 'mine' && project.createdByWorkspaceMemberId !== ctx.workspaceMemberId) return false;
-          if (owner === 'others' && project.createdByWorkspaceMemberId === ctx.workspaceMemberId) return false;
+          if (owner === 'mine' && !createdByCurrentMember) return false;
+          if (owner === 'others' && createdByCurrentMember) return false;
           return true;
         });
       /** @type {import('@open-design/contracts').WorkspaceProjectsResponse} */
@@ -1796,10 +1831,13 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
     if (targetVisibility === 'team') return summary.currentUserAccess.canMoveToTeam;
     return summary.currentUserAccess.canMoveToPersonal;
   }
-  async function requestTeamShares(projectIds: string[], ctx: WorkspaceProjectContext, visibility: 'personal' | 'team') {
-    if (visibility !== 'team') return;
+  async function requestTeamVisibility(projectIds: string[], ctx: WorkspaceProjectContext, visibility: 'personal' | 'team') {
     for (const projectId of projectIds) {
-      await collabSync.requestTeamShare(projectId, workspaceProjectPrincipal(ctx));
+      if (visibility === 'team') {
+        await collabSync.requestTeamShare(projectId, workspaceProjectPrincipal(ctx));
+      } else {
+        await collabSync.requestTeamUnshare(projectId, workspaceProjectPrincipal(ctx));
+      }
     }
   }
   function ownerForTeamShare(summary: any, ctx: WorkspaceProjectContext, visibility: 'personal' | 'team') {
@@ -1846,9 +1884,6 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       if (!validVisibility(visibility)) {
         return sendApiError(res, 400, 'BAD_REQUEST', 'visibility must be personal or team');
       }
-      if (visibility === 'personal') {
-        return sendApiError(res, 403, 'PROJECT_UNSHARE_UNSUPPORTED', 'moving team projects back to personal is not supported yet');
-      }
       const wp = ensureWorkspaceProjection(project, ctx, 'personal');
       const row = listWorkspaceProjects(db, ctx.workspaceId).find((item: any) => item.id === project.id);
       if (!row || !wp) return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'not found');
@@ -1858,7 +1893,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       }
       updateWorkspaceProject(db, ctx.workspaceId, project.id, workspaceProjectMovePatch(project.id, summary, ctx, visibility));
       try {
-        await requestTeamShares([project.id], ctx, visibility);
+        await requestTeamVisibility([project.id], ctx, visibility);
       } catch (error) {
         restoreWorkspaceProjectRow(row);
         throw error;
@@ -1878,9 +1913,6 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       const projectIds = parseProjectIds(req.body?.projectIds);
       if (!validVisibility(visibility) || !projectIds) {
         return sendApiError(res, 400, 'BAD_REQUEST', 'projectIds and visibility are required');
-      }
-      if (visibility === 'personal') {
-        return sendApiError(res, 403, 'PROJECT_UNSHARE_UNSUPPORTED', 'moving team projects back to personal is not supported yet');
       }
       const locations = await configuredProjectLocations();
       const rows = workspaceProjectRowsForIds(projectIds, ctx, locations);
@@ -1902,7 +1934,7 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       });
       moveMany(projectIds);
       try {
-        await requestTeamShares(projectIds, ctx, visibility);
+        await requestTeamVisibility(projectIds, ctx, visibility);
       } catch (error) {
         const rollbackMany = db.transaction((items: any[]) => {
           for (const item of items) restoreWorkspaceProjectRow(item);
@@ -2169,6 +2201,25 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         createdAt: now,
         updatedAt: now,
       });
+      const workspaceIdForCreate = headerValue(req, 'x-od-workspace-id');
+      const createWorkspaceContext = workspaceIdForCreate
+        ? workspaceProjectContext(req, workspaceIdForCreate)
+        : null;
+      if (createWorkspaceContext && createWorkspaceContext.memberStatus === 'active') {
+        ensureWorkspaceProject(db, {
+          projectId: id,
+          workspaceId: createWorkspaceContext.workspaceId,
+          visibility: 'personal',
+          resourceState: 'active',
+          createdByWorkspaceMemberId: createWorkspaceContext.workspaceMemberId,
+          updatedByWorkspaceMemberId: createWorkspaceContext.workspaceMemberId,
+          syncState: 'local_only',
+          resourceHubResourceId: null,
+          cloudTombstonedAt: null,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
       const explicitPlugin =
         typeof req.body?.pluginId === 'string' && req.body.pluginId.trim().length > 0
           ? true

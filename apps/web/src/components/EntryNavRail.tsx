@@ -23,12 +23,22 @@
 // personal_byok workspace still has full team features.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { WorkspaceBillingSummary, WorkspaceCollabContext } from '@open-design/contracts';
+import type {
+  WorkspaceActiveResponse,
+  WorkspaceBillingSummary,
+  WorkspaceCollabContext,
+  WorkspaceDirectoryItem,
+  WorkspaceDirectoryResponse,
+} from '@open-design/contracts';
 import { Icon } from './Icon';
 import { InviteDialog } from './InviteDialog';
 import { CreditsPanel } from './CreditsPanel';
 import { LOCALE_LABEL, LOCALES, useI18n } from '../i18n';
-import { notifyWorkspaceBillingRefresh, notifyWorkspaceContextRefresh } from '../collab/useWorkspaceContext';
+import {
+  notifyTeamProjectsChanged,
+  notifyWorkspaceBillingRefresh,
+  notifyWorkspaceContextRefresh,
+} from '../collab/useWorkspaceContext';
 import type { EntryHomeView } from '../router';
 
 const REPO_URL = 'https://github.com/nexu-io/open-design';
@@ -164,10 +174,6 @@ export function EntryNavRail({
   const accountName = displayName || brandLabel;
   const accountInitial = accountName.charAt(0).toUpperCase() || '·';
 
-  // Team identity (real).
-  const teamName = context?.teamName?.trim() || context?.teamId || '';
-  const teamInitial = teamName.charAt(0).toUpperCase() || 'T';
-
   // Credits chip: prefer the real billing summary (A-lane, via the vela CLI
   // 收口); fall back to the context plan-tier hint with no balance when billing
   // hasn't loaded / no session.
@@ -179,6 +185,9 @@ export function EntryNavRail({
   const [accountOpen, setAccountOpen] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
   const [teamOpen, setTeamOpen] = useState(false);
+  const [workspaceItems, setWorkspaceItems] = useState<WorkspaceDirectoryItem[]>([]);
+  const [workspaceDirectoryLoading, setWorkspaceDirectoryLoading] = useState(false);
+  const [workspaceSwitchingId, setWorkspaceSwitchingId] = useState<string | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [creditsOpen, setCreditsOpen] = useState(false);
   const billingUpgradeUrl =
@@ -189,6 +198,69 @@ export function EntryNavRail({
   // focus returns so direct web upgrades sync plan, credits, seats and gates.
   const canUpgrade = Boolean(billingUpgradeUrl && permissions?.canManageBilling);
   const currentLanguageLabel = LOCALE_LABEL[locale];
+  const currentWorkspaceItem = context
+    ? workspaceItems.find((item) => item.workspaceId === context.workspaceId) ?? null
+    : null;
+  const workspaceName =
+    currentWorkspaceItem?.workspaceName?.trim() ||
+    context?.teamName?.trim() ||
+    context?.teamId ||
+    (context?.workspaceType === 'personal' ? 'Personal workspace' : '');
+  const workspaceInitial = workspaceName.charAt(0).toUpperCase() || 'W';
+  const visibleWorkspaceItems =
+    workspaceItems.length > 0
+      ? workspaceItems
+      : context
+        ? [{
+            workspaceId: context.workspaceId,
+            workspaceName,
+            workspaceType: context.workspaceType,
+            workspaceMemberId: context.workspaceMemberId,
+            role: context.role,
+            memberStatus: context.memberStatus,
+            lifecycleState: context.lifecycleState,
+          } satisfies WorkspaceDirectoryItem]
+        : [];
+
+  async function loadWorkspaceDirectory() {
+    setWorkspaceDirectoryLoading(true);
+    try {
+      const response = await fetch('/api/workspace/directory', { cache: 'no-store' });
+      if (!response.ok) {
+        setWorkspaceItems([]);
+        return;
+      }
+      const body = (await response.json()) as WorkspaceDirectoryResponse;
+      setWorkspaceItems(body.items ?? []);
+    } catch {
+      setWorkspaceItems([]);
+    } finally {
+      setWorkspaceDirectoryLoading(false);
+    }
+  }
+
+  async function switchWorkspace(workspaceId: string) {
+    if (workspaceId === context?.workspaceId || workspaceSwitchingId) return;
+    setWorkspaceSwitchingId(workspaceId);
+    try {
+      const response = await fetch('/api/workspace/active', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ workspaceId }),
+      });
+      if (!response.ok) return;
+      const body = (await response.json()) as WorkspaceActiveResponse;
+      setTeamOpen(false);
+      notifyWorkspaceContextRefresh();
+      notifyWorkspaceBillingRefresh();
+      notifyTeamProjectsChanged();
+      selectView('home');
+    } catch {
+      // Keep the menu open; the next open/focus refresh can retry the directory.
+    } finally {
+      setWorkspaceSwitchingId(null);
+    }
+  }
 
   function openBillingUpgrade() {
     if (!billingUpgradeUrl) return;
@@ -220,6 +292,11 @@ export function EntryNavRail({
   useEffect(() => {
     if (!accountOpen) setLanguageOpen(false);
   }, [accountOpen]);
+
+  useEffect(() => {
+    if (!teamOpen) return;
+    void loadWorkspaceDirectory();
+  }, [teamOpen]);
 
   return (
     <nav
@@ -411,15 +488,6 @@ export function EntryNavRail({
         </div>
 
         <NavButton
-          ariaLabel={t('entry.navNewProject')}
-          tooltip={t('entry.navNewProject')}
-          onClick={onNewProject}
-          disabled={newProjectDisabled}
-          testId="entry-nav-new-project"
-        >
-          <Icon name="plus" size={18} />
-        </NavButton>
-        <NavButton
           active={isHome}
           ariaLabel={t('entry.navRecents')}
           tooltip={t('entry.navRecents')}
@@ -438,58 +506,82 @@ export function EntryNavRail({
           <Icon name="globe" size={18} />
         </NavButton>
 
-        {isTeam ? (
-          <>
-            <div className="entry-nav-rail__team-wrap">
-              <button
-                type="button"
-                className="entry-nav-rail__team"
-                onClick={() => setTeamOpen((v) => !v)}
-                aria-expanded={teamOpen}
-                data-testid="workspace-switcher"
-              >
-                <span className="entry-nav-rail__team-avatar" aria-hidden>{teamInitial}</span>
-                <span className="entry-nav-rail__team-name">{teamName}</span>
-                <Icon name="chevron-down" size={14} />
-              </button>
-              {teamOpen ? (
-                <>
-                  <div className="entry-nav-rail__menu-backdrop" onClick={() => setTeamOpen(false)} />
-                  <div className="entry-nav-rail__team-menu" role="menu">
-                    <button type="button" className="entry-nav-rail__menu-item is-current" role="menuitem" disabled>
-                      <span className="entry-nav-rail__team-avatar" aria-hidden>{teamInitial}</span>
-                      {teamName}
-                      <Icon name="check" size={14} />
-                    </button>
-                    <div className="entry-nav-rail__menu-divider" />
-                    {canInviteMembers ? (
+        {context ? (
+          <div className="entry-nav-rail__team-wrap">
+            <button
+              type="button"
+              className="entry-nav-rail__team"
+              onClick={() => setTeamOpen((v) => !v)}
+              aria-expanded={teamOpen}
+              data-testid="workspace-switcher"
+            >
+              <span className="entry-nav-rail__team-avatar" aria-hidden>{workspaceInitial}</span>
+              <span className="entry-nav-rail__team-name">{workspaceName}</span>
+              <Icon name="chevron-down" size={14} />
+            </button>
+            {teamOpen ? (
+              <>
+                <div className="entry-nav-rail__menu-backdrop" onClick={() => setTeamOpen(false)} />
+                <div className="entry-nav-rail__team-menu" role="menu">
+                  {visibleWorkspaceItems.map((item) => {
+                    const active = item.workspaceId === context.workspaceId;
+                    const initial = item.workspaceName.trim().charAt(0).toUpperCase() || 'W';
+                    return (
                       <button
+                        key={item.workspaceId}
                         type="button"
-                        className="entry-nav-rail__menu-item"
+                        className={`entry-nav-rail__menu-item${active ? ' is-current' : ''}`}
                         role="menuitem"
+                        disabled={active || workspaceSwitchingId === item.workspaceId}
                         onClick={() => {
-                          setTeamOpen(false);
-                          setInviteOpen(true);
+                          void switchWorkspace(item.workspaceId);
                         }}
                       >
-                        <Icon name="share" size={15} /> {t('workspaceSwitcher.invite')}
+                        <span className="entry-nav-rail__team-avatar" aria-hidden>{initial}</span>
+                        <span className="entry-nav-rail__workspace-menu-name">{item.workspaceName}</span>
+                        <span className="entry-nav-rail__workspace-menu-role">{item.role}</span>
+                        {active ? <Icon name="check" size={14} /> : null}
                       </button>
-                    ) : null}
+                    );
+                  })}
+                  {workspaceDirectoryLoading && visibleWorkspaceItems.length === 0 ? (
+                    <div className="entry-nav-rail__menu-item is-muted" role="status">
+                      {t('common.loading')}
+                    </div>
+                  ) : null}
+                  <div className="entry-nav-rail__menu-divider" />
+                  {canInviteMembers ? (
                     <button
                       type="button"
                       className="entry-nav-rail__menu-item"
                       role="menuitem"
                       onClick={() => {
-                        // TODO(collab): create-team is a B vela/web flow via vela CLI 收口
                         setTeamOpen(false);
+                        setInviteOpen(true);
                       }}
                     >
-                      <Icon name="plus" size={15} /> {t('workspaceSwitcher.createTeam')}
+                      <Icon name="share" size={15} /> {t('workspaceSwitcher.invite')}
                     </button>
-                  </div>
-                </>
-              ) : null}
-            </div>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="entry-nav-rail__menu-item"
+                    role="menuitem"
+                    onClick={() => {
+                      // TODO(workspace): create-team is a B vela/web flow.
+                      setTeamOpen(false);
+                    }}
+                  >
+                    <Icon name="plus" size={15} /> {t('workspaceSwitcher.createTeam')}
+                  </button>
+                </div>
+              </>
+            ) : null}
+          </div>
+        ) : null}
+
+        {context ? (
+          <>
             <NavButton
               active={view === 'drafts'}
               ariaLabel={t('entry.navDrafts')}
@@ -526,8 +618,10 @@ export function EntryNavRail({
             >
               <Icon name="grid" size={18} />
             </NavButton>
-            {/* Member management (成员 / 数据大盘 / Workspace 设置) lives in B's
-                vela/web console — link OUT, don't route to in-client views. */}
+            {/* Workspace management (成员 / 数据大盘 / Workspace 设置) lives in
+                B's vela/web console — link OUT, don't route to in-client views.
+                Gate by B permissions, not workspaceType: a personal workspace
+                owner can invite seats and manage the workspace too. */}
             {canManageMembers && workspaceSettingsUrl ? (
               <a
                 className="entry-nav-rail__btn"
@@ -573,55 +667,6 @@ export function EntryNavRail({
                 <span className="entry-nav-rail__btn-label">{t('entry.navWorkspaceSettings')}</span>
               </a>
             ) : null}
-          </>
-        ) : context ? (
-          <>
-            <div className="entry-nav-rail__section-divider" aria-hidden />
-            <NavButton
-              active={view === 'projects'}
-              ariaLabel={t('entry.navProjects')}
-              tooltip={t('entry.navProjects')}
-              onClick={() => selectView('projects')}
-              testId="entry-nav-projects"
-            >
-              <Icon name="folder" size={18} />
-            </NavButton>
-            <NavButton
-              active={view === 'tasks'}
-              ariaLabel={t('entry.navTasks')}
-              tooltip={t('entry.navTasks')}
-              onClick={() => selectView('tasks')}
-              testId="entry-nav-tasks"
-            >
-              <Icon name="kanban" size={18} />
-            </NavButton>
-            <NavButton
-              active={view === 'design-systems'}
-              ariaLabel={t('entry.navDesignSystems')}
-              tooltip={t('entry.navDesignSystems')}
-              onClick={() => selectView('design-systems')}
-              testId="entry-nav-design-systems"
-            >
-              <Icon name="palette" size={18} />
-            </NavButton>
-            <NavButton
-              active={view === 'plugins'}
-              ariaLabel={t('entry.navExtensions')}
-              tooltip={t('entry.navExtensions')}
-              onClick={() => selectView('plugins')}
-              testId="entry-nav-plugins"
-            >
-              <Icon name="grid" size={18} />
-            </NavButton>
-            <NavButton
-              active={view === 'integrations'}
-              ariaLabel={t('entry.navIntegrations')}
-              tooltip={t('entry.navIntegrations')}
-              onClick={() => selectView('integrations')}
-              testId="entry-nav-integrations"
-            >
-              <Icon name="integrations-filled" size={18} />
-            </NavButton>
           </>
         ) : (
           <>

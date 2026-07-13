@@ -585,11 +585,16 @@ import { registerCollabContextRoutes } from './routes/collab-context.js';
 import { registerTeamResourceRoutes } from './routes/team-resources.js';
 import { registerTeamResourceShareRoutes } from './routes/team-resource-share.js';
 import { createCollabRuntime } from './collab/runtime.js';
+import { createActiveWorkspaceSelectionStore } from './collab/active-workspace-selection.js';
+import { createWorkspaceContextProviderFromEnv } from './collab/vela-workspace-context.js';
 import { createCollabPublishWatcher } from './collab/collab-publish-watcher.js';
 import { resolveProjectShareDir } from './collab/project-share-dir.js';
 import { createTeamProjectsLister } from './collab/team-projects.js';
 import { createTeamResourceShareService } from './collab/team-resource-share.js';
-import { contextToResourceHubPrincipal } from './collab/resource-principal.js';
+import {
+  contextToResourceHubPrincipal,
+  type ResourceHubPrincipal,
+} from './collab/resource-principal.js';
 import { createCollabCloudClientFromEnv } from './integrations/collab-cloud.js';
 import { createCollabCloudService } from './collab/collab-cloud-service.js';
 import { createVelaCliCollabClientFromEnv } from './collab/vela-cli-collab-client.js';
@@ -3839,6 +3844,10 @@ export async function startServer({
   const velaCliCollabClient = createVelaCliCollabClientFromEnv();
   const velaCliTeamProjectCatalog = createVelaCliTeamProjectCatalogFromEnv();
   const velaCliWorkspaceTeamProjectCatalog = createVelaCliTeamProjectCatalogClientFromEnv();
+  const activeWorkspace = createActiveWorkspaceSelectionStore(RUNTIME_DATA_DIR);
+  const workspaceContext = createWorkspaceContextProviderFromEnv(process.env, {
+    getActiveWorkspaceId: () => activeWorkspace.get(),
+  });
   function persistWorkspaceProjectSyncState(
     projectId: string,
     workspaceId: string | null | undefined,
@@ -3847,9 +3856,58 @@ export async function startServer({
     if (!workspaceId) return;
     updateWorkspaceProject(db, workspaceId, projectId, { syncState });
   }
+  function persistWorkspaceProjectVisibility(
+    input: {
+      projectId: string;
+      principal?: ResourceHubPrincipal | null;
+      visibility: 'personal' | 'team';
+      ownerMemberId?: string | null;
+      updatedByMemberId?: string | null;
+    },
+  ) {
+    const workspaceId = input.principal?.teamId;
+    if (!workspaceId) return;
+    const project = getProject(db, input.projectId);
+    if (project && !getWorkspaceProject(db, workspaceId, input.projectId)) {
+      ensureWorkspaceProject(db, {
+        projectId: input.projectId,
+        workspaceId,
+        visibility: 'personal',
+        resourceState: 'active',
+        createdByWorkspaceMemberId: input.ownerMemberId ?? input.updatedByMemberId ?? null,
+        updatedByWorkspaceMemberId: input.updatedByMemberId ?? input.ownerMemberId ?? null,
+        resourceHubResourceId: null,
+        cloudTombstonedAt: null,
+        syncState: 'local_only',
+        createdAt: project.createdAt,
+        updatedAt: project.updatedAt,
+      });
+    }
+    const patch = input.visibility === 'team'
+      ? {
+          visibility: 'team',
+          createdByWorkspaceMemberId: input.ownerMemberId ?? input.updatedByMemberId ?? null,
+          updatedByWorkspaceMemberId: input.updatedByMemberId ?? input.ownerMemberId ?? null,
+          resourceHubResourceId: projectResourceIdFor(input.projectId, input.principal),
+          cloudTombstonedAt: null,
+          syncState: 'synced',
+        }
+      : {
+          visibility: 'personal',
+          updatedByWorkspaceMemberId: input.updatedByMemberId ?? input.ownerMemberId ?? null,
+          resourceHubResourceId: null,
+          cloudTombstonedAt: Date.now(),
+          syncState: 'local_only',
+        };
+    updateWorkspaceProject(db, workspaceId, input.projectId, patch);
+  }
   const collab = createCollabRuntime({
-    resolveProjectDir: (projectId) =>
-      resolveProjectShareDir(PROJECTS_DIR, projectId, getProject(db, projectId), resolveProjectDir),
+    workspaceContext,
+    resolveProjectDir: async (projectId) => {
+      const project = getProject(db, projectId);
+      if (project) await ensureProject(PROJECTS_DIR, projectId, project.metadata);
+      return resolveProjectShareDir(PROJECTS_DIR, projectId, project, resolveProjectDir);
+    },
     resolvePullDir: (projectId) => resolveProjectDir(PROJECTS_DIR, projectId),
     describeProject: describeCollabProject,
     ...(velaCliTeamProjectCatalog ? { teamProjectCatalog: velaCliTeamProjectCatalog } : {}),
@@ -3972,12 +4030,16 @@ export async function startServer({
         });
       },
     },
-    resolveProjectDir: (projectId) =>
-      resolveProjectShareDir(PROJECTS_DIR, projectId, getProject(db, projectId), resolveProjectDir),
+    resolveProjectDir: async (projectId) => {
+      const project = getProject(db, projectId);
+      if (project) await ensureProject(PROJECTS_DIR, projectId, project.metadata);
+      return resolveProjectShareDir(PROJECTS_DIR, projectId, project, resolveProjectDir);
+    },
     resolvePullDir: (projectId) => resolveProjectDir(PROJECTS_DIR, projectId),
     resolveSharedProject,
     resolveSharedProjectOwner,
     describeProject: describeCollabProject,
+    onTeamShareStateChanged: persistWorkspaceProjectVisibility,
     ...(velaCliTeamProjectCatalog ? { teamProjectCatalog: velaCliTeamProjectCatalog } : {}),
     // Resolve the owner's display name + role from the collab-cloud directory so
     // /collab/status can hand the client a named "shared project" banner.
@@ -3992,6 +4054,7 @@ export async function startServer({
   });
   registerCollabContextRoutes(app, {
     workspaceContext: collab.workspaceContext,
+    activeWorkspace,
     // Expose the collab-cloud member directory so the web client can resolve
     // comment authors + owner names to a name + role.
     ...(collabCloud ? { listMembers: () => collabCloud.listMembers() } : {}),
@@ -4029,7 +4092,7 @@ export async function startServer({
       await runVelaResourceCommand([
         'pull',
         'plugin',
-        `plugin-${resource.id}`,
+        resource.hubResourceId ?? `plugin-${resource.id}`,
         stagedFolder,
         '--ref',
         'published',
@@ -4095,7 +4158,7 @@ export async function startServer({
       await runVelaResourceCommand([
         'pull',
         'design_system',
-        `ds-${resource.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
+        resource.hubResourceId ?? `ds-${resource.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
         stagedFolder,
         '--ref',
         'published',
@@ -4148,6 +4211,7 @@ export async function startServer({
         const plugin = getInstalledPlugin(db, id);
         if (!plugin) return null;
         return {
+          localId: id,
           title: plugin.manifest?.title ?? plugin.manifest?.name ?? plugin.title ?? id,
           ...(plugin.manifest?.description ? { description: plugin.manifest.description } : {}),
         };
@@ -4170,6 +4234,7 @@ export async function startServer({
         const skill = findSkillById(await listAllSkills(), id);
         if (!skill) return null;
         return {
+          localId: id,
           title: skill.name || id,
           ...(skill.description ? { description: skill.description } : {}),
         };
@@ -4664,7 +4729,10 @@ export async function startServer({
     validation: validationDeps,
     // C-lane sync seam for D's project-visibility routes: a personal→team move
     // calls requestTeamShare on success to publish the project for the team.
-    collabSync: { requestTeamShare: (projectId, ownerMemberId) => collab.requestTeamShare(projectId, ownerMemberId) },
+    collabSync: {
+      requestTeamShare: (projectId, ownerMemberId) => collab.requestTeamShare(projectId, ownerMemberId),
+      requestTeamUnshare: (projectId, ownerMemberId) => collab.requestTeamUnshare(projectId, ownerMemberId),
+    },
     ...(velaCliWorkspaceTeamProjectCatalog ? { teamProjectCatalog: velaCliWorkspaceTeamProjectCatalog } : {}),
     // Collab-cloud comment seams (no-op off-team / when unconfigured): stamp the
     // server-authoritative author, gate status/delete on the caller vs the
