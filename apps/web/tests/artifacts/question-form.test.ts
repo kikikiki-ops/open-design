@@ -13,6 +13,72 @@ const VALID_BODY = `{
   ]
 }`;
 
+describe('form content language (lang)', () => {
+  it('parses a top-level lang tag from the complete form body', () => {
+    const input = [
+      '<question-form id="discovery" title="快速确认 · 30秒">',
+      '{ "lang": "zh-CN", "questions": [',
+      '  { "id": "output", "label": "我们要做什么？", "type": "radio", "options": ["海报", "网页"] }',
+      '] }',
+      '</question-form>',
+    ].join('\n');
+
+    const segments = splitOnQuestionForms(input);
+    expect(segments[0]?.kind).toBe('form');
+    if (segments[0]?.kind !== 'form') return;
+    expect(segments[0].form.lang).toBe('zh-CN');
+  });
+
+  it('never exposes a defaultValue on the still-streaming trailing question', () => {
+    // Red spec for the truncated-prefill freeze (production run beaf2da0):
+    // while a question object is still streaming, the partial-JSON repair can
+    // terminate mid-default — `"default": ["历史背景与经过", "抗战精` repairs
+    // to ["历史背景与经过", "抗战精"], and `"default": "单位教` to "单位教".
+    // The card adopts a streamed default only while the answer is still
+    // empty, so a truncated adoption freezes garbage that the completed
+    // default can never overwrite. The in-flight question must therefore
+    // expose NO defaultValue until its braces close.
+    const head =
+      '<question-form id="discovery" title="快速确认">\n' +
+      '{ "questions": [\n' +
+      '  { "id": "focus", "label": "内容重点（最多选2项）", "type": "checkbox", "maxSelections": 2,\n' +
+      '    "default": ["历史背景与经过", "抗战精';
+
+    const midDefault = parsePartialQuestionForm(head);
+    const focusMid = midDefault?.questions.find((q) => q.id === 'focus');
+    expect(focusMid).toBeTruthy();
+    expect(focusMid?.defaultValue).toBeUndefined();
+
+    const closed = parsePartialQuestionForm(
+      head +
+        '神与当代意义"],\n' +
+        '    "options": ["历史背景与经过", "重要战役与事件", "抗战精神与当代意义"] },\n' +
+        '  { "id": "tone", "label": "整体基调", "type": "radio", "default": "庄重',
+    );
+    // First question closed → its complete default surfaces; the trailing
+    // in-flight question ("tone", mid-default "庄重…") still exposes none.
+    const focusClosed = closed?.questions.find((q) => q.id === 'focus');
+    expect(focusClosed?.defaultValue).toEqual(['历史背景与经过', '抗战精神与当代意义']);
+    const toneInFlight = closed?.questions.find((q) => q.id === 'tone');
+    expect(toneInFlight).toBeTruthy();
+    expect(toneInFlight?.defaultValue).toBeUndefined();
+  });
+
+  it('adopts a streaming lang only once its string literal terminates', () => {
+    // A half-streamed tag like "zh-C" must not resolve to a dictionary; the
+    // field appears once the closing quote lands (same churn rule as `id`).
+    const partial = parsePartialQuestionForm(
+      '<question-form id="discovery" title="快速确认">\n{ "lang": "zh-C',
+    );
+    expect(partial?.lang).toBeUndefined();
+
+    const complete = parsePartialQuestionForm(
+      '<question-form id="discovery" title="快速确认">\n{ "lang": "zh-CN", "questions": [',
+    );
+    expect(complete?.lang).toBe('zh-CN');
+  });
+});
+
 describe('splitOnQuestionForms', () => {
   it('normalizes string and object question options', () => {
     const input = [
