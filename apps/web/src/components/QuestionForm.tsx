@@ -53,6 +53,13 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
     [form, submittedAnswers, draftAnswers],
   );
   const [answers, setAnswers] = useState<Record<string, string | string[]>>(initial);
+  // Question ids the user has interacted with this mount, seeded with ids
+  // restored from a submitted/draft snapshot (those are prior user input).
+  // "Untouched" for the streamed-default backfill below means absent here —
+  // NOT "currently empty": clearing an answer is itself a touch.
+  const [touched] = useState(
+    () => new Set<string>(Object.keys(submittedAnswers ?? draftAnswers ?? {})),
+  );
   const locked = !interactive || !onSubmit || submittedAnswers !== undefined;
   const currentAnswers = submittedAnswers ?? answers;
 
@@ -63,7 +70,13 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
       let changed = false;
       const next = { ...prev };
       for (const q of form.questions) {
-        if (next[q.id] !== undefined) continue;
+        if (next[q.id] !== undefined) {
+          if (shouldAdoptStreamedDefault(q, next[q.id]!, touched)) {
+            next[q.id] = canonicalizeQuestionValue(q, q.defaultValue!);
+            changed = true;
+          }
+          continue;
+        }
         changed = true;
         if (submittedAnswers && submittedAnswers[q.id] !== undefined) {
           next[q.id] = canonicalizeQuestionValue(q, submittedAnswers[q.id]!);
@@ -75,10 +88,11 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
       }
       return changed ? next : prev;
     });
-  }, [form, submittedAnswers]);
+  }, [form, submittedAnswers, touched]);
 
   function update(id: string, value: string | string[]) {
     if (locked) return;
+    touched.add(id);
     const next = { ...answers, [id]: value };
     setAnswers(next);
     onDraftChange?.(next);
@@ -90,6 +104,7 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
     const current = Array.isArray(answers[id]) ? (answers[id] as string[]) : [];
     const has = current.includes(option);
     if (!has && maxSelections !== undefined && current.length >= maxSelections) return;
+    touched.add(id);
     const next = has ? current.filter((v) => v !== option) : [...current, option];
     const nextAnswers = { ...answers, [id]: next };
     setAnswers(nextAnswers);
@@ -542,6 +557,28 @@ function buildInitialState(
     out[q.id] = emptyQuestionValue(q);
   }
   return out;
+}
+
+/**
+ * Whether a question that already holds a value should adopt a
+ * later-arriving streamed `default`.
+ *
+ * The partial-JSON parser reveals a question as soon as its label lands, but
+ * models are free to emit the `default` key after `options` — so the reveal
+ * pass can park a question on its auto-assigned empty value before the
+ * recommendation has streamed in. Invariant: a late default fills a question
+ * only while (a) the user has never touched it and (b) it still holds that
+ * auto-assigned empty value, so it can never clobber a real answer or an
+ * intentional clear.
+ */
+function shouldAdoptStreamedDefault(
+  q: QuestionForm['questions'][number],
+  current: string | string[],
+  touched: ReadonlySet<string>,
+): boolean {
+  if (q.defaultValue === undefined || touched.has(q.id)) return false;
+  if (Array.isArray(current)) return current.length === 0;
+  return current === emptyQuestionValue(q);
 }
 
 function emptyQuestionValue(q: QuestionForm['questions'][number]): string | string[] {

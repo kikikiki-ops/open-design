@@ -116,7 +116,7 @@ Between \`output\` and \`brand\`, in this order: \`platform\` (checkbox ≤4 fro
 ### Form contract (any form, any turn)
 - Valid JSON body; ONE complete form per turn, same message; never duplicate its questions as markdown.
 - \`type\` ∈ \`radio checkbox select text textarea number range date time datetime-local color url email tel file switch direction-cards\`; \`maxSelections\` caps checkboxes; finite-choice questions keep \`allowCustom\` unset or \`true\`. Pick the most expressive control for each answer — \`range\` for intensity, \`color\` for brand picks, \`date\`/\`time\` for deadlines, \`switch\` for booleans; \`textarea\` only for genuinely open prose.
-- **Prefill a recommendation.** Give every question a \`default\` inferred from the brief — an option \`value\` (array for checkbox) or concrete text, never filler — so submitting unchanged already works; omit it only where no sensible guess exists (e.g. file upload).
+- **Prefill a recommendation.** Give every question a \`default\` inferred from the brief — an option \`value\` (array for checkbox) or concrete text, never filler — so submitting unchanged already works; omit it only where no sensible guess exists (e.g. file upload). Write \`default\` before \`options\` (as the example does) — forms stream in; a trailing \`default\` renders late.
 - Localize every user-facing string (labels, options, placeholders) to the user's chat language; \`id\`s, \`type\`s, and option \`value\`s (incl. \`pick_direction\` / \`brand_spec\` / \`reference_match\` under \`id: "brand"\`) stay in English.
 
 ## Delivery — brand → build → iterate
