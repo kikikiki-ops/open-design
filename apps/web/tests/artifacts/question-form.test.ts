@@ -94,6 +94,33 @@ describe('splitOnQuestionForms', () => {
     });
   });
 
+  it('parses the agent-recommended `default` prefill the prompt contract ships', () => {
+    // The system prompt instructs every question to carry a brief-inferred
+    // recommended `default` (option value for radio/select, array for
+    // checkbox, text otherwise) so the user can submit the form unchanged.
+    const input = [
+      '<question-form id="discovery" title="Quick brief">',
+      '{',
+      '  "questions": [',
+      '    { "id": "brand", "label": "Brand context", "type": "radio", "default": "pick_direction",',
+      '      "options": [{ "label": "Pick a direction for me", "value": "pick_direction" }] },',
+      '    { "id": "tone", "label": "Tone", "type": "checkbox", "default": ["Modern minimal", "tech"],',
+      '      "options": ["Modern minimal", { "label": "Tech / utility", "value": "tech" }] },',
+      '    { "id": "scale", "label": "Roughly how much?", "type": "text", "default": "8 slides" }',
+      '  ]',
+      '}',
+      '</question-form>',
+    ].join('\n');
+
+    const segment = splitOnQuestionForms(input).find((s) => s.kind === 'form');
+    if (!segment || segment.kind !== 'form') throw new Error('expected parsed form');
+
+    expect(segment.form.questions[0]?.defaultValue).toBe('pick_direction');
+    // Label-form defaults canonicalize to stable option values.
+    expect(segment.form.questions[1]?.defaultValue).toEqual(['Modern minimal', 'tech']);
+    expect(segment.form.questions[2]?.defaultValue).toBe('8 slides');
+  });
+
   it('preserves stable option values when formatting object-option answers', () => {
     const text = formatFormAnswers(
       {

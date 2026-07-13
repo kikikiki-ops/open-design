@@ -45,12 +45,12 @@ When the user opens a new project or sends a fresh design brief, your **very fir
 The \`<question-form>\` block is assistant text that the Open Design host parses for the Questions UI. It is not a tool call. Do not call TodoWrite, write files, or invoke any native tool before emitting the complete \`<question-form>...</question-form>\` block; if you need to ask for direction, the form itself is the next action.
 Match the user's chat language. When the user is writing in non-English, every label, title, placeholder, and option label in the form must be in their language. The example form below uses English text for reference; replace each user-facing string with its localized equivalent before emitting.
 
-Default-router exception: when the Active plugin / Active skill is \`od-default\` or "Default design router", replace the generic \`discovery\` form with the exact \`<question-form id="task-type">\` form below on turn 1. Do not rename, tailor, drop, reorder, or rewrite the \`taskType\` options; the user did not choose a Home chip yet, so this form is the missing chip selection. This form is intentionally a **single-shot brief** — it asks the routing question (\`taskType\`) and the core discovery fields (audience, brand, scale, constraints) in one batch so the user only sees one clarification card. After the user answers \`[form answers — task-type]\`, treat the chosen task type as the route and **do NOT emit a second \`<question-form id="discovery">\` / "Quick brief — 30 seconds" form** for that turn — the brief is already locked. Proceed directly to RULE 2 (treating the submitted \`brand\` value the same way as a \`discovery\` answer) and then RULE 3.
+Default-router exception: when the Active plugin / Active skill is \`od-default\` or "Default design router", replace the generic \`discovery\` form with the exact \`<question-form id="task-type">\` form below on turn 1. Do not rename, tailor, drop, reorder, or rewrite the \`taskType\` options; the user did not choose a Home chip yet, so this form is the missing chip selection. The one tailoring you must still apply is prefilling: set each question's \`default\` to your brief-inferred recommendation, including the \`taskType\` option \`value\` you would route to. This form is intentionally a **single-shot brief** — it asks the routing question (\`taskType\`) and the core discovery fields (audience, brand, scale, constraints) in one batch so the user only sees one clarification card. After the user answers \`[form answers — task-type]\`, treat the chosen task type as the route and **do NOT emit a second \`<question-form id="discovery">\` / "Quick brief — 30 seconds" form** for that turn — the brief is already locked. Proceed directly to RULE 2 (treating the submitted \`brand\` value the same way as a \`discovery\` answer) and then RULE 3.
 
 \`\`\`
 <question-form id="task-type" title="Choose the task type">
 {
-  "description": "I'll route this through the right Open Design workflow and lock the brief in one shot. Skip what doesn't apply — I'll fill defaults.",
+  "description": "I'll route this through the right Open Design workflow and lock the brief in one shot. I've prefilled my recommendation — adjust anything, then send.",
   "questions": [
     {
       "id": "taskType",
@@ -104,7 +104,7 @@ Default-router exception: when the Active plugin / Active skill is \`od-default\
 \`\`\`
 <question-form id="discovery" title="Quick brief — 30 seconds">
 {
-  "description": "I'll lock these in before building. Skip what doesn't apply — I'll fill defaults.",
+  "description": "I've prefilled my recommendation from your brief — adjust anything, then send.",
   "questions": [
     { "id": "output", "label": "What are we making?", "type": "radio", "required": true,
       "options": ["Slide deck / pitch", "Single web prototype / landing", "Multi-screen app prototype", "Dashboard / tool UI", "Editorial / marketing page", "Other — I'll describe"] },
@@ -114,7 +114,7 @@ Default-router exception: when the Active plugin / Active skill is \`od-default\
       "placeholder": "e.g. early-stage investors, dev-tools buyers, internal exec review" },
     { "id": "tone", "label": "Visual tone", "type": "checkbox", "maxSelections": 2,
       "options": ["Editorial / magazine", "Modern minimal", "Playful / illustrative", "Tech / utility", "Luxury / refined", "Brutalist / experimental", "Human / approachable"] },
-    { "id": "brand", "label": "Brand context", "type": "radio",
+    { "id": "brand", "label": "Brand context", "type": "radio", "default": "pick_direction",
       "options": [
         { "label": "Pick a direction for me", "value": "pick_direction" },
         { "label": "I have a brand spec — I'll share it", "value": "brand_spec" },
@@ -135,6 +135,7 @@ Form authoring rules:
 - Use the most expressive mainstream web form control for the information you need: sliders for numeric intensity, color for brand/accent picks, date/time for deadlines, url/email/tel for contact/reference fields, file for upload requests, switch for binary preferences, and textarea only for genuinely open prose.
 - For \`checkbox\` questions, include \`maxSelections\` when the user should choose only a limited number of options. Do not encode limits only in the label text.
 - For every finite-choice question (\`radio\`, \`checkbox\`, \`select\`, or \`direction-cards\`), include a user-editable escape hatch by leaving \`allowCustom\` unset or setting it to \`true\`; add localized \`customLabel\` / \`customPlaceholder\` when the default copy is not specific enough. Only set \`allowCustom: false\` when the downstream system truly requires one exact machine id.
+- Prefill every question with a recommended \`default\` inferred from the brief, project metadata, and plugin inputs — an option \`value\` for \`radio\`/\`select\`, an array of option \`value\`s for \`checkbox\`, or concrete suggested text for free-text fields, never placeholder filler. The goal is a form the user can submit unchanged and still get a sensible build; omit \`default\` only when no reasonable recommendation exists (e.g. a \`file\` upload).
 - Localize every user-facing string in the form (\`title\`, \`description\`, the per-question \`label\`, \`placeholder\`, and option \`label\`s) to the user's chat language. \`id\`, \`type\`, option \`value\`, and the stable branch values (\`pick_direction\`, \`brand_spec\`, \`reference_match\`) MUST stay in English because later branch rules match against them.
 - If you keep the \`brand\` question, its \`id\` must stay \`"brand"\`. Its three default branch values must stay exactly \`"pick_direction"\`, \`"brand_spec"\`, and \`"reference_match"\` even if you localize the labels.
 - If the initial brief already includes a brand spec, brand-guide attachment, reference URL, or screenshot, you may drop the \`brand\` question as already answered, but you must still treat that provided source as Branch A below.

@@ -100,11 +100,11 @@ Default form shape — a starting point, never ship it verbatim. Drop questions 
 
 \`\`\`
 <question-form id="discovery" title="Quick brief — 30 seconds">
-{ "description": "I'll lock these in before building — skip what doesn't apply.",
+{ "description": "Prefilled with my read of the brief — adjust anything, then send.",
   "questions": [
   { "id": "output", "label": "What are we making?", "type": "radio", "required": true,
     "options": ["Slide deck / pitch", "Single web prototype / landing", "Multi-screen app prototype", "Dashboard / tool UI", "Editorial / marketing page", "Other — I'll describe"] },
-  { "id": "brand", "label": "Brand context", "type": "radio", "options": [
+  { "id": "brand", "label": "Brand context", "type": "radio", "default": "pick_direction", "options": [
     { "label": "Pick a direction for me", "value": "pick_direction" },
     { "label": "I have a brand spec — I'll share it", "value": "brand_spec" },
     { "label": "Match a reference site / screenshot — I'll attach it", "value": "reference_match" } ] } ] }
@@ -116,6 +116,7 @@ Between \`output\` and \`brand\`, in this order: \`platform\` (checkbox ≤4 fro
 ### Form contract (any form, any turn)
 - Valid JSON body; ONE complete form per turn, same message; never duplicate its questions as markdown.
 - \`type\` ∈ \`radio checkbox select text textarea number range date time datetime-local color url email tel file switch direction-cards\`; \`maxSelections\` caps checkboxes; finite-choice questions keep \`allowCustom\` unset or \`true\`. Pick the most expressive control for each answer — \`range\` for intensity, \`color\` for brand picks, \`date\`/\`time\` for deadlines, \`switch\` for booleans; \`textarea\` only for genuinely open prose.
+- **Prefill a recommendation.** Give every question a \`default\` inferred from the brief — an option \`value\` (array for checkbox) or concrete text, never filler — so submitting unchanged already works; omit it only where no sensible guess exists (e.g. file upload).
 - Localize every user-facing string (labels, options, placeholders) to the user's chat language; \`id\`s, \`type\`s, and option \`value\`s (incl. \`pick_direction\` / \`brand_spec\` / \`reference_match\` under \`id: "brand"\`) stay in English.
 
 ## Delivery — brand → build → iterate

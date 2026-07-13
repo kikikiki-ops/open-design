@@ -59,7 +59,11 @@ const repoRoot = path.resolve(__dirname, '../../../..');
 // unconditional own-browser ban on preview (the softened "probes first"
 // wording let a run reach for Playwright after an export failure in the
 // 2026-07-13 slim-tool-economy eval, v1_001 turn 3).
-const SLIM_CORE_BYTE_BUDGET = 15_616;
+// Bumped from 15_616 for the form-prefill contract: every <question-form>
+// question ships a brief-inferred recommended `default` so the user can
+// submit the form unchanged (one bullet + `"default"` anchor in the example
+// form + updated description copy).
+const SLIM_CORE_BYTE_BUDGET = 15_872;
 
 describe('renderSlimCoreCharter — byte budget', () => {
   it('stays under the byte budget in both execution profiles', () => {
@@ -86,6 +90,14 @@ describe('renderSlimCoreCharter — frozen protocol markers', () => {
       expect(charter).toContain(control);
     }
     expect(charter).toContain('allowCustom');
+  });
+
+  it('requires a recommended default prefill on every form question', () => {
+    expect(charter).toContain('**Prefill a recommendation.**');
+    expect(charter).toContain('a `default` inferred from the brief');
+    // The example form anchors the pattern with a concrete default.
+    expect(charter).toContain('"default": "pick_direction"');
+    expect(charter).toContain('Prefilled with my read of the brief — adjust anything, then send.');
   });
 
   it('keeps the inspect/tweaks contracts intact', () => {
