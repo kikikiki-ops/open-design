@@ -319,6 +319,98 @@ describe('QuestionFormView', () => {
     expect(onSubmit.mock.calls[0]?.[1]).toEqual({ platform: 'mobile' });
   });
 
+  it('adopts a default that streams in after the question was revealed', () => {
+    // Red spec for the streamed-prefill race: the partial-JSON parser reveals
+    // a question as soon as its label lands, but models are free to emit the
+    // `default` key AFTER `options` (observed in production run
+    // fca86faa-86ce-4dc1-9ff5-047c2dd15b96) — so the question first mounts
+    // with no defaultValue and the recommendation only appears on a later
+    // parse pass. The late default must still prefill untouched questions.
+    const partial = {
+      id: 'discovery',
+      title: '快速需求确认',
+      questions: [
+        {
+          id: 'purpose',
+          label: '海报用途是什么？',
+          type: 'radio',
+          required: true,
+          options: [
+            { label: '诊所门口/室内展示', value: 'display' },
+            { label: '线上社交媒体推广', value: 'social' },
+          ],
+        },
+        {
+          id: 'content',
+          label: '海报需要包含哪些信息？',
+          type: 'checkbox',
+          options: [
+            { label: '诊所名称和Logo', value: 'branding' },
+            { label: '服务项目', value: 'services' },
+            { label: '联系方式和地址', value: 'contact' },
+          ],
+        },
+      ],
+    } as QuestionForm;
+    const complete = {
+      ...partial,
+      questions: [
+        { ...partial.questions[0], defaultValue: 'display' },
+        { ...partial.questions[1], defaultValue: ['branding', 'contact'] },
+      ],
+    } as QuestionForm;
+
+    const { container, rerender } = render(
+      <QuestionFormView form={partial} interactive onSubmit={vi.fn()} />,
+    );
+    expect(container.querySelectorAll('input:checked')).toHaveLength(0);
+
+    rerender(<QuestionFormView form={complete} interactive onSubmit={vi.fn()} />);
+
+    expect(
+      (container.querySelector('input[type="radio"][value="display"]') as HTMLInputElement)
+        ?.checked,
+    ).toBe(true);
+    expect(container.querySelectorAll('input[type="checkbox"]:checked')).toHaveLength(2);
+  });
+
+  it('never lets a late default clobber an answer the user touched', () => {
+    // Companion guard for the streamed-prefill fix: "untouched" must mean the
+    // user never interacted, not "currently empty". Checking a box and then
+    // unchecking it leaves the empty value by intent — a default arriving
+    // after that must not resurrect the recommendation.
+    const partial = {
+      id: 'discovery',
+      title: 'Quick brief',
+      questions: [
+        {
+          id: 'tone',
+          label: 'Visual tone',
+          type: 'checkbox',
+          options: [
+            { label: 'Editorial', value: 'editorial' },
+            { label: 'Minimal', value: 'minimal' },
+          ],
+        },
+      ],
+    } as QuestionForm;
+    const complete = {
+      ...partial,
+      questions: [{ ...partial.questions[0], defaultValue: ['minimal'] }],
+    } as QuestionForm;
+
+    const { container, rerender } = render(
+      <QuestionFormView form={partial} interactive onSubmit={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByLabelText('Editorial'));
+    fireEvent.click(screen.getByLabelText('Editorial'));
+    expect(container.querySelectorAll('input[type="checkbox"]:checked')).toHaveLength(0);
+
+    rerender(<QuestionFormView form={complete} interactive onSubmit={vi.fn()} />);
+
+    expect(container.querySelectorAll('input[type="checkbox"]:checked')).toHaveLength(0);
+  });
+
   it('submits native defaults for required color and defaultless range controls', () => {
     const nativeDefaultsForm = {
       id: 'native-defaults',
