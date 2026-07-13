@@ -90,6 +90,8 @@ export interface CreateCollabRuntimeOptions {
   adapter?: ResourcePublishAdapter;
   /** Managed-project directory resolver, so the real hub adapter can pack/land. */
   resolveProjectDir?: (projectId: string) => string;
+  /** Pull destination for a project that may not have a local database row yet. */
+  resolvePullDir?: (projectId: string) => string;
   /** Resource-index metadata for team project discovery/cards. */
   describeProject?: (projectId: string) => Record<string, unknown> | null | Promise<Record<string, unknown> | null>;
   /** Workspace-context provider. Defaults to a dev provider until wired to an identity source. */
@@ -112,6 +114,7 @@ export interface CreateCollabRuntimeOptions {
 
 function selectResourcePublishAdapter(
   resolveProjectDir: ((projectId: string) => string | Promise<string>) | undefined,
+  resolvePullDir: ((projectId: string) => string | Promise<string>) | undefined,
   workspaceContext: WorkspaceContextProvider,
   describeProject: ((projectId: string) => Record<string, unknown> | null | Promise<Record<string, unknown> | null>) | undefined,
 ): ResourcePublishAdapter | null {
@@ -119,6 +122,7 @@ function selectResourcePublishAdapter(
   if (shouldUseVelaCliResourceTransport()) {
     return createVelaCliResourceAdapter({
       resolveProjectDir,
+      ...(resolvePullDir ? { resolvePullDir } : {}),
       ...(describeProject ? { describeProject } : {}),
       hasTeamIdentity: async () => contextHasTeamIdentity(await workspaceContext.current({})),
     });
@@ -164,6 +168,7 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
     options.adapter ??
     selectResourcePublishAdapter(
       options.resolveProjectDir,
+      options.resolvePullDir,
       workspaceContext,
       options.describeProject,
     ) ??
@@ -191,6 +196,10 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
     syncState: TeamProjectCatalogSyncState,
     principal?: ResourceHubPrincipal | null,
   ) {
+    const descriptor = await options.describeProject?.(projectId) ?? null;
+    const displayName = typeof descriptor?.name === 'string'
+      ? descriptor.name.trim()
+      : '';
     const principals = principal ? [principal] : principalsForProject(projectId);
     const fallbackPrincipal = await getProjectPrincipal(projectId);
     const targets = principals.length > 0
@@ -203,7 +212,9 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
         {
           projectId,
           resourceId: projectResourceIdFor(projectId, target),
+          ...(displayName ? { displayName } : {}),
           syncState,
+          ...(descriptor ? { metadata: descriptor } : {}),
         },
         target,
       );
@@ -364,6 +375,12 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
     },
     onError: (result) => {
       const { projectId, principal } = parseScopedProjectKey(result.projectId);
+      const key = principal ? scopedProjectKey(projectId, principal) : projectId;
+      if (unshared.has(key) || unshared.has(projectId)) {
+        syncStates.set(projectId, 'local_only');
+        syncStates.set(key, 'local_only');
+        return;
+      }
       syncStates.set(projectId, 'sync_failed');
       const principals = principal ? [principal] : principalsForProject(projectId);
       for (const scopedPrincipal of principals) {
@@ -428,13 +445,13 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
       return publishNow(projectId, 'share', principal);
     },
     async requestTeamUnshare(projectId, principal) {
+      unshared.add(projectId);
       const targets = principal
         ? [principal]
         : principalsForProject(projectId).length > 0
           ? principalsForProject(projectId)
           : [await getProjectPrincipal(projectId)].filter((candidate): candidate is ResourceHubPrincipal => Boolean(candidate));
       if (targets.length === 0) {
-        unshared.add(projectId);
         await baseAdapter.unpublish?.({ projectId });
       }
       for (const target of targets) {

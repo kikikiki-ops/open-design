@@ -3850,6 +3850,7 @@ export async function startServer({
   const collab = createCollabRuntime({
     resolveProjectDir: (projectId) =>
       resolveProjectShareDir(PROJECTS_DIR, projectId, getProject(db, projectId), resolveProjectDir),
+    resolvePullDir: (projectId) => resolveProjectDir(PROJECTS_DIR, projectId),
     describeProject: describeCollabProject,
     ...(velaCliTeamProjectCatalog ? { teamProjectCatalog: velaCliTeamProjectCatalog } : {}),
     onPublished: ({ projectId, principal }) => {

@@ -52,6 +52,7 @@ function fakeProjectStore(): PulledProjectStore & {
 function fixedShareContextProvider(canShareProjects: boolean): WorkspaceContextProvider {
   const context: WorkspaceCollabContext = {
     workspaceId: 'ws-1',
+    teamId: 'ws-1',
     workspaceType: 'team',
     workspaceMemberId: 'wm-1',
     role: 'member',
@@ -265,6 +266,48 @@ describe('collab sync routes', () => {
     expect(runtime.projectSyncState(projectId, workspaceB)).toBe('sync_failed');
   });
 
+  it('does not recreate a failed catalog row when a publish error arrives after unshare', async () => {
+    let publishCalls = 0;
+    const teamProjectCatalog = {
+      upsert: vi.fn(async () => null),
+      remove: vi.fn(async () => null),
+    };
+    const workspace = {
+      memberId: 'wm-1',
+      teamId: 'ws-1',
+      role: 'member' as const,
+      lifecycleState: 'active' as const,
+    };
+    runtime = createCollabRuntime({
+      adapter: {
+        publish: async () => {
+          publishCalls += 1;
+          if (publishCalls === 1) return { version: 1 };
+          throw new Error('project directory removed after unshare');
+        },
+        unpublish: async () => {},
+      },
+      workspaceContext: fixedShareContextProvider(true),
+      teamProjectCatalog,
+    });
+
+    await runtime.requestTeamShare('landing', workspace);
+    for (let i = 0; i < 40 && teamProjectCatalog.upsert.mock.calls.length < 1; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    teamProjectCatalog.upsert.mockClear();
+
+    await runtime.requestTeamUnshare('landing', workspace);
+    runtime.scheduler.notifyChanged('landing', 'save');
+    runtime.scheduler.runBoundary('landing');
+    for (let i = 0; i < 40 && teamProjectCatalog.upsert.mock.calls.length < 1; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    expect(runtime.projectSyncState('landing', workspace)).toBe('local_only');
+    expect(teamProjectCatalog.upsert).not.toHaveBeenCalled();
+  });
+
   it('keeps team-project catalog resource ids scoped per workspace principal', async () => {
     const teamProjectCatalog = {
       list: vi.fn(),
@@ -305,6 +348,47 @@ describe('collab sync routes', () => {
       ]),
     );
     expect(projectResourceIdFor(projectId, workspaceA)).not.toBe(projectResourceIdFor(projectId, workspaceB));
+  });
+
+  it('writes project discovery metadata when publishing a team share through the runtime', async () => {
+    const descriptor = {
+      name: 'Electric Studio 2',
+      skillId: 'deck-builder',
+      designSystemId: 'ds-emerald',
+      createdAt: 1719820800000,
+      updatedAt: 1719907200000,
+      metadata: { kind: 'deck', entryFile: 'index.html' },
+    };
+    const teamProjectCatalog = {
+      upsert: vi.fn(async () => null),
+    };
+    const workspace = {
+      memberId: 'member-owner',
+      teamId: 'workspace-team',
+      role: 'owner' as const,
+      lifecycleState: 'active' as const,
+    };
+    runtime = createCollabRuntime({
+      adapter: { publish: async () => ({ version: 1 }) },
+      describeProject: () => descriptor,
+      teamProjectCatalog,
+    });
+
+    await runtime.requestTeamShare('landing', workspace);
+    for (let i = 0; i < 40 && teamProjectCatalog.upsert.mock.calls.length < 1; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    expect(teamProjectCatalog.upsert).toHaveBeenCalledWith(
+      {
+        projectId: 'landing',
+        resourceId: projectResourceIdFor('landing', workspace),
+        displayName: 'Electric Studio 2',
+        syncState: 'synced',
+        metadata: descriptor,
+      },
+      workspace,
+    );
   });
 
   it('restores persisted team-share principals after runtime restart', async () => {
@@ -565,6 +649,12 @@ describe('collab sync routes', () => {
     expect(writes).toEqual([
       {
         projectId: 'p1',
+        resourceId: projectResourceIdFor('p1', {
+          memberId: 'wm-1',
+          teamId: 'ws-1',
+          role: 'member',
+          lifecycleState: 'active',
+        }),
         displayName: 'Electric Studio 2',
         syncState: 'synced',
         metadata: {
