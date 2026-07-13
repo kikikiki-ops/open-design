@@ -23,6 +23,8 @@ export interface TeamResourceShareRecord {
   id: string;
   title?: string;
   description?: string;
+  ownerMemberId?: string;
+  canUnshare?: boolean;
 }
 
 export interface TeamResourceShareService {
@@ -112,7 +114,12 @@ export function createTeamResourceShareService(
       return result;
     },
     async unshare(resourceId) {
-      if (!(await options.getPrincipal())) return false;
+      const principal = await options.getPrincipal();
+      if (!principal) return false;
+      const sharedResource = (await this.sharedResources()).find((resource) => resource.id === resourceId);
+      if (sharedResource && !sharedResource.canUnshare) {
+        throw new TeamResourceShareForbiddenError();
+      }
       await adapter.unpublish?.({ projectId: resourceId });
       shared.delete(resourceId);
       return true;
@@ -121,7 +128,8 @@ export function createTeamResourceShareService(
       return (await this.sharedResources()).map((resource) => resource.id);
     },
     async sharedResources() {
-      if (!(await options.getPrincipal())) return [];
+      const principal = await options.getPrincipal();
+      if (!principal) return [];
       try {
         const out = await (options.run ?? defaultRun)(['shared', '--json']);
         const resources = parseSharedResourceRecords(out, options.kind, options.idPrefix);
@@ -130,9 +138,14 @@ export function createTeamResourceShareService(
         for (const id of shared) {
           if (!byId.has(id)) byId.set(id, { id });
         }
-        return [...byId.values()].sort((a, b) => a.id.localeCompare(b.id));
+        return [...byId.values()]
+          .map((resource) => ({
+            ...resource,
+            canUnshare: canManageSharedResource(principal, resource),
+          }))
+          .sort((a, b) => a.id.localeCompare(b.id));
       } catch {
-        return [...shared].sort().map((id) => ({ id }));
+        return [...shared].sort().map((id) => ({ id, canUnshare: true }));
       }
     },
     isShared: (resourceId) => shared.has(resourceId),
@@ -151,6 +164,7 @@ interface SharedResourceListPayload {
     kind?: unknown;
     deletedAt?: unknown;
     metadata?: unknown;
+    ownerMemberId?: unknown;
   }>;
 }
 
@@ -182,18 +196,36 @@ export function parseSharedResourceRecords(
     if (typeof resource.id !== 'string' || !resource.id.startsWith(prefix)) {
       continue;
     }
-    const localId = resource.id.slice(prefix.length);
-    if (!localId) continue;
+    const rawLocalId = resource.id.slice(prefix.length);
     const metadata = isObjectRecord(resource.metadata) ? resource.metadata : {};
+    const localId = stringValue(metadata.localId) || decodeSharedResourceLocalId(rawLocalId, kind);
+    if (!localId) continue;
     const title = stringValue(metadata.title) || stringValue(metadata.name);
     const description = stringValue(metadata.description);
+    const ownerMemberId = stringValue(resource.ownerMemberId);
     records.set(localId, {
       id: localId,
       ...(title ? { title } : {}),
       ...(description ? { description } : {}),
+      ...(ownerMemberId ? { ownerMemberId } : {}),
     });
   }
   return [...records.values()].sort((a, b) => a.id.localeCompare(b.id));
+}
+
+function canManageSharedResource(
+  principal: ResourceHubPrincipal,
+  resource: TeamResourceShareRecord,
+): boolean {
+  if (principal.role === 'owner' || principal.role === 'admin') return true;
+  return typeof resource.ownerMemberId === 'string' && resource.ownerMemberId === principal.memberId;
+}
+
+function decodeSharedResourceLocalId(localId: string, kind: string): string {
+  if (kind === 'design_system' && localId.startsWith('user-')) {
+    return `user:${localId.slice('user-'.length)}`;
+  }
+  return localId;
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {

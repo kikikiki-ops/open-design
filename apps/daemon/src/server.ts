@@ -4006,10 +4006,15 @@ export async function startServer({
   const teamShareGetPrincipal = async () =>
     contextToResourceHubPrincipal(await collab.workspaceContext.current({}));
   // Only a member who may manage shared resources (owner/admin on a writable
-  // workspace) can share; the gate reads the same permission bit the web surface
-  // hides the action behind, so the route cannot be bypassed directly.
-  const teamShareGetCanShare = async () =>
-    (await collab.workspaceContext.current({}))?.permissions.canManageSharedResources ?? false;
+  // workspace) or share workspace projects (regular active members) can promote
+  // their own local resources. Unshare is narrower: owner/admin or uploader.
+  const teamShareGetCanShare = async () => {
+    const context = await collab.workspaceContext.current({});
+    return Boolean(
+      context?.permissions.canManageSharedResources ||
+      context?.permissions.canShareProjects,
+    );
+  };
   async function syncSharedTeamPlugin(resource): Promise<void> {
     const existing = getInstalledPlugin(db, resource.id);
     const remoteDescription = typeof resource.description === 'string' ? resource.description.trim() : '';
@@ -4059,6 +4064,14 @@ export async function startServer({
       idPrefix: 'ds',
       resolveDir: (id) =>
         path.join(USER_DESIGN_SYSTEMS_DIR, stripPrefixAndValidateId(id, 'user:') ?? '__invalid__'),
+      describeResource: async (id) => {
+        const system = (await listAllDesignSystems()).find((candidate) => candidate.id === id);
+        return {
+          localId: id,
+          ...(system?.title ? { title: system.title } : {}),
+          ...(system?.summary ? { description: system.summary } : {}),
+        };
+      },
       getPrincipal: teamShareGetPrincipal,
       getCanShare: teamShareGetCanShare,
     }),

@@ -62,6 +62,9 @@ export function registerTeamResourceShareRoutes(
       const unshared = await share.unshare(id);
       res.json({ unshared });
     } catch (error) {
+      if (error instanceof TeamResourceShareForbiddenError) {
+        return res.status(403).json({ error: 'WORKSPACE_RESOURCE_UNSHARE_DENIED' });
+      }
       res.status(500).json({ error: error instanceof Error ? error.message : 'unshare failed' });
     }
   });

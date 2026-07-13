@@ -96,6 +96,7 @@ describe('team resource share permission gate', () => {
             id: 'skill-mock-team-expert-kit',
             kind: 'skill',
             deletedAt: null,
+            ownerMemberId: 'wm-1',
             metadata: { title: 'Mock kit', description: 'Shared kit' },
           },
           { id: 'skill-deleted-kit', kind: 'skill', deletedAt: '2026-07-13T00:00:00Z' },
@@ -115,9 +116,42 @@ describe('team resource share permission gate', () => {
 
     expect(await service.sharedIds()).toEqual(['mock-team-expert-kit']);
     await expect(service.sharedResources()).resolves.toEqual([
-      { id: 'mock-team-expert-kit', title: 'Mock kit', description: 'Shared kit' },
+      {
+        id: 'mock-team-expert-kit',
+        title: 'Mock kit',
+        description: 'Shared kit',
+        ownerMemberId: 'wm-1',
+        canUnshare: true,
+      },
     ]);
     expect(service.isShared('mock-team-expert-kit')).toBe(true);
+  });
+
+  it('marks resources unshareable for non-owner non-uploader members', async () => {
+    const run = async (): Promise<string> => JSON.stringify({
+      resources: [
+        {
+          id: 'plugin-shared-kit',
+          kind: 'plugin',
+          deletedAt: null,
+          ownerMemberId: 'wm-owner',
+        },
+      ],
+    });
+    const service = createTeamResourceShareService({
+      kind: 'plugin',
+      idPrefix: 'plugin',
+      resolveDir: () => '/tmp/plugin',
+      getPrincipal: () => principal,
+      getCanShare: () => true,
+      run,
+      env: { OD_WORKSPACE_CONTEXT_SOURCE: 'vela' },
+    });
+
+    await expect(service.sharedResources()).resolves.toEqual([
+      { id: 'shared-kit', ownerMemberId: 'wm-owner', canUnshare: false },
+    ]);
+    await expect(service.unshare('shared-kit')).rejects.toBeInstanceOf(TeamResourceShareForbiddenError);
   });
 
   it('parses shared resource ids by kind and prefix', () => {
@@ -145,6 +179,7 @@ describe('team resource share permission gate', () => {
             {
               id: 'skill-alpha',
               kind: 'skill',
+              ownerMemberId: 'wm-1',
               metadata: { title: 'Alpha skill', description: 'Useful in teams' },
             },
           ],
@@ -152,6 +187,34 @@ describe('team resource share permission gate', () => {
         'skill',
         'skill',
       ),
-    ).toEqual([{ id: 'alpha', title: 'Alpha skill', description: 'Useful in teams' }]);
+    ).toEqual([{
+      id: 'alpha',
+      title: 'Alpha skill',
+      description: 'Useful in teams',
+      ownerMemberId: 'wm-1',
+    }]);
+  });
+
+  it('decodes legacy design-system resource ids back to user ids', () => {
+    expect(
+      parseSharedResourceRecords(
+        JSON.stringify({
+          resources: [
+            {
+              id: 'ds-user-design-system-inspired-by-agentic',
+              kind: 'design_system',
+              ownerMemberId: 'wm-1',
+              metadata: { title: 'Agentic' },
+            },
+          ],
+        }),
+        'design_system',
+        'ds',
+      ),
+    ).toEqual([{
+      id: 'user:design-system-inspired-by-agentic',
+      title: 'Agentic',
+      ownerMemberId: 'wm-1',
+    }]);
   });
 });

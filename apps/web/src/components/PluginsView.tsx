@@ -699,6 +699,7 @@ interface SharedResourceCardMeta {
   id: string;
   title?: string;
   description?: string;
+  canUnshare?: boolean;
 }
 
 interface MarketCard {
@@ -902,6 +903,7 @@ export function ExtensionsMarketplace({
               ...(typeof record.description === 'string' && record.description.trim()
                 ? { description: record.description }
                 : {}),
+              ...(typeof record.canUnshare === 'boolean' ? { canUnshare: record.canUnshare } : {}),
             });
           }
           metaSetter(meta);
@@ -945,9 +947,9 @@ export function ExtensionsMarketplace({
       if (res.ok && body.shared) {
         setShared((prev) => new Set(prev).add(id));
         if (kind === 'plugins') {
-          setSharedPluginMeta((prev) => new Map(prev).set(id, { id, title }));
+          setSharedPluginMeta((prev) => new Map(prev).set(id, { id, title, canUnshare: true }));
         } else {
-          setSharedSkillMeta((prev) => new Map(prev).set(id, { id, title }));
+          setSharedSkillMeta((prev) => new Map(prev).set(id, { id, title, canUnshare: true }));
         }
         setToast({ message: t('pluginsView.shareSuccess', { title }), tone: 'success' });
       } else {
@@ -1021,6 +1023,7 @@ export function ExtensionsMarketplace({
     const pluginRecordCard = (record: InstalledPluginRecord, personal: boolean): MarketCard => {
       const title = localizePluginTitle(locale, record);
       const shared = sharedPluginIds.has(record.id);
+      const canUnshare = sharedPluginMeta.get(record.id)?.canUnshare === true;
       return {
         id: record.id,
         title,
@@ -1028,13 +1031,14 @@ export function ExtensionsMarketplace({
         accent: marketAccent(record.id),
         action: { kind: 'try', record },
         share: personal && !shared ? { kind: 'plugins', id: record.id } : null,
-        unshare: shared ? { kind: 'plugins', id: record.id } : null,
+        unshare: shared && canUnshare ? { kind: 'plugins', id: record.id } : null,
         isShared: shared,
       };
     };
     const skillCard = (skill: SkillSummary, personal: boolean): MarketCard => {
       const title = localizeSkillName(locale, skill);
       const shared = sharedSkillIds.has(skill.id);
+      const canUnshare = sharedSkillMeta.get(skill.id)?.canUnshare === true;
       return {
         id: skill.id,
         title,
@@ -1042,7 +1046,7 @@ export function ExtensionsMarketplace({
         accent: marketAccent(skill.id),
         action: { kind: 'none' },
         share: personal && !shared ? { kind: 'skills', id: skill.id } : null,
-        unshare: shared ? { kind: 'skills', id: skill.id } : null,
+        unshare: shared && canUnshare ? { kind: 'skills', id: skill.id } : null,
         isShared: shared,
       };
     };
@@ -1070,6 +1074,7 @@ export function ExtensionsMarketplace({
       // team
       return [...sharedPluginIds].map((id) => {
         const meta = sharedPluginMeta.get(id);
+        const canUnshare = meta?.canUnshare === true;
         const record =
           allInstalledPlugins.find((plugin) => plugin.id === id) ??
           userPlugins.find((plugin) => plugin.id === id) ??
@@ -1082,7 +1087,7 @@ export function ExtensionsMarketplace({
           accent: marketAccent(id),
           action: record ? { kind: 'try', record } : { kind: 'none' },
           share: null,
-          unshare: { kind: 'plugins', id },
+          unshare: canUnshare ? { kind: 'plugins', id } : null,
           isShared: true,
         } satisfies MarketCard;
       });
@@ -1093,6 +1098,7 @@ export function ExtensionsMarketplace({
     if (scope === 'official') return officialSkills.map((skill) => skillCard(skill, false));
     return [...sharedSkillIds].map((id) => {
       const meta = sharedSkillMeta.get(id);
+      const canUnshare = meta?.canUnshare === true;
       const skill = skills.find((row) => row.id === id) ?? null;
       const title = skill ? localizeSkillName(locale, skill) : meta?.title || id;
       return {
@@ -1102,7 +1108,7 @@ export function ExtensionsMarketplace({
         accent: marketAccent(id),
         action: { kind: 'none' },
         share: null,
-        unshare: { kind: 'skills', id },
+        unshare: canUnshare ? { kind: 'skills', id } : null,
         isShared: true,
       } satisfies MarketCard;
     });
