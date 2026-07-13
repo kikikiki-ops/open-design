@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildVelaResourceEnv,
   contextHasTeamIdentity,
   createVelaCliResourceAdapter,
   shouldUseVelaCliResourceTransport,
@@ -83,6 +82,23 @@ describe('createVelaCliResourceAdapter', () => {
       '.od-skills',
       '--metadata-json',
       JSON.stringify({ name: 'Launch Deck', metadata: { kind: 'deck' } }),
+    ]);
+  });
+
+  it('stores the project id in project resource metadata for legacy catalog fallback', async () => {
+    const { run, calls } = recordingRun({ push: JSON.stringify({ version: 7 }) });
+    const adapter = createVelaCliResourceAdapter({
+      ...OPTS,
+      kind: 'project',
+      describeProject: () => ({ name: 'Launch Deck' }),
+      run,
+    });
+
+    await adapter.publish({ projectId: 'p1', reason: 'share' });
+
+    expect(calls[0]?.slice(-2)).toEqual([
+      '--metadata-json',
+      JSON.stringify({ projectId: 'p1', name: 'Launch Deck' }),
     ]);
   });
 
@@ -172,19 +188,14 @@ describe('transport selection', () => {
   it('opts into the CLI transport for explicit or Vela-backed team modes', () => {
     expect(shouldUseVelaCliResourceTransport({ OD_RESOURCE_TRANSPORT: 'vela-cli' })).toBe(true);
     expect(shouldUseVelaCliResourceTransport({ OD_RESOURCE_TRANSPORT: 'sdk' })).toBe(false);
+    expect(shouldUseVelaCliResourceTransport({ OD_WORKSPACE_CONTEXT_SOURCE: 'vela' })).toBe(true);
+    expect(shouldUseVelaCliResourceTransport({
+      OD_WORKSPACE_CONTEXT_SOURCE: 'vela',
+      OD_RESOURCE_TRANSPORT: 'sdk',
+    })).toBe(true);
     expect(shouldUseVelaCliResourceTransport({ OD_TEAM_PROJECTS_TRANSPORT: 'vela-cli' })).toBe(true);
     expect(shouldUseVelaCliResourceTransport({ OD_COLLAB_TRANSPORT: 'vela-cli' })).toBe(true);
     expect(shouldUseVelaCliResourceTransport({})).toBe(false);
-  });
-
-  it('preserves an explicit VELA_PROFILE over the daemon default profile', () => {
-    expect(
-      buildVelaResourceEnv({
-        OPEN_DESIGN_AMR_PROFILE: 'prod',
-        VELA_PROFILE: 'local',
-        AMR_HOME: '/tmp/member',
-      }).VELA_PROFILE,
-    ).toBe('local');
   });
 
   it('gates team identity on a live team workspace context', () => {

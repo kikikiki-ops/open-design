@@ -61,7 +61,7 @@ import {
   type VelaTeamProjectCatalogClient,
   type VelaTeamProjectRecord,
 } from '../../integrations/vela-team-projects.js';
-import type { ResourceHubPrincipal } from '../../integrations/resource-hub.js';
+import type { ResourceHubPrincipal } from '../../collab/resource-principal.js';
 
 export interface RegisterProjectRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'paths' | 'projectStore' | 'projectFiles' | 'conversations' | 'templates' | 'status' | 'events' | 'ids' | 'telemetry' | 'appConfig' | 'agents' | 'validation' | 'collabSync'> {
   teamProjectCatalog?: VelaTeamProjectCatalogClient;

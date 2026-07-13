@@ -11,7 +11,7 @@
 // pull a version that is not yet durable. The adapter is expected to resolve only
 // on durable success (E's atomic write); this scheduler adds the coalescing.
 
-import type { ResourceHubPrincipal } from '../integrations/resource-hub.js';
+import type { ResourceHubPrincipal } from './resource-principal.js';
 
 export interface ResourcePublishInput {
   projectId: string;

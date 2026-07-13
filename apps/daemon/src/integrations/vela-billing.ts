@@ -1,10 +1,9 @@
-import { execFile } from 'node:child_process';
 import type {
   WorkspaceBillingCatalog,
   WorkspaceBillingSummary,
   WorkspaceTeamBillingPlanId,
 } from '@open-design/contracts';
-import { amrVelaProfileEnv } from './vela-profile.js';
+import { runVelaCommand } from './vela-command.js';
 
 // A-lane billing 收口. Instead of the daemon holding billing credentials, it
 // shells out to `vela billing summary --format json`, which authenticates with
@@ -204,18 +203,4 @@ function parseTeamPlanId(value: unknown): WorkspaceTeamBillingPlanId | null {
 }
 
 const defaultRunVelaBilling: RunVelaBilling = (args) =>
-  new Promise<string>((resolve, reject) => {
-    const bin = process.env.OD_VELA_BIN?.trim() || 'vela';
-    execFile(
-      bin,
-      ['billing', ...args],
-      // Inherit the AMR profile so the CLI reads the same ~/.amr session the
-      // daemon's AMR runtime + resource transport use — one login covers agent
-      // runs, resources, and billing.
-      { env: { ...process.env, ...amrVelaProfileEnv() }, maxBuffer: 4 * 1024 * 1024 },
-      (error, stdout) => {
-        if (error) reject(error);
-        else resolve(stdout);
-      },
-    );
-  });
+  runVelaCommand(['billing', ...args], { maxBuffer: 4 * 1024 * 1024 });

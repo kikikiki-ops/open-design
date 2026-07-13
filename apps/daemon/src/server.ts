@@ -568,7 +568,6 @@ import { registerDeployRoutes, registerDeploymentCheckRoutes } from './routes/de
 import { registerMediaRoutes } from './routes/media.js';
 import { registerProjectRoutes, registerProjectArtifactRoutes, registerProjectFileRoutes, registerProjectUploadRoutes } from './routes/project/index.js';
 import { registerVelaRoutes } from './routes/vela.js';
-import { registerResourceSharingRoutes } from './routes/resources/index.js';
 import { registerFinalizeRoutes, registerImportRoutes, registerProjectExportRoutes } from './import-export-routes.js';
 import { registerHandoffRoutes } from './routes/handoff.js';
 import { EmptyTranscriptError, synthesizeHandoffPrompt } from './handoff-design.js';
@@ -590,7 +589,7 @@ import { createCollabPublishWatcher } from './collab/collab-publish-watcher.js';
 import { resolveProjectShareDir } from './collab/project-share-dir.js';
 import { createTeamProjectsLister } from './collab/team-projects.js';
 import { createTeamResourceShareService } from './collab/team-resource-share.js';
-import { contextToResourceHubPrincipal } from './collab/resource-hub-publish-adapter.js';
+import { contextToResourceHubPrincipal } from './collab/resource-principal.js';
 import { createCollabCloudClientFromEnv } from './integrations/collab-cloud.js';
 import { createCollabCloudService } from './collab/collab-cloud-service.js';
 import { createVelaCliCollabClientFromEnv } from './collab/vela-cli-collab-client.js';
@@ -3823,9 +3822,8 @@ export async function startServer({
 
 
   // Team collaboration subsystem: presence + author-side publish scheduler.
-  // The scheduler publishes/pulls through the resource-hub adapter — the real
-  // hub when OD_RESOURCE_HUB_URL + workspace member env are set, else a local
-  // stub. resolveProjectDir lets the hub adapter pack/land managed projects.
+  // Product team workspaces publish and pull through the login-backed Vela CLI;
+  // non-Vela local modes retain the in-memory adapter for isolated development.
   const describeCollabProject = (projectId: string) => {
     const project = getProject(db, projectId);
     if (!project) return null;
@@ -4759,11 +4757,6 @@ export async function startServer({
     research: researchDeps,
   });
 
-  registerResourceSharingRoutes(app, {
-    db,
-    paths: pathDeps,
-    requireLocalDaemonRequest,
-  });
   registerVelaRoutes(app, {
     paths: { RUNTIME_DATA_DIR },
     appConfig: { readAppConfig },

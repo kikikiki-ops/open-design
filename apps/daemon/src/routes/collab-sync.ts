@@ -3,10 +3,12 @@ import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from 'node
 import os from 'node:os';
 import path from 'node:path';
 import type { ProjectMetadata, ProjectSyncIntentEvent, TeamProject } from '@open-design/contracts';
-import { contextToResourceHubPrincipal } from '../collab/resource-hub-publish-adapter.js';
 import type { CollabRuntime } from '../collab/runtime.js';
+import {
+  contextToResourceHubPrincipal,
+  type ResourceHubPrincipal,
+} from '../collab/resource-principal.js';
 import { parseVelaResourceSnapshot, runVelaResourceCommand } from '../collab/vela-cli-resource-adapter.js';
-import type { ResourceHubPrincipal } from '../integrations/resource-hub.js';
 import { readVelaControlApiContext } from '../integrations/vela.js';
 import { projectResourceIdFor } from '../integrations/vela-team-projects.js';
 import { readProjectManifest } from '../project-locations.js';

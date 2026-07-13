@@ -1,19 +1,10 @@
 // Team resource sharing. A member with publish rights promotes a personal
 // resource — a design system, plugin, or skill — into the team scope: the
-// resource's directory is packed and pushed to the resource hub under its kind,
-// so teammates can pull it into their own workspace. This reuses the same
-// content-addressed publish machinery as project sync — only the resource kind
-// and id namespace differ — and degrades to a no-op when there is no team
-// identity or the hub is not configured (the same identity gate as the rest of
-// the collab surface).
+// resource's directory is packed and pushed by the login-backed Vela CLI under
+// its kind, so teammates can pull it into their own workspace. Open Design owns
+// the permission gate and scheduling, not backend credentials or byte transfer.
 
-import {
-  createResourceHubClient,
-  readResourceHubConfig,
-  type ResourceHubClient,
-  type ResourceHubPrincipal,
-} from '../integrations/resource-hub.js';
-import { createResourceHubPublishAdapter } from './resource-hub-publish-adapter.js';
+import type { ResourceHubPrincipal } from './resource-principal.js';
 import {
   createVelaCliResourceAdapter,
   shouldUseVelaCliResourceTransport,
@@ -35,7 +26,7 @@ export interface TeamResourceShareService {
   sharedIds(): string[];
   /** True once a resource has been shared to the team. */
   isShared(resourceId: string): boolean;
-  /** Whether the hub is reachable (share is a no-op otherwise). */
+  /** Whether the login-backed Vela transport is wired. */
   readonly configured: boolean;
 }
 
@@ -57,8 +48,8 @@ export interface CreateTeamResourceShareOptions {
    * caller is trusted to have pre-checked).
    */
   getCanShare?: () => boolean | Promise<boolean>;
-  /** Injectable client for tests; built from env when omitted. */
-  client?: ResourceHubClient;
+  /** Injectable Vela resource runner for tests. */
+  run?: (args: string[]) => Promise<string>;
   env?: NodeJS.ProcessEnv;
 }
 
@@ -66,6 +57,14 @@ export function createTeamResourceShareService(
   options: CreateTeamResourceShareOptions,
 ): TeamResourceShareService {
   const env = options.env ?? process.env;
+  if (!shouldUseVelaCliResourceTransport(env)) {
+    return {
+      share: async () => null,
+      sharedIds: () => [],
+      isShared: () => false,
+      configured: false,
+    };
+  }
   // Distinct, colon-free id namespace on the shared hub. The caller's id (e.g.
   // `user:palette-x`) is sanitized to path-safe chars — the hub routes the
   // resource id as a path param, so a colon would 404.
@@ -75,40 +74,13 @@ export function createTeamResourceShareService(
   // listing query lands.
   const shared = new Set<string>();
 
-  let adapter: ResourcePublishAdapter;
-  if (shouldUseVelaCliResourceTransport(env)) {
-    // Vela CLI transport (收口): the CLI drives the hub with the same vela login
-    // session AMR uses, so sharing needs no daemon-held internal token. Its
-    // configured-ness is the CLI's presence, not a hub URL, so this branch is
-    // always "configured" — the identity gate below still no-ops off-team.
-    adapter = createVelaCliResourceAdapter({
-      resolveProjectDir: options.resolveDir,
-      resourceIdFor,
-      kind: options.kind,
-      hasTeamIdentity: async () => (await options.getPrincipal()) != null,
-    });
-  } else {
-    const client =
-      options.client ??
-      (env.OD_RESOURCE_HUB_URL?.trim()
-        ? createResourceHubClient({ config: readResourceHubConfig(env) })
-        : null);
-    if (!client) {
-      return {
-        share: async () => null,
-        sharedIds: () => [],
-        isShared: () => false,
-        configured: false,
-      };
-    }
-    adapter = createResourceHubPublishAdapter({
-      client,
-      getPrincipal: options.getPrincipal,
-      resolveProjectDir: options.resolveDir,
-      resourceIdFor,
-      kind: options.kind,
-    });
-  }
+  const adapter: ResourcePublishAdapter = createVelaCliResourceAdapter({
+    resolveProjectDir: options.resolveDir,
+    resourceIdFor,
+    kind: options.kind,
+    hasTeamIdentity: async () => (await options.getPrincipal()) != null,
+    ...(options.run ? { run: options.run } : {}),
+  });
 
   return {
     async share(resourceId) {

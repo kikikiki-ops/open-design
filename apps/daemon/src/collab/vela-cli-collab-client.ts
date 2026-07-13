@@ -1,11 +1,10 @@
-import { execFile } from 'node:child_process';
 import type {
   CollabCloudComment,
   CollabCloudMemberDirectoryEntry,
   CollabMemberRole,
   CollabPresenceMember,
 } from '@open-design/contracts';
-import { amrVelaProfileEnv } from '../integrations/vela-profile.js';
+import { runVelaCommand } from '../integrations/vela-command.js';
 
 export type RunVelaCollab = (args: string[]) => Promise<string>;
 
@@ -204,31 +203,12 @@ function isRole(value: unknown): value is CollabMemberRole {
 }
 
 const defaultRunVelaCollab: RunVelaCollab = (args) =>
-  new Promise<string>((resolve, reject) => {
-    const bin = process.env.OD_VELA_BIN?.trim() || 'vela';
-    execFile(
-      bin,
-      ['collab', ...args],
-      { env: buildVelaCollabEnv(), maxBuffer: 16 * 1024 * 1024 },
-      (error, stdout) => {
-        if (error) reject(error);
-        else resolve(stdout);
-      },
-    );
-  });
-
-export function buildVelaCollabEnv(
-  env: NodeJS.ProcessEnv = process.env,
-): NodeJS.ProcessEnv {
-  // OPEN_DESIGN_AMR_PROFILE remains the daemon-level default, but an explicit
-  // VELA_PROFILE/AMR_HOME/VELA_API_URL on the daemon process must win so local
-  // multi-user tools-dev runs can point each daemon at a different CLI profile.
-  return { ...amrVelaProfileEnv(env), ...env };
-}
+  runVelaCommand(['collab', ...args]);
 
 export function shouldUseVelaCliCollabTransport(
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
+  if (env.OD_WORKSPACE_CONTEXT_SOURCE?.trim() === 'vela') return true;
   const explicitTransport = env.OD_COLLAB_TRANSPORT?.trim();
   if (explicitTransport) return explicitTransport === 'vela-cli';
   if (env.OD_COLLAB_CLOUD_URL?.trim()) return false;

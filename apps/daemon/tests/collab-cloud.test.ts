@@ -24,7 +24,6 @@ import {
   previewCommentToCloud,
 } from '../src/collab/collab-cloud-service.js';
 import {
-  buildVelaCollabEnv,
   createVelaCliCollabClient,
   shouldUseVelaCliCollabTransport,
 } from '../src/collab/vela-cli-collab-client.js';
@@ -464,23 +463,15 @@ describe('VelaCliCollabClient', () => {
   it('uses the CLI transport when team/resource sync is already Vela-backed', () => {
     expect(shouldUseVelaCliCollabTransport({ OD_COLLAB_TRANSPORT: 'vela-cli' })).toBe(true);
     expect(shouldUseVelaCliCollabTransport({ OD_COLLAB_TRANSPORT: 'sdk' })).toBe(false);
+    expect(shouldUseVelaCliCollabTransport({ OD_WORKSPACE_CONTEXT_SOURCE: 'vela' })).toBe(true);
+    expect(shouldUseVelaCliCollabTransport({
+      OD_WORKSPACE_CONTEXT_SOURCE: 'vela',
+      OD_COLLAB_CLOUD_URL: 'http://legacy-fixture.local',
+    })).toBe(true);
     expect(shouldUseVelaCliCollabTransport({ OD_TEAM_PROJECTS_TRANSPORT: 'vela-cli' })).toBe(true);
     expect(shouldUseVelaCliCollabTransport({ OD_RESOURCE_TRANSPORT: 'vela-cli' })).toBe(true);
     expect(shouldUseVelaCliCollabTransport({ OD_COLLAB_CLOUD_URL: 'http://fixture.local' })).toBe(false);
     expect(shouldUseVelaCliCollabTransport({})).toBe(false);
-  });
-
-  it('keeps an explicit VELA_PROFILE and AMR_HOME when spawning the CLI', () => {
-    const env = buildVelaCollabEnv({
-      OPEN_DESIGN_AMR_PROFILE: 'prod',
-      VELA_PROFILE: 'local',
-      AMR_HOME: '/tmp/od-collab-owner-amr',
-      VELA_API_URL: 'http://127.0.0.1:18082',
-    });
-
-    expect(env.VELA_PROFILE).toBe('local');
-    expect(env.AMR_HOME).toBe('/tmp/od-collab-owner-amr');
-    expect(env.VELA_API_URL).toBe('http://127.0.0.1:18082');
   });
 
   it('uses vela collab commands for comments, directory, and presence', async () => {

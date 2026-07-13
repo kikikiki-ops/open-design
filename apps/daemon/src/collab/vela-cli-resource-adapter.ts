@@ -1,9 +1,8 @@
-import { execFile } from 'node:child_process';
 import type { WorkspaceCollabContext } from '@open-design/contracts';
-import { amrVelaProfileEnv } from '../integrations/vela-profile.js';
+import { runVelaCommand } from '../integrations/vela-command.js';
 import { projectResourceIdFor } from '../integrations/vela-team-projects.js';
-import type { ResourceHubPrincipal } from '../integrations/resource-hub.js';
 import type { ResourcePublishAdapter } from './publish-scheduler.js';
+import type { ResourceHubPrincipal } from './resource-principal.js';
 
 // The `vela resource` transport for the publish/pull machinery (T7c). Instead of
 // the daemon holding an internal token and driving the hub over HTTP itself, it
@@ -11,10 +10,9 @@ import type { ResourcePublishAdapter } from './publish-scheduler.js';
 // vela login session AMR uses — one identity, and the content-addressing lives in
 // the vela CLI so any vela-embedding project shares the exact same code path.
 //
-// This is a drop-in ResourcePublishAdapter, selected by env so it coexists with
-// the in-process SDK adapter until the CLI ships everywhere (see
-// createResourcePublishAdapterFromEnv). The child process is injectable so the
-// wiring is unit-tested without a live CLI or hub.
+// This is a drop-in ResourcePublishAdapter selected by the collaboration mode.
+// The child process is injectable so the wiring is unit-tested without a live
+// CLI or hub.
 
 const PUBLISHED_REF = 'published';
 const PROJECT_KIND = 'project';
@@ -89,8 +87,11 @@ export function createVelaCliResourceAdapter(
           args.push('--exclude', name);
         }
         const metadata = await options.describeProject?.(projectId);
-        if (metadata && Object.keys(metadata).length > 0) {
-          args.push('--metadata-json', JSON.stringify(metadata));
+        const resourceMetadata = kind === PROJECT_KIND
+          ? { projectId, ...(metadata ?? {}) }
+          : metadata;
+        if (resourceMetadata && Object.keys(resourceMetadata).length > 0) {
+          args.push('--metadata-json', JSON.stringify(resourceMetadata));
         }
         const out = await run(args);
         const version = parseVersion(out);
@@ -169,31 +170,9 @@ export function parseVelaResourceSnapshot(stdout: string): VelaResourceSnapshotR
 }
 
 export const runVelaResourceCommand: RunVelaResource = (args) =>
-  new Promise<string>((resolve, reject) => {
-    const bin = process.env.OD_VELA_BIN?.trim() || process.env.VELA_BIN?.trim() || 'vela';
-    execFile(
-      bin,
-      ['resource', ...args],
-      // Inherit the AMR profile so the CLI reads the same ~/.amr session the
-      // daemon's AMR runtime uses — one login drives agent runs and resources.
-      { env: buildVelaResourceEnv(), maxBuffer: 16 * 1024 * 1024 },
-      (error, stdout) => {
-        if (error) reject(error);
-        else resolve(stdout);
-      },
-    );
-  });
+  runVelaCommand(['resource', ...args]);
 
 const defaultRunVelaResource: RunVelaResource = runVelaResourceCommand;
-
-export function buildVelaResourceEnv(
-  env: NodeJS.ProcessEnv = process.env,
-): NodeJS.ProcessEnv {
-  // OPEN_DESIGN_AMR_PROFILE remains the daemon-level default, but an explicit
-  // VELA_PROFILE/AMR_HOME/VELA_API_URL on the daemon process must win so local
-  // multi-user tools-dev runs can point each daemon at a different CLI profile.
-  return { ...amrVelaProfileEnv(env), ...env };
-}
 
 /**
  * Whether this run should drive resource sharing through the `vela resource` CLI
@@ -203,6 +182,7 @@ export function buildVelaResourceEnv(
  * leaving project content on the local stub.
  */
 export function shouldUseVelaCliResourceTransport(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (env.OD_WORKSPACE_CONTEXT_SOURCE?.trim() === 'vela') return true;
   const explicitTransport = env.OD_RESOURCE_TRANSPORT?.trim();
   if (explicitTransport) return explicitTransport === 'vela-cli';
   return env.OD_TEAM_PROJECTS_TRANSPORT?.trim() === 'vela-cli' ||
