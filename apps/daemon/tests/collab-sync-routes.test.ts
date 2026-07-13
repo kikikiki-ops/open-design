@@ -53,6 +53,7 @@ function fixedShareContextProvider(canShareProjects: boolean): WorkspaceContextP
   const context: WorkspaceCollabContext = {
     workspaceId: 'ws-1',
     workspaceType: 'team',
+    teamId: 'team-1',
     workspaceMemberId: 'wm-1',
     role: 'member',
     memberStatus: 'active',
@@ -536,6 +537,29 @@ describe('collab sync routes', () => {
     expect(removes).toEqual([]);
   });
 
+  it('refuses public file publishing for a shared project owned by another member', async () => {
+    const resolveProjectDir = vi.fn(() => {
+      throw new Error('project dir should not be read');
+    });
+    const api = await startSyncServer(fixedShareContextProvider(true), {
+      resolveProjectDir,
+      resolveSharedProject: async () => ({
+        projectId: 'p1',
+        ownerMemberId: 'wm-owner',
+        sharedAt: new Date(1).toISOString(),
+        name: 'Owner Project',
+      }),
+    });
+
+    const res = await api.json('/api/projects/p1/files/index.html/publish-public', {
+      method: 'POST',
+    });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('WORKSPACE_PROJECT_PUBLISH_DENIED');
+    expect(resolveProjectDir).not.toHaveBeenCalled();
+  });
+
   it('writes and removes the Vela team-project catalog around share intents', async () => {
     const writes: unknown[] = [];
     const removes: string[] = [];
@@ -565,6 +589,12 @@ describe('collab sync routes', () => {
     expect(writes).toEqual([
       {
         projectId: 'p1',
+        resourceId: projectResourceIdFor('p1', {
+          teamId: 'team-1',
+          memberId: 'wm-1',
+          role: 'member',
+          lifecycleState: 'active',
+        }),
         displayName: 'Electric Studio 2',
         syncState: 'synced',
         metadata: {

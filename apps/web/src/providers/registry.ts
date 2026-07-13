@@ -1394,6 +1394,34 @@ export async function publishProjectFilePublic(
   return (await resp.json()) as WebPublicProjectFileResponse;
 }
 
+export async function unpublishProjectFilePublic(
+  projectId: string,
+  fileName: string,
+  slug: string,
+): Promise<{ ok: true; slug: string; fileName: string }> {
+  const resp = await fetch(
+    `/api/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(fileName)}/publish-public`,
+    {
+      method: 'DELETE',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ slug }),
+    },
+  );
+  if (!resp.ok) {
+    const payload = (await resp.json().catch(() => null)) as
+      | { error?: { message?: string } | string; message?: string }
+      | null;
+    const errorMessage =
+      typeof payload?.error === 'object'
+        ? payload.error.message
+        : typeof payload?.error === 'string'
+          ? payload.error
+          : payload?.message;
+    throw new Error(errorMessage || `Unpublish failed (${resp.status})`);
+  }
+  return (await resp.json()) as { ok: true; slug: string; fileName: string };
+}
+
 export async function checkDeploymentLink(
   projectId: string,
   deploymentId: string,

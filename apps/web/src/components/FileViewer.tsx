@@ -73,6 +73,7 @@ import {
   projectFileUrl,
   projectRawUrl,
   publishProjectFilePublic,
+  unpublishProjectFilePublic,
   LiveArtifactRefreshError,
   refreshLiveArtifact,
   restoreProjectFileVersion,
@@ -5299,6 +5300,7 @@ function ReactComponentViewer({
   const [shareAccessMenuOpen, setShareAccessMenuOpen] = useState(false);
   const [shareAccessBusy, setShareAccessBusy] = useState(false);
   const [publishedFileUrl, setPublishedFileUrl] = useState('');
+  const [publishedFileSlug, setPublishedFileSlug] = useState('');
   const [publishingPublicFile, setPublishingPublicFile] = useState(false);
   const [publishLinkFeedback, setPublishLinkFeedback] = useState<'copied' | 'failed' | null>(null);
   const filePublished = publishedFileUrl.length > 0;
@@ -5403,6 +5405,13 @@ function ReactComponentViewer({
     setShareAccessMenuOpen(false);
   }, [viewerOnly]);
 
+  useEffect(() => {
+    setPublishedFileUrl('');
+    setPublishedFileSlug('');
+    setPublishingPublicFile(false);
+    setPublishLinkFeedback(null);
+  }, [projectId, file.name]);
+
   async function publishCurrentFilePublic() {
     if (viewerOnly || publishingPublicFile) return;
     setPublishingPublicFile(true);
@@ -5410,8 +5419,25 @@ function ReactComponentViewer({
     try {
       const response = await publishProjectFilePublic(projectId, file.name);
       setPublishedFileUrl(response.url);
+      setPublishedFileSlug(response.slug);
     } catch (error) {
       console.warn('[FileViewer] failed to publish public file', error);
+      setPublishLinkFeedback('failed');
+    } finally {
+      setPublishingPublicFile(false);
+    }
+  }
+
+  async function unpublishCurrentFilePublic() {
+    if (!publishedFileSlug || publishingPublicFile) return;
+    setPublishingPublicFile(true);
+    setPublishLinkFeedback(null);
+    try {
+      await unpublishProjectFilePublic(projectId, file.name, publishedFileSlug);
+      setPublishedFileUrl('');
+      setPublishedFileSlug('');
+    } catch (error) {
+      console.warn('[FileViewer] failed to unpublish public file', error);
       setPublishLinkFeedback('failed');
     } finally {
       setPublishingPublicFile(false);
@@ -5661,9 +5687,12 @@ function ReactComponentViewer({
                                 <button
                                   type="button"
                                   className="chrome-publish-button chrome-publish-button--ghost"
-                                  onClick={() => setPublishedFileUrl('')}
+                                  disabled={publishingPublicFile}
+                                  onClick={() => {
+                                    void unpublishCurrentFilePublic();
+                                  }}
                                 >
-                                  {t('common.cancel')}
+                                  {t('fileViewer.unpublishFile')}
                                 </button>
                               </div>
                             </>
@@ -6198,6 +6227,7 @@ function HtmlViewer({
   const [shareAccessMenuOpen, setShareAccessMenuOpen] = useState(false);
   const [shareAccessBusy, setShareAccessBusy] = useState(false);
   const [publishedFileUrl, setPublishedFileUrl] = useState('');
+  const [publishedFileSlug, setPublishedFileSlug] = useState('');
   const [publishingPublicFile, setPublishingPublicFile] = useState(false);
   const [publishLinkFeedback, setPublishLinkFeedback] = useState<'copied' | 'failed' | null>(null);
   const filePublished = publishedFileUrl.length > 0;
@@ -6286,6 +6316,14 @@ function HtmlViewer({
   useEffect(() => {
     if (!deployMenuOpen) setShareAccessMenuOpen(false);
   }, [deployMenuOpen]);
+
+  useEffect(() => {
+    setPublishedFileUrl('');
+    setPublishedFileSlug('');
+    setPublishingPublicFile(false);
+    setPublishLinkFeedback(null);
+  }, [projectId, file.name]);
+
   async function publishCurrentFilePublic() {
     if (viewerOnly || publishingPublicFile) return;
     setPublishingPublicFile(true);
@@ -6293,8 +6331,25 @@ function HtmlViewer({
     try {
       const response = await publishProjectFilePublic(projectId, file.name);
       setPublishedFileUrl(response.url);
+      setPublishedFileSlug(response.slug);
     } catch (error) {
       console.warn('[FileViewer] failed to publish public file', error);
+      setPublishLinkFeedback('failed');
+    } finally {
+      setPublishingPublicFile(false);
+    }
+  }
+
+  async function unpublishCurrentFilePublic() {
+    if (!publishedFileSlug || publishingPublicFile) return;
+    setPublishingPublicFile(true);
+    setPublishLinkFeedback(null);
+    try {
+      await unpublishProjectFilePublic(projectId, file.name, publishedFileSlug);
+      setPublishedFileUrl('');
+      setPublishedFileSlug('');
+    } catch (error) {
+      console.warn('[FileViewer] failed to unpublish public file', error);
       setPublishLinkFeedback('failed');
     } finally {
       setPublishingPublicFile(false);
@@ -11124,7 +11179,10 @@ function HtmlViewer({
                               <button
                                 type="button"
                                 className="chrome-publish-button chrome-publish-button--ghost"
-                                onClick={() => setPublishedFileUrl('')}
+                                disabled={publishingPublicFile}
+                                onClick={() => {
+                                  void unpublishCurrentFilePublic();
+                                }}
                               >
                                 {t('fileViewer.unpublishFile')}
                               </button>

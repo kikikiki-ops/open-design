@@ -7,6 +7,7 @@ import { contextToResourceHubPrincipal } from '../collab/resource-hub-publish-ad
 import type { CollabRuntime } from '../collab/runtime.js';
 import { parseVelaResourceSnapshot, runVelaResourceCommand } from '../collab/vela-cli-resource-adapter.js';
 import type { ResourceHubPrincipal } from '../integrations/resource-hub.js';
+import { readVelaControlApiContext } from '../integrations/vela.js';
 import { projectResourceIdFor } from '../integrations/vela-team-projects.js';
 import { readProjectManifest } from '../project-locations.js';
 
@@ -212,13 +213,13 @@ function encodePublicFileUrlPath(filePath: string): string {
   return filePath.split('/').map((part) => encodeURIComponent(part)).join('/');
 }
 
-function publicResourceHubBaseUrl(): string {
-  return process.env.VELA_API_URL?.trim() || process.env.OD_RESOURCE_HUB_URL?.trim() || 'http://127.0.0.1:18080';
+function publicResourceHubBaseUrl(): string | null {
+  return readVelaControlApiContext()?.apiUrl?.trim() || process.env.OD_RESOURCE_HUB_URL?.trim() || null;
 }
 
-function publicSnapshotFileUrl(slug: string, filePath: string): string {
+function publicSnapshotFileUrl(baseUrl: string, slug: string, filePath: string): string {
   const relative = `/api/v1/public/snapshots/${encodeURIComponent(slug)}/files/${encodePublicFileUrlPath(filePath)}`;
-  return new URL(relative, publicResourceHubBaseUrl()).toString();
+  return new URL(relative, baseUrl).toString();
 }
 
 export function registerCollabSyncRoutes(app: Express, deps: RegisterCollabSyncRoutesDeps): void {
@@ -360,6 +361,18 @@ export function registerCollabSyncRoutes(app: Express, deps: RegisterCollabSyncR
     if (!principal) {
       return res.status(409).json({ error: 'WORKSPACE_IDENTITY_REQUIRED' });
     }
+    if (!await canShareProjectsForRequest(req)) {
+      return res.status(403).json({ error: 'WORKSPACE_PROJECT_SHARE_DENIED' });
+    }
+    let sharedProject: TeamProject | null = null;
+    try {
+      sharedProject = await resolveSharedProject?.(projectId) ?? null;
+    } catch {
+      sharedProject = null;
+    }
+    if (sharedProject?.ownerMemberId && sharedProject.ownerMemberId !== principal.memberId) {
+      return res.status(403).json({ error: 'WORKSPACE_PROJECT_PUBLISH_DENIED' });
+    }
     if (!resolveProjectDir) {
       return res.status(500).json({ error: 'PROJECT_DIR_UNAVAILABLE' });
     }
@@ -410,8 +423,12 @@ export function registerCollabSyncRoutes(app: Express, deps: RegisterCollabSyncR
       if (!snapshot) {
         return res.status(502).json({ error: 'PUBLIC_SNAPSHOT_UNAVAILABLE' });
       }
+      const baseUrl = publicResourceHubBaseUrl();
+      if (!baseUrl) {
+        return res.status(502).json({ error: 'PUBLIC_FILE_URL_UNAVAILABLE' });
+      }
       return res.json({
-        url: publicSnapshotFileUrl(snapshot.slug, filePath),
+        url: publicSnapshotFileUrl(baseUrl, snapshot.slug, filePath),
         slug: snapshot.slug,
         fileName: filePath,
       });
@@ -420,6 +437,47 @@ export function registerCollabSyncRoutes(app: Express, deps: RegisterCollabSyncR
       return res.status(502).json({ error: 'PUBLIC_FILE_PUBLISH_UNAVAILABLE' });
     } finally {
       await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  app.delete(/^\/api\/projects\/([^/]+)\/files\/(.+)\/publish-public$/u, async (req, res) => {
+    const params = req.params as unknown as { 0?: string; 1?: string };
+    const projectId = String(params[0] ?? '');
+    const filePath = normalizePublicFilePath(String(params[1] ?? ''));
+    const slug = typeof (req.body as { slug?: unknown } | undefined)?.slug === 'string'
+      ? (req.body as { slug: string }).slug.trim()
+      : '';
+    if (!projectId || !filePath || !slug) {
+      return res.status(400).json({ error: 'invalid_public_file' });
+    }
+    const principal = await principalForRequest(req);
+    if (!principal) {
+      return res.status(409).json({ error: 'WORKSPACE_IDENTITY_REQUIRED' });
+    }
+    if (!await canShareProjectsForRequest(req)) {
+      return res.status(403).json({ error: 'WORKSPACE_PROJECT_SHARE_DENIED' });
+    }
+    let sharedProject: TeamProject | null = null;
+    try {
+      sharedProject = await resolveSharedProject?.(projectId) ?? null;
+    } catch {
+      sharedProject = null;
+    }
+    if (sharedProject?.ownerMemberId && sharedProject.ownerMemberId !== principal.memberId) {
+      return res.status(403).json({ error: 'WORKSPACE_PROJECT_PUBLISH_DENIED' });
+    }
+    const resourceId = publicFileResourceIdFor(projectId, filePath, principal);
+    try {
+      await runVelaResourceCommand([
+        'snapshot-redact',
+        resourceId,
+        slug,
+        '--json',
+      ]);
+      return res.json({ ok: true, slug, fileName: filePath });
+    } catch (error) {
+      console.warn('[od] failed to unpublish public project file:', error);
+      return res.status(502).json({ error: 'PUBLIC_FILE_UNPUBLISH_UNAVAILABLE' });
     }
   });
 
