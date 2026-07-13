@@ -8,6 +8,15 @@ describe('deployErrorCode', () => {
     expect(deployErrorCode(err)).toBe('UPSTREAM_UNAVAILABLE');
   });
 
+  it('ignores generic envelope codes and falls through to status/message bucketing', () => {
+    // The daemon wraps non-404 provider failures as `BAD_REQUEST` (404 as
+    // `FILE_NOT_FOUND`) — those carry no signal and must not shortcut the real
+    // status/message classification. Safety net in case one reaches here.
+    expect(deployErrorCode(Object.assign(new Error('403 Forbidden'), { code: 'BAD_REQUEST' }))).toBe('FORBIDDEN');
+    expect(deployErrorCode(Object.assign(new Error('deploy failed (500)'), { code: 'BAD_REQUEST' }))).toBe('HTTP_500');
+    expect(deployErrorCode(Object.assign(new Error('file not found'), { code: 'FILE_NOT_FOUND' }))).toBe('NOT_FOUND');
+  });
+
   it('returns UNKNOWN for non-Error throwables', () => {
     expect(deployErrorCode('nope')).toBe('UNKNOWN');
     expect(deployErrorCode(undefined)).toBe('UNKNOWN');

@@ -17,9 +17,19 @@
  *
  * Mirrors apps/web/src/analytics/export-error-code.ts (issue-#5220 pattern).
  */
+
+// The daemon deploy route (apps/daemon/src/routes/deploy.ts) collapses every
+// non-404 failure's code to `BAD_REQUEST` (and 404 to `FILE_NOT_FOUND`) while
+// keeping the real provider HTTP status + message. Those envelope codes carry no
+// signal, so they must NOT win over status/message-based bucketing — treated as
+// "no structured code" both at the throw site and here as a safety net.
+export const GENERIC_DEPLOY_ENVELOPE_CODES = new Set(['BAD_REQUEST', 'FILE_NOT_FOUND', 'INTERNAL', 'INTERNAL_ERROR', 'UNKNOWN']);
+
 export function deployErrorCode(err: unknown): string {
   const structured = (err as { code?: unknown } | null | undefined)?.code;
-  if (typeof structured === 'string' && structured.length > 0) return structured;
+  if (typeof structured === 'string' && structured.length > 0 && !GENERIC_DEPLOY_ENVELOPE_CODES.has(structured)) {
+    return structured;
+  }
   if (!(err instanceof Error)) return 'UNKNOWN';
   const message = err.message ?? '';
   // Daemon↔desktop sidecar version skew (new daemon → old desktop): the same
