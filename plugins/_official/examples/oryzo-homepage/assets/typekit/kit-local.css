@@ -1,0 +1,15 @@
+/* 本地自托管 Adobe Typekit kit pmn6ngx (halyard) — 仅本地学习用，字体授权仍归 Adobe */
+@font-face{
+  font-family:"halyard-text-variable";
+  src:url("./fonts/halyard-text.woff2") format("woff2"),
+      url("./fonts/halyard-text.woff") format("woff"),
+      url("./fonts/halyard-text.otf") format("opentype");
+  font-display:swap;font-style:normal;font-weight:100 800;font-stretch:normal;
+}
+@font-face{
+  font-family:"halyard-display-variable";
+  src:url("./fonts/halyard-display.woff2") format("woff2"),
+      url("./fonts/halyard-display.woff") format("woff"),
+      url("./fonts/halyard-display.otf") format("opentype");
+  font-display:swap;font-style:normal;font-weight:100 900;font-stretch:normal;
+}
