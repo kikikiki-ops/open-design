@@ -85,6 +85,23 @@ describe('createVelaCliResourceAdapter', () => {
     ]);
   });
 
+  it('stores the project id in project resource metadata for legacy catalog fallback', async () => {
+    const { run, calls } = recordingRun({ push: JSON.stringify({ version: 7 }) });
+    const adapter = createVelaCliResourceAdapter({
+      ...OPTS,
+      kind: 'project',
+      describeProject: () => ({ name: 'Launch Deck' }),
+      run,
+    });
+
+    await adapter.publish({ projectId: 'p1', reason: 'share' });
+
+    expect(calls[0]?.slice(-2)).toEqual([
+      '--metadata-json',
+      JSON.stringify({ projectId: 'p1', name: 'Launch Deck' }),
+    ]);
+  });
+
   it('reports the head version via `head` without pulling', async () => {
     const { run, calls } = recordingRun({ head: JSON.stringify({ version: 3 }) });
     const adapter = createVelaCliResourceAdapter({ ...OPTS, run });

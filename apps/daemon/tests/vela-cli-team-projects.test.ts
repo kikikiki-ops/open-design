@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   createVelaCliTeamProjectCatalog,
+  createVelaCliTeamProjectCatalogClient,
   shouldUseVelaCliTeamProjectCatalog,
 } from '../src/collab/vela-cli-team-projects.js';
 
 describe('Vela CLI team-project catalog adapter', () => {
   it('maps list output into team-project DTOs', async () => {
     const catalog = createVelaCliTeamProjectCatalog({
+      supportsTeamProjects: () => true,
       run: async (args) => {
         expect(args).toEqual(['list']);
         return JSON.stringify({
@@ -48,6 +50,7 @@ describe('Vela CLI team-project catalog adapter', () => {
 
   it('hides catalog rows whose project bytes are not synced yet', async () => {
     const catalog = createVelaCliTeamProjectCatalog({
+      supportsTeamProjects: () => true,
       run: async () => JSON.stringify({
         projects: [
           {
@@ -89,6 +92,7 @@ describe('Vela CLI team-project catalog adapter', () => {
   it('uses Vela team-project commands for upsert and remove', async () => {
     const calls: string[][] = [];
     const catalog = createVelaCliTeamProjectCatalog({
+      supportsTeamProjects: () => true,
       run: async (args) => {
         calls.push(args);
         return '{}';
@@ -128,6 +132,83 @@ describe('Vela CLI team-project catalog adapter', () => {
         }),
       ],
       ['remove', 'p1'],
+    ]);
+  });
+
+  it('falls back to vela resource shared when the CLI lacks team-projects', async () => {
+    const scopedId = `project-${Buffer.from(
+      JSON.stringify(['team-1', 'member-owner', 'p-fallback']),
+      'utf8',
+    ).toString('base64url')}`;
+    const teamCalls: string[][] = [];
+    const resourceCalls: string[][] = [];
+    const sharedOutput = JSON.stringify({
+      resources: [
+        {
+          id: scopedId,
+          teamId: 'team-1',
+          kind: 'project',
+          ownerMemberId: 'member-owner',
+          metadata: {
+            name: 'Fallback Project',
+            skillId: 'deck-builder',
+            createdAt: 1719820800000,
+            updatedAt: 1719907200000,
+            metadata: { kind: 'deck' },
+          },
+          createdAt: '2026-07-01T00:00:00.000Z',
+          deletedAt: null,
+        },
+      ],
+    });
+    const options = {
+      run: async (args: string[]) => {
+        teamCalls.push(args);
+        throw new Error('unknown command "team-projects" for "vela"');
+      },
+      runResource: async (args: string[]) => {
+        resourceCalls.push(args);
+        return sharedOutput;
+      },
+    };
+
+    const catalog = createVelaCliTeamProjectCatalog(options);
+    await expect(catalog.list()).resolves.toEqual([
+      {
+        projectId: 'p-fallback',
+        ownerMemberId: 'member-owner',
+        sharedAt: '2026-07-01T00:00:00.000Z',
+        name: 'Fallback Project',
+        skillId: 'deck-builder',
+        createdAt: 1719820800000,
+        updatedAt: 1719907200000,
+        metadata: { kind: 'deck' },
+      },
+    ]);
+    await catalog.upsert({ projectId: 'p-fallback' });
+    await catalog.remove('p-fallback');
+    expect(teamCalls).toEqual([['--help']]);
+    expect(resourceCalls).toEqual([['shared', '--json']]);
+
+    const client = createVelaCliTeamProjectCatalogClient(options);
+    await expect(client.list()).resolves.toEqual([
+      expect.objectContaining({
+        workspaceId: 'team-1',
+        projectId: 'p-fallback',
+        resourceId: scopedId,
+        ownerMemberId: 'member-owner',
+        displayName: 'Fallback Project',
+        syncState: 'synced',
+      }),
+    ]);
+    await expect(client.upsert({
+      projectId: 'p-fallback',
+      resourceId: scopedId,
+    })).resolves.toBeNull();
+    expect(teamCalls).toEqual([['--help'], ['--help']]);
+    expect(resourceCalls).toEqual([
+      ['shared', '--json'],
+      ['shared', '--json'],
     ]);
   });
 

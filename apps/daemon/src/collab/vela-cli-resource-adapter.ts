@@ -86,8 +86,11 @@ export function createVelaCliResourceAdapter(
           '--json',
         ];
         const metadata = await options.describeProject?.(projectId);
-        if (metadata && Object.keys(metadata).length > 0) {
-          args.push('--metadata-json', JSON.stringify(metadata));
+        const resourceMetadata = kind === PROJECT_KIND
+          ? { projectId, ...(metadata ?? {}) }
+          : metadata;
+        if (resourceMetadata && Object.keys(resourceMetadata).length > 0) {
+          args.push('--metadata-json', JSON.stringify(resourceMetadata));
         }
         const out = await run(args);
         const version = parseVersion(out);

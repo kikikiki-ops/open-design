@@ -5,7 +5,10 @@
 // the permission gate and scheduling, not backend credentials or byte transfer.
 
 import type { ResourceHubPrincipal } from './resource-principal.js';
-import { createVelaCliResourceAdapter } from './vela-cli-resource-adapter.js';
+import {
+  createVelaCliResourceAdapter,
+  shouldUseVelaCliResourceTransport,
+} from './vela-cli-resource-adapter.js';
 import type { ResourcePublishAdapter } from './publish-scheduler.js';
 
 /** Thrown when a team member without share rights attempts to share a resource. */
@@ -47,11 +50,21 @@ export interface CreateTeamResourceShareOptions {
   getCanShare?: () => boolean | Promise<boolean>;
   /** Injectable Vela resource runner for tests. */
   run?: (args: string[]) => Promise<string>;
+  env?: NodeJS.ProcessEnv;
 }
 
 export function createTeamResourceShareService(
   options: CreateTeamResourceShareOptions,
 ): TeamResourceShareService {
+  const env = options.env ?? process.env;
+  if (!shouldUseVelaCliResourceTransport(env)) {
+    return {
+      share: async () => null,
+      sharedIds: () => [],
+      isShared: () => false,
+      configured: false,
+    };
+  }
   // Distinct, colon-free id namespace on the shared hub. The caller's id (e.g.
   // `user:palette-x`) is sanitized to path-safe chars — the hub routes the
   // resource id as a path param, so a colon would 404.

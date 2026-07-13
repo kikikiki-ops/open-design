@@ -24,6 +24,7 @@ describe('team resource share permission gate', () => {
       getPrincipal: () => principal,
       getCanShare: () => false,
       run: unreachableRun,
+      env: { OD_WORKSPACE_CONTEXT_SOURCE: 'vela' },
     });
     await expect(service.share('ds-1')).rejects.toBeInstanceOf(TeamResourceShareForbiddenError);
     expect(service.isShared('ds-1')).toBe(false);
@@ -37,7 +38,24 @@ describe('team resource share permission gate', () => {
       getPrincipal: () => null,
       getCanShare: () => false,
       run: unreachableRun,
+      env: { OD_WORKSPACE_CONTEXT_SOURCE: 'vela' },
     });
     expect(await service.share('ds-1')).toBeNull();
+  });
+
+  it('keeps a non-Vela dev workspace on the unconfigured no-op path', async () => {
+    const service = createTeamResourceShareService({
+      kind: 'design_system',
+      idPrefix: 'ds',
+      resolveDir: () => '/tmp/ds',
+      getPrincipal: () => principal,
+      getCanShare: () => true,
+      run: unreachableRun,
+      env: {},
+    });
+
+    expect(service.configured).toBe(false);
+    expect(await service.share('ds-1')).toBeNull();
+    expect(service.sharedIds()).toEqual([]);
   });
 });

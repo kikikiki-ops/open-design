@@ -10,6 +10,13 @@ import { runVelaCommand } from '../integrations/vela-command.js';
 const PROJECT_RESOURCE_PREFIX = 'project-';
 
 export type RunVelaTeamProjects = (args: string[]) => Promise<string>;
+export type RunVelaResources = (args: string[]) => Promise<string>;
+
+interface VelaCliTeamProjectCatalogOptions {
+  run?: RunVelaTeamProjects;
+  runResource?: RunVelaResources;
+  supportsTeamProjects?: () => boolean | Promise<boolean>;
+}
 
 export interface VelaTeamProjectCatalog {
   list(): Promise<TeamProject[]>;
@@ -41,14 +48,30 @@ type TeamProjectsListWire = {
   projects?: unknown;
 };
 
+type SharedResourceWire = {
+  id: string;
+  teamId: string;
+  kind: 'project';
+  ownerMemberId: string;
+  metadata?: unknown;
+  createdAt: string;
+  deletedAt?: null;
+};
+
+type SharedResourcesListWire = {
+  resources?: unknown;
+};
+
 export function projectResourceId(projectId: string): string {
   return `${PROJECT_RESOURCE_PREFIX}${projectId}`;
 }
 
 export function createVelaCliTeamProjectCatalog(
-  options: { run?: RunVelaTeamProjects } = {},
+  options: VelaCliTeamProjectCatalogOptions = {},
 ): VelaTeamProjectCatalog {
   const run = options.run ?? defaultRunVelaTeamProjects;
+  const runResource = options.runResource ?? defaultRunVelaResources;
+  const supportsTeamProjects = createTeamProjectsCapabilityCheck(run, options.supportsTeamProjects);
 
   async function runJson<T>(args: string[]): Promise<T> {
     const stdout = await run(args);
@@ -59,6 +82,10 @@ export function createVelaCliTeamProjectCatalog(
 
   return {
     async list(): Promise<TeamProject[]> {
+      if (!(await supportsTeamProjects())) {
+        const resources = await listSharedProjectResources(runResource);
+        return resources.map(toFallbackTeamProject);
+      }
       const payload = await runJson<TeamProjectsListWire>(['list']);
       return Array.isArray(payload.projects)
         ? payload.projects.map(toTeamProject).filter((project): project is TeamProject => project != null)
@@ -66,6 +93,10 @@ export function createVelaCliTeamProjectCatalog(
     },
 
     async upsert(input): Promise<void> {
+      // Older packaged Vela builds expose only the resource index. The project
+      // push writes the same discovery metadata there, so no second catalog
+      // write is required in compatibility mode.
+      if (!(await supportsTeamProjects())) return;
       const args = [
         'upsert',
         input.projectId,
@@ -84,15 +115,20 @@ export function createVelaCliTeamProjectCatalog(
     },
 
     async remove(projectId): Promise<void> {
+      // The resource adapter removes the resource-index row in compatibility
+      // mode; there is no separate catalog row to delete.
+      if (!(await supportsTeamProjects())) return;
       await run(['remove', projectId]);
     },
   };
 }
 
 export function createVelaCliTeamProjectCatalogClient(
-  options: { run?: RunVelaTeamProjects } = {},
+  options: VelaCliTeamProjectCatalogOptions = {},
 ): VelaTeamProjectCatalogClient {
   const run = options.run ?? defaultRunVelaTeamProjects;
+  const runResource = options.runResource ?? defaultRunVelaResources;
+  const supportsTeamProjects = createTeamProjectsCapabilityCheck(run, options.supportsTeamProjects);
 
   async function runJson<T>(args: string[]): Promise<T> {
     const stdout = await run(args);
@@ -103,6 +139,10 @@ export function createVelaCliTeamProjectCatalogClient(
 
   return {
     async list(): Promise<VelaTeamProjectRecord[]> {
+      if (!(await supportsTeamProjects())) {
+        const resources = await listSharedProjectResources(runResource);
+        return resources.map(toFallbackVelaTeamProjectRecord);
+      }
       const payload = await runJson<TeamProjectsListWire>(['list']);
       return Array.isArray(payload.projects)
         ? payload.projects
@@ -112,6 +152,8 @@ export function createVelaCliTeamProjectCatalogClient(
     },
 
     async upsert(input: UpsertVelaTeamProjectInput): Promise<VelaTeamProjectRecord | null> {
+      // See the catalog adapter above: resource push owns the fallback index.
+      if (!(await supportsTeamProjects())) return null;
       const args = [
         'upsert',
         input.projectId,
@@ -241,5 +283,123 @@ function recordObject(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+function createTeamProjectsCapabilityCheck(
+  run: RunVelaTeamProjects,
+  injected?: () => boolean | Promise<boolean>,
+): () => Promise<boolean> {
+  // The packaged dependency can lag the source-built CLI. Probe once per
+  // adapter so source builds use the richer catalog while older builds retain
+  // resource-index discovery without a version pin.
+  let result: Promise<boolean> | null = null;
+  return () => {
+    result ??= injected
+      ? Promise.resolve().then(injected)
+      : run(['--help']).then(
+          () => true,
+          () => false,
+        );
+    return result;
+  };
+}
+
+async function listSharedProjectResources(
+  runResource: RunVelaResources,
+): Promise<SharedResourceWire[]> {
+  const stdout = await runResource(['shared', '--json']);
+  const trimmed = stdout.trim();
+  if (!trimmed) return [];
+  const payload = JSON.parse(trimmed) as SharedResourcesListWire;
+  if (!Array.isArray(payload.resources)) return [];
+  return payload.resources.filter(isSharedProjectResource);
+}
+
+function isSharedProjectResource(value: unknown): value is SharedResourceWire {
+  if (!value || typeof value !== 'object') return false;
+  const resource = value as Record<string, unknown>;
+  return resource.kind === 'project' &&
+    typeof resource.id === 'string' &&
+    typeof resource.teamId === 'string' &&
+    typeof resource.ownerMemberId === 'string' &&
+    typeof resource.createdAt === 'string' &&
+    (resource.deletedAt === null || resource.deletedAt === undefined);
+}
+
+function toFallbackTeamProject(resource: SharedResourceWire): TeamProject {
+  const metadata = recordObject(resource.metadata) ?? {};
+  const project: TeamProject = {
+    projectId: fallbackProjectId(resource, metadata),
+    ownerMemberId: resource.ownerMemberId,
+    sharedAt: resource.createdAt,
+  };
+  if (typeof metadata.name === 'string' && metadata.name.trim()) {
+    project.name = metadata.name.trim();
+  }
+  if (metadata.skillId === null || typeof metadata.skillId === 'string') {
+    project.skillId = metadata.skillId;
+  }
+  if (metadata.designSystemId === null || typeof metadata.designSystemId === 'string') {
+    project.designSystemId = metadata.designSystemId;
+  }
+  if (typeof metadata.createdAt === 'number') project.createdAt = metadata.createdAt;
+  if (typeof metadata.updatedAt === 'number') project.updatedAt = metadata.updatedAt;
+  const projectMetadata = recordObject(metadata.metadata);
+  if (projectMetadata) project.metadata = projectMetadata as unknown as ProjectMetadata;
+  return project;
+}
+
+function toFallbackVelaTeamProjectRecord(
+  resource: SharedResourceWire,
+): VelaTeamProjectRecord {
+  const metadata = recordObject(resource.metadata) ?? {};
+  const project = toFallbackTeamProject(resource);
+  const createdAt = resource.createdAt;
+  const updatedAt = typeof metadata.updatedAt === 'number' && Number.isFinite(metadata.updatedAt)
+    ? new Date(metadata.updatedAt).toISOString()
+    : createdAt;
+  return {
+    id: resource.id,
+    workspaceId: resource.teamId,
+    projectId: project.projectId,
+    resourceId: resource.id,
+    ownerMemberId: resource.ownerMemberId,
+    displayName: project.name ?? null,
+    syncState: 'synced',
+    lastSyncedVersionId: null,
+    createdAt,
+    updatedAt,
+    access: {
+      canView: true,
+      canComment: true,
+      canEdit: false,
+      frozen: false,
+    },
+  };
+}
+
+function fallbackProjectId(
+  resource: SharedResourceWire,
+  metadata: Record<string, unknown>,
+): string {
+  if (typeof metadata.projectId === 'string' && metadata.projectId.trim()) {
+    return metadata.projectId.trim();
+  }
+  const resourceId = resource.id;
+  const suffix = resourceId.startsWith(PROJECT_RESOURCE_PREFIX)
+    ? resourceId.slice(PROJECT_RESOURCE_PREFIX.length)
+    : resourceId;
+  try {
+    const decoded = JSON.parse(Buffer.from(suffix, 'base64url').toString('utf8')) as unknown;
+    if (Array.isArray(decoded) && typeof decoded[2] === 'string' && decoded[2].trim()) {
+      return decoded[2].trim();
+    }
+  } catch {
+    // Legacy resource ids are simply `project-<projectId>`.
+  }
+  return suffix;
+}
+
 const defaultRunVelaTeamProjects: RunVelaTeamProjects = (args) =>
   runVelaCommand(['team-projects', ...args]);
+
+const defaultRunVelaResources: RunVelaResources = (args) =>
+  runVelaCommand(['resource', ...args]);
