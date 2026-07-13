@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { amrProfileBadgeLabel, amrRechargeUrlForProfile, resolveRunFailureUi } from '../../src/runtime/amr-guidance';
+import {
+  DEFAULT_AMR_RECHARGE_URL,
+  amrProfileBadgeLabel,
+  amrRechargeUrlForProfile,
+  resolveRunFailureUi,
+} from '../../src/runtime/amr-guidance';
 
 describe('amrRechargeUrlForProfile', () => {
   it('matches the selected AMR profile wallet origin', () => {
-    expect(amrRechargeUrlForProfile('prod')).toBe(
-      'https://open-design.ai/amr/wallet?source=open_design',
-    );
+    expect(amrRechargeUrlForProfile('prod')).toBe(DEFAULT_AMR_RECHARGE_URL);
     expect(amrRechargeUrlForProfile('test')).toBe(
       'https://vela.powerformer.net/wallet?source=open_design',
     );
@@ -15,9 +18,8 @@ describe('amrRechargeUrlForProfile', () => {
     expect(amrRechargeUrlForProfile('local')).toBe(
       'http://localhost:5173/wallet?source=open_design',
     );
-    expect(amrRechargeUrlForProfile(' unknown ')).toBe(
-      'https://open-design.ai/amr/wallet?source=open_design',
-    );
+    expect(amrRechargeUrlForProfile(' unknown ')).toBe(DEFAULT_AMR_RECHARGE_URL);
+    expect(amrRechargeUrlForProfile(null)).toBe(DEFAULT_AMR_RECHARGE_URL);
   });
 
   it('labels the feature-test profile distinctly', () => {
