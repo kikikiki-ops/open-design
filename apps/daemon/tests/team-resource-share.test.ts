@@ -3,6 +3,7 @@ import {
   TeamResourceShareForbiddenError,
   createTeamResourceShareService,
   parseSharedResourceIds,
+  parseSharedResourceRecords,
 } from '../src/collab/team-resource-share.js';
 import type { ResourceHubPrincipal } from '../src/collab/resource-principal.js';
 
@@ -57,7 +58,33 @@ describe('team resource share permission gate', () => {
 
     expect(service.configured).toBe(false);
     expect(await service.share('ds-1')).toBeNull();
+    expect(await service.unshare('ds-1')).toBe(false);
     expect(await service.sharedIds()).toEqual([]);
+  });
+
+  it('removes a team resource through the Vela CLI', async () => {
+    const calls: string[][] = [];
+    const run = async (args: string[]): Promise<string> => {
+      calls.push(args);
+      if (args[0] === 'push') return JSON.stringify({ version: 1 });
+      if (args[0] === 'remove') return JSON.stringify({ ok: true });
+      throw new Error(`unexpected args: ${args.join(' ')}`);
+    };
+    const service = createTeamResourceShareService({
+      kind: 'skill',
+      idPrefix: 'skill',
+      resolveDir: () => '/tmp/skill',
+      getPrincipal: () => principal,
+      getCanShare: () => true,
+      run,
+      env: { OD_WORKSPACE_CONTEXT_SOURCE: 'vela' },
+    });
+
+    expect(await service.share('mock-team-expert-kit')).toEqual({ version: 1 });
+    expect(service.isShared('mock-team-expert-kit')).toBe(true);
+    await expect(service.unshare('mock-team-expert-kit')).resolves.toBe(true);
+    expect(service.isShared('mock-team-expert-kit')).toBe(false);
+    expect(calls.at(-1)).toEqual(['remove', 'skill-mock-team-expert-kit', '--json']);
   });
 
   it('lists resources already shared through another daemon via Vela CLI', async () => {
@@ -65,7 +92,12 @@ describe('team resource share permission gate', () => {
       expect(args).toEqual(['shared', '--json']);
       return JSON.stringify({
         resources: [
-          { id: 'skill-mock-team-expert-kit', kind: 'skill', deletedAt: null },
+          {
+            id: 'skill-mock-team-expert-kit',
+            kind: 'skill',
+            deletedAt: null,
+            metadata: { title: 'Mock kit', description: 'Shared kit' },
+          },
           { id: 'skill-deleted-kit', kind: 'skill', deletedAt: '2026-07-13T00:00:00Z' },
           { id: 'project-p1', kind: 'project', deletedAt: null },
         ],
@@ -82,6 +114,9 @@ describe('team resource share permission gate', () => {
     });
 
     expect(await service.sharedIds()).toEqual(['mock-team-expert-kit']);
+    await expect(service.sharedResources()).resolves.toEqual([
+      { id: 'mock-team-expert-kit', title: 'Mock kit', description: 'Shared kit' },
+    ]);
     expect(service.isShared('mock-team-expert-kit')).toBe(true);
   });
 
@@ -100,5 +135,23 @@ describe('team resource share permission gate', () => {
         'skill',
       ),
     ).toEqual(['alpha', 'beta']);
+  });
+
+  it('parses shared resource metadata for team cards', () => {
+    expect(
+      parseSharedResourceRecords(
+        JSON.stringify({
+          resources: [
+            {
+              id: 'skill-alpha',
+              kind: 'skill',
+              metadata: { title: 'Alpha skill', description: 'Useful in teams' },
+            },
+          ],
+        }),
+        'skill',
+        'skill',
+      ),
+    ).toEqual([{ id: 'alpha', title: 'Alpha skill', description: 'Useful in teams' }]);
   });
 });

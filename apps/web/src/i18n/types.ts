@@ -1542,7 +1542,9 @@ export interface Dict {
   'pluginsView.emptyOfficialHint': string;
   'pluginsView.teamSharedBadge': string;
   'pluginsView.sharing': string;
+  'pluginsView.unsharing': string;
   'pluginsView.shareToTeam': string;
+  'pluginsView.unshareFromTeam': string;
   'pluginsView.moreActions': string;
   'pluginsView.skillUrlUnsupported': string;
   'pluginsView.importPluginSuccess': string;
@@ -1553,6 +1555,9 @@ export interface Dict {
   'pluginsView.shareSuccess': string;
   'pluginsView.shareUnavailable': string;
   'pluginsView.shareFailed': string;
+  'pluginsView.unshareSuccess': string;
+  'pluginsView.unshareUnavailable': string;
+  'pluginsView.unshareFailed': string;
   'pluginsView.installSuccess': string;
   'pluginsView.installFailed': string;
   'pluginsView.skillMissingFile': string;

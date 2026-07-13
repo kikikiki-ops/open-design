@@ -649,10 +649,9 @@ export function PluginsView({
 //   团队  → GET /api/workspace/plugins/team   /skills/team  ({ ids })
 //   个人  → listPlugins() user kinds   fetchSkills() source==='user'
 //
-// The share-to-team action reuses the same POST /api/workspace/:kind/:id/share
-// endpoint TeamPanel uses; on success the id joins the local team set, so the
-// item immediately appears under the 团队 scope. There is no un-share endpoint,
-// so (matching the real API) we only expose the promote-to-team direction.
+// The share-to-team action uses POST /api/workspace/:kind/:id/share. Removing
+// from the team uses DELETE on the same route, backed by Vela's resource owner
+// permission gate.
 // ============================================================================
 
 type MarketMode = 'plugins' | 'skills';
@@ -691,6 +690,12 @@ type MarketCardAction =
   | { kind: 'install'; plugin: AvailableMarketplacePlugin }
   | { kind: 'none' };
 
+interface SharedResourceCardMeta {
+  id: string;
+  title?: string;
+  description?: string;
+}
+
 interface MarketCard {
   id: string;
   title: string;
@@ -699,6 +704,8 @@ interface MarketCard {
   action: MarketCardAction;
   // present only for a personal resource that is not yet shared to the team
   share: { kind: MarketMode; id: string } | null;
+  // present for a resource currently in the team index
+  unshare: { kind: MarketMode; id: string } | null;
   isShared: boolean;
 }
 
@@ -733,7 +740,10 @@ export function ExtensionsMarketplace({
 
   const [sharedPluginIds, setSharedPluginIds] = useState<ReadonlySet<string>>(() => new Set());
   const [sharedSkillIds, setSharedSkillIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [sharedPluginMeta, setSharedPluginMeta] = useState<ReadonlyMap<string, SharedResourceCardMeta>>(() => new Map());
+  const [sharedSkillMeta, setSharedSkillMeta] = useState<ReadonlyMap<string, SharedResourceCardMeta>>(() => new Map());
   const [sharingId, setSharingId] = useState<string | null>(null);
+  const [unsharingId, setUnsharingId] = useState<string | null>(null);
   const [installingKey, setInstallingKey] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
 
@@ -866,20 +876,37 @@ export function ExtensionsMarketplace({
     const loadShared = async (
       basePath: string,
       setter: (ids: ReadonlySet<string>) => void,
+      metaSetter: (meta: ReadonlyMap<string, SharedResourceCardMeta>) => void,
     ) => {
       try {
         const res = await fetch(`/api/workspace/${basePath}/team`);
         if (!res.ok) return;
-        const body = (await res.json()) as { ids?: unknown };
+        const body = (await res.json()) as { ids?: unknown; resources?: unknown };
         if (!cancelled && Array.isArray(body.ids)) {
           setter(new Set(body.ids.filter((id): id is string => typeof id === 'string')));
+        }
+        if (!cancelled && Array.isArray(body.resources)) {
+          const meta = new Map<string, SharedResourceCardMeta>();
+          for (const resource of body.resources) {
+            if (!resource || typeof resource !== 'object') continue;
+            const record = resource as Record<string, unknown>;
+            if (typeof record.id !== 'string') continue;
+            meta.set(record.id, {
+              id: record.id,
+              ...(typeof record.title === 'string' && record.title.trim() ? { title: record.title } : {}),
+              ...(typeof record.description === 'string' && record.description.trim()
+                ? { description: record.description }
+                : {}),
+            });
+          }
+          metaSetter(meta);
         }
       } catch {
         // Off-team / offline → empty collection.
       }
     };
-    void loadShared('plugins', setSharedPluginIds);
-    void loadShared('skills', setSharedSkillIds);
+    void loadShared('plugins', setSharedPluginIds, setSharedPluginMeta);
+    void loadShared('skills', setSharedSkillIds, setSharedSkillMeta);
     return () => {
       cancelled = true;
     };
@@ -900,7 +927,7 @@ export function ExtensionsMarketplace({
   );
 
   async function shareResource(kind: MarketMode, id: string, title: string) {
-    if (sharingId) return;
+    if (sharingId || unsharingId) return;
     setSharingId(id);
     setMenuId(null);
     const basePath = kind === 'plugins' ? 'plugins' : 'skills';
@@ -912,6 +939,11 @@ export function ExtensionsMarketplace({
       const body = (await res.json().catch(() => ({}))) as { shared?: boolean };
       if (res.ok && body.shared) {
         setShared((prev) => new Set(prev).add(id));
+        if (kind === 'plugins') {
+          setSharedPluginMeta((prev) => new Map(prev).set(id, { id, title }));
+        } else {
+          setSharedSkillMeta((prev) => new Map(prev).set(id, { id, title }));
+        }
         setToast({ message: t('pluginsView.shareSuccess', { title }), tone: 'success' });
       } else {
         setToast({ message: t('pluginsView.shareUnavailable', { title }), tone: 'error' });
@@ -920,6 +952,47 @@ export function ExtensionsMarketplace({
       setToast({ message: t('pluginsView.shareFailed', { title }), tone: 'error' });
     } finally {
       setSharingId(null);
+    }
+  }
+
+  async function unshareResource(kind: MarketMode, id: string, title: string) {
+    if (sharingId || unsharingId) return;
+    setUnsharingId(id);
+    setMenuId(null);
+    const basePath = kind === 'plugins' ? 'plugins' : 'skills';
+    const setShared = kind === 'plugins' ? setSharedPluginIds : setSharedSkillIds;
+    try {
+      const res = await fetch(`/api/workspace/${basePath}/${encodeURIComponent(id)}/share`, {
+        method: 'DELETE',
+      });
+      const body = (await res.json().catch(() => ({}))) as { unshared?: boolean };
+      if (res.ok && body.unshared) {
+        setShared((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+        if (kind === 'plugins') {
+          setSharedPluginMeta((prev) => {
+            const next = new Map(prev);
+            next.delete(id);
+            return next;
+          });
+        } else {
+          setSharedSkillMeta((prev) => {
+            const next = new Map(prev);
+            next.delete(id);
+            return next;
+          });
+        }
+        setToast({ message: t('pluginsView.unshareSuccess', { title }), tone: 'success' });
+      } else {
+        setToast({ message: t('pluginsView.unshareUnavailable', { title }), tone: 'error' });
+      }
+    } catch {
+      setToast({ message: t('pluginsView.unshareFailed', { title }), tone: 'error' });
+    } finally {
+      setUnsharingId(null);
     }
   }
 
@@ -950,6 +1023,7 @@ export function ExtensionsMarketplace({
         accent: marketAccent(record.id),
         action: { kind: 'try', record },
         share: personal && !shared ? { kind: 'plugins', id: record.id } : null,
+        unshare: shared ? { kind: 'plugins', id: record.id } : null,
         isShared: shared,
       };
     };
@@ -963,6 +1037,7 @@ export function ExtensionsMarketplace({
         accent: marketAccent(skill.id),
         action: { kind: 'none' },
         share: personal && !shared ? { kind: 'skills', id: skill.id } : null,
+        unshare: shared ? { kind: 'skills', id: skill.id } : null,
         isShared: shared,
       };
     };
@@ -982,24 +1057,27 @@ export function ExtensionsMarketplace({
               ? { kind: 'try', record: installed }
               : { kind: 'install', plugin },
             share: null,
+            unshare: null,
             isShared: false,
           } satisfies MarketCard;
         });
       }
       // team
       return [...sharedPluginIds].map((id) => {
+        const meta = sharedPluginMeta.get(id);
         const record =
           allInstalledPlugins.find((plugin) => plugin.id === id) ??
           userPlugins.find((plugin) => plugin.id === id) ??
           null;
-        const title = record ? localizePluginTitle(locale, record) : id;
+        const title = record ? localizePluginTitle(locale, record) : meta?.title || id;
         return {
           id,
           title,
-          description: record ? localizePluginDescription(locale, record) || '' : '',
+          description: (record ? localizePluginDescription(locale, record) || '' : '') || meta?.description || '',
           accent: marketAccent(id),
           action: record ? { kind: 'try', record } : { kind: 'none' },
           share: null,
+          unshare: { kind: 'plugins', id },
           isShared: true,
         } satisfies MarketCard;
       });
@@ -1009,15 +1087,17 @@ export function ExtensionsMarketplace({
     if (scope === 'personal') return userSkills.map((skill) => skillCard(skill, true));
     if (scope === 'official') return officialSkills.map((skill) => skillCard(skill, false));
     return [...sharedSkillIds].map((id) => {
+      const meta = sharedSkillMeta.get(id);
       const skill = skills.find((row) => row.id === id) ?? null;
-      const title = skill ? localizeSkillName(locale, skill) : id;
+      const title = skill ? localizeSkillName(locale, skill) : meta?.title || id;
       return {
         id,
         title,
-        description: skill?.description ?? '',
+        description: skill?.description || meta?.description || '',
         accent: marketAccent(id),
         action: { kind: 'none' },
         share: null,
+        unshare: { kind: 'skills', id },
         isShared: true,
       } satisfies MarketCard;
     });
@@ -1028,10 +1108,12 @@ export function ExtensionsMarketplace({
     userPlugins,
     availablePlugins,
     sharedPluginIds,
+    sharedPluginMeta,
     allInstalledPlugins,
     userSkills,
     officialSkills,
     sharedSkillIds,
+    sharedSkillMeta,
     skills,
   ]);
 
@@ -1138,7 +1220,7 @@ export function ExtensionsMarketplace({
               const busy =
                 card.action.kind === 'install'
                   ? installingKey === card.action.plugin.key
-                  : sharingId === card.id;
+                  : sharingId === card.id || unsharingId === card.id;
               return (
                 <article
                   key={card.id}
@@ -1200,9 +1282,21 @@ export function ExtensionsMarketplace({
                       >
                         {busy ? t('pluginsView.sharing') : t('pluginsView.shareToTeam')}
                       </button>
+                    ) : card.unshare ? (
+                      <button
+                        type="button"
+                        className="plugin-marketplace__row-action"
+                        disabled={busy}
+                        onClick={() => {
+                          const unshare = card.unshare!;
+                          void unshareResource(unshare.kind, unshare.id, card.title);
+                        }}
+                      >
+                        {busy ? t('pluginsView.unsharing') : t('pluginsView.unshareFromTeam')}
+                      </button>
                     ) : null}
 
-                    {card.share && card.action.kind !== 'none' ? (
+                    {(card.share || card.unshare) && card.action.kind !== 'none' ? (
                       <span className="plugin-marketplace__menu-wrap">
                         <button
                           type="button"
@@ -1215,18 +1309,34 @@ export function ExtensionsMarketplace({
                         </button>
                         {menuId === card.id ? (
                           <span className="plugin-marketplace__menu" role="menu">
-                            <button
-                              type="button"
-                              role="menuitem"
-                              disabled={busy}
-                              onClick={() => {
-                                const share = card.share!;
-                                void shareResource(share.kind, share.id, card.title);
-                              }}
-                            >
-                              <Icon name="users" size={14} />
-                              {t('pluginsView.shareToTeam')}
-                            </button>
+                            {card.share ? (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                disabled={busy}
+                                onClick={() => {
+                                  const share = card.share!;
+                                  void shareResource(share.kind, share.id, card.title);
+                                }}
+                              >
+                                <Icon name="users" size={14} />
+                                {t('pluginsView.shareToTeam')}
+                              </button>
+                            ) : null}
+                            {card.unshare ? (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                disabled={busy}
+                                onClick={() => {
+                                  const unshare = card.unshare!;
+                                  void unshareResource(unshare.kind, unshare.id, card.title);
+                                }}
+                              >
+                                <Icon name="close" size={14} />
+                                {t('pluginsView.unshareFromTeam')}
+                              </button>
+                            ) : null}
                           </span>
                         ) : null}
                       </span>
@@ -1412,11 +1522,39 @@ function parseSkillMarkdown(
   }
   const block = match[1] ?? '';
   const body = content.slice(match[0].length).trim();
-  const unquote = (value: string | undefined) =>
-    (value ?? '').trim().replace(/^["']|["']$/g, '').trim();
-  const name = unquote(block.match(/^name:\s*(.+)$/m)?.[1]) || fallbackName;
-  const description = unquote(block.match(/^description:\s*(.+)$/m)?.[1]);
+  const name = readSkillFrontmatterString(block, 'name') || fallbackName;
+  const description = readSkillFrontmatterString(block, 'description');
   return { name, description, body };
+}
+
+function readSkillFrontmatterString(block: string, key: string): string {
+  const lines = block.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? '';
+    const match = line.match(new RegExp(`^${key}:\\s*(.*)$`));
+    if (!match) continue;
+    const raw = (match[1] ?? '').trim();
+    if (raw === '|' || raw === '>') {
+      const collected: string[] = [];
+      for (let next = index + 1; next < lines.length; next += 1) {
+        const child = lines[next] ?? '';
+        if (child.trim().length > 0 && !/^\s/.test(child)) break;
+        collected.push(child);
+      }
+      const nonEmpty = collected.filter((child) => child.trim().length > 0);
+      const minIndent = nonEmpty.reduce((min, child) => {
+        const indent = child.match(/^\s*/)?.[0].length ?? 0;
+        return Math.min(min, indent);
+      }, Number.POSITIVE_INFINITY);
+      const normalized = collected
+        .map((child) => child.slice(Number.isFinite(minIndent) ? minIndent : 0))
+        .join('\n')
+        .trim();
+      return raw === '>' ? normalized.replace(/\s*\n\s*/g, ' ').trim() : normalized;
+    }
+    return raw.replace(/^["']|["']$/g, '').trim();
+  }
+  return '';
 }
 
 function pluginKindLabel(kind: 'plugin' | 'skill', t: ReturnType<typeof useI18n>['t']): string {

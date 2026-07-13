@@ -1,6 +1,7 @@
 import type { Express } from 'express';
 import {
   TeamResourceShareForbiddenError,
+  type TeamResourceShareRecord,
   type TeamResourceShareService,
 } from '../collab/team-resource-share.js';
 
@@ -8,6 +9,8 @@ export interface RegisterTeamResourceShareRoutesDeps {
   /** URL segment for this resource kind: `design-systems` | `plugins` | `skills`. */
   basePath: string;
   share: TeamResourceShareService;
+  /** Optional materialization hook for shared team resources. */
+  syncSharedResource?: (resource: TeamResourceShareRecord) => Promise<void>;
 }
 
 /**
@@ -27,7 +30,11 @@ export function registerTeamResourceShareRoutes(
 
   // Ids shared to the team — drives the "team" collection for this kind.
   app.get(`${root}/team`, async (_req, res) => {
-    res.json({ ids: await share.sharedIds() });
+    const resources = await share.sharedResources();
+    if (deps.syncSharedResource) {
+      await Promise.all(resources.map((resource) => deps.syncSharedResource?.(resource)));
+    }
+    res.json({ ids: resources.map((resource) => resource.id), resources });
   });
 
   // Share a personal resource to the team.
@@ -43,6 +50,19 @@ export function registerTeamResourceShareRoutes(
         return res.status(403).json({ error: 'WORKSPACE_RESOURCE_SHARE_DENIED' });
       }
       res.status(500).json({ error: error instanceof Error ? error.message : 'share failed' });
+    }
+  });
+
+  // Remove a resource from the team index. Vela remains the permission source of
+  // truth: only the resource owner can edit/remove the shared resource.
+  app.delete(`${root}/:id/share`, async (req, res) => {
+    const id = typeof req.params.id === 'string' ? decodeURIComponent(req.params.id) : '';
+    if (!id) return res.status(400).json({ error: 'invalid resource id' });
+    try {
+      const unshared = await share.unshare(id);
+      res.json({ unshared });
+    } catch (error) {
+      res.status(500).json({ error: error instanceof Error ? error.message : 'unshare failed' });
     }
   });
 }

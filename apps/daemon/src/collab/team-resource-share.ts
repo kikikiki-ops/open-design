@@ -19,11 +19,21 @@ export class TeamResourceShareForbiddenError extends Error {
   }
 }
 
+export interface TeamResourceShareRecord {
+  id: string;
+  title?: string;
+  description?: string;
+}
+
 export interface TeamResourceShareService {
   /** Share a resource to the team. Returns the published version, or null off-team. */
   share(resourceId: string): Promise<{ version: number } | null>;
+  /** Remove a resource from the team index. Returns false off-team/unconfigured. */
+  unshare(resourceId: string): Promise<boolean>;
   /** Ids of resources shared to the team. */
   sharedIds(): Promise<string[]>;
+  /** Resources shared to the team, including best-effort display metadata. */
+  sharedResources(): Promise<TeamResourceShareRecord[]>;
   /** True once a resource has been shared to the team. */
   isShared(resourceId: string): boolean;
   /** Whether the login-backed Vela transport is wired. */
@@ -48,6 +58,8 @@ export interface CreateTeamResourceShareOptions {
    * caller is trusted to have pre-checked).
    */
   getCanShare?: () => boolean | Promise<boolean>;
+  /** Optional resource-index metadata shown in teammate team lists. */
+  describeResource?: (resourceId: string) => Record<string, unknown> | null | Promise<Record<string, unknown> | null>;
   /** Injectable Vela resource runner for tests. */
   run?: (args: string[]) => Promise<string>;
   env?: NodeJS.ProcessEnv;
@@ -60,7 +72,9 @@ export function createTeamResourceShareService(
   if (!shouldUseVelaCliResourceTransport(env)) {
     return {
       share: async () => null,
+      unshare: async () => false,
       sharedIds: async () => [],
+      sharedResources: async () => [],
       isShared: () => false,
       configured: false,
     };
@@ -79,6 +93,7 @@ export function createTeamResourceShareService(
     resourceIdFor,
     kind: options.kind,
     hasTeamIdentity: async () => (await options.getPrincipal()) != null,
+    ...(options.describeResource ? { describeProject: options.describeResource } : {}),
     ...(options.run ? { run: options.run } : {}),
   });
 
@@ -96,15 +111,28 @@ export function createTeamResourceShareService(
       if (result) shared.add(resourceId);
       return result;
     },
+    async unshare(resourceId) {
+      if (!(await options.getPrincipal())) return false;
+      await adapter.unpublish?.({ projectId: resourceId });
+      shared.delete(resourceId);
+      return true;
+    },
     async sharedIds() {
+      return (await this.sharedResources()).map((resource) => resource.id);
+    },
+    async sharedResources() {
       if (!(await options.getPrincipal())) return [];
       try {
         const out = await (options.run ?? defaultRun)(['shared', '--json']);
-        const ids = parseSharedResourceIds(out, options.kind, options.idPrefix);
-        for (const id of ids) shared.add(id);
-        return [...shared].sort();
+        const resources = parseSharedResourceRecords(out, options.kind, options.idPrefix);
+        for (const resource of resources) shared.add(resource.id);
+        const byId = new Map(resources.map((resource) => [resource.id, resource]));
+        for (const id of shared) {
+          if (!byId.has(id)) byId.set(id, { id });
+        }
+        return [...byId.values()].sort((a, b) => a.id.localeCompare(b.id));
       } catch {
-        return [...shared].sort();
+        return [...shared].sort().map((id) => ({ id }));
       }
     },
     isShared: (resourceId) => shared.has(resourceId),
@@ -122,6 +150,7 @@ interface SharedResourceListPayload {
     id?: unknown;
     kind?: unknown;
     deletedAt?: unknown;
+    metadata?: unknown;
   }>;
 }
 
@@ -130,6 +159,14 @@ export function parseSharedResourceIds(
   kind: string,
   idPrefix: string,
 ): string[] {
+  return parseSharedResourceRecords(stdout, kind, idPrefix).map((resource) => resource.id);
+}
+
+export function parseSharedResourceRecords(
+  stdout: string,
+  kind: string,
+  idPrefix: string,
+): TeamResourceShareRecord[] {
   const trimmed = stdout.trim();
   if (!trimmed) return [];
   let parsed: SharedResourceListPayload;
@@ -139,14 +176,30 @@ export function parseSharedResourceIds(
     return [];
   }
   const prefix = `${idPrefix}-`;
-  const ids = new Set<string>();
+  const records = new Map<string, TeamResourceShareRecord>();
   for (const resource of parsed.resources ?? []) {
     if (resource.kind !== kind || resource.deletedAt != null) continue;
     if (typeof resource.id !== 'string' || !resource.id.startsWith(prefix)) {
       continue;
     }
     const localId = resource.id.slice(prefix.length);
-    if (localId) ids.add(localId);
+    if (!localId) continue;
+    const metadata = isObjectRecord(resource.metadata) ? resource.metadata : {};
+    const title = stringValue(metadata.title) || stringValue(metadata.name);
+    const description = stringValue(metadata.description);
+    records.set(localId, {
+      id: localId,
+      ...(title ? { title } : {}),
+      ...(description ? { description } : {}),
+    });
   }
-  return [...ids].sort();
+  return [...records.values()].sort((a, b) => a.id.localeCompare(b.id));
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
 }

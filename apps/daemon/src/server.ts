@@ -4010,6 +4010,48 @@ export async function startServer({
   // hides the action behind, so the route cannot be bypassed directly.
   const teamShareGetCanShare = async () =>
     (await collab.workspaceContext.current({}))?.permissions.canManageSharedResources ?? false;
+  async function syncSharedTeamPlugin(resource): Promise<void> {
+    const existing = getInstalledPlugin(db, resource.id);
+    const remoteDescription = typeof resource.description === 'string' ? resource.description.trim() : '';
+    const localDescription = typeof existing?.manifest?.description === 'string'
+      ? existing.manifest.description.trim()
+      : '';
+    if (existing && (!remoteDescription || localDescription === remoteDescription)) return;
+
+    const stagedFolder = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'od-team-plugin-'));
+    try {
+      const { runVelaResourceCommand } = await import('./collab/vela-cli-resource-adapter.js');
+      await runVelaResourceCommand([
+        'pull',
+        'plugin',
+        `plugin-${resource.id}`,
+        stagedFolder,
+        '--ref',
+        'published',
+        '--json',
+      ]);
+      for await (const ev of installFromLocalFolder(db, {
+        source: `team:plugin:${resource.id}`,
+        roots: PLUGIN_REGISTRY_ROOTS,
+        _stagedFolder: stagedFolder,
+        _stagedSourceKind: 'user',
+        lockfilePath: PLUGIN_LOCKFILE_PATH,
+      })) {
+        if (ev.kind === 'success') return;
+        if (ev.kind === 'error') {
+          console.warn(`[team-resources] failed to install shared plugin ${resource.id}: ${ev.message}`);
+          return;
+        }
+      }
+    } catch (error) {
+      console.warn(
+        `[team-resources] failed to pull shared plugin ${resource.id}:`,
+        error instanceof Error ? error.message : error,
+      );
+    } finally {
+      await fs.promises.rm(stagedFolder, { recursive: true, force: true }).catch(() => undefined);
+    }
+  }
   registerTeamResourceShareRoutes(app, {
     basePath: 'design-systems',
     share: createTeamResourceShareService({
@@ -4023,6 +4065,7 @@ export async function startServer({
   });
   registerTeamResourceShareRoutes(app, {
     basePath: 'plugins',
+    syncSharedResource: syncSharedTeamPlugin,
     share: createTeamResourceShareService({
       kind: 'plugin',
       idPrefix: 'plugin',
@@ -4030,6 +4073,14 @@ export async function startServer({
         const plugin = getInstalledPlugin(db, id);
         if (!plugin || typeof plugin.fsPath !== 'string') throw new Error('plugin not found');
         return plugin.fsPath;
+      },
+      describeResource: (id) => {
+        const plugin = getInstalledPlugin(db, id);
+        if (!plugin) return null;
+        return {
+          title: plugin.manifest?.title ?? plugin.manifest?.name ?? plugin.title ?? id,
+          ...(plugin.manifest?.description ? { description: plugin.manifest.description } : {}),
+        };
       },
       getPrincipal: teamShareGetPrincipal,
       getCanShare: teamShareGetCanShare,
@@ -4044,6 +4095,14 @@ export async function startServer({
         const skill = findSkillById(await listAllSkills(), id);
         if (!skill || typeof skill.dir !== 'string') throw new Error('skill not found');
         return skill.dir;
+      },
+      describeResource: async (id) => {
+        const skill = findSkillById(await listAllSkills(), id);
+        if (!skill) return null;
+        return {
+          title: skill.name || id,
+          ...(skill.description ? { description: skill.description } : {}),
+        };
       },
       getPrincipal: teamShareGetPrincipal,
       getCanShare: teamShareGetCanShare,
