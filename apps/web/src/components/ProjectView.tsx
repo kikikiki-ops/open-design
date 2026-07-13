@@ -1768,6 +1768,11 @@ export function ProjectView({
   const reattachControllersRef = useRef<Map<string, AbortController>>(new Map());
   const reattachCancelControllersRef = useRef<Map<string, AbortController>>(new Map());
   const completedReattachRunsRef = useRef<Set<string>>(new Set());
+  // A locally finished run briefly has terminal status before its async
+  // project-file refresh attaches delivery evidence. Do not let that same
+  // browser session reattach the run during this handoff; reattach remains
+  // the recovery path after a reload, where this in-memory set is empty.
+  const finalizingLocalRunIdsRef = useRef<Set<string>>(new Set());
   // Tracks transient null-status retry attempts per runId; bounded by
   // MAX_TRANSIENT_RETRIES so we never spin indefinitely on a persistently
   // missing run.
@@ -3699,6 +3704,7 @@ export function ProjectView({
           );
           continue;
         }
+        if (finalizingLocalRunIdsRef.current.has(runId)) continue;
         if (reattachControllersRef.current.has(runId)) continue;
         if (completedReattachRunsRef.current.has(runId)) continue;
         const genericDisconnectBackoffUntil =
@@ -5537,6 +5543,8 @@ export function ProjectView({
               runStatus: finalRunStatus,
             };
           });
+          const finalizingRunId = currentRunId;
+          if (finalizingRunId) finalizingLocalRunIdsRef.current.add(finalizingRunId);
           if (runCommentAttachments.length > 0) {
             void patchAttachedStatuses(runCommentAttachments, 'needs_review');
           }
@@ -5662,6 +5670,7 @@ export function ProjectView({
               await auditDesignSystemWorkspaceAfterRun(assistantId);
             } finally {
               clearTraceTouchedFilePaths();
+              if (finalizingRunId) finalizingLocalRunIdsRef.current.delete(finalizingRunId);
             }
           })();
           onProjectsRefresh();
