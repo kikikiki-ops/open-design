@@ -627,7 +627,6 @@ process.stdin.on("end", () => {
     try {
       await Promise.all([
         mkdir(join(dir, "apps", "web"), { recursive: true }),
-        mkdir(join(dir, "apps", "telemetry-worker"), { recursive: true }),
         mkdir(join(dir, "packages", "platform"), { recursive: true }),
         mkdir(join(dir, "packages", "components"), { recursive: true }),
         mkdir(join(dir, "tools", "dev"), { recursive: true }),
@@ -636,7 +635,6 @@ process.stdin.on("end", () => {
       await Promise.all([
         writeJson("package.json", { name: "root", version: "0.12.0", dependencies: { untouched: "0.12.0" } }),
         writeJson("apps/web/package.json", { name: "@open-design/web", version: "0.12.0" }),
-        writeJson("apps/telemetry-worker/package.json", { name: "telemetry-worker", version: "0.1.0" }),
         writeJson("packages/platform/package.json", { name: "@open-design/platform", version: "0.12.0" }),
         writeJson("packages/components/package.json", { name: "@open-design/components", version: "0.5.0" }),
         writeJson("tools/dev/package.json", { name: "@open-design/dev", version: "0.12.0" }),
@@ -664,9 +662,6 @@ process.stdin.on("end", () => {
       });
       await expect(readFile(join(dir, "e2e", "package.json"), "utf8").then(JSON.parse)).resolves.toMatchObject({
         version: "0.12.1",
-      });
-      await expect(readFile(join(dir, "apps", "telemetry-worker", "package.json"), "utf8").then(JSON.parse)).resolves.toMatchObject({
-        version: "0.1.0",
       });
       await expect(readFile(join(dir, "packages", "components", "package.json"), "utf8").then(JSON.parse)).resolves.toMatchObject({
         version: "0.5.0",
