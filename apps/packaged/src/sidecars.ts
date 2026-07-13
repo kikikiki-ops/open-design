@@ -261,7 +261,13 @@ export async function waitForStatus<T>(
       } catch (error) {
         lastError = error;
       }
-      await sleep(pollDelayMs);
+      // Keep timeoutMs a hard-ish upper bound: never sleep past the deadline, so
+      // the widened win32 budget can't be overshot by a full backoff interval on
+      // a slow/dead sidecar. The in-flight requestJsonIpc timeout is the only
+      // residual overshoot; the while-condition re-checks the deadline next tick.
+      const remaining = timeoutMs - (Date.now() - startedAt);
+      if (remaining <= 0) break;
+      await sleep(Math.min(pollDelayMs, remaining));
       pollDelayMs = Math.min(pollDelayMs * 2, STATUS_POLL_MAX_MS);
     }
 
