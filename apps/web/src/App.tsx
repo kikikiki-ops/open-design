@@ -62,6 +62,7 @@ import {
   uploadProjectFiles,
   replaceProjectWorkingDir,
 } from './providers/registry';
+import { openFirstPartyExternalLinkFromClick } from './first-party-external-link';
 import {
   RUNS_CHANGED_EVENT,
   fetchAmrModels,
@@ -383,18 +384,13 @@ function AppInner() {
   const clientType = useMemo(() => detectClientType(), []);
   useModalWindowDragGuard();
   useEffect(() => {
-    const onFirstPartyExternalLink = (event: MouseEvent) => {
-      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-      const anchor = event.target instanceof Element ? event.target.closest('a[href]') : null;
-      if (!(anchor instanceof HTMLAnchorElement)) return;
-      let url: URL;
-      try { url = new URL(anchor.href); } catch { return; }
-      if (!['open-design.ai', 'www.open-design.ai', 'staging.open-design.ai'].includes(url.hostname)) return;
-      event.preventDefault();
-      void openExternalUrl(url.toString());
-    };
-    document.addEventListener('click', onFirstPartyExternalLink, true);
-    return () => document.removeEventListener('click', onFirstPartyExternalLink, true);
+    const onFirstPartyExternalLink = (event: MouseEvent) => openFirstPartyExternalLinkFromClick(
+      event,
+      (url) => { void openExternalUrl(url); },
+    );
+    // React handlers append AMR attribution while the event bubbles; bridge the final URL afterwards.
+    document.addEventListener('click', onFirstPartyExternalLink);
+    return () => document.removeEventListener('click', onFirstPartyExternalLink);
   }, []);
   // Observability marker. `apps/web/src/observability/white-screen.ts`
   // keys its "app actually mounted" success condition on this attribute
