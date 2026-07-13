@@ -72,6 +72,22 @@ function expectPickRowPreventsMousedown(name: RegExp) {
 }
 
 describe('ComposerPlusMenu pick-row caret protection', () => {
+  it('toggles deep research without closing the menu', () => {
+    const onDeepResearchChange = vi.fn();
+    renderMenu({
+      deepResearchEnabled: false,
+      onDeepResearchChange,
+    });
+    fireEvent.click(screen.getByTestId('plus-trigger'));
+
+    const row = screen.getByTestId('composer-plus-deep-research');
+    expect(row.getAttribute('aria-checked')).toBe('false');
+    fireEvent.click(row);
+
+    expect(onDeepResearchChange).toHaveBeenCalledWith(true);
+    expect(screen.getByTestId('composer-plus-attach')).toBeTruthy();
+  });
+
   it('cancels mousedown on the connector / plugin / MCP pick rows', () => {
     renderMenu();
     fireEvent.click(screen.getByTestId('plus-trigger'));

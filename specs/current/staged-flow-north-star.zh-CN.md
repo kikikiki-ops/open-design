@@ -279,6 +279,18 @@ UI 侧(`QuestionForm.tsx` / `QuestionsPanel.tsx`):
 - 每个预选项右上角加 ★「推荐」角标(对应 codex-slides
   `onb-recommended`)。
 - 逐项调整仍然可用——默认路径变快,不砍能力。
+- **默认值语义 = 选中推荐选项,而非填充 custom answer**:有限选项题
+  (radio/select/checkbox/direction-cards)的 `defaultValue` 只用于**高亮
+  选中对应选项**;当默认值不落在任何选项上(模型漂移,或流式解析时
+  `defaultValue` 只到了一半,如「现代极简…」只流到「现」)必须回退到题型
+  默认(radio → 首项),**绝不把这段游离字符串塞进自由文本 custom 框**。
+  实现:`QuestionForm.tsx` `seedDefaultForQuestion` 对有限选项题只保留能
+  映射到真实选项的默认值,其余丢弃并回退。
+- **流式 re-seed(不冻结半截默认值)**:Questions tab 流式期用容错解析
+  (`parsePartialQuestionForm`),某题的推荐默认值可能在字段首次渲染后才
+  流完。`QuestionForm.tsx` 用 `touchedRef` 记录用户已改动的题,对**未改动**
+  的题在表单更新时重新按最新默认值 seed(而不是只回填 `undefined`),
+  保证流完后默认值落成「选中的推荐选项」而非停在半截的 custom 文本。
 
 ### 5.5 搜索:＋菜单开关 + 内置基础 search
 
@@ -458,21 +470,38 @@ contracts;新端点三件套(HTTP+UI+CLI)同 PR;`src/` 下不加测试,测试进
 
 ### M1 进度卡 + 表单默认值(首个用户可见里程碑)
 
-- [ ] web:`FlowProgressCard` 组件 + CSS Module(五步/状态图标/detail/
-      pending 预告文案/进度 N/M)
-- [ ] web:钉卡接线(ChatPane,flow 会话替代 TodoCard;非 flow 会话不变;
-      滚动契约:ResizeObserver + MutationObserver 覆盖)
-- [ ] web:`flow_stage` SSE 事件消费 + 刷新后 `GET /flow` 恢复
-- [ ] prompt:discovery 默认值硬规则(每个 radio/select 必带
-      `defaultValue`;题量收敛 4–6)
-- [ ] web:表单确定性补默认(radio/select 无 defaultValue → 首项),
-      「模型可引导、不可依赖」
-- [ ] web:「按推荐直接开始」主 CTA +「逐项调整」次路径 + ★ 推荐角标
-- [ ] i18n:全部新 key 进 `types.ts` + 18 locale
-- [ ] 测试:Playwright 断言默认值 seed 与一键提交;进度卡状态渲染单测
+- [x] web:`FlowProgressCard` 组件 + CSS Module(五步/状态图标/detail/
+      pending 预告文案/进度 N/M + 单位)— 2026-07-13
+- [x] web:钉卡接线(ChatPane `.chat-log-wrap` 之上的兄弟节点,同
+      QueuedSendStrip 模式;`syncFlowCard` 注册进 ResizeObserver +
+      MutationObserver 双观察者;非 flow 会话 `flowSnapshot=null` 不渲染,
+      TodoCard 原样保留——**与 spec 原文差异:v1 不替代 TodoCard,两卡
+      并存**,flow 卡管大阶段、Todo 卡管本轮任务,后续观察再定去留)
+      — 2026-07-13
+- [x] web:`flow_stage` SSE 消费(providers/daemon.ts `onFlowStage`
+      专用 handler,不进 AgentEvent union)+ ProjectView 会话级 state +
+      载入时 `fetchConversationFlow` 恢复 — 2026-07-13
+- [x] prompt:discovery 默认值硬规则(每个有限选择题必带
+      `defaultValue`;默认模板全部补默认;题量收敛 4–6,硬上限 7)
+      — 2026-07-13
+- [x] web:表单确定性补默认(`seedQuestionValue`:**仅 radio** 无
+      defaultValue 时补首项——**与 spec 原文差异:select 不补**,现有
+      回归护栏(必填 select 如 ElevenLabs 语音选择必须保持未答禁提交)
+      证明折叠控件静默预选是错的;select 依赖模型显式 defaultValue)
+      — 2026-07-13
+- [x] web:「按推荐直接开始」主 CTA(QuestionsPanel Continue 按钮在
+      pristine 态换文案与 testid,任何编辑或恢复的草稿回退为「继续」;
+      埋点 submitSource 增加 'recommended')+ ★ 推荐角标(OptionCopy,
+      radio/checkbox 命中 defaultValue 的选项)— 2026-07-13
+- [x] i18n:26 个新 key 进 `types.ts` + **19** 个 locale(spec 原文写
+      18,实际含 `it` 共 19),parity 测试 13/13 通过 — 2026-07-13
+- [ ] 测试:进度卡状态渲染单测 ✅(FlowProgressCard.test.tsx)+ 表单
+      默认值/必填回归 ✅(QuestionForm.test.tsx 12 例全绿);
+      Playwright 一键提交端到端 **未做**(排 M2 前回归项)
 
-*验收*:新会话第一屏即见五步全览;不改任何选项一键提交可直达 plan;
-Playwright 断言默认值 seed。
+*验收状态*:代码路径齐备;「新会话第一屏见五步」依赖 daemon 首帧
+`flow_stage` 发射(已实现,startChatRun 初始 emit);真机 Playwright
+彩排待补。
 
 ### M2 Plan 工件 + 确认条
 

@@ -1,0 +1,149 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+  color: var(--text);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.rounds {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.round {
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+}
+
+.active {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 7%, var(--bg-subtle));
+}
+
+.glyph {
+  flex: 0 0 auto;
+  width: 18px;
+  color: var(--text-muted);
+  text-align: center;
+  line-height: 1.4;
+}
+
+.active .glyph {
+  color: var(--accent);
+}
+
+.complete .glyph {
+  color: var(--success, #2e9e5b);
+}
+
+.error .glyph {
+  color: var(--danger, #d9534f);
+}
+
+.roundCopy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.roundHeading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.roundTitle {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.status {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.detail {
+  margin: 5px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.report {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.reportCopy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.reportLabel {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.reportPath,
+.reportPending {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reportPending {
+  font-family: inherit;
+}
+
+.openButton {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 520px) {
+  .report {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .openButton {
+    width: 100%;
+  }
+}

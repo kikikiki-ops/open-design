@@ -49,6 +49,7 @@ export interface Dict {
   'chat.plus.connectors': string;
   'chat.plus.plugins': string;
   'chat.plus.mcp': string;
+  'chat.plus.deepResearch': string;
   'chat.referenceProject.title': string;
   'chat.referenceProject.search': string;
   'chat.referenceProject.empty': string;

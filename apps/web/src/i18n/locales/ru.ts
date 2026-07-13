@@ -89,6 +89,7 @@ export const ru: Dict = {
   'chat.plus.connectors': 'Коннекторы',
   'chat.plus.plugins': 'Плагины',
   'chat.plus.mcp': 'MCP',
+  'chat.plus.deepResearch': 'Глубокое исследование',
   'chat.referenceProject.title': 'Добавить другой проект как референс',
   'chat.referenceProject.search': 'Поиск проектов…',
   'chat.referenceProject.empty': 'Проекты по запросу «{query}» не найдены',

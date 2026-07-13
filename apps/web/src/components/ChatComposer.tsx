@@ -257,6 +257,8 @@ interface Props {
   onTogglePet?: () => void;
   onOpenPetSettings?: () => void;
   researchAvailable?: boolean;
+  deepResearchEnabled?: boolean;
+  onDeepResearchChange?: (enabled: boolean) => void;
   projectMetadata?: ProjectMetadata;
   onProjectMetadataChange?: (metadata: ProjectMetadata) => void;
   activeWorkspaceContext?: WorkspaceContextItem | null;
@@ -412,6 +414,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
       onTogglePet,
       onOpenPetSettings,
       researchAvailable = false,
+      deepResearchEnabled = false,
+      onDeepResearchChange,
       projectMetadata,
       onProjectMetadataChange,
       activeWorkspaceContext = null,
@@ -1150,6 +1154,9 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
         ...(workspaceItems.length > 0 ? { workspaceItems } : {}),
       };
       const meta: ChatSendMeta = {
+        ...(deepResearchEnabled
+          ? { research: { enabled: true, depth: 'deep' as const } }
+          : {}),
         ...(skillIds.length > 0 ? { skillIds } : {}),
         ...(activeAppliedPlugin
           ? {
@@ -2619,9 +2626,11 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
               }}
             />
           ) : null}
-          {designSystemPicker || selectedWorkspaceContexts.length > 0 || stagedSkills.length > 0 || stagedMcpServers.length > 0 || stagedConnectors.length > 0 || staged.length > 0 || activeAppliedPlugin ? (
+          {designSystemPicker || deepResearchEnabled || selectedWorkspaceContexts.length > 0 || stagedSkills.length > 0 || stagedMcpServers.length > 0 || stagedConnectors.length > 0 || staged.length > 0 || activeAppliedPlugin ? (
             <StagedRunContexts
               designSystemPicker={designSystemPicker}
+              deepResearchEnabled={deepResearchEnabled}
+              onDeepResearchChange={onDeepResearchChange}
               workspaceItems={selectedWorkspaceContexts}
               currentWorkspaceContextId={visibleWorkspaceContext?.id ?? null}
               skills={stagedSkills}
@@ -2851,6 +2860,8 @@ export const ChatComposer = forwardRef<ChatComposerHandle, Props>(
                 });
                 fileInputRef.current?.click();
               }}
+              deepResearchEnabled={deepResearchEnabled}
+              onDeepResearchChange={onDeepResearchChange}
               onReferenceProject={() => {
                 trackComposerBar({ element: 'plus_pick', resource_kind: 'workspace', resource_id: 'reference-project' });
                 trackProjectReferenceModalSurfaceView(analytics.track, {
@@ -3447,6 +3458,8 @@ function workspaceContextKindLabel(kind: WorkspaceContextItem['kind']): string {
 
 function StagedRunContexts({
   designSystemPicker,
+  deepResearchEnabled,
+  onDeepResearchChange,
   workspaceItems,
   currentWorkspaceContextId,
   skills,
@@ -3466,6 +3479,8 @@ function StagedRunContexts({
   t,
 }: {
   designSystemPicker?: ReactNode;
+  deepResearchEnabled: boolean;
+  onDeepResearchChange?: (enabled: boolean) => void;
   workspaceItems: WorkspaceContextItem[];
   currentWorkspaceContextId: string | null;
   skills: SkillSummary[];
@@ -3507,6 +3522,24 @@ function StagedRunContexts({
       {designSystemPicker ? (
         <div className="staged-context-picker staged-context-picker--design-system">
           {designSystemPicker}
+        </div>
+      ) : null}
+      {deepResearchEnabled ? (
+        <div className="staged-chip staged-context staged-context--research">
+          <span className="staged-icon" aria-hidden>
+            <Icon name="search" size={12} />
+          </span>
+          <span className="staged-name">{t('chat.plus.deepResearch')}</span>
+          <button
+            type="button"
+            className="staged-remove od-tooltip"
+            onClick={() => onDeepResearchChange?.(false)}
+            title={t('common.delete')}
+            data-tooltip={t('common.delete')}
+            aria-label={t('chat.removeAria', { name: t('chat.plus.deepResearch') })}
+          >
+            <Icon name="close" size={11} />
+          </button>
         </div>
       ) : null}
       {pluginChip ? (

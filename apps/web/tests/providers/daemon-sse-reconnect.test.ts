@@ -157,6 +157,46 @@ describe('reattachDaemonRun SSE reader reconnection', () => {
     expect(eventCalls[1]![0]).toContain('after=2');
   });
 
+  it('delivers staged-flow snapshots outside the assistant event stream', async () => {
+    const snapshot = {
+      version: 1,
+      shape: 'deck',
+      stages: [
+        { id: 'clarify', state: 'active' },
+        { id: 'research', state: 'pending' },
+        { id: 'plan', state: 'pending' },
+        { id: 'inspire', state: 'pending' },
+        { id: 'generate', state: 'pending' },
+        { id: 'deliver', state: 'pending' },
+      ],
+      activeStage: 'clarify',
+      researchMode: 'basic',
+      updatedAt: 1,
+    };
+    const reader = makeFiniteReader([
+      enc(sseEvent(1, 'agent', { type: 'flow_stage', snapshot })),
+      enc(sseEvent(2, 'end', { status: 'succeeded', code: 0 })),
+    ]);
+    globalThis.fetch = vi.fn(async () => streamResponse(reader)) as unknown as typeof globalThis.fetch;
+
+    const onFlowStage = vi.fn();
+    await reattachDaemonRun({
+      runId: 'flow-run',
+      signal: new AbortController().signal,
+      handlers: {
+        onDelta: () => {},
+        onDone: () => {},
+        onError: () => {},
+        onAgentEvent: () => {},
+        onFlowStage,
+      },
+      onRunStatus: () => {},
+    });
+
+    expect(onFlowStage).toHaveBeenCalledOnce();
+    expect(onFlowStage).toHaveBeenCalledWith(snapshot);
+  });
+
   it('carries daemon failure classification off the error-frame status probe (no end frame)', async () => {
     // #5329 regression: an `error` frame arrives, then the connection drops
     // before any terminal `end` frame. The recovery path fetches run status and

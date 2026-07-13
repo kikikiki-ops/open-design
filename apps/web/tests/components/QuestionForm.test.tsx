@@ -197,6 +197,65 @@ describe('QuestionFormView', () => {
     expect(onSubmit.mock.calls[0]?.[1]).toEqual({ platform: 'mobile' });
   });
 
+  it('seeds a mismatched radio default as the recommended option, not the custom field', () => {
+    // A partial (mid-stream) or mismatched `defaultValue` must select a real
+    // option, never pre-fill the free-form custom input (staged-flow §5.4).
+    const partialDefaultForm = {
+      ...richForm,
+      questions: [{ ...richForm.questions[0], defaultValue: 'Mob' }],
+    } as QuestionForm;
+
+    render(<QuestionFormView form={partialDefaultForm} interactive onSubmit={vi.fn()} />);
+
+    const custom = screen.getByLabelText('Custom answer') as HTMLInputElement;
+    expect(custom.value).toBe('');
+    // Falls back to the first option (recommended-path submit never blocks).
+    expect((screen.getByLabelText('Responsive') as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('re-seeds an untouched radio default when the streamed value resolves to an option', () => {
+    const onSubmit = vi.fn();
+    const streamingForm = {
+      ...richForm,
+      questions: [{ ...richForm.questions[0], defaultValue: 'Mob' }],
+    } as QuestionForm;
+    const { rerender } = render(
+      <QuestionFormView form={streamingForm} interactive onSubmit={onSubmit} />,
+    );
+
+    // Partial default resolves to a real option once streaming completes.
+    const resolvedForm = {
+      ...richForm,
+      questions: [{ ...richForm.questions[0], defaultValue: 'mobile' }],
+    } as QuestionForm;
+    rerender(<QuestionFormView form={resolvedForm} interactive onSubmit={onSubmit} />);
+
+    expect((screen.getByLabelText('Mobile (iOS/Android)') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Custom answer') as HTMLInputElement).value).toBe('');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send answers' }));
+    expect(onSubmit.mock.calls[0]?.[1]).toEqual({ platform: 'mobile' });
+  });
+
+  it('does not overwrite a user-picked radio option when the form re-renders', () => {
+    const onSubmit = vi.fn();
+    const defaultedForm = {
+      ...richForm,
+      questions: [{ ...richForm.questions[0], defaultValue: 'Responsive' }],
+    } as QuestionForm;
+    const { rerender } = render(
+      <QuestionFormView form={defaultedForm} interactive onSubmit={onSubmit} />,
+    );
+
+    fireEvent.click(screen.getByLabelText('Desktop web'));
+    // A later re-render (e.g. streaming reconciliation) must not clobber the pick.
+    rerender(<QuestionFormView form={defaultedForm} interactive onSubmit={onSubmit} />);
+
+    expect((screen.getByLabelText('Desktop web') as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Send answers' }));
+    expect(onSubmit.mock.calls[0]?.[1]).toEqual({ platform: 'Desktop web' });
+  });
+
   it('lets users override generated radio options with a custom answer', () => {
     const onSubmit = vi.fn();
     render(<QuestionFormView form={richForm} interactive onSubmit={onSubmit} />);

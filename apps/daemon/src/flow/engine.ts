@@ -23,6 +23,7 @@ import {
   createFlowSnapshot,
   FLOW_SHAPES,
   parseOdFlowMarkers,
+  type FlowResearchMode,
   type FlowShapeId,
   type FlowSnapshot,
   type OdFlowMarker,
@@ -31,12 +32,15 @@ import {
 /** Longest prefix of a marker/tag we may need to hold across chunk splits. */
 const TAG_CARRY = 96;
 const QUESTION_FORM_TAG = '<question-form';
+const PLAN_CONFIRM_ANSWER = '[form answers — plan-confirm]';
+const PLAN_CONFIRM_ANSWER_ASCII = '[form answers - plan-confirm]';
 
 export interface ResolveFlowShapeInput {
   sessionMode?: string | null;
   taskKind?: string | null;
   projectKind?: string | null;
   projectPlatform?: string | null;
+  requestText?: string | null;
 }
 
 /**
@@ -59,9 +63,25 @@ export function resolveFlowShape(input: ResolveFlowShapeInput): FlowShapeId | nu
       return 'media';
     case 'template':
       return 'document';
+    case 'other':
+      return flowShapeFromRequestText(input.requestText);
     default:
       return null;
   }
+}
+
+function flowShapeFromRequestText(text: string | null | undefined): FlowShapeId | null {
+  if (!text) return null;
+  const normalized = text.toLowerCase();
+  if (
+    /\b(?:pptx?|powerpoint|slide\s*deck|slides?|presentation|keynote|pitch\s*deck)\b/.test(
+      normalized,
+    ) ||
+    /幻灯片|投影片|演示文稿|簡報|简报/.test(normalized)
+  ) {
+    return 'deck';
+  }
+  return null;
 }
 
 export interface FlowTracker {
@@ -77,6 +97,7 @@ export interface FlowTracker {
 export interface CreateFlowTrackerOptions {
   shape: FlowShapeId;
   initial?: FlowSnapshot | null;
+  researchMode?: FlowResearchMode;
   now?: () => number;
 }
 
@@ -84,12 +105,18 @@ export function createFlowTracker(options: CreateFlowTrackerOptions): FlowTracke
   const now = options.now ?? Date.now;
   let snapshot: FlowSnapshot;
   if (options.initial && options.initial.version === 1) {
-    snapshot = options.initial;
+    snapshot =
+      options.researchMode && options.initial.researchMode !== options.researchMode
+        ? { ...options.initial, researchMode: options.researchMode, updatedAt: now() }
+        : options.initial;
   } else {
     // A brand-new flow conversation starts at clarify — the ladder should be
     // visible (step 1 active) from the very first streamed byte.
     snapshot = applyFlowMarker(
-      createFlowSnapshot(options.shape, { now: now() }),
+      createFlowSnapshot(options.shape, {
+        now: now(),
+        ...(options.researchMode ? { researchMode: options.researchMode } : {}),
+      }),
       { stage: 'clarify', state: 'active' },
       now(),
     );
@@ -220,8 +247,36 @@ export function createFlowTracker(options: CreateFlowTrackerOptions): FlowTracke
     noteUserMessage(text: string): FlowSnapshot | null {
       if (typeof text !== 'string' || !text) return null;
       let advanced = false;
-      if (text.includes('[form answers')) {
+      const normalized = text.toLowerCase();
+      const isPlanConfirmation =
+        normalized.includes(PLAN_CONFIRM_ANSWER) ||
+        normalized.includes(PLAN_CONFIRM_ANSWER_ASCII);
+      if (text.includes('[form answers') && !isPlanConfirmation) {
         if (apply({ stage: 'clarify', state: 'complete' })) advanced = true;
+      }
+      if (isPlanConfirmation) {
+        const requestsModification =
+          /\b(?:modify|change|edit|revise|adjust)\b/u.test(normalized) ||
+          /修改|调整|調整|改一下|先改|我要改/u.test(text);
+        if (requestsModification) {
+          if (
+            apply({
+              stage: 'plan',
+              state: 'active',
+              detail: 'Waiting for outline changes',
+            })
+          ) {
+            advanced = true;
+          }
+        } else if (
+          apply({
+            stage: 'plan',
+            state: 'complete',
+            detail: 'Outline confirmed',
+          })
+        ) {
+          advanced = true;
+        }
       }
       if (text.includes('[inspiration —') || text.includes('[inspiration -')) {
         if (apply({ stage: 'inspire', state: 'complete' })) advanced = true;

@@ -547,6 +547,7 @@ export function registerMediaRoutes(app: Express, ctx: RegisterMediaRoutesDeps) 
         const result = await searchResearch({
           projectRoot: PROJECT_ROOT,
           query: req.body?.query,
+          depth: req.body?.depth,
           maxSources:
             typeof req.body?.maxSources === 'number'
               ? req.body.maxSources

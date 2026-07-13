@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import type { ResearchDepth } from '@open-design/contracts';
 import {
   renderCodexImagegenOverride,
   resolveCodexImagegenModelId,
@@ -91,7 +92,12 @@ export function composeLiveInstructionPrompt({
 }
 
 export function resolveResearchCommandContract(
-  research: { enabled?: boolean; query?: string; maxSources?: number } | null | undefined,
+  research: {
+    enabled?: boolean;
+    query?: string;
+    depth?: ResearchDepth;
+    maxSources?: number;
+  } | null | undefined,
   message: string,
 ) {
   if (!research || !research.enabled) return '';
@@ -101,6 +107,7 @@ export function resolveResearchCommandContract(
       : message;
   return renderResearchCommandContract({
     query: researchQuery,
+    ...(research.depth ? { depth: research.depth } : {}),
     ...(typeof research.maxSources === 'number'
       ? { maxSources: research.maxSources }
       : {}),

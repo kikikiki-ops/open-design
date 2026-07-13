@@ -177,6 +177,10 @@ export interface ComposerPlusMenuProps {
   onAttachFiles: () => void;
   attachLoading?: boolean;
 
+  /** Optional staged-flow research toggle shown as a direct menu action. */
+  deepResearchEnabled?: boolean;
+  onDeepResearchChange?: (enabled: boolean) => void;
+
   /** Opens the reference-project picker. */
   onReferenceProject?: () => void;
 
@@ -292,6 +296,8 @@ export function ComposerPlusMenu({
   onAddMcp,
   onAttachFiles,
   attachLoading,
+  deepResearchEnabled = false,
+  onDeepResearchChange,
   onReferenceProject,
   onLinkLocalCode,
   onSelectFromLibrary,
@@ -605,6 +611,25 @@ export function ComposerPlusMenu({
             />
             <span>{t('chat.plus.attachFiles')}</span>
           </button>
+          {onDeepResearchChange ? (
+            <button
+              type="button"
+              role="menuitemcheckbox"
+              aria-checked={deepResearchEnabled}
+              className="plus-menu__item"
+              data-testid="composer-plus-deep-research"
+              onClick={() => onDeepResearchChange(!deepResearchEnabled)}
+            >
+              <Icon name="search" size={14} className="plus-menu__item-icon" />
+              <span>{t('chat.plus.deepResearch')}</span>
+              <span
+                className={`plus-menu__toggle${deepResearchEnabled ? ' is-active' : ''}`}
+                aria-hidden
+              >
+                <span />
+              </span>
+            </button>
+          ) : null}
           {onReferenceProject ? (
             <button
               type="button"

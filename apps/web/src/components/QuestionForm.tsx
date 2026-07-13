@@ -3,6 +3,7 @@ import {
   useEffect,
   useImperativeHandle,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
 } from 'react';
@@ -73,32 +74,48 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
   const [fileAnswers, setFileAnswers] = useState<Record<string, File[]>>({});
   const locked = !interactive || !onSubmit || submittedAnswers !== undefined;
   const currentAnswers = submittedAnswers ?? answers;
+  // Questions the user has explicitly changed. Their answers are owned by the
+  // user and must never be overwritten by a re-seed (see the effect below).
+  const touchedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     setFileAnswers({});
+    touchedRef.current = new Set();
   }, [form.id]);
 
-  // When the form streams in question-by-question, backfill state for newly
-  // revealed questions without disturbing answers the user already touched.
+  // Keep untouched answers in sync with the (possibly still-streaming) form.
+  // A question's recommended `defaultValue` can arrive — or finish streaming —
+  // after the field first renders (the Questions tab uses a tolerant partial
+  // parse during streaming). Re-seeding every untouched question, rather than
+  // freezing whatever value happened to be present when the field first
+  // appeared, is what makes a streamed default land as a *selected recommended
+  // option* instead of a frozen partial string stuck in the custom field.
   useEffect(() => {
     setAnswers((prev) => {
       let changed = false;
       const next = { ...prev };
       for (const q of form.questions) {
-        if (next[q.id] !== undefined) continue;
-        changed = true;
+        if (touchedRef.current.has(q.id)) continue;
+        let seeded: string | string[];
         if (submittedAnswers && submittedAnswers[q.id] !== undefined) {
-          next[q.id] = canonicalizeQuestionValue(q, submittedAnswers[q.id]!);
+          seeded = canonicalizeQuestionValue(q, submittedAnswers[q.id]!);
+        } else if (draftAnswers && draftAnswers[q.id] !== undefined && q.type !== 'file') {
+          seeded = canonicalizeQuestionValue(q, draftAnswers[q.id]!);
         } else {
-          next[q.id] = seedQuestionValue(q);
+          seeded = seedQuestionValue(q);
+        }
+        if (!answerValuesEqual(next[q.id], seeded)) {
+          next[q.id] = seeded;
+          changed = true;
         }
       }
       return changed ? next : prev;
     });
-  }, [form, submittedAnswers]);
+  }, [form, submittedAnswers, draftAnswers]);
 
   function update(id: string, value: string | string[]) {
     if (locked) return;
+    touchedRef.current.add(id);
     const next = { ...answers, [id]: value };
     setAnswers(next);
     onDraftChange?.(draftSafeAnswers(form, next));
@@ -107,6 +124,7 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
 
   function toggleCheckbox(id: string, option: string, maxSelections?: number) {
     if (locked) return;
+    touchedRef.current.add(id);
     const current = Array.isArray(answers[id]) ? (answers[id] as string[]) : [];
     const has = current.includes(option);
     if (!has && maxSelections !== undefined && current.length >= maxSelections) return;
@@ -608,13 +626,61 @@ function buildInitialState(
  * selects like the ElevenLabs voice picker must stay deliberately unanswered
  * — see the "required select" regression test), and pre-picking checkbox
  * combinations or a whole visual direction would overstate user intent.
+ *
+ * A default on a finite-choice control must *select the recommended option*,
+ * never pre-fill the free-form custom field: a partial (mid-stream) or
+ * mismatched default is dropped so it falls back to the type default (radio →
+ * first option) instead of leaking a stray string into `Custom answer`.
  */
 function seedQuestionValue(q: QuestionForm['questions'][number]): string | string[] {
-  if (q.defaultValue !== undefined) return canonicalizeQuestionValue(q, q.defaultValue);
+  if (q.defaultValue !== undefined) {
+    const seeded = seedDefaultForQuestion(q, q.defaultValue);
+    if (seeded !== undefined) return seeded;
+  }
   if (q.type === 'radio' && q.options && q.options.length > 0) {
     return q.options[0]!.value;
   }
   return emptyQuestionValue(q);
+}
+
+/**
+ * Resolve a model-supplied `defaultValue` into a seedable answer. For
+ * finite-choice controls only values that map to a real option survive; when
+ * none do, returns undefined so the caller applies the type default rather
+ * than surfacing the raw default in the custom field. Free-text controls keep
+ * the canonicalized default as-is.
+ */
+function seedDefaultForQuestion(
+  q: QuestionForm['questions'][number],
+  defaultValue: string | string[],
+): string | string[] | undefined {
+  const canon = canonicalizeQuestionValue(q, defaultValue);
+  if (!questionHasFiniteOptions(q)) return canon;
+  const values = Array.isArray(canon) ? canon : [canon];
+  const known = values.filter((value) => questionValueIsKnown(q, value));
+  if (known.length === 0) return undefined;
+  return q.type === 'checkbox' ? known : known[0]!;
+}
+
+function questionHasFiniteOptions(q: QuestionForm['questions'][number]): boolean {
+  if (q.type === 'radio' || q.type === 'checkbox' || q.type === 'select') {
+    return Boolean(q.options && q.options.length > 0);
+  }
+  if (q.type === 'direction-cards') {
+    return Boolean(q.cards && q.cards.length > 0);
+  }
+  return false;
+}
+
+function answerValuesEqual(
+  a: string | string[] | undefined,
+  b: string | string[] | undefined,
+): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return a.length === b.length && a.every((value, index) => value === b[index]);
+  }
+  return false;
 }
 
 /** True when this option is the question's recommended default (★ badge). */

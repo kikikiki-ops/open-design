@@ -33,6 +33,35 @@ afterEach(() => {
 });
 
 describe('ChatComposer /search command', () => {
+  it('attaches deep research to the next turn and shows its staged pill', async () => {
+    const onSend = vi.fn();
+
+    render(
+      <ChatComposer
+        projectId="project-1"
+        projectFiles={[]}
+        streaming={false}
+        deepResearchEnabled
+        onDeepResearchChange={vi.fn()}
+        onEnsureProject={async () => 'project-1'}
+        onSend={onSend}
+        onStop={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId('staged-contexts').textContent).toContain('Deep research');
+    await typeAndSettle('Build a market overview deck');
+    fireEvent.click(screen.getByTestId('chat-send'));
+
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+    expect(onSend).toHaveBeenCalledWith(
+      'Build a market overview deck',
+      [],
+      [],
+      { research: { enabled: true, depth: 'deep' } },
+    );
+  });
+
   it('sends staged file attachments even when the text draft is empty', async () => {
     const onSend = vi.fn();
     mockedUploadProjectFiles.mockResolvedValue({

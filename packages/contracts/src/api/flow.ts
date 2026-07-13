@@ -49,6 +49,11 @@ export interface FlowStageSnapshot {
 
 export type FlowResearchMode = 'deep' | 'basic' | 'off';
 
+export interface FlowInspireChoice {
+  templateId: string | null;
+  skipped: boolean;
+}
+
 export type FlowShapeId =
   | 'deck'
   | 'landing'
@@ -149,6 +154,7 @@ export interface FlowSnapshot {
   stages: FlowStageSnapshot[];
   activeStage: FlowStageId | null;
   researchMode: FlowResearchMode;
+  inspireChoice?: FlowInspireChoice;
   updatedAt: number;
 }
 
@@ -157,6 +163,11 @@ export interface FlowSnapshot {
 export interface FlowStatusResponse {
   conversationId: string;
   flow: FlowSnapshot | null;
+}
+
+/** `PATCH /api/conversations/:id/flow` request. */
+export interface UpdateFlowResearchModeRequest {
+  researchMode: FlowResearchMode;
 }
 
 /** Map a design-template / plugin `od.mode` (+ platform) to a flow shape.
@@ -183,7 +194,7 @@ export function flowShapeFromModePlatform(
 
 export function createFlowSnapshot(
   shape: FlowShapeId,
-  options?: { researchMode?: FlowResearchMode; now?: number },
+  options?: { researchMode?: FlowResearchMode | undefined; now?: number },
 ): FlowSnapshot {
   const spec = FLOW_SHAPES[shape];
   return {

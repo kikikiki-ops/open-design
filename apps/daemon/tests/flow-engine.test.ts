@@ -14,6 +14,13 @@ describe('resolveFlowShape', () => {
       resolveFlowShape({ sessionMode: 'design', taskKind: 'tune-collab', projectKind: 'deck' }),
     ).toBeNull();
     expect(resolveFlowShape({ sessionMode: 'design', projectKind: 'brand' })).toBeNull();
+    expect(
+      resolveFlowShape({
+        sessionMode: 'design',
+        projectKind: 'brand',
+        requestText: 'Create a brand presentation',
+      }),
+    ).toBeNull();
   });
 
   it('maps project kind + platform onto flow shapes', () => {
@@ -27,6 +34,30 @@ describe('resolveFlowShape', () => {
     expect(resolveFlowShape({ sessionMode: 'design', projectKind: 'video' })).toBe('media');
     expect(resolveFlowShape({ sessionMode: 'design', projectKind: 'template' })).toBe('document');
   });
+
+  it('infers a deck flow for an untyped project with an explicit PPT request', () => {
+    expect(
+      resolveFlowShape({
+        sessionMode: 'design',
+        projectKind: 'other',
+        requestText: '做一个 agent native 的 ppt',
+      }),
+    ).toBe('deck');
+  });
+
+  it('maps the default-router task-type answer onto the selected flow shape', () => {
+    expect(
+      resolveFlowShape({
+        sessionMode: 'design',
+        projectKind: 'other',
+        requestText: [
+          '[form answers — task-type]',
+          '- What should I build?: Slide deck',
+          '- Who is this for?: Product leaders',
+        ].join('\n'),
+      }),
+    ).toBe('deck');
+  });
 });
 
 describe('createFlowTracker', () => {
@@ -35,6 +66,16 @@ describe('createFlowTracker', () => {
     expect(tracker.snapshot.shape).toBe('deck');
     expect(tracker.snapshot.activeStage).toBe('clarify');
     expect(stageState(tracker, 'clarify')).toBe('active');
+  });
+
+  it('persists the requested deep research mode in a fresh snapshot', () => {
+    const tracker = createFlowTracker({
+      shape: 'deck',
+      researchMode: 'deep',
+      now: () => 1,
+    });
+
+    expect(tracker.snapshot.researchMode).toBe('deep');
   });
 
   it('consumes <od-flow> markers split across text_delta chunk boundaries', () => {
@@ -108,6 +149,44 @@ describe('createFlowTracker', () => {
     const advanced = tracker.noteUserMessage('[form answers — discovery]\n- 页数: 12');
     expect(advanced).not.toBeNull();
     expect(stageState(tracker, 'clarify')).toBe('complete');
+  });
+
+  it('completes plan only when the plan-confirm form accepts the outline', () => {
+    const tracker = createFlowTracker({ shape: 'deck', now: () => 1 });
+    tracker.observeAgentEvent({
+      type: 'tool_use',
+      id: 't1',
+      name: 'Write',
+      input: { file_path: 'generated/outline.md', content: '# Outline' },
+    });
+
+    const advanced = tracker.noteUserMessage(
+      '[form answers — plan-confirm]\n- 下一步: ✓ 确认，生成 12 页',
+    );
+
+    expect(advanced).not.toBeNull();
+    expect(stageState(tracker, 'plan')).toBe('complete');
+    expect(stageState(tracker, 'inspire')).toBe('pending');
+  });
+
+  it('keeps plan active when the plan-confirm form requests changes', () => {
+    const tracker = createFlowTracker({ shape: 'deck', now: () => 1 });
+    tracker.observeAgentEvent({
+      type: 'tool_use',
+      id: 't1',
+      name: 'Write',
+      input: { file_path: 'generated/outline.md', content: '# Outline' },
+    });
+
+    const advanced = tracker.noteUserMessage(
+      '[form answers — plan-confirm]\n- 下一步: 我要修改\n- 补充: 增加竞品页',
+    );
+
+    expect(advanced).not.toBeNull();
+    expect(stageState(tracker, 'plan')).toBe('active');
+    expect(tracker.snapshot.stages.find((stage) => stage.id === 'plan')?.detail).toBe(
+      'Waiting for outline changes',
+    );
   });
 
   it('promotes generate → deliver on a clean run end', () => {

@@ -17,6 +17,7 @@ export * from './api/export.js';
 export * from './api/files.js';
 export * from './api/figma.js';
 export * from './api/flow.js';
+export * from './api/inspire.js';
 export * from './api/host-tools.js';
 export * from './api/finalize.js';
 export * from './api/github.js';

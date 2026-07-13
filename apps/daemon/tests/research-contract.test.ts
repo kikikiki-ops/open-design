@@ -6,6 +6,7 @@ describe('renderResearchCommandContract', () => {
   it('requires /search runs to use the research command as the first tool action', () => {
     const prompt = renderResearchCommandContract({
       query: 'EV market 2025 trends',
+      depth: 'shallow',
       maxSources: 15,
     });
 
@@ -35,8 +36,36 @@ describe('renderResearchCommandContract', () => {
     );
   });
 
-  it('defaults and clamps the requested source cap to the supported range', () => {
+  it('uses depth defaults and clamps them to the provider limit', () => {
     expect(renderResearchCommandContract()).toContain('--max-sources 5');
+    expect(renderResearchCommandContract({ depth: 'medium' })).toContain(
+      '--max-sources 12',
+    );
+    expect(renderResearchCommandContract({ depth: 'deep' })).toContain(
+      '--max-sources 20',
+    );
     expect(renderResearchCommandContract({ maxSources: 50 })).toContain('--max-sources 20');
+  });
+
+  it('defines the multi-round deep research workflow and flow markers', () => {
+    const prompt = renderResearchCommandContract({
+      query: 'EV market 2025 trends',
+      depth: 'deep',
+    });
+
+    expect(prompt).toContain('Selected research depth: deep');
+    expect(prompt).toContain('two rounds by default');
+    expect(prompt).toContain('multiple distinct queries');
+    expect(prompt).toContain('identify evidence gaps');
+    expect(prompt).toContain(
+      '<od-flow stage="research" state="active" detail="Round 1/2',
+    );
+    expect(prompt).toContain(
+      '<od-flow stage="research" state="active" detail="Round 2/2',
+    );
+    expect(prompt).toContain(
+      '<od-flow stage="research" state="complete"',
+    );
+    expect(prompt).toContain('Only after all research rounds are complete');
   });
 });

@@ -113,6 +113,7 @@ const MCP_INSTALL_BOOLEAN_FLAGS = new Set([
 
 const RESEARCH_SEARCH_STRING_FLAGS = new Set([
   'query',
+  'depth',
   'max-sources',
   'daemon-url',
 ]);
@@ -207,7 +208,7 @@ const PROJECT_STRING_FLAGS = new Set([
   'prompt-file', 'path', 'dir', 'as',
   'agent', 'model', 'snapshot-id', 'inputs', 'grant-caps', 'editor',
   'title', 'label', 'against', 'seed-from', 'fork-after', 'mode',
-  'source',
+  'source', 'research',
 ]);
 const PROJECT_BOOLEAN_FLAGS = new Set(['help', 'h', 'json', 'follow']);
 // `od templates …` mirrors NewProjectPanel / ExamplesTab. Same surface,
@@ -734,6 +735,11 @@ async function runResearchSearch(rawArgs) {
     process.exit(2);
   }
   const daemonUrl = await cliDaemonUrl(flags);
+  const depth = typeof flags.depth === 'string' ? flags.depth : 'shallow';
+  if (!['shallow', 'medium', 'deep'].includes(depth)) {
+    console.error('--depth must be one of: shallow | medium | deep');
+    process.exit(2);
+  }
   const maxSources =
     flags['max-sources'] == null ? undefined : Number(flags['max-sources']);
   const url = `${daemonUrl.replace(/\/$/, '')}/api/research/search`;
@@ -744,6 +750,7 @@ async function runResearchSearch(rawArgs) {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         query,
+        depth,
         ...(Number.isFinite(maxSources) ? { maxSources } : {}),
       }),
     });
@@ -766,15 +773,16 @@ async function runArtifacts(args) {
 
 function printResearchHelp() {
   console.log(`Usage:
-  od research search --query <text> [--max-sources 5] [--daemon-url <url>]
+  od research search --query <text> [--depth shallow|medium|deep] [--max-sources 5] [--daemon-url <url>]
 
-Runs Tavily-backed shallow research through the local Open Design daemon.
+Runs Tavily-backed research through the local Open Design daemon.
 Output is JSON only on stdout:
   { "query": "...", "summary": "...", "sources": [...], "provider": "tavily", "depth": "shallow", "fetchedAt": 0 }
 
 Flags:
   --query        Required search query.
-  --max-sources  Optional source cap. Defaults to 5, clamped to Tavily's max.
+  --depth        Search depth. shallow uses basic search; medium/deep use advanced search.
+  --max-sources  Optional source cap. Defaults follow depth and are clamped to Tavily's max.
   --daemon-url   Local daemon URL. Defaults to OD_DAEMON_URL, OD_SIDECAR_IPC_PATH discovery, or http://127.0.0.1:7456.`);
 }
 
@@ -5994,7 +6002,8 @@ async function runRun(args) {
     console.log(`Usage:
   od run start --project <projectId> [--conversation <id>] [--message "<text>"]
                [--plugin <id>] [--inputs <json>] [--grant-caps a,b]
-               [--agent claude|codex|opencode] [--model <id>] [--follow] [--json]
+               [--agent claude|codex|opencode] [--model <id>]
+               [--research deep|basic|off] [--follow] [--json]
   od run redesign [--path <folder>] [--message "<text>" | --prompt-file <path|->]
                [--agent claude] [--model <id>] [--follow] [--json]
   od run watch  <runId>                     ND-JSON event stream on stdout.
@@ -6206,6 +6215,19 @@ Common options:
       if (flags['design-system']) body.designSystemId = flags['design-system'];
       if (flags.agent) body.agentId = flags.agent;
       if (flags.model) body.model = flags.model;
+      if (flags.research) {
+        if (!['deep', 'basic', 'off'].includes(flags.research)) {
+          console.error('--research must be one of: deep | basic | off');
+          process.exit(2);
+        }
+        body.research =
+          flags.research === 'off'
+            ? { enabled: false }
+            : {
+                enabled: true,
+                depth: flags.research === 'deep' ? 'deep' : 'shallow',
+              };
+      }
       if (flags.inputs) {
         try { body.pluginInputs = JSON.parse(flags.inputs); } catch (err) {
           console.error(`--inputs must be valid JSON: ${err.message}`);
@@ -7066,7 +7088,7 @@ Common options:
 // (specs/current/staged-flow-north-star.zh-CN.md §5.9).
 // ---------------------------------------------------------------------------
 
-const FLOW_STRING_FLAGS = new Set(['daemon-url', 'conversation']);
+const FLOW_STRING_FLAGS = new Set(['daemon-url', 'conversation', 'mode']);
 const FLOW_BOOLEAN_FLAGS = new Set(['json']);
 const FLOW_STAGE_ICONS = {
   pending: '○',
@@ -7082,6 +7104,8 @@ async function runFlow(args) {
   od flow status <conversationId>     Print the staged-flow snapshot
                                       (clarify → research → plan → inspire →
                                       generate → deliver).
+  od flow research <conversationId> --mode deep|basic|off
+                                      Persist the conversation research mode.
 
 Common options:
   --daemon-url <url>   Open Design daemon HTTP base.
@@ -7090,7 +7114,7 @@ Common options:
   }
   const sub = args[0];
   const rest = args.slice(1);
-  if (sub !== 'status') {
+  if (sub !== 'status' && sub !== 'research') {
     console.error(`unknown subcommand: od flow ${sub}`);
     process.exit(2);
   }
@@ -7099,11 +7123,32 @@ Common options:
   const conversationId =
     typeof flags.conversation === 'string' && flags.conversation ? flags.conversation : positional;
   if (!conversationId) {
-    console.error('Usage: od flow status <conversationId> [--json]');
+    console.error(`Usage: od flow ${sub} <conversationId> [--json]`);
     process.exit(2);
   }
   const base = (await cliDaemonUrl(flags)).replace(/\/$/, '');
-  const resp = await fetch(`${base}/api/conversations/${encodeURIComponent(conversationId)}/flow`);
+  if (sub === 'research') {
+    if (!flags.mode || !['deep', 'basic', 'off'].includes(flags.mode)) {
+      console.error('--mode must be one of: deep | basic | off');
+      process.exit(2);
+    }
+    const resp = await fetch(
+      `${base}/api/conversations/${encodeURIComponent(conversationId)}/flow`,
+      {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ researchMode: flags.mode }),
+      },
+    );
+    if (!resp.ok) return structuredHttpFailure(resp, 'conversation-not-found');
+    const data = await resp.json();
+    if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+    console.log(`[flow] research mode ${data?.flow?.researchMode ?? flags.mode}`);
+    return;
+  }
+  const resp = await fetch(
+    `${base}/api/conversations/${encodeURIComponent(conversationId)}/flow`,
+  );
   if (!resp.ok) return structuredHttpFailure(resp, 'conversation-not-found');
   const data = await resp.json();
   if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');

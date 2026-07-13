@@ -95,6 +95,7 @@ export const zhTW: Dict = {
   "chat.plus.connectors": "連接器",
   "chat.plus.plugins": "外掛",
   "chat.plus.mcp": "MCP",
+  "chat.plus.deepResearch": "深度研究",
   "chat.referenceProject.title": "引用其他專案",
   "chat.referenceProject.search": "搜尋專案…",
   "chat.referenceProject.empty": "沒有符合「{query}」的專案",

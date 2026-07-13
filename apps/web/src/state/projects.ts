@@ -15,6 +15,7 @@ import type {
   CreatePluginShareProjectResponse,
   FlowSnapshot,
   FlowStatusResponse,
+  type FlowResearchMode,
   CreateTerminalRequest,
   ImportFolderRequest,
   ImportFolderResponse,
@@ -497,6 +498,27 @@ export async function fetchConversationFlow(
     if (!resp.ok) return null;
     const json = (await resp.json()) as FlowStatusResponse;
     return json.flow ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function patchConversationFlowResearchMode(
+  conversationId: string,
+  researchMode: FlowResearchMode,
+): Promise<FlowSnapshot | null> {
+  try {
+    const resp = await fetch(
+      `/api/conversations/${encodeURIComponent(conversationId)}/flow`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ researchMode }),
+      },
+    );
+    if (!resp.ok) return null;
+    const body = (await resp.json()) as FlowStatusResponse;
+    return body.flow;
   } catch {
     return null;
   }

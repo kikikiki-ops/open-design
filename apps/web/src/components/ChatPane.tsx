@@ -474,6 +474,8 @@ interface Props {
   // FlowProgressCard is pinned above the chat log; null/undefined keeps the
   // current UX for non-flow conversations (chat, tune, migrations).
   flowSnapshot?: FlowSnapshot | null;
+  deepResearchEnabled?: boolean;
+  onDeepResearchChange?: (enabled: boolean) => void;
   queuedItems?: QueuedSendItem[];
   onRemoveQueuedSend?: (id: string) => void;
   onUpdateQueuedSend?: (id: string, update: QueuedSendUpdate) => void;
@@ -782,6 +784,8 @@ export function ChatPane({
   loading = false,
   sendDisabled = false,
   flowSnapshot = null,
+  deepResearchEnabled = flowSnapshot?.researchMode === 'deep',
+  onDeepResearchChange,
   queuedItems = [],
   error,
   projectId,
@@ -2084,6 +2088,8 @@ export function ChatPane({
       onTogglePet={onTogglePet}
       onOpenPetSettings={onOpenPetSettings}
       researchAvailable={researchAvailable}
+      deepResearchEnabled={deepResearchEnabled}
+      onDeepResearchChange={onDeepResearchChange}
       projectMetadata={projectMetadata}
       onProjectMetadataChange={onProjectMetadataChange}
       activeWorkspaceContext={activeWorkspaceContext}

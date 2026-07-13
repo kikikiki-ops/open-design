@@ -53,11 +53,19 @@ export function FlowProgressCard({
   containerRef?: MutableRefObject<HTMLDivElement | null>;
 }) {
   const t = useT();
-  const total = flow.stages.length;
+  const visibleStages = flow.stages.filter(
+    (stage) =>
+      stage.id !== 'research' ||
+      flow.researchMode === 'deep' ||
+      stage.state !== 'pending',
+  );
+  const total = visibleStages.length;
   const activeIndex = flow.activeStage
-    ? flow.stages.findIndex((s) => s.id === flow.activeStage)
+    ? visibleStages.findIndex((s) => s.id === flow.activeStage)
     : -1;
-  const terminalCount = flow.stages.filter((s) => s.state !== 'pending' && s.state !== 'active').length;
+  const terminalCount = visibleStages.filter(
+    (stage) => stage.state !== 'pending' && stage.state !== 'active',
+  ).length;
   const current = activeIndex >= 0 ? activeIndex + 1 : Math.max(1, Math.min(terminalCount, total));
   const unit = t(FLOW_SHAPES[flow.shape].progressUnitKey as keyof Dict);
 
@@ -68,7 +76,7 @@ export function FlowProgressCard({
         <span className={styles.stepOf}>{t('flow.stepOf', { current, total })}</span>
       </div>
       <ol className={styles.steps}>
-        {flow.stages.map((stage) => {
+        {visibleStages.map((stage) => {
           const detail =
             stage.detail ??
             (stage.state === 'pending'

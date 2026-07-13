@@ -42,6 +42,59 @@ describe('research search', () => {
     } satisfies Partial<ResearchError>);
   });
 
+  it('rejects an unsupported research depth', async () => {
+    await expect(
+      searchResearch({
+        projectRoot: await tempProjectRoot(),
+        query: 'EV trends',
+        depth: 'exhaustive' as never,
+      }),
+    ).rejects.toMatchObject({
+      code: 'INVALID_RESEARCH_DEPTH',
+      status: 400,
+    } satisfies Partial<ResearchError>);
+  });
+
+  it.each([
+    ['shallow', 'basic', 5],
+    ['medium', 'advanced', 12],
+    ['deep', 'advanced', 20],
+  ] as const)(
+    'maps %s depth to Tavily %s search with the effective default source cap',
+    async (depth, searchDepth, maxResults) => {
+      process.env.OD_TAVILY_API_KEY = 'tvly-test';
+      const fetchMock = vi.fn(async (_input: FetchInput, _init?: FetchInit) =>
+        new Response(
+          JSON.stringify({
+            answer: 'Current findings.',
+            results: [
+              {
+                title: 'Current report',
+                url: 'https://example.com/report',
+                content: 'Current evidence.',
+              },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+
+      const findings = await searchResearch({
+        projectRoot: await tempProjectRoot(),
+        query: 'current market evidence',
+        depth,
+      });
+
+      expect(findings.depth).toBe(depth);
+      const [, init] = fetchMock.mock.calls[0] as [FetchInput, FetchInit];
+      expect(JSON.parse(String(init!.body))).toMatchObject({
+        search_depth: searchDepth,
+        max_results: maxResults,
+      });
+    },
+  );
+
   it('uses shallow Tavily search and normalizes JSON findings', async () => {
     process.env.OD_TAVILY_API_KEY = 'tvly-test';
     const fetchMock = vi.fn(async (_input: FetchInput, _init?: FetchInit) =>

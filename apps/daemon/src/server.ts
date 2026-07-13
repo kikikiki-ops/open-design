@@ -3467,6 +3467,8 @@ export async function startServer({
     streamFormat,
     locale,
     sessionMode,
+    conversationId,
+    requestText,
     appliedPluginSnapshotId,
     mediaExecution,
     byokMediaDefaults,
@@ -4033,7 +4035,11 @@ export async function startServer({
       // Staged-flow protocol (spec §5.2): rendered from the same FLOW_SHAPES
       // registry the progress card reads, only for flow-shaped runs.
       ...(() => {
-        const shape = resolveFlowShape({
+        const persistedFlow =
+          typeof conversationId === 'string' && conversationId
+            ? getConversationFlow(db, conversationId)
+            : null;
+        const shape = persistedFlow?.shape ?? resolveFlowShape({
           sessionMode: normalizeConversationSessionMode(sessionMode),
           taskKind: (() => {
             if (typeof appliedPluginSnapshotId !== 'string' || !appliedPluginSnapshotId) {
@@ -4047,6 +4053,7 @@ export async function startServer({
           })(),
           projectKind: metadata?.kind ?? null,
           projectPlatform: metadata?.platform ?? null,
+          requestText,
         });
         return shape ? { flowProtocol: renderFlowProtocol(shape) } : {};
       })(),
@@ -4541,6 +4548,13 @@ export async function startServer({
         streamFormat: def?.streamFormat ?? 'plain',
         locale,
         sessionMode: runSessionMode,
+        conversationId,
+        requestText:
+          typeof message === 'string'
+            ? message
+            : typeof currentPrompt === 'string'
+              ? currentPrompt
+              : null,
         mediaExecution: run?.mediaExecution,
         byokMediaDefaults,
         // Plan §3.M2 / §3.V1 — forward the run's snapshot id so the
@@ -5065,7 +5079,10 @@ export async function startServer({
     // event through send() (so live SSE, replay, and the run record all carry
     // it) and persisted on the conversation row so refresh recovery
     // (`GET /api/conversations/:id/flow`) and the CLI read the same truth.
-    const flowShape = resolveFlowShape({
+    const persistedFlow = run.conversationId
+      ? getConversationFlow(db, run.conversationId)
+      : null;
+    const flowShape = persistedFlow?.shape ?? resolveFlowShape({
       sessionMode: runSessionMode,
       taskKind: (() => {
         if (typeof run?.appliedPluginSnapshotId !== 'string' || !run.appliedPluginSnapshotId) {
@@ -5079,11 +5096,20 @@ export async function startServer({
       })(),
       projectKind: projectRecord?.metadata?.kind ?? null,
       projectPlatform: projectRecord?.metadata?.platform ?? null,
+      requestText:
+        typeof message === 'string'
+          ? message
+          : typeof currentPrompt === 'string'
+            ? currentPrompt
+            : null,
     });
     const flowTracker = flowShape
       ? createFlowTracker({
           shape: flowShape,
-          initial: run.conversationId ? getConversationFlow(db, run.conversationId) : null,
+          initial: persistedFlow,
+          ...(research?.enabled
+            ? { researchMode: research.depth === 'deep' ? 'deep' : 'basic' }
+            : {}),
         })
       : null;
     const emitFlowSnapshot = (snapshot) => {

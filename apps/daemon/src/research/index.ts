@@ -1,12 +1,13 @@
-import type {
-  ResearchDepth,
-  ResearchFindings,
-  ResearchSource,
+import {
+  RESEARCH_DEFAULT_MAX_SOURCES,
+  type ResearchDepth,
+  type ResearchFindings,
+  type ResearchSearchRequest,
+  type ResearchSource,
 } from '@open-design/contracts/api/research';
 import { resolveProviderConfig } from '../media/config.js';
 import { tavilySearch, TavilyError } from './tavily.js';
 
-const DEFAULT_MAX_SOURCES = 5;
 const TAVILY_MAX_RESULTS_LIMIT = 20;
 
 export class ResearchError extends Error {
@@ -20,11 +21,8 @@ export class ResearchError extends Error {
   }
 }
 
-export interface SearchResearchInput {
-  query: string;
+export interface SearchResearchInput extends ResearchSearchRequest {
   projectRoot: string;
-  maxSources?: number;
-  providers?: string[];
   requestInit?: Pick<RequestInit, 'dispatcher'>;
   signal?: AbortSignal;
 }
@@ -36,13 +34,13 @@ export async function searchResearch(
   if (!query) {
     throw new ResearchError('query required', 400, 'QUERY_REQUIRED');
   }
-  const depth: ResearchDepth = 'shallow';
+  const depth = normalizeResearchDepth(input.depth);
   const requested = Array.isArray(input.providers) ? input.providers : [];
   const providers = requested.filter(
     (p: unknown): p is string => typeof p === 'string' && p.length > 0,
   );
   const provider = providers[0] ?? 'tavily';
-  const maxSources = clampMaxSources(input.maxSources);
+  const maxSources = clampMaxSources(input.maxSources, depth);
 
   if (provider !== 'tavily') {
     throw new ResearchError(
@@ -67,7 +65,7 @@ export async function searchResearch(
     const out = await tavilySearch({
       apiKey: cfg.apiKey,
       query,
-      searchDepth: 'basic',
+      searchDepth: depth === 'shallow' ? 'basic' : 'advanced',
       maxResults: maxSources,
       includeAnswer: true,
       ...(cfg.baseUrl ? { baseUrl: cfg.baseUrl } : {}),
@@ -106,9 +104,24 @@ function synthesizeFallbackSummary(sources: ResearchSource[]): string {
   return `(No provider summary; top snippets follow.)\n${lead}`;
 }
 
-function clampMaxSources(value: unknown): number {
+function normalizeResearchDepth(value: unknown): ResearchDepth {
+  if (value == null) return 'shallow';
+  if (value === 'shallow' || value === 'medium' || value === 'deep') {
+    return value;
+  }
+  throw new ResearchError(
+    'depth must be shallow, medium, or deep',
+    400,
+    'INVALID_RESEARCH_DEPTH',
+  );
+}
+
+function clampMaxSources(value: unknown, depth: ResearchDepth): number {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
-    return DEFAULT_MAX_SOURCES;
+    return Math.min(
+      RESEARCH_DEFAULT_MAX_SOURCES[depth],
+      TAVILY_MAX_RESULTS_LIMIT,
+    );
   }
   return Math.max(1, Math.min(Math.floor(value), TAVILY_MAX_RESULTS_LIMIT));
 }

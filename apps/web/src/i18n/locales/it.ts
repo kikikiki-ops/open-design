@@ -89,6 +89,7 @@ export const it: Dict = {
   'chat.plus.connectors': 'Connectors',
   'chat.plus.plugins': 'Plugins',
   'chat.plus.mcp': 'MCP',
+  'chat.plus.deepResearch': 'Ricerca approfondita',
   'chat.referenceProject.title': 'Reference another project',
   'chat.referenceProject.search': 'Search projects…',
   'chat.referenceProject.empty': 'No projects match “{query}”',

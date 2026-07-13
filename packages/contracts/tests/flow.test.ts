@@ -27,6 +27,16 @@ describe('flow shape registry', () => {
     expect(flowShapeFromModePlatform('image')).toBe('media');
     expect(flowShapeFromModePlatform('nonsense')).toBeNull();
   });
+
+  it('keeps the deck inspiration filter and choice in the shared contract', () => {
+    expect(FLOW_SHAPES.deck.inspireFilter).toEqual({ modes: ['deck'] });
+    const snapshot = createFlowSnapshot('deck');
+    expect(snapshot.inspireChoice).toBeUndefined();
+    expect({
+      ...snapshot,
+      inspireChoice: { templateId: 'editorial-deck', skipped: false },
+    }.inspireChoice).toEqual({ templateId: 'editorial-deck', skipped: false });
+  });
 });
 
 describe('parseOdFlowMarkers', () => {

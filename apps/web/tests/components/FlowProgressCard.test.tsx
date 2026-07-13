@@ -8,18 +8,31 @@ import { FlowProgressCard } from '../../src/components/FlowProgressCard';
 afterEach(cleanup);
 
 describe('FlowProgressCard', () => {
-  it('renders the full ladder with the active step and pending hints', () => {
+  it('keeps the optional research step out of the default pending ladder', () => {
     let flow = createFlowSnapshot('deck', { now: 1 });
     flow = applyFlowMarker(flow, { stage: 'clarify', state: 'active' }, 1);
 
     render(<FlowProgressCard flow={flow} />);
 
     expect(screen.getByText('Task progress')).toBeTruthy();
-    expect(screen.getByText('Step 1 of 6')).toBeTruthy();
+    expect(screen.getByText('Step 1 of 5')).toBeTruthy();
     expect(screen.getByText('Confirm the brief')).toBeTruthy();
+    expect(screen.queryByText('Research')).toBeNull();
     // Pending steps always carry a "when does this start" preview line.
     expect(screen.getByText('Pick after the plan is confirmed')).toBeTruthy();
     expect(screen.getByText('Download or share when generation ends')).toBeTruthy();
+  });
+
+  it('inserts the pending research step when deep research is selected', () => {
+    const flow = {
+      ...createFlowSnapshot('deck', { now: 1 }),
+      researchMode: 'deep' as const,
+    };
+
+    render(<FlowProgressCard flow={flow} />);
+
+    expect(screen.getByText('Step 1 of 6')).toBeTruthy();
+    expect(screen.getByText('Research')).toBeTruthy();
   });
 
   it('shows generate progress counts and stage detail lines', () => {

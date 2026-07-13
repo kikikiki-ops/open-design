@@ -95,6 +95,7 @@ export const zhCN: Dict = {
   "chat.plus.connectors": "连接器",
   "chat.plus.plugins": "插件",
   "chat.plus.mcp": "MCP",
+  "chat.plus.deepResearch": "深度研究",
   "chat.referenceProject.title": "引用其它项目",
   "chat.referenceProject.search": "搜索项目…",
   "chat.referenceProject.empty": "没有匹配“{query}”的项目",

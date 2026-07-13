@@ -271,6 +271,11 @@ interface Props {
   onWorkspaceContextsChange?: (contexts: WorkspaceContextItem[]) => void;
   messages?: ChatMessage[];
   artifactHtml?: string | null;
+  flowWorkspace?: {
+    label: string;
+    content: ReactNode;
+    nonce: number;
+  } | null;
   conversationError?: string | null;
   onRetry?: (message: ChatMessage) => void;
   // Contextual failure recovery, mirrored from the chat error card so the
@@ -375,6 +380,7 @@ function shouldKeepCurrentSketchState(
 export const DESIGN_FILES_TAB = '__design_files__';
 export const DESIGN_SYSTEM_TAB = '__design_system__';
 const QUESTIONS_TAB = '__questions__';
+const FLOW_STAGE_TAB = '__flow_stage__';
 
 // Module-level default so a caller that omits `previewComments` doesn't mint
 // a fresh [] every render — that identity feeds the memoized FileViewer.
@@ -1281,6 +1287,8 @@ export function FileWorkspace({
   onActiveContextChange,
   onWorkspaceContextsChange,
   messages = [],
+  artifactHtml = null,
+  flowWorkspace = null,
   conversationId,
   headerActions,
   questionForm = null,
@@ -1833,6 +1841,7 @@ export function FileWorkspace({
       activeTab === DESIGN_FILES_TAB
       || activeTab === DESIGN_SYSTEM_TAB
       || activeTab === QUESTIONS_TAB
+      || activeTab === FLOW_STAGE_TAB
     ) return;
     if (isBrowserTabId(activeTab)) {
       if (!browserTabs.some((tab) => tab.id === activeTab)) {
@@ -1973,6 +1982,13 @@ export function FileWorkspace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusQuestionsRequest?.nonce]);
 
+  useEffect(() => {
+    if (!flowWorkspace) return;
+    if (activeTab === QUESTIONS_TAB && showQuestionsTab) return;
+    setActiveTab(FLOW_STAGE_TAB);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flowWorkspace?.nonce]);
+
   // Submitting from the right-hand panel should close the preview once. The
   // answered form remains available, so a later chat-banner click can reopen
   // the same Questions tab without this effect immediately closing it again.
@@ -1994,6 +2010,12 @@ export function FileWorkspace({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, showQuestionsTab]);
+
+  useEffect(() => {
+    if (activeTab === FLOW_STAGE_TAB && !flowWorkspace) {
+      setActiveTab(defaultRootTab);
+    }
+  }, [activeTab, defaultRootTab, flowWorkspace]);
 
   function openFile(name: string, options?: { forcePersist?: boolean }) {
     setUploadError(null);
@@ -2077,7 +2099,7 @@ export function FileWorkspace({
   }
 
   function activateWorkspaceTab(tabId: string) {
-    if (tabId === QUESTIONS_TAB) {
+    if (tabId === QUESTIONS_TAB || tabId === FLOW_STAGE_TAB) {
       setUploadError(null);
       setActiveTab(tabId);
       return;
@@ -2114,6 +2136,10 @@ export function FileWorkspace({
     if (!workspaceTabIds.includes(activeTab)) return;
     if (activeTab === DESIGN_FILES_TAB || activeTab === DESIGN_SYSTEM_TAB) return;
     if (activeTab === QUESTIONS_TAB) {
+      setActiveTab(defaultRootTab);
+      return;
+    }
+    if (activeTab === FLOW_STAGE_TAB) {
       setActiveTab(defaultRootTab);
       return;
     }
@@ -2314,7 +2340,12 @@ export function FileWorkspace({
   // The Pages switcher is already sticky-pinned, so we only scroll
   // for real workspace tabs. Issue #775.
   useEffect(() => {
-    if (activeTab === DESIGN_FILES_TAB || activeTab === DESIGN_SYSTEM_TAB || activeTab === QUESTIONS_TAB) return;
+    if (
+      activeTab === DESIGN_FILES_TAB
+      || activeTab === DESIGN_SYSTEM_TAB
+      || activeTab === QUESTIONS_TAB
+      || activeTab === FLOW_STAGE_TAB
+    ) return;
     const tabBar = tabsBarRef.current;
     if (!tabBar) return;
     const el = tabBar.querySelector<HTMLElement>('.ws-tab.active');
@@ -2897,6 +2928,7 @@ export function FileWorkspace({
       activeTab === DESIGN_FILES_TAB
       || activeTab === DESIGN_SYSTEM_TAB
       || activeTab === QUESTIONS_TAB
+      || activeTab === FLOW_STAGE_TAB
       || isBrowserTabId(activeTab)
     ) return null;
     const onDisk = visibleFiles.find((f) => f.name === activeTab);
@@ -2921,6 +2953,7 @@ export function FileWorkspace({
       activeTab === DESIGN_FILES_TAB
       || activeTab === DESIGN_SYSTEM_TAB
       || activeTab === QUESTIONS_TAB
+      || activeTab === FLOW_STAGE_TAB
       || isBrowserTabId(activeTab)
     ) return null;
     return liveArtifactEntries.find((entry) => entry.tabId === activeTab) ?? null;
@@ -3082,11 +3115,12 @@ export function FileWorkspace({
     if (designSystemProject) ids.push(DESIGN_SYSTEM_TAB);
     ids.push(DESIGN_FILES_TAB);
     if (showQuestionsTab) ids.push(QUESTIONS_TAB);
+    if (flowWorkspace) ids.push(FLOW_STAGE_TAB);
     for (const entry of visibleOrderedWorkspaceTabs) {
       ids.push(entry.kind === 'browser' ? entry.browserTab.id : entry.name);
     }
     return ids;
-  }, [designSystemProject, showQuestionsTab, visibleOrderedWorkspaceTabs]);
+  }, [designSystemProject, flowWorkspace, showQuestionsTab, visibleOrderedWorkspaceTabs]);
 
   // Per-tab handler sets with stable identities. Tab is memoized; the inline
   // closures the strip map used to create handed every Tab fresh props on
@@ -3961,6 +3995,11 @@ export function FileWorkspace({
             projectId={projectId}
             projectKind={projectKind}
             file={activeFile}
+            liveHtml={
+              isDeck && streaming && artifactHtml
+                ? artifactHtml
+                : undefined
+            }
             filesRefreshKey={filesRefreshKey}
             isDeck={isDeck}
             streaming={streaming}

@@ -10,11 +10,18 @@ export interface ResearchOptions {
   enabled: boolean;
   /** Optional override; defaults to the user's chat message. */
   query?: string;
-  /** Phase 1 only honours 'shallow'. */
+  /** Search and synthesis effort. Defaults to 'shallow'. */
   depth?: ResearchDepth;
-  /** Cap on returned sources. Defaults follow the depth. */
+  /** Cap on returned sources. Defaults follow the depth and provider limits. */
   maxSources?: number;
-  /** Provider preference order. Phase 1 supports ['tavily']. */
+  /** Provider preference order. Currently supports ['tavily']. */
+  providers?: string[];
+}
+
+export interface ResearchSearchRequest {
+  query: string;
+  depth?: ResearchDepth;
+  maxSources?: number;
   providers?: string[];
 }
 

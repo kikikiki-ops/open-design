@@ -162,6 +162,7 @@ import {
   listMessages,
   loadTabs,
   patchConversation,
+  patchConversationFlowResearchMode,
   patchProject,
   saveMessage,
   startGeneratedPluginShareTask,
@@ -1511,6 +1512,7 @@ export function ProjectView({
   // Staged-flow snapshot for the active conversation (spec §5.3): live
   // updates from `flow_stage` SSE events, seeded from GET /flow on load.
   const [flowSnapshot, setFlowSnapshot] = useState<FlowSnapshot | null>(null);
+  const [deepResearchEnabled, setDeepResearchEnabled] = useState(false);
   const [previewComments, setPreviewComments] = useState<PreviewComment[]>([]);
   // Mirror so the send-now interrupt path can read the current statuses
   // synchronously without re-creating its callback on every comment change.
@@ -2147,6 +2149,7 @@ export function ProjectView({
       messagesConversationIdRef.current = null;
     }
     setFlowSnapshot(null);
+    setDeepResearchEnabled(false);
     (async () => {
       try {
         const [list, comments, flow] = await Promise.all([
@@ -2159,6 +2162,7 @@ export function ProjectView({
         setMessagesInitialized(true);
         setPreviewComments(comments);
         setFlowSnapshot(flow);
+        setDeepResearchEnabled(flow?.researchMode === 'deep');
         setAttachedComments([]);
         setArtifact(null);
         setError(null);
@@ -2184,6 +2188,27 @@ export function ProjectView({
       cancelled = true;
     };
   }, [project.id, activeConversationId, messageLoadRetryNonce]);
+
+  const handleDeepResearchChange = useCallback(
+    (enabled: boolean) => {
+      setDeepResearchEnabled(enabled);
+      if (!activeConversationId || !flowSnapshot) return;
+      const researchMode = enabled ? 'deep' : 'basic';
+      setFlowSnapshot((current) =>
+        current
+          ? { ...current, researchMode, updatedAt: Date.now() }
+          : current,
+      );
+      void patchConversationFlowResearchMode(activeConversationId, researchMode).then(
+        (persisted) => {
+          if (!persisted) return;
+          setFlowSnapshot(persisted);
+          setDeepResearchEnabled(persisted.researchMode === 'deep');
+        },
+      );
+    },
+    [activeConversationId, flowSnapshot],
+  );
 
   useEffect(() => {
     if (!projectIsProgrammaticBrandExtraction) return undefined;
@@ -5366,6 +5391,7 @@ export function ProjectView({
         // Refresh recovery reads GET /api/conversations/:id/flow on load.
         onFlowStage: (snapshot: FlowSnapshot) => {
           setFlowSnapshot(snapshot);
+          setDeepResearchEnabled(snapshot.researchMode === 'deep');
         },
         onToolInputDelta: (id: string, name: string, delta: string) => {
           setLiveToolInput((prev) => ({
@@ -8462,6 +8488,8 @@ export function ProjectView({
               loading={currentConversationLoading}
               sendDisabled={currentConversationSendDisabled}
               flowSnapshot={flowSnapshot}
+              deepResearchEnabled={deepResearchEnabled}
+              onDeepResearchChange={handleDeepResearchChange}
               queuedItems={currentConversationQueuedItems}
               error={conversationLoadError ?? error}
               projectId={project.id}

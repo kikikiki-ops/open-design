@@ -736,6 +736,70 @@ process.stdin.on('end', () => {
     }
   });
 
+  it('streams and persists deck flow progress for a generic PPT request', async () => {
+    const projectId = `flow-ppt-${randomUUID()}`;
+    const createProjectResponse = await fetch(`${baseUrl}/api/projects`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: projectId,
+        name: 'Generic PPT flow fixture',
+        metadata: { kind: 'other' },
+      }),
+    });
+    expect(createProjectResponse.ok).toBe(true);
+
+    const conversationsResponse = await fetch(`${baseUrl}/api/projects/${projectId}/conversations`);
+    expect(conversationsResponse.ok).toBe(true);
+    const conversationsBody = await conversationsResponse.json() as {
+      conversations: Array<{ id: string }>;
+    };
+    const conversationId = conversationsBody.conversations[0]?.id;
+    expect(conversationId).toBeTruthy();
+
+    await withFakeAgent(
+      'opencode',
+      `
+process.stdin.resume();
+process.stdin.on('end', () => {
+  console.log(JSON.stringify({ type: 'step_start' }));
+  console.log(JSON.stringify({ type: 'text', part: { text: 'PPT flow started.' } }));
+  console.log(JSON.stringify({ type: 'step_finish', part: { tokens: { input: 1, output: 1 } } }));
+  process.exit(0);
+});
+`,
+      async () => {
+        const response = await fetch(`${baseUrl}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            agentId: 'opencode',
+            projectId,
+            conversationId,
+            message: '做一个 Agent Native 的 PPT',
+          }),
+        });
+        const body = await response.text();
+
+        expect(response.ok).toBe(true);
+        expect(body).toContain('"type":"flow_stage"');
+        expect(body).toContain('"shape":"deck"');
+      },
+    );
+
+    const flowResponse = await fetch(
+      `${baseUrl}/api/conversations/${encodeURIComponent(conversationId!)}/flow`,
+    );
+    expect(flowResponse.ok).toBe(true);
+    const flowBody = await flowResponse.json() as {
+      flow: { shape: string; activeStage: string | null } | null;
+    };
+    expect(flowBody.flow).toMatchObject({
+      shape: 'deck',
+      activeStage: 'clarify',
+    });
+  });
+
   it('does not leave a pinned assistant message queued when legacy chat fails before spawning', async () => {
     if (!process.env.OD_DATA_DIR) {
       throw new Error('OD_DATA_DIR is required for assistant message pin tests');
@@ -3293,6 +3357,17 @@ describe('chat prompt helpers', () => {
     expect(prompt).toContain('Canonical query for this run:');
     expect(prompt).toContain('EV market 2025 trends');
     expect(prompt).toContain('the first tool action must be the research command');
+  });
+
+  it('forwards deep research depth into the agent command contract', () => {
+    const prompt = resolveResearchCommandContract(
+      { enabled: true, depth: 'deep', maxSources: 20 },
+      'Agent platform landscape',
+    );
+
+    expect(prompt).toContain('--depth deep');
+    expect(prompt).toContain('Round 1');
+    expect(prompt).toContain('Round 2');
   });
 
   it('resolves only the narrow Codex generated_images allowlist for known gpt-image image projects', () => {

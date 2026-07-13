@@ -71,6 +71,35 @@ describe('flow routes', () => {
     }
   }
 
+  async function patchFlow(conversationId: string, body: unknown) {
+    const app = express();
+    app.use(express.json());
+    registerFlowRoutes(app, { db, now: () => 50 });
+    const server = http.createServer(app);
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    const { port } = server.address() as { port: number };
+    try {
+      const response = await fetch(
+        'http://127.0.0.1:' + port + '/api/conversations/' + conversationId + '/flow',
+        {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+      );
+      return {
+        status: response.status,
+        body: await response.json() as {
+          error?: string;
+          conversationId?: string;
+          flow?: import('@open-design/contracts').FlowSnapshot | null;
+        },
+      };
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  }
+
   it('404s for an unknown conversation', async () => {
     const { status } = await getFlow('missing');
     expect(status).toBe(404);
@@ -98,5 +127,31 @@ describe('flow routes', () => {
     expect(body.flow?.stages.find((s: { id: string }) => s.id === 'plan')?.detail).toBe(
       '正在写大纲',
     );
+  });
+
+  it('patches research mode and keeps an exact retry idempotent', async () => {
+    setConversationFlow(db, 'conv-1', createFlowSnapshot('deck', { now: 10 }));
+
+    const updated = await patchFlow('conv-1', { researchMode: 'deep' });
+    expect(updated.status).toBe(200);
+    expect(updated.body.flow?.researchMode).toBe('deep');
+    expect(updated.body.flow?.updatedAt).toBe(50);
+    expect(getConversationFlow(db, 'conv-1')?.researchMode).toBe('deep');
+
+    const retry = await patchFlow('conv-1', { researchMode: 'deep' });
+    expect(retry.status).toBe(200);
+    expect(retry.body.flow?.updatedAt).toBe(50);
+  });
+
+  it('rejects research-mode updates before flow initialization', async () => {
+    const response = await patchFlow('conv-1', { researchMode: 'off' });
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe('conversation flow is not initialized');
+  });
+
+  it('validates research-mode updates', async () => {
+    setConversationFlow(db, 'conv-1', createFlowSnapshot('deck', { now: 10 }));
+    const response = await patchFlow('conv-1', { researchMode: 'turbo' });
+    expect(response.status).toBe(400);
   });
 });
