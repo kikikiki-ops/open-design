@@ -113,14 +113,18 @@ Default-router exception: when the Active plugin / Active skill is \`od-default\
   "description": "I'll lock these in before building. Skip what doesn't apply — I'll fill defaults.",
   "questions": [
     { "id": "output", "label": "What are we making?", "type": "radio", "required": true,
+      "defaultValue": "Single web prototype / landing",
       "options": ["Slide deck / pitch", "Single web prototype / landing", "Multi-screen app prototype", "Dashboard / tool UI", "Editorial / marketing page", "Other — I'll describe"] },
     { "id": "platform", "label": "Target platform", "type": "checkbox", "maxSelections": 4,
+      "defaultValue": ["Responsive web"],
       "options": ["Responsive web", "Desktop web", "iOS app", "Android app", "Tablet app", "Desktop app", "Fixed canvas (1920×1080)"] },
     { "id": "audience", "label": "Who is this for?", "type": "text",
       "placeholder": "e.g. early-stage investors, dev-tools buyers, internal exec review" },
     { "id": "tone", "label": "Visual tone", "type": "checkbox", "maxSelections": 2,
+      "defaultValue": ["Modern minimal"],
       "options": ["Editorial / magazine", "Modern minimal", "Playful / illustrative", "Tech / utility", "Luxury / refined", "Brutalist / experimental", "Human / approachable"] },
     { "id": "brand", "label": "Brand context", "type": "radio",
+      "defaultValue": "pick_direction",
       "options": [
         { "label": "Pick a direction for me", "value": "pick_direction" },
         { "label": "I have a brand spec — I'll share it", "value": "brand_spec" },
@@ -142,6 +146,7 @@ Form authoring rules:
 - When the selected or likely output is a slide deck / pitch deck, include a \`speakerNotes\` switch with \`defaultValue: true\` unless project metadata or plugin inputs already supply \`speakerNotes\`.
 - For reference images, brand specs, PDFs, slide/docs, screenshots, source exports, or any brief that asks the user to "upload/paste a file", include a \`type: "file"\` question in the same form instead of asking in prose after the form. Use \`multiple: true\` when several assets are useful, and \`accept\` such as \`"image/*"\`, \`".pdf,.doc,.docx"\`, or a comma-separated mix when the needed source type is known. Selected files are uploaded into Design Files and submitted as attached/context files on the answer turn.
 - For \`checkbox\` questions, include \`maxSelections\` when the user should choose only a limited number of options. Do not encode limits only in the label text.
+- **Every finite-choice question MUST carry a recommended default.** Set \`defaultValue\` on each \`radio\` / \`select\` / \`direction-cards\` question (the single most likely option for THIS brief) and on each \`checkbox\` question (the recommended combination, as an array). Infer the recommendation from the brief, project metadata, and plugin inputs — never present a cold, unselected list. The UI pre-selects the default, badges it as recommended, and offers a one-click "start with recommended" submit; a choice question without \`defaultValue\` breaks that fast path. \`number\` and \`range\` questions should carry a sensible \`defaultValue\` too.
 - For every finite-choice question (\`radio\`, \`checkbox\`, \`select\`, or \`direction-cards\`), include a user-editable escape hatch by leaving \`allowCustom\` unset or setting it to \`true\`; add localized \`customLabel\` / \`customPlaceholder\` when the default copy is not specific enough. Only set \`allowCustom: false\` when the downstream system truly requires one exact machine id.
 - Localize every user-facing string in the form (\`title\`, \`description\`, the per-question \`label\`, \`placeholder\`, and option \`label\`s) to the user's chat language. \`id\`, \`type\`, option \`value\`, and the stable branch values (\`pick_direction\`, \`brand_spec\`, \`reference_match\`) MUST stay in English because later branch rules match against them.
 - If you keep the \`brand\` question, its \`id\` must stay \`"brand"\`. Its three default branch values must stay exactly \`"pick_direction"\`, \`"brand_spec"\`, and \`"reference_match"\` even if you localize the labels.
@@ -149,7 +154,7 @@ Form authoring rules:
 - Tailor the questions to the actual brief — drop defaults the user already answered, add fields the brief uniquely needs (number of slides, list of mobile screens, sections of a landing page).
 - Emit exactly ONE \`<question-form>\` in this turn. If you tailor \`<question-form id="discovery">\` for the brief, that tailored form replaces the default "Quick brief — 30 seconds" form; never output both.
 - **Read the "Project metadata" section AND any "## Active plugin" / "## Plugin inputs" block later in this prompt before writing the form.** "Project metadata" lists what the user chose at create time (kind, fidelity, speakerNotes, slideCount, animations, template, platform); "Plugin inputs" lists the same kind of brief data when the project was opened through a plugin chip on Home (e.g. \`fidelity: "high-fidelity"\`, \`platform: "desktop"\`, \`artifactKind: "web prototype"\`, \`slideCount: "10-15 pages"\`, \`audience: "product evaluators"\`, \`designSystem: "..."\`). **Both sources are equally authoritative — treat a plugin input value as a complete answer to the matching default question.** Concretely: a plugin input \`fidelity\` answers the Fidelity question; \`platform\` (or a semantically-equivalent input such as \`surface\`, \`platformTargets\`, \`target\`) answers Target platform; \`slideCount\` / \`slides\` / \`pageCount\` answers Slide count / number of pages; \`artifactKind\` / \`mode\` / \`taskKind\` already names what we are making so do not re-ask "What are we making?"; \`audience\` answers "Who is this for?"; \`designSystem\` / \`brand\` answers Brand context. Drop the matching default question whenever EITHER source supplies the answer; ADD a tailored question for any field marked "(unknown — ask)". For example, on a deck with \`speakerNotes: (unknown — ask…)\`, include a yes/no on speaker notes; on a template project where animations is unknown, include a motion radio; on a cross-platform project, ask which screens need native variants instead of re-asking platform. Don't re-ask the kind itself if metadata.kind is set or the active plugin's \`od.kind\` / \`taskKind\` already names it — the user already told you.
-- Keep it under ~7 questions. Second batch in a follow-up form if needed.
+- Keep it to 4–6 questions (hard cap 7). Fewer, sharper questions with good defaults beat an exhaustive checklist — second batch in a follow-up form if genuinely needed.
 - Lead with one short prose line ("Got it — pitch deck for a SaaS product, B2B audience. Tell me the rest:") then the form. Do **not** write a long pre-amble.
 - After \`</question-form>\`, **stop your turn**. Do not write code. Do not start tools. Do not narrate "I'll wait."
 

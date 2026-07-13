@@ -19,12 +19,14 @@ import os from 'node:os';
 import net from 'node:net';
 import { executionProfileFromStreamFormat, PLUGIN_SHARE_ACTION_PLUGIN_IDS } from '@open-design/contracts';
 import { isTodoWriteToolName, stopReasonIsTruncation, todoItemsFromTodoWriteInput } from '@open-design/contracts';
+import { renderFlowProtocol } from '@open-design/contracts';
 import {
   composeSystemPrompt,
   renderConnectedExternalMcpDirective,
   resolveExclusiveSurface,
 } from './prompts/system.js';
 import { emittedRenderableQuestionForm } from './question-form-detect.js';
+import { createFlowTracker, resolveFlowShape } from './flow/engine.js';
 import { resolveProjectRoot } from './project-root.js';
 import {
   resolveDaemonCliPath,
@@ -506,6 +508,8 @@ import {
   deleteProject as dbDeleteProject,
   deleteTemplate,
   getConversation,
+  getConversationFlow,
+  setConversationFlow,
   getDeployment,
   getDeploymentById,
   getMessageTelemetryFinalizationState,
@@ -581,6 +585,7 @@ import { registerActiveContextRoutes } from './routes/active-context.js';
 import { registerAutomationRoutes } from './routes/automation.js';
 import { registerDaemonRoutes } from './routes/daemon.js';
 import { registerGenuiRoutes } from './routes/genui.js';
+import { registerFlowRoutes } from './routes/flow.js';
 import { registerDesignSystemRoutes } from './routes/design-systems.js';
 import { registerHostToolsRoutes } from './routes/host-tools.js';
 import { registerPluginAssetRoutes } from './routes/plugins/assets.js';
@@ -3414,6 +3419,8 @@ export async function startServer({
     paths: { PROJECTS_DIR },
   });
 
+  registerFlowRoutes(app, { db });
+
   registerProjectPluginRoutes(app, {
     db,
     paths: { PROJECTS_DIR, PLUGIN_REGISTRY_ROOTS, PLUGIN_LOCKFILE_PATH },
@@ -4023,6 +4030,26 @@ export async function startServer({
       executionProfile: executionProfileFromStreamFormat(streamFormat),
       ...(pluginBlock ? { pluginBlock } : {}),
       ...(activeStageBlocks ? { activeStageBlocks } : {}),
+      // Staged-flow protocol (spec §5.2): rendered from the same FLOW_SHAPES
+      // registry the progress card reads, only for flow-shaped runs.
+      ...(() => {
+        const shape = resolveFlowShape({
+          sessionMode: normalizeConversationSessionMode(sessionMode),
+          taskKind: (() => {
+            if (typeof appliedPluginSnapshotId !== 'string' || !appliedPluginSnapshotId) {
+              return 'new-generation';
+            }
+            try {
+              return getSnapshot(db, appliedPluginSnapshotId)?.taskKind ?? 'new-generation';
+            } catch {
+              return 'new-generation';
+            }
+          })(),
+          projectKind: metadata?.kind ?? null,
+          projectPlatform: metadata?.platform ?? null,
+        });
+        return shape ? { flowProtocol: renderFlowProtocol(shape) } : {};
+      })(),
       userInstructions,
     });
     // The chat handler also needs to know where the active skill lives
@@ -5031,6 +5058,61 @@ export async function startServer({
       persistRunEventToAssistantMessage(db, run, event, data);
       design.runs.emit(run, event, data);
     };
+    // Staged-flow tracker (specs/current/staged-flow-north-star.zh-CN.md §5.2).
+    // Dual-channel stage advancement for the conversation's FlowSnapshot:
+    // `<od-flow …/>` markers in streamed text plus deterministic heuristics on
+    // tool/artifact events. Every advance is emitted as a `flow_stage` agent
+    // event through send() (so live SSE, replay, and the run record all carry
+    // it) and persisted on the conversation row so refresh recovery
+    // (`GET /api/conversations/:id/flow`) and the CLI read the same truth.
+    const flowShape = resolveFlowShape({
+      sessionMode: runSessionMode,
+      taskKind: (() => {
+        if (typeof run?.appliedPluginSnapshotId !== 'string' || !run.appliedPluginSnapshotId) {
+          return 'new-generation';
+        }
+        try {
+          return getSnapshot(db, run.appliedPluginSnapshotId)?.taskKind ?? 'new-generation';
+        } catch {
+          return 'new-generation';
+        }
+      })(),
+      projectKind: projectRecord?.metadata?.kind ?? null,
+      projectPlatform: projectRecord?.metadata?.platform ?? null,
+    });
+    const flowTracker = flowShape
+      ? createFlowTracker({
+          shape: flowShape,
+          initial: run.conversationId ? getConversationFlow(db, run.conversationId) : null,
+        })
+      : null;
+    const emitFlowSnapshot = (snapshot) => {
+      if (!snapshot) return;
+      send('agent', { type: 'flow_stage', snapshot });
+      if (run.conversationId) {
+        try {
+          setConversationFlow(db, run.conversationId, snapshot);
+        } catch {
+          // Persistence is best-effort; the SSE stream already carried the update.
+        }
+      }
+    };
+    const observeFlowEvent = (ev) => {
+      if (!flowTracker) return;
+      emitFlowSnapshot(flowTracker.observeAgentEvent(ev));
+    };
+    if (flowTracker) {
+      flowTracker.noteUserMessage(
+        typeof message === 'string' && message
+          ? message
+          : typeof currentPrompt === 'string'
+            ? currentPrompt
+            : '',
+      );
+      // Always surface the ladder at run start so the progress card renders
+      // from the first frame, even before any stage advances this turn.
+      emitFlowSnapshot(flowTracker.snapshot);
+    }
     const retryAnalyticsBase = (decision, failure, errorCode) => {
       const runProjectKind = resolveRunProjectKindForAnalytics({
         hintProjectKind: null,
@@ -5358,6 +5440,9 @@ export async function startServer({
         }
       }
       pendingRpcCloseReason = null;
+      // A clean end while generating advances the flow to deliver so the UI
+      // renders the delivery CTA row off the terminal frame (spec §5.8).
+      if (flowTracker) emitFlowSnapshot(flowTracker.noteRunEnd(status));
       design.runs.finish(run, status, code, signal);
       return false;
     };
@@ -6823,6 +6908,7 @@ export async function startServer({
       captureRunWorkCompletenessSignals(run, ev);
       send('agent', ev);
       observeToolEventForLoop(ev);
+      observeFlowEvent(ev);
     }
 
     const sendAgentEvent = (ev) => {

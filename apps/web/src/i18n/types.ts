@@ -3913,6 +3913,7 @@ export interface Dict {
   'qf.cardSelected': string;
   'qf.cardRefs': string;
   'qf.cardSampleText': string;
+  'qf.recommended': string;
   'questions.tabLabel': string;
   'questions.banner': string;
   'questions.bannerAnswered': string;
@@ -3921,6 +3922,33 @@ export interface Dict {
   'questions.skipAll': string;
   'questions.autoSkipHint': string;
   'questions.submitting': string;
+  'questions.useRecommended': string;
+
+  // Staged-flow progress card (specs/current/staged-flow-north-star.zh-CN.md §5.3)
+  'flow.title': string;
+  'flow.stepOf': string;
+  'flow.stage.clarify': string;
+  'flow.stage.research': string;
+  'flow.stage.plan': string;
+  'flow.stage.inspire': string;
+  'flow.stage.generate': string;
+  'flow.stage.deliver': string;
+  'flow.hint.clarify': string;
+  'flow.hint.research': string;
+  'flow.hint.plan': string;
+  'flow.hint.inspire': string;
+  'flow.hint.generate': string;
+  'flow.hint.deliver': string;
+  'flow.state.active': string;
+  'flow.state.complete': string;
+  'flow.state.skipped': string;
+  'flow.state.error': string;
+  'flow.unit.slides': string;
+  'flow.unit.sections': string;
+  'flow.unit.screens': string;
+  'flow.unit.pages': string;
+  'flow.unit.chapters': string;
+  'flow.unit.assets': string;
 
   // Inline <od-card> memory cards (display-only siblings of question-form)
   'artifact.odCardTaskBriefChip': string;

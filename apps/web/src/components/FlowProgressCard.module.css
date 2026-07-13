@@ -1,0 +1,109 @@
+/* Staged-flow progress card (specs/current/staged-flow-north-star.zh-CN.md
+   §5.3). Pinned above the chat log for flow conversations: the whole ladder
+   is always visible so the user knows what happens next, not just what is
+   happening now. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-subtle, var(--bg-panel));
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.title {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.stepOf {
+  color: var(--text-muted, var(--text));
+  font-variant-numeric: tabular-nums;
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.icon {
+  flex: 0 0 auto;
+  width: 16px;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-muted, var(--text));
+}
+
+.step.complete .icon {
+  color: var(--success, #2e9e5b);
+}
+
+.step.active .icon {
+  color: var(--accent);
+}
+
+.step.error .icon {
+  color: var(--danger, #d9534f);
+}
+
+.copy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.labelRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.label {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.step.pending .label,
+.step.skipped .label {
+  color: var(--text-muted, var(--text));
+  font-weight: 400;
+}
+
+.step.active .label {
+  color: var(--accent);
+}
+
+.count {
+  color: var(--text-muted, var(--text));
+  font-variant-numeric: tabular-nums;
+}
+
+.detail {
+  color: var(--text-muted, var(--text));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

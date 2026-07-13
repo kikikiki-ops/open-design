@@ -8,7 +8,7 @@ import Database from 'better-sqlite3';
 import path from 'node:path';
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import type { ProjectBrowserWorkspaceTab, ProjectTabsState } from '@open-design/contracts';
+import type { FlowSnapshot, ProjectBrowserWorkspaceTab, ProjectTabsState } from '@open-design/contracts';
 import { eventsEndedWithUnfinishedWork } from '@open-design/contracts';
 import { migrateCritique } from './critique/persistence.js';
 import { migrateMediaTasks } from './media/tasks.js';
@@ -264,6 +264,11 @@ function migrate(db: SqliteDb): void {
   const conversationCols = db.prepare(`PRAGMA table_info(conversations)`).all() as DbRow[];
   if (!conversationCols.some((c: DbRow) => c.name === 'session_mode')) {
     db.exec(`ALTER TABLE conversations ADD COLUMN session_mode TEXT NOT NULL DEFAULT 'design'`);
+  }
+  if (!conversationCols.some((c: DbRow) => c.name === 'flow_json')) {
+    // Staged-flow snapshot (specs/current/staged-flow-north-star.zh-CN.md).
+    // NULL for conversations that never entered the staged flow.
+    db.exec(`ALTER TABLE conversations ADD COLUMN flow_json TEXT`);
   }
   const messageCols = db.prepare(`PRAGMA table_info(messages)`).all() as DbRow[];
   if (!messageCols.some((c: DbRow) => c.name === 'agent_id')) {
@@ -1241,6 +1246,28 @@ export function updateConversation(db: SqliteDb, id: string, patch: DbRow) {
 
 export function deleteConversation(db: SqliteDb, id: string) {
   db.prepare(`DELETE FROM conversations WHERE id = ?`).run(id);
+}
+
+// ---------- staged flow (specs/current/staged-flow-north-star.zh-CN.md) ----------
+
+export function getConversationFlow(db: SqliteDb, id: string): FlowSnapshot | null {
+  const r = db
+    .prepare(`SELECT flow_json AS flowJson FROM conversations WHERE id = ?`)
+    .get(id) as DbRow | undefined;
+  if (!r || typeof r.flowJson !== 'string' || !r.flowJson) return null;
+  try {
+    const parsed = JSON.parse(r.flowJson) as FlowSnapshot;
+    return parsed && parsed.version === 1 && Array.isArray(parsed.stages) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setConversationFlow(db: SqliteDb, id: string, snapshot: FlowSnapshot | null) {
+  db.prepare(`UPDATE conversations SET flow_json = ? WHERE id = ?`).run(
+    snapshot ? JSON.stringify(snapshot) : null,
+    id,
+  );
 }
 
 // ---------- agent sessions ----------

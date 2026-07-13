@@ -1,4 +1,5 @@
 import type { LiveArtifactRefreshStatus } from '../api/live-artifacts.js';
+import type { FlowSnapshot } from '../api/flow.js';
 import type { RunFailureCategory, RunFailureDetail } from '../api/chat.js';
 import type { SseErrorPayload } from '../errors.js';
 import type { SseTransportEvent } from './common.js';
@@ -136,6 +137,15 @@ export type DaemonAgentPayload =
       signature: string;
       count: number;
     }
+  /**
+   * Staged-flow snapshot update (specs/current/staged-flow-north-star.zh-CN.md).
+   * Emitted by the daemon whenever the conversation's `FlowSnapshot` advances —
+   * from an inline `<od-flow …/>` marker or a fallback heuristic. Carries the
+   * FULL snapshot (not a delta) so consumers can render statelessly and a
+   * missed event never corrupts the picture; refresh recovery goes through
+   * `GET /api/conversations/:id/flow`.
+   */
+  | { type: 'flow_stage'; snapshot: FlowSnapshot }
   | { type: 'raw'; line: string };
 
 export type ChatSseEvent =

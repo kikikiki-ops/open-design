@@ -35,7 +35,8 @@ import { takeComposerSeedFor } from '../state/libraryHandoff';
 import { splitOnQuestionForms } from '../artifacts/question-form';
 import { stripArtifact } from '../artifacts/strip';
 import type { TodoItem } from '../runtime/todos';
-import type { AppliedPluginSnapshot, ChatSessionMode, WorkspaceContextItem } from '@open-design/contracts';
+import type { AppliedPluginSnapshot, ChatSessionMode, FlowSnapshot, WorkspaceContextItem } from '@open-design/contracts';
+import { FlowProgressCard } from './FlowProgressCard';
 import type { TrackingProjectKind } from '@open-design/contracts/analytics';
 import {
   DESIGN_SYSTEM_WORKSPACE_DISPLAY_DESCRIPTION,
@@ -468,6 +469,11 @@ interface Props {
   hasActiveDesignSystem?: boolean;
   activeDesignSystem?: DesignSystemSummary | null;
   sendDisabled?: boolean;
+  // Staged-flow snapshot for this conversation
+  // (specs/current/staged-flow-north-star.zh-CN.md §5.3). When present, the
+  // FlowProgressCard is pinned above the chat log; null/undefined keeps the
+  // current UX for non-flow conversations (chat, tune, migrations).
+  flowSnapshot?: FlowSnapshot | null;
   queuedItems?: QueuedSendItem[];
   onRemoveQueuedSend?: (id: string) => void;
   onUpdateQueuedSend?: (id: string, update: QueuedSendUpdate) => void;
@@ -775,6 +781,7 @@ export function ChatPane({
   streaming,
   loading = false,
   sendDisabled = false,
+  flowSnapshot = null,
   queuedItems = [],
   error,
   projectId,
@@ -914,6 +921,7 @@ export function ChatPane({
   const composerSlotRef = useRef<HTMLDivElement | null>(null);
   const composerLayerRef = useRef<HTMLDivElement | null>(null);
   const queuedSendStripRef = useRef<HTMLDivElement | null>(null);
+  const flowCardRef = useRef<HTMLDivElement | null>(null);
   const didInitialScrollRef = useRef(false);
   const runFailedToastSurfaceKeysRef = useRef<Set<string>>(new Set());
   // Tracks whether the user is glued close enough to the bottom that
@@ -1791,14 +1799,35 @@ export function ChatPane({
       }
     };
 
+    // Like QueuedSendStrip, the FlowProgressCard sits outside the chat-log
+    // subtree (a sibling above .chat-log-wrap), so auto-follow must observe it
+    // explicitly or its mount/resize would mismeasure the scroll math.
+    let observedFlowCard: Element | null = null;
+    const syncFlowCard = () => {
+      if (!resizeObserver) return;
+      const flowEl = flowCardRef.current;
+      if (flowEl && observedFlowCard !== flowEl) {
+        if (observedFlowCard) {
+          resizeObserver.unobserve(observedFlowCard);
+        }
+        resizeObserver.observe(flowEl);
+        observedFlowCard = flowEl;
+      } else if (!flowEl && observedFlowCard) {
+        resizeObserver.unobserve(observedFlowCard);
+        observedFlowCard = null;
+      }
+    };
+
     syncObservedChildren();
     syncQueuedSendStrip();
+    syncFlowCard();
 
     const mutationObserver =
       typeof MutationObserver !== 'undefined'
         ? new MutationObserver(() => {
             syncObservedChildren();
             syncQueuedSendStrip();
+            syncFlowCard();
             followLatestIfPinned();
           })
         : null;
@@ -2224,6 +2253,9 @@ export function ChatPane({
       </div>
       {tab === 'chat' ? (
         <>
+          {flowSnapshot ? (
+            <FlowProgressCard flow={flowSnapshot} containerRef={flowCardRef} />
+          ) : null}
           <div className={`chat-log-wrap${chatLogTray ? ' has-chat-log-tray' : ''}`}>
             <div
               className={[

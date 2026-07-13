@@ -89,10 +89,8 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
         changed = true;
         if (submittedAnswers && submittedAnswers[q.id] !== undefined) {
           next[q.id] = canonicalizeQuestionValue(q, submittedAnswers[q.id]!);
-        } else if (q.defaultValue !== undefined) {
-          next[q.id] = canonicalizeQuestionValue(q, q.defaultValue);
         } else {
-          next[q.id] = emptyQuestionValue(q);
+          next[q.id] = seedQuestionValue(q);
         }
       }
       return changed ? next : prev;
@@ -212,7 +210,11 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
                         aria-label={opt.label}
                         onChange={() => update(q.id, opt.value)}
                       />
-                      <OptionCopy option={opt} />
+                      <OptionCopy
+                        option={opt}
+                        recommended={optionIsRecommended(q, opt)}
+                        recommendedLabel={t('qf.recommended')}
+                      />
                     </label>
                   ))}
                 </div>
@@ -247,7 +249,11 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
                           aria-label={opt.label}
                           onChange={() => toggleCheckbox(q.id, opt.value, q.maxSelections)}
                         />
-                        <OptionCopy option={opt} />
+                        <OptionCopy
+                          option={opt}
+                          recommended={optionIsRecommended(q, opt)}
+                          recommendedLabel={t('qf.recommended')}
+                        />
                       </label>
                     );
                   })}
@@ -455,10 +461,25 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
   );
 });
 
-function OptionCopy({ option }: { option: FormOption }) {
+function OptionCopy({
+  option,
+  recommended = false,
+  recommendedLabel,
+}: {
+  option: FormOption;
+  recommended?: boolean;
+  recommendedLabel?: string;
+}) {
   return (
     <span className="qf-chip-copy">
-      <span>{option.label}</span>
+      <span>
+        {option.label}
+        {recommended ? (
+          <span className="qf-chip-recommended" title={recommendedLabel} aria-label={recommendedLabel}>
+            ★
+          </span>
+        ) : null}
+      </span>
       {option.description ? <span className="qf-chip-desc">{option.description}</span> : null}
     </span>
   );
@@ -572,13 +593,38 @@ function buildInitialState(
       out[q.id] = canonicalizeQuestionValue(q, draft[q.id]!);
       continue;
     }
-    if (q.defaultValue !== undefined) {
-      out[q.id] = canonicalizeQuestionValue(q, q.defaultValue);
-      continue;
-    }
-    out[q.id] = emptyQuestionValue(q);
+    out[q.id] = seedQuestionValue(q);
   }
   return out;
+}
+
+/**
+ * Deterministic default backfill (staged-flow spec §5.4): the model is asked
+ * to put a recommended `defaultValue` on every finite-choice question, but it
+ * is steerable, not authoritative — when a radio arrives without one, seed
+ * the first option so the recommended-path submit never blocks on a cold,
+ * unanswered required choice. Only radio gets this: its chips make the
+ * preselection visible at a glance. A collapsed select hides it (and required
+ * selects like the ElevenLabs voice picker must stay deliberately unanswered
+ * — see the "required select" regression test), and pre-picking checkbox
+ * combinations or a whole visual direction would overstate user intent.
+ */
+function seedQuestionValue(q: QuestionForm['questions'][number]): string | string[] {
+  if (q.defaultValue !== undefined) return canonicalizeQuestionValue(q, q.defaultValue);
+  if (q.type === 'radio' && q.options && q.options.length > 0) {
+    return q.options[0]!.value;
+  }
+  return emptyQuestionValue(q);
+}
+
+/** True when this option is the question's recommended default (★ badge). */
+function optionIsRecommended(
+  q: QuestionForm['questions'][number],
+  option: FormOption,
+): boolean {
+  if (q.defaultValue === undefined) return false;
+  const def = canonicalizeQuestionValue(q, q.defaultValue);
+  return Array.isArray(def) ? def.includes(option.value) : def === option.value;
 }
 
 function draftSafeAnswers(

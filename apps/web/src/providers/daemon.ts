@@ -22,6 +22,7 @@ import type {
   ChatSseEvent,
   ChatSseStartPayload,
   DaemonAgentPayload,
+  FlowSnapshot,
   AmrModelsResponse,
   AmrWalletSnapshot,
   ByokChatProviderConfig,
@@ -268,6 +269,14 @@ export interface DaemonStreamHandlers extends StreamHandlers {
    * tool name so the UI can gate the live preview to code-writing tools.
    */
   onToolInputDelta?: (id: string, name: string, delta: string) => void;
+  /**
+   * Staged-flow snapshot update (specs/current/staged-flow-north-star.zh-CN.md).
+   * Carries the FULL FlowSnapshot, not a delta, and is conversation-scoped UI
+   * state rather than message content — kept off `AgentEvent` for the same
+   * reason as `onToolInputDelta`. Refresh recovery reads
+   * `GET /api/conversations/:id/flow` instead of replaying these.
+   */
+  onFlowStage?: (snapshot: FlowSnapshot) => void;
 }
 
 export interface DaemonStreamOptions {
@@ -1117,6 +1126,12 @@ async function consumeDaemonRun({
                 typeof event.data.delta === 'string'
               ) {
                 handlers.onToolInputDelta?.(event.data.id, event.data.name, event.data.delta);
+              }
+              continue;
+            }
+            if (event.data.type === 'flow_stage') {
+              if (event.data.snapshot && event.data.snapshot.version === 1) {
+                handlers.onFlowStage?.(event.data.snapshot);
               }
               continue;
             }

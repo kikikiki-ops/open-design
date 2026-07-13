@@ -84,7 +84,9 @@ export function QuestionsPanel({
   // What drove the next submit: the Continue CTA, the Skip button, or the
   // auto-continue countdown. Read (and reset) inside submitAndClearDraft so
   // the single submit chokepoint can label the click event.
-  const submitSourceRef = useRef<'continue' | 'skip_button' | 'countdown'>('continue');
+  const submitSourceRef = useRef<'continue' | 'recommended' | 'skip_button' | 'countdown'>(
+    'continue',
+  );
   const [ready, setReady] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -104,6 +106,14 @@ export function QuestionsPanel({
   const [draftAnswers, setDraftAnswers] = useState<QuestionFormAnswers | undefined>(() =>
     readQuestionFormDraft(formKey),
   );
+  // Pristine = the user hasn't touched any control on this form yet, so the
+  // current answers are exactly the seeded recommended defaults. While
+  // pristine, the Continue CTA reads "Start with recommended" (staged-flow
+  // spec §5.4) — submitting it IS the one-click default path. Any edit (or a
+  // restored draft from a previous visit) flips the label back to Continue.
+  const [touchedForm, setTouchedForm] = useState(false);
+  const pristineDefaults =
+    !touchedForm && (draftAnswers === undefined || Object.keys(draftAnswers).length === 0);
 
   const total = form?.questions.length ?? 0;
   const answered = submittedAnswers !== undefined;
@@ -125,6 +135,7 @@ export function QuestionsPanel({
 
   useEffect(() => {
     setDraftAnswers(readQuestionFormDraft(formKey));
+    setTouchedForm(false);
   }, [formKey]);
 
   useEffect(() => {
@@ -134,6 +145,7 @@ export function QuestionsPanel({
   const updateDraftAnswers = useCallback(
     (answers: QuestionFormAnswers) => {
       setUploadError(null);
+      setTouchedForm(true);
       setDraftAnswers(answers);
       writeQuestionFormDraft(formKey, answers);
     },
@@ -239,7 +251,7 @@ export function QuestionsPanel({
         trackQuestionsFormClick(analytics.track, {
           page_name: 'chat_panel',
           area: 'questions_form',
-          ...(source === 'continue'
+          ...(source === 'continue' || source === 'recommended'
             ? { element: 'submit' as const }
             : {
                 element: 'skip' as const,
@@ -413,8 +425,9 @@ export function QuestionsPanel({
           className="questions-continue"
           disabled={!canContinue}
           aria-busy={submitting ? 'true' : undefined}
+          data-testid={pristineDefaults ? 'questions-recommended-start' : 'questions-continue'}
           onClick={() => {
-            submitSourceRef.current = 'continue';
+            submitSourceRef.current = pristineDefaults ? 'recommended' : 'continue';
             formRef.current?.submit();
           }}
         >
@@ -423,6 +436,8 @@ export function QuestionsPanel({
               <span className="questions-continue-spinner" aria-hidden />
               {t('questions.submitting')}
             </>
+          ) : pristineDefaults ? (
+            t('questions.useRecommended')
           ) : (
             t('questions.continue')
           )}

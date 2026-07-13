@@ -225,6 +225,10 @@ export interface ComposeInput {
   // contracts composer simply splices them in after the plugin block;
   // every block is already self-contained markdown.
   activeStageBlocks?: ReadonlyArray<string> | undefined;
+  // Staged-flow protocol block (specs/current/staged-flow-north-star.zh-CN.md
+  // §5.2), pre-rendered by `renderFlowProtocol(shape)` for flow-shaped runs.
+  // Undefined for conversations that don't enter the staged flow.
+  flowProtocol?: string | undefined;
   // Provider voice choices fetched by the app before composing the
   // prompt. Used for ElevenLabs speech discovery so the agent can
   // render a select question-form instead of asking the user to paste
@@ -265,6 +269,7 @@ export function composeSystemPrompt({
   template,
   pluginBlock,
   activeStageBlocks,
+  flowProtocol,
   audioVoiceOptions,
   audioVoiceOptionsError,
   streamFormat,
@@ -442,6 +447,12 @@ export function composeSystemPrompt({
         parts.push(block);
       }
     }
+  }
+
+  // Staged-flow protocol (specs/current/staged-flow-north-star.zh-CN.md §5.2).
+  // Present only for flow-shaped runs; carries the <od-flow> marker contract.
+  if (flowProtocol && flowProtocol.trim().length > 0) {
+    parts.push(flowProtocol);
   }
 
   const metaBlock = renderMetadataBlock(metadata, template, audioVoiceOptions, audioVoiceOptionsError);

@@ -60,6 +60,7 @@ import {
   type ByokMediaDefaults,
   type ByokChatProviderConfig,
   type ByokChatProtocol,
+  type FlowSnapshot,
   type ResearchOptions,
 } from '@open-design/contracts';
 import {
@@ -157,6 +158,7 @@ import {
   fetchAppliedPluginSnapshot,
   installGeneratedPluginFolder,
   listConversations,
+  fetchConversationFlow,
   listMessages,
   loadTabs,
   patchConversation,
@@ -1506,6 +1508,9 @@ export function ProjectView({
   // wipes both — leaving the daemon's run with no client-side message to
   // attach the runId to.
   const [messagesInitialized, setMessagesInitialized] = useState(false);
+  // Staged-flow snapshot for the active conversation (spec §5.3): live
+  // updates from `flow_stage` SSE events, seeded from GET /flow on load.
+  const [flowSnapshot, setFlowSnapshot] = useState<FlowSnapshot | null>(null);
   const [previewComments, setPreviewComments] = useState<PreviewComment[]>([]);
   // Mirror so the send-now interrupt path can read the current statuses
   // synchronously without re-creating its callback on every comment change.
@@ -2141,16 +2146,19 @@ export function ProjectView({
     if (messagesConversationIdRef.current !== activeConversationId) {
       messagesConversationIdRef.current = null;
     }
+    setFlowSnapshot(null);
     (async () => {
       try {
-        const [list, comments] = await Promise.all([
+        const [list, comments, flow] = await Promise.all([
           listMessages(project.id, activeConversationId),
           fetchPreviewComments(project.id, activeConversationId),
+          fetchConversationFlow(activeConversationId),
         ]);
         if (cancelled) return;
         setMessages(list);
         setMessagesInitialized(true);
         setPreviewComments(comments);
+        setFlowSnapshot(flow);
         setAttachedComments([]);
         setArtifact(null);
         setError(null);
@@ -5353,6 +5361,12 @@ export function ProjectView({
           if (ev.kind === 'text') textBuffer.appendTextEvent(ev.text);
           else pushEvent(ev);
         },
+        // Staged-flow snapshot updates are conversation-scoped UI state, not
+        // message content — mirror the conversation_title precedent above.
+        // Refresh recovery reads GET /api/conversations/:id/flow on load.
+        onFlowStage: (snapshot: FlowSnapshot) => {
+          setFlowSnapshot(snapshot);
+        },
         onToolInputDelta: (id: string, name: string, delta: string) => {
           setLiveToolInput((prev) => ({
             ...prev,
@@ -8447,6 +8461,7 @@ export function ProjectView({
               liveToolInput={liveToolInput}
               loading={currentConversationLoading}
               sendDisabled={currentConversationSendDisabled}
+              flowSnapshot={flowSnapshot}
               queuedItems={currentConversationQueuedItems}
               error={conversationLoadError ?? error}
               projectId={project.id}

@@ -332,6 +332,7 @@ const SUBCOMMAND_MAP = {
   files: runFiles,
   templates: runTemplates,
   conversation: runConversation,
+  flow: runFlow,
   chat: runChat,
   daemon: runDaemon,
   atoms: runAtoms,
@@ -557,6 +558,10 @@ function printRootHelp() {
 
   od research search --query <text> [--max-sources 5] [--daemon-url <url>]
       Run agent-callable Tavily research through the local daemon.
+
+  od flow status <conversationId> [--json]
+      Print a conversation's staged-flow progress (clarify → research →
+      plan → inspire → generate → deliver).
 
   od plugin <list|info|install|uninstall|apply|doctor|replay|trust> [args]
       Discover, install, and apply plugins through the local daemon.
@@ -7050,6 +7055,70 @@ Common options:
       console.error(`unknown subcommand: od conversation ${sub}`);
       process.exit(2);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Subcommand: od flow  (staged-flow progress)
+//
+// `od flow status <conversationId> [--json]` reads the same persisted
+// FlowSnapshot the web progress card renders (GET /api/conversations/:id/flow)
+// — the CLI half of the dual-track surface for the staged flow
+// (specs/current/staged-flow-north-star.zh-CN.md §5.9).
+// ---------------------------------------------------------------------------
+
+const FLOW_STRING_FLAGS = new Set(['daemon-url', 'conversation']);
+const FLOW_BOOLEAN_FLAGS = new Set(['json']);
+const FLOW_STAGE_ICONS = {
+  pending: '○',
+  active: '◔',
+  complete: '✓',
+  skipped: '⊘',
+  error: '✕',
+};
+
+async function runFlow(args) {
+  if (args.length === 0 || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
+    console.log(`Usage:
+  od flow status <conversationId>     Print the staged-flow snapshot
+                                      (clarify → research → plan → inspire →
+                                      generate → deliver).
+
+Common options:
+  --daemon-url <url>   Open Design daemon HTTP base.
+  --json               Emit raw JSON.`);
+    process.exit(args.length === 0 ? 2 : 0);
+  }
+  const sub = args[0];
+  const rest = args.slice(1);
+  if (sub !== 'status') {
+    console.error(`unknown subcommand: od flow ${sub}`);
+    process.exit(2);
+  }
+  const flags = parseFlags(rest, { string: FLOW_STRING_FLAGS, boolean: FLOW_BOOLEAN_FLAGS });
+  const [positional] = positionalArgs(rest, FLOW_STRING_FLAGS);
+  const conversationId =
+    typeof flags.conversation === 'string' && flags.conversation ? flags.conversation : positional;
+  if (!conversationId) {
+    console.error('Usage: od flow status <conversationId> [--json]');
+    process.exit(2);
+  }
+  const base = (await cliDaemonUrl(flags)).replace(/\/$/, '');
+  const resp = await fetch(`${base}/api/conversations/${encodeURIComponent(conversationId)}/flow`);
+  if (!resp.ok) return structuredHttpFailure(resp, 'conversation-not-found');
+  const data = await resp.json();
+  if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+  if (!data.flow) {
+    console.log('[flow] no staged flow for this conversation');
+    return;
+  }
+  console.log(`[flow] shape ${data.flow.shape} · research ${data.flow.researchMode}`);
+  for (const stage of data.flow.stages) {
+    const icon = FLOW_STAGE_ICONS[stage.state] ?? '·';
+    const progress = stage.progress ? ` ${stage.progress.done}/${stage.progress.total}` : '';
+    const detail = stage.detail ? ` — ${stage.detail}` : '';
+    console.log(`  ${icon} ${stage.id}${progress}${detail}`);
+  }
+  return;
 }
 
 // ---------------------------------------------------------------------------

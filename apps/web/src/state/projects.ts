@@ -13,6 +13,8 @@ import type {
   CreateDesignSystemProjectFromProjectResponse,
   DuplicateProjectResponse,
   CreatePluginShareProjectResponse,
+  FlowSnapshot,
+  FlowStatusResponse,
   CreateTerminalRequest,
   ImportFolderRequest,
   ImportFolderResponse,
@@ -473,6 +475,30 @@ export async function deleteConversation(
     return resp.ok;
   } catch {
     return false;
+  }
+}
+
+// ---------- staged flow ----------
+
+/**
+ * Refresh-recovery read for the staged-flow progress card
+ * (specs/current/staged-flow-north-star.zh-CN.md). Live updates arrive as
+ * `flow_stage` SSE events; this fetch seeds the card after a reload. Returns
+ * null for conversations that never entered the staged flow.
+ */
+export async function fetchConversationFlow(
+  conversationId: string,
+): Promise<FlowSnapshot | null> {
+  try {
+    const resp = await fetch(
+      `/api/conversations/${encodeURIComponent(conversationId)}/flow`,
+      { cache: 'no-store' },
+    );
+    if (!resp.ok) return null;
+    const json = (await resp.json()) as FlowStatusResponse;
+    return json.flow ?? null;
+  } catch {
+    return null;
   }
 }
 

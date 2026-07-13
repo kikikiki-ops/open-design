@@ -35,6 +35,7 @@ import {
 import {
   hasOdCard,
   splitOnOdCards,
+  stripOdFlowMarkers,
   stripTrailingOpenOdCard,
   type ChatSessionMode,
   type OdCard,
@@ -2353,7 +2354,11 @@ function ProseBlock({
 }) {
   const t = useT();
   const cleaned = useMemo(() => {
-    const stripped = stripArtifact(text);
+    // `<od-flow …/>` stage markers are machine protocol (the daemon parses
+    // them into the FlowProgressCard); strip complete markers and any
+    // mid-stream partial tail before the prose renders — same treatment as
+    // `<question-form>` blocks (spec §5.2).
+    const stripped = stripArtifact(stripOdFlowMarkers(text));
     return hideRecoveredHtmlFallback ? stripRecoveredHtmlFallbackForDisplay(stripped, text) : stripped;
   }, [hideRecoveredHtmlFallback, text]);
   // While the latest turn is still streaming a not-yet-closed question-form,

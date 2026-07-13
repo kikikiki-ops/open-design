@@ -561,6 +561,11 @@ export interface ComposeInput {
   // flag is set; otherwise this stays undefined and the prompt
   // composer's hard-coded constants keep their precedence (back-compat).
   activeStageBlocks?: ReadonlyArray<string> | undefined;
+  // Staged-flow protocol block (specs/current/staged-flow-north-star.zh-CN.md
+  // §5.2), pre-rendered by `renderFlowProtocol(shape)` from
+  // @open-design/contracts for flow-shaped runs. Undefined for conversations
+  // that don't enter the staged flow (chat, plan, tune-collab, migrations).
+  flowProtocol?: string | undefined;
   // Free-form instructions the user set at the global (user-level)
   // settings panel. Injected after personal memory and before the
   // project-level instructions.
@@ -615,6 +620,7 @@ export function composeSystemPrompt({
   critiqueSkill,
   pluginBlock,
   activeStageBlocks,
+  flowProtocol,
   streamFormat,
   locale,
   sessionMode,
@@ -873,6 +879,12 @@ export function composeSystemPrompt({
         parts.push(block);
       }
     }
+  }
+
+  // Staged-flow protocol (specs/current/staged-flow-north-star.zh-CN.md §5.2).
+  // Present only for flow-shaped runs; carries the <od-flow> marker contract.
+  if (flowProtocol && flowProtocol.trim().length > 0) {
+    parts.push(flowProtocol);
   }
 
   const metaBlock = renderMetadataBlock(
