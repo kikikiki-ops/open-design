@@ -671,6 +671,7 @@
   padding: 0;
   font-size: var(--font-size-14);
   font-weight: 500;
+  text-align: left;
 }
 .home-hero__lexical .composer-input-placeholder {
   top: 0;

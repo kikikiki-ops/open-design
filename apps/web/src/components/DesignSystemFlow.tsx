@@ -82,6 +82,7 @@ import { DesignSystemAssetDropzone } from './DesignSystemAssetDropzone';
 import { BrandPickerModal } from './BrandPickerModal';
 import { HomeView } from './HomeView';
 import type { PluginLoopSubmit } from './PluginLoopHome';
+import { orderedCreateChips } from './home-hero/chips';
 import { DesignSystemPicker } from './DesignSystemPicker';
 import { LibraryPicker } from './LibraryPicker';
 import { notifyConnectorsChanged } from './connectors-events';
@@ -230,6 +231,10 @@ interface DemoExtractionProject {
 }
 
 const DEMO_HOME_HIDDEN_TEMPLATE_IDS = ['live-artifact', 'image', 'video', 'audio'];
+const DEMO_ARTIFACT_CHOICES = orderedCreateChips().filter(
+  (artifact) => artifact.action.kind === 'apply-scenario'
+    && !DEMO_HOME_HIDDEN_TEMPLATE_IDS.includes(artifact.id),
+);
 
 interface DemoExtractedFoundation {
   displayFont: string | null;
@@ -410,6 +415,7 @@ export function DesignSystemCreationFlow({
   const [demoFoundation, setDemoFoundation] = useState<DemoExtractedFoundation | null>(null);
   const [demoArtifactCreating, setDemoArtifactCreating] = useState(false);
   const [demoComposerDesignSystemId, setDemoComposerDesignSystemId] = useState<string | null>(null);
+  const [demoArtifactTypeId, setDemoArtifactTypeId] = useState<string | null>(null);
   const demoLogoUploadRef = useRef<HTMLInputElement>(null);
   const demoExtractionStartedAtRef = useRef<number | null>(null);
   const demoLogoRevealTimerRef = useRef<number | null>(null);
@@ -1064,6 +1070,7 @@ export function DesignSystemCreationFlow({
     setDemoFoundation(null);
     setDemoExtractionStage('extracting-logo');
     setDemoComposerDesignSystemId(null);
+    setDemoArtifactTypeId(null);
     onBeforeGenerate?.(snapshot);
     setGenerationStarting(true);
     setError(null);
@@ -1633,6 +1640,7 @@ export function DesignSystemCreationFlow({
               <HomeView
                 focused
                 hiddenTemplateIds={DEMO_HOME_HIDDEN_TEMPLATE_IDS}
+                initialChipId={demoArtifactTypeId}
                 projects={[]}
                 projectsLoading={false}
                 designSystems={demoComposerDesignSystems}
@@ -1643,6 +1651,8 @@ export function DesignSystemCreationFlow({
               />
             </div>
           ) : null}
+          artifactTypeId={demoArtifactTypeId}
+          onArtifactTypeChange={setDemoArtifactTypeId}
           artifactCreating={demoArtifactCreating}
           canOpenProject={demoProject !== null}
         />
@@ -1671,6 +1681,8 @@ function DesignSystemExtractionDemo({
   onApproveLogo,
   onOpenComposer,
   artifactComposer,
+  artifactTypeId,
+  onArtifactTypeChange,
   artifactCreating,
   canOpenProject,
 }: {
@@ -1684,13 +1696,16 @@ function DesignSystemExtractionDemo({
   onApproveLogo: () => void;
   onOpenComposer: () => Promise<boolean>;
   artifactComposer: ReactNode;
+  artifactTypeId: string | null;
+  onArtifactTypeChange: (artifactId: string) => void;
   artifactCreating: boolean;
   canOpenProject: boolean;
 }) {
   const label = brandName || 'your brand';
   const isLoading = stage === 'extracting-logo' || stage === 'extracting-system';
   const resultFoundation = foundation ?? demoFoundationFromSource(sourceUrl);
-  const [creationStep, setCreationStep] = useState<'summary' | 'compose'>('summary');
+  const [creationStep, setCreationStep] = useState<'summary' | 'artifact' | 'compose'>('summary');
+  const selectedArtifact = DEMO_ARTIFACT_CHOICES.find((artifact) => artifact.id === artifactTypeId) ?? null;
   const showSummary = stage === 'system-review' && creationStep === 'summary';
   const showArtifactFlow = stage === 'system-review' && creationStep !== 'summary';
 
@@ -1781,7 +1796,7 @@ function DesignSystemExtractionDemo({
                 disabled={artifactCreating}
                 onClick={() => {
                   void onOpenComposer().then((opened) => {
-                    if (opened) setCreationStep('compose');
+                    if (opened) setCreationStep('artifact');
                   });
                 }}
               >
@@ -1790,6 +1805,40 @@ function DesignSystemExtractionDemo({
             </footer>
           ) : null}
         </>
+      ) : null}
+
+      {stage === 'system-review' && creationStep === 'artifact' ? (
+        <section className="ds-artifact-picker">
+          <header>
+            <h1>What do you want to create?</h1>
+            <p>Choose an artifact to create with your new design system.</p>
+          </header>
+          <div className="ds-artifact-picker__grid">
+            {DEMO_ARTIFACT_CHOICES.map((artifact) => {
+              const selected = artifact.id === artifactTypeId;
+              return (
+                <button
+                  type="button"
+                  key={artifact.id}
+                  className={`ds-artifact-choice${selected ? ' is-selected' : ''}`}
+                  aria-pressed={selected}
+                  onClick={() => onArtifactTypeChange(artifact.id)}
+                >
+                  <Icon name={artifact.icon} size={22} />
+                  <strong>{artifact.label}</strong>
+                  <span>{artifact.description ?? artifact.hint}</span>
+                </button>
+              );
+            })}
+          </div>
+          <Button
+            variant="primary"
+            disabled={!selectedArtifact}
+            onClick={() => setCreationStep('compose')}
+          >
+            Continue
+          </Button>
+        </section>
       ) : null}
 
       {stage === 'system-review' && creationStep === 'compose' ? artifactComposer : null}

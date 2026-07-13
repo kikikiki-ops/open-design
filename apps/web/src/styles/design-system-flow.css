@@ -595,6 +595,80 @@
   margin: 0 auto;
 }
 
+.ds-artifact-picker {
+  display: grid;
+  width: 100%;
+  justify-items: center;
+  text-align: center;
+}
+.ds-artifact-picker > header { margin-bottom: 28px; }
+.ds-artifact-picker h1 {
+  margin: 0;
+  color: var(--text-strong);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(34px, 4.5vw, 52px);
+  font-weight: 500;
+  letter-spacing: -.035em;
+  line-height: 1.05;
+}
+.ds-artifact-picker header p {
+  margin: 12px 0 0;
+  color: var(--text-muted);
+  font-size: 15px;
+}
+.ds-artifact-picker__grid {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.ds-artifact-choice {
+  display: grid;
+  min-height: 104px;
+  grid-template-columns: 28px 1fr;
+  align-content: center;
+  gap: 3px 10px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--bg-panel);
+  color: var(--text-strong);
+  text-align: left;
+  transition:
+    background 200ms cubic-bezier(0.23, 1, 0.32, 1),
+    border-color 200ms cubic-bezier(0.23, 1, 0.32, 1),
+    transform 140ms cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.ds-artifact-choice:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--text-strong) 26%, var(--border));
+  background: color-mix(in srgb, var(--bg-panel) 95%, var(--text-strong) 5%);
+  transform: translateY(-2px);
+}
+.ds-artifact-choice.is-selected {
+  border-color: var(--text-strong);
+  background: color-mix(in srgb, var(--bg-panel) 92%, var(--text-strong) 8%);
+  box-shadow: inset 0 0 0 1px var(--text-strong);
+}
+.ds-artifact-choice .od-icon {
+  grid-row: 1 / span 2;
+  align-self: start;
+  color: var(--text-muted);
+}
+.ds-artifact-choice strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+.ds-artifact-choice span {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.ds-artifact-picker > button {
+  min-width: 160px;
+  margin-top: 20px;
+}
+
 @media (max-width: 760px) {
   .ds-extraction-demo--result {
     padding-top: 96px;
@@ -607,6 +681,8 @@
   .ds-extraction-demo__next-step { align-items: stretch; flex-direction: column; }
   .ds-extraction-demo__next-step button { width: 100%; }
   .ds-extraction-demo--artifact-flow { padding-top: 84px; }
+  .ds-artifact-picker__grid { grid-template-columns: 1fr; }
+  .ds-artifact-choice { min-height: 92px; }
 }
 @media (max-width: 960px) {
   .ds-setup-topbar {

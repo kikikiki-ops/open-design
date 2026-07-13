@@ -205,6 +205,7 @@ interface Props {
   isActive?: boolean;
   focused?: boolean;
   hiddenTemplateIds?: string[];
+  initialChipId?: string | null;
   projects: Project[];
   projectsLoading?: boolean;
   designSystems?: DesignSystemSummary[];
@@ -404,6 +405,7 @@ export function HomeView({
   isActive = true,
   focused = false,
   hiddenTemplateIds,
+  initialChipId = null,
   projects,
   projectsLoading,
   designSystems = EMPTY_DESIGN_SYSTEMS,
@@ -1735,6 +1737,19 @@ export function HomeView({
       }
     }
   }
+
+  const initialChipAppliedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!initialChipId || pluginsLoading || plugins.length === 0) return;
+    if (initialChipAppliedRef.current === initialChipId) return;
+    const chip = findChip(initialChipId);
+    if (!chip) return;
+    initialChipAppliedRef.current = initialChipId;
+    pickChip(chip);
+    // `pickChip` intentionally uses the latest composer state; this effect is
+    // a one-shot bridge for focused flows that already chose an artifact.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialChipId, plugins, pluginsLoading]);
 
   // Consume a one-shot Home composer chip intent (e.g. "Use in new chat" on the
   // Brands tab requesting the Prototype scenario). The entry shell keeps
