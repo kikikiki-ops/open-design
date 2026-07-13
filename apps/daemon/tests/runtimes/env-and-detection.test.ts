@@ -284,7 +284,7 @@ test('spawnEnvForAgent injects the resolved AMR profile after configured env', (
   const env = spawnEnvForAgent(
     'amr',
     {
-      OPEN_DESIGN_AMR_PROFILE: 'test',
+      OPEN_DESIGN_AMR_PROFILE: 'feature-test',
       VELA_PROFILE: 'prod',
       PATH: '/usr/bin',
     },
@@ -293,8 +293,8 @@ test('spawnEnvForAgent injects the resolved AMR profile after configured env', (
     },
   );
 
-  assert.equal(env.VELA_PROFILE, 'test');
-  assert.equal(env.OPEN_DESIGN_AMR_PROFILE, 'test');
+  assert.equal(env.VELA_PROFILE, 'feature-test');
+  assert.equal(env.OPEN_DESIGN_AMR_PROFILE, 'feature-test');
   assert.equal(env.PATH, '/usr/bin');
 });
 
