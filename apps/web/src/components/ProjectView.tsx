@@ -113,6 +113,7 @@ import {
 import type { RunFailureClassificationFields } from '../runtime/chat-events';
 import {
   designDeliveryVerificationPending,
+  isRetryableAssistantTerminalFailure,
   resolveDesignDeliveryOutcome,
   type DesignDeliveryOutcome,
 } from '../runtime/design-delivery';
@@ -9431,7 +9432,7 @@ export function resolveRetryTarget(
     (message) =>
       message.id === failedAssistantId &&
       message.role === 'assistant' &&
-      message.runStatus === 'failed',
+      isRetryableAssistantTerminalFailure(message),
   );
   if (failedIndex <= 0 || failedIndex !== messages.length - 1) return null;
 
@@ -9439,7 +9440,7 @@ export function resolveRetryTarget(
   while (
     userIndex >= 0 &&
     messages[userIndex]?.role === 'assistant' &&
-    messages[userIndex]?.runStatus === 'failed'
+    isRetryableAssistantTerminalFailure(messages[userIndex]!)
   ) {
     userIndex -= 1;
   }

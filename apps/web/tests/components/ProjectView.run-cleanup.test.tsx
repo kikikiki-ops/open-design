@@ -428,11 +428,13 @@ describe('retry target resolution', () => {
     });
   });
 
-  it('keeps earlier failed retry attempts visible while reusing the original user turn', () => {
+  it('keeps earlier delivery-failure retry attempts visible while reusing the original user turn', () => {
     const firstFailure: ChatMessage = {
       ...failedAssistant,
       id: 'assistant-1',
       content: 'First attempt produced partial output',
+      runStatus: 'succeeded',
+      resultDeliveryState: 'no_result',
       events: [{ kind: 'text', text: 'thinking before failure' }],
       producedFiles: [
         {
@@ -448,6 +450,8 @@ describe('retry target resolution', () => {
       ...failedAssistant,
       id: 'assistant-2',
       content: 'Retry failed too',
+      runStatus: 'succeeded',
+      resultDeliveryState: 'delivery_failed',
     };
 
     expect(resolveRetryTarget([userMessage, firstFailure, secondFailure], secondFailure.id)).toEqual({

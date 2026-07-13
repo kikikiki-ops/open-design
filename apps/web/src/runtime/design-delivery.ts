@@ -20,6 +20,21 @@ export interface DesignDeliveryInput {
   persistenceFailed?: boolean;
 }
 
+/**
+ * Delivery failures retain the agent-process `succeeded` status, but they are
+ * terminal user-facing failures and must follow the same retry path as a
+ * failed process run.
+ */
+export function isRetryableAssistantTerminalFailure(
+  message: Pick<ChatMessage, 'runStatus' | 'resultDeliveryState'>,
+): boolean {
+  return (
+    message.runStatus === 'failed' ||
+    message.resultDeliveryState === 'no_result' ||
+    message.resultDeliveryState === 'delivery_failed'
+  );
+}
+
 function asksForUserInput(content: string): boolean {
   return /<(?:question-form|ask-question)\b/i.test(content);
 }
