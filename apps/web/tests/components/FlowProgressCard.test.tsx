@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { applyFlowMarker, createFlowSnapshot } from '@open-design/contracts';
 import { FlowProgressCard } from '../../src/components/FlowProgressCard';
 
@@ -48,5 +48,24 @@ describe('FlowProgressCard', () => {
 
     expect(screen.getByText('3 / 12 slides')).toBeTruthy();
     expect(screen.getByText('Skipped · default style')).toBeTruthy();
+  });
+
+  it('opens a durable stage artifact from the progress card', () => {
+    const onOpenArtifact = vi.fn();
+    render(
+      <FlowProgressCard
+        flow={createFlowSnapshot('deck', { now: 1 })}
+        stageArtifactPaths={{ clarify: ['generated/brief.md'] }}
+        onOpenArtifact={onOpenArtifact}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Confirm the brief: generated/brief.md',
+      }),
+    );
+
+    expect(onOpenArtifact).toHaveBeenCalledWith('generated/brief.md');
   });
 });

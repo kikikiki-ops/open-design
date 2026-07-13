@@ -159,11 +159,13 @@ import {
   installGeneratedPluginFolder,
   listConversations,
   fetchConversationFlow,
+  chooseConversationInspiration,
   listMessages,
   loadTabs,
   patchConversation,
   patchConversationFlowResearchMode,
   patchProject,
+  rankInspiration,
   saveMessage,
   startGeneratedPluginShareTask,
   cacheTabsLocally,
@@ -238,6 +240,17 @@ import { isDesignSystemProject, resolveProjectDesignSystemId } from './design-sy
 import { collectReferencedJsxNames } from '../runtime/jsx-module-refs';
 import { KNOWN_PROVIDERS } from '../state/config';
 import { DESIGN_SYSTEM_TAB, FileWorkspace, type BrowserOpenRequest } from './FileWorkspace';
+import { InspirePanel, type RankedInspireTemplate } from './InspirePanel';
+import { OutlinePanel, type OutlinePage } from './OutlinePanel';
+import {
+  ResearchWorkspacePanel,
+  type ResearchRound,
+} from './ResearchWorkspacePanel';
+import {
+  defaultDeckOutline,
+  parseDeckOutlineMarkdown,
+  serializeDeckOutlineMarkdown,
+} from '../runtime/deck-outline';
 import {
   type PluginFolderAgentAction,
 } from './design-files/pluginFolderActions';
@@ -1513,6 +1526,15 @@ export function ProjectView({
   // updates from `flow_stage` SSE events, seeded from GET /flow on load.
   const [flowSnapshot, setFlowSnapshot] = useState<FlowSnapshot | null>(null);
   const [deepResearchEnabled, setDeepResearchEnabled] = useState(false);
+  const [outlinePages, setOutlinePages] = useState<OutlinePage[]>([]);
+  const [inspireTemplates, setInspireTemplates] = useState<RankedInspireTemplate[]>([]);
+  const [inspireSelectedId, setInspireSelectedId] = useState<string | null>(null);
+  const [inspireLoading, setInspireLoading] = useState(false);
+  const [inspireSearch, setInspireSearch] = useState('');
+  const [inspireCategory, setInspireCategory] = useState<string | null>(null);
+  const outlineSaveTimerRef = useRef<number | null>(null);
+  const outlinePagesRef = useRef<OutlinePage[]>([]);
+  const outlineSaveChainRef = useRef<Promise<void>>(Promise.resolve());
   const [previewComments, setPreviewComments] = useState<PreviewComment[]>([]);
   // Mirror so the send-now interrupt path can read the current statuses
   // synchronously without re-creating its callback on every comment change.
@@ -2121,6 +2143,10 @@ export function ProjectView({
     if (!activeConversationId) {
       setMessages([]);
       setMessagesInitialized(false);
+      setOutlinePages([]);
+      outlinePagesRef.current = [];
+      setInspireTemplates([]);
+      setInspireSelectedId(null);
       setPreviewComments([]);
       setAttachedComments([]);
       setMessagesConversationId(null);
@@ -2136,6 +2162,12 @@ export function ProjectView({
     setMessagesInitialized(false);
     let cancelled = false;
     setMessages([]);
+    setOutlinePages([]);
+    outlinePagesRef.current = [];
+    setInspireTemplates([]);
+    setInspireSelectedId(null);
+    setInspireSearch('');
+    setInspireCategory(null);
     setPreviewComments([]);
     setAttachedComments([]);
     setArtifact(null);
@@ -2209,6 +2241,104 @@ export function ProjectView({
     },
     [activeConversationId, flowSnapshot],
   );
+
+  const stagedFlowBrief = useMemo(
+    () =>
+      messages
+        .filter((message) => message.role === 'user')
+        .slice(-4)
+        .map((message) => message.content.trim())
+        .filter(Boolean)
+        .join('\n\n')
+        .slice(0, 4_000),
+    [messages],
+  );
+
+  useEffect(() => {
+    if (flowSnapshot?.shape !== 'deck' || flowSnapshot.activeStage !== 'plan') return;
+    let cancelled = false;
+    void fetchProjectFileText(project.id, 'generated/outline.md', {
+      cache: 'no-store',
+      cacheBustKey: flowSnapshot.updatedAt,
+    }).then((markdown) => {
+      if (cancelled) return;
+      const parsed = parseDeckOutlineMarkdown(markdown ?? '');
+      const nextPages = parsed.map((page) => ({
+          id: page.id,
+          title: page.title,
+          bullets: page.points,
+        }));
+      outlinePagesRef.current = nextPages;
+      setOutlinePages(nextPages);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    flowSnapshot?.activeStage,
+    flowSnapshot?.shape,
+    flowSnapshot?.updatedAt,
+    project.id,
+  ]);
+
+  useEffect(() => {
+    if (flowSnapshot?.shape !== 'deck' || flowSnapshot.activeStage !== 'inspire') return;
+    let cancelled = false;
+    setInspireLoading(true);
+    const outlineTitles = (
+      outlinePages.length > 0
+        ? outlinePages
+        : defaultDeckOutline().map((page) => ({
+            id: page.id,
+            title: page.title,
+            bullets: page.points,
+          }))
+    ).map((page) => page.title);
+    void rankInspiration({
+      brief: stagedFlowBrief || project.name,
+      outlineTitles,
+      mode: 'deck',
+    })
+      .then((result) => {
+        if (cancelled) return;
+        const templatesById = new Map(designTemplates.map((template) => [template.id, template]));
+        const ranked = result.ranked.flatMap((id) => {
+          const template = templatesById.get(id);
+          if (!template) return [];
+          return [{
+            id,
+            title: template.displayName?.[locale] ?? template.name,
+            reason: result.reasons[id],
+            category: template.category ?? template.scenario ?? undefined,
+          }];
+        });
+        setInspireTemplates(ranked);
+        setInspireSelectedId(
+          flowSnapshot.inspireChoice?.skipped
+            ? null
+            : flowSnapshot.inspireChoice?.templateId ?? ranked[0]?.id ?? null,
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setInspireTemplates([]);
+      })
+      .finally(() => {
+        if (!cancelled) setInspireLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    designTemplates,
+    flowSnapshot?.activeStage,
+    flowSnapshot?.inspireChoice?.skipped,
+    flowSnapshot?.inspireChoice?.templateId,
+    flowSnapshot?.shape,
+    locale,
+    outlinePages,
+    project.name,
+    stagedFlowBrief,
+  ]);
 
   useEffect(() => {
     if (!projectIsProgrammaticBrandExtraction) return undefined;
@@ -2532,6 +2662,64 @@ export function ProjectView({
     if (!name) return;
     setOpenRequest({ name, nonce: Date.now() });
   }, []);
+
+  const queueOutlineSave = useCallback(
+    (pages: readonly OutlinePage[]): Promise<void> => {
+      const markdown = serializeDeckOutlineMarkdown(
+        pages.map((page) => ({
+          id: page.id,
+          title: page.title,
+          points: page.bullets,
+        })),
+      );
+      const operation = outlineSaveChainRef.current
+        .catch(() => undefined)
+        .then(async () => {
+          const saved = await writeProjectTextFile(
+            project.id,
+            'generated/outline.md',
+            markdown,
+          );
+          if (saved) await refreshProjectFiles();
+        });
+      outlineSaveChainRef.current = operation;
+      return operation;
+    },
+    [project.id, refreshProjectFiles],
+  );
+
+  const handleOutlineChange = useCallback(
+    (nextPages: OutlinePage[]) => {
+      outlinePagesRef.current = nextPages;
+      setOutlinePages(nextPages);
+      if (outlineSaveTimerRef.current != null) {
+        window.clearTimeout(outlineSaveTimerRef.current);
+      }
+      outlineSaveTimerRef.current = window.setTimeout(() => {
+        outlineSaveTimerRef.current = null;
+        void queueOutlineSave(nextPages);
+      }, 350);
+    },
+    [queueOutlineSave],
+  );
+
+  const flushOutlineSave = useCallback(async (): Promise<void> => {
+    if (outlineSaveTimerRef.current != null) {
+      window.clearTimeout(outlineSaveTimerRef.current);
+      outlineSaveTimerRef.current = null;
+    }
+    await queueOutlineSave(outlinePagesRef.current);
+  }, [queueOutlineSave]);
+
+  useEffect(
+    () => () => {
+      if (outlineSaveTimerRef.current != null) {
+        window.clearTimeout(outlineSaveTimerRef.current);
+        outlineSaveTimerRef.current = null;
+      }
+    },
+    [project.id],
+  );
 
   useEffect(() => {
     const designSystemId = brandReady?.designSystemId;
@@ -7481,12 +7669,205 @@ export function ProjectView({
     });
   }, []);
 
+  const handleInspireChoice = useCallback(
+    async (action: 'apply' | 'skip', templateId?: string) => {
+      if (!activeConversationId) return;
+      setInspireLoading(true);
+      try {
+        const result = await chooseConversationInspiration(
+          activeConversationId,
+          action === 'skip'
+            ? { action: 'skip' }
+            : { action: 'apply', templateId: templateId ?? '' },
+        );
+        setFlowSnapshot(result.flow);
+        setInspireSelectedId(result.flow.inspireChoice?.templateId ?? null);
+        if (action === 'apply') {
+          onProjectChange({ ...project, skillId: templateId ?? null });
+          await refreshWorkspaceItems();
+          requestOpenFile('index.html');
+        }
+        await handleSend(
+          action === 'skip'
+            ? '[inspiration — skip]'
+            : `[inspiration — ${templateId ?? ''}]`,
+          [],
+          [],
+          action === 'apply' && templateId ? { skillIds: [templateId] } : undefined,
+        );
+      } catch (choiceError) {
+        setProjectActionsToast({
+          message:
+            choiceError instanceof Error
+              ? choiceError.message
+              : 'Could not save inspiration',
+          details: null,
+          tone: 'error',
+          ttlMs: 3_000,
+        });
+      } finally {
+        setInspireLoading(false);
+      }
+    },
+    [
+      activeConversationId,
+      handleSend,
+      onProjectChange,
+      project,
+      refreshWorkspaceItems,
+      requestOpenFile,
+    ],
+  );
+
   const isDeck = useMemo(
     () =>
+      flowSnapshot?.shape === 'deck' ||
       (skills.find((s) => s.id === project.skillId) ??
         designTemplates.find((s) => s.id === project.skillId))?.mode === 'deck',
-    [skills, designTemplates, project.skillId],
+    [skills, designTemplates, flowSnapshot?.shape, project.skillId],
   );
+  const researchRounds = useMemo<ResearchRound[]>(() => {
+    const stage = flowSnapshot?.stages.find((item) => item.id === 'research');
+    if (!stage || stage.state === 'pending') {
+      return [
+        { id: 'round-1', title: 'Round 1 · Explore the topic', status: 'pending' },
+        { id: 'round-2', title: 'Round 2 · Fill evidence gaps', status: 'pending' },
+      ];
+    }
+    if (stage.state === 'complete' || stage.state === 'skipped') {
+      return [
+        { id: 'round-1', title: 'Round 1 · Explore the topic', status: 'complete' },
+        { id: 'round-2', title: 'Round 2 · Fill evidence gaps', status: 'complete' },
+      ];
+    }
+    const secondRound = /(?:round\s*2|2\s*\/\s*2|evidence gap)/iu.test(stage.detail ?? '');
+    return [
+      {
+        id: 'round-1',
+        title: 'Round 1 · Explore the topic',
+        status: secondRound ? 'complete' : stage.state === 'error' ? 'error' : 'active',
+      },
+      {
+        id: 'round-2',
+        title: 'Round 2 · Fill evidence gaps',
+        status: secondRound
+          ? stage.state === 'error'
+            ? 'error'
+            : 'active'
+          : 'pending',
+      },
+    ];
+  }, [flowSnapshot?.stages]);
+  const researchReportPath = useMemo(
+    () => {
+      const canonical = [
+        'generated/research-report.md',
+        'generated/research.md',
+        'research-report.md',
+      ].find((candidate) => projectFiles.some((file) => file.name === candidate));
+      if (canonical) return canonical;
+      return projectFiles
+        .filter((file) => file.name.startsWith('research/') && file.name.endsWith('.md'))
+        .sort((left, right) => right.mtime - left.mtime)[0]?.name;
+    },
+    [projectFiles],
+  );
+  const inspireCategories = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          inspireTemplates
+            .map((template) => template.category)
+            .filter((category): category is string => Boolean(category)),
+        ),
+      ).map((category) => ({ id: category, label: category })),
+    [inspireTemplates],
+  );
+  const visibleInspireTemplates = useMemo(() => {
+    const query = inspireSearch.trim().toLocaleLowerCase();
+    return inspireTemplates.filter((template) => {
+      if (inspireCategory && template.category !== inspireCategory) return false;
+      if (!query) return true;
+      return [template.title, template.reason, template.category]
+        .filter(Boolean)
+        .some((value) => value?.toLocaleLowerCase().includes(query));
+    });
+  }, [inspireCategory, inspireSearch, inspireTemplates]);
+  const flowWorkspace = useMemo(() => {
+    if (!isDeck || !flowSnapshot?.activeStage) return null;
+    if (
+      flowSnapshot.activeStage === 'research' &&
+      flowSnapshot.researchMode === 'deep'
+    ) {
+      const researchStage = flowSnapshot.stages.find((stage) => stage.id === 'research');
+      return {
+        label: t('flow.stage.research'),
+        nonce: flowSnapshot.updatedAt,
+        content: (
+          <ResearchWorkspacePanel
+            rounds={researchRounds}
+            activeDetail={researchStage?.detail}
+            reportPath={researchReportPath}
+            onOpenReport={requestOpenFile}
+          />
+        ),
+      };
+    }
+    if (flowSnapshot.activeStage === 'plan') {
+      return {
+        label: t('flow.stage.plan'),
+        nonce: flowSnapshot.updatedAt,
+        content: (
+          <OutlinePanel
+            pages={outlinePages}
+            onChange={handleOutlineChange}
+          />
+        ),
+      };
+    }
+    if (flowSnapshot.activeStage === 'inspire') {
+      return {
+        label: t('flow.stage.inspire'),
+        nonce: flowSnapshot.updatedAt,
+        content: (
+          <InspirePanel
+            rankedTemplates={visibleInspireTemplates}
+            loading={inspireLoading}
+            selectedId={inspireSelectedId}
+            searchQuery={inspireSearch}
+            categories={inspireCategories}
+            selectedCategory={inspireCategory}
+            onSelect={setInspireSelectedId}
+            onApply={(templateId) => {
+              void handleInspireChoice('apply', templateId);
+            }}
+            onSkip={() => {
+              void handleInspireChoice('skip');
+            }}
+            onSearch={setInspireSearch}
+            onCategory={setInspireCategory}
+          />
+        ),
+      };
+    }
+    return null;
+  }, [
+    flowSnapshot,
+    handleInspireChoice,
+    handleOutlineChange,
+    inspireCategories,
+    inspireCategory,
+    inspireLoading,
+    inspireSearch,
+    inspireSelectedId,
+    isDeck,
+    outlinePages,
+    requestOpenFile,
+    researchReportPath,
+    researchRounds,
+    t,
+    visibleInspireTemplates,
+  ]);
   const chatResizeLabel = t('project.resizeChatPanel');
   const workspacePanelTrack =
     workspacePanelMinWidth === 0
@@ -8700,6 +9081,7 @@ export function ProjectView({
           onRefreshFiles={() => {
             return refreshWorkspaceItems().then(() => undefined);
           }}
+          flowWorkspace={flowWorkspace}
           isDeck={isDeck}
           streaming={currentConversationActionDisabled}
           commentQueueOnSend={commentQueueOnSend}
@@ -8811,10 +9193,25 @@ export function ProjectView({
             if (currentConversationActionDisabled) return;
             // Submitting question-form answers is a clarification turn, not a
             // fresh create/edit — tag entry_from so the dashboard can separate it.
-            void handleSend(text, attachments, [], {
-              entryFrom: 'question_answer',
-              ...(context ? { context } : {}),
-            });
+            void (async () => {
+              if (displayedQuestionForm?.id === 'plan-confirm') {
+                try {
+                  await flushOutlineSave();
+                } catch {
+                  setProjectActionsToast({
+                    message: 'Could not save the edited outline',
+                    details: null,
+                    tone: 'error',
+                    ttlMs: 3_000,
+                  });
+                  return;
+                }
+              }
+              await handleSend(text, attachments, [], {
+                entryFrom: 'question_answer',
+                ...(context ? { context } : {}),
+              });
+            })();
           }}
         />
       </div>

@@ -79,12 +79,14 @@ describe('inspiration routes', () => {
     const saveConversationFlow = vi.fn((id: string, flow: FlowSnapshot) => {
       flows.set(id, flow);
     });
+    const applyTemplate = vi.fn();
     const app = express();
     app.use(express.json());
     registerInspireRoutes(app, {
       listCatalogueEntries: () => catalogue,
       loadConversationFlow: (id) => flows.has(id) ? flows.get(id) : undefined,
       saveConversationFlow,
+      applyTemplate,
       now: () => 10,
     });
 
@@ -121,6 +123,8 @@ describe('inspiration routes', () => {
         skipped: false,
       });
       expect(saveConversationFlow).toHaveBeenCalledTimes(1);
+      expect(applyTemplate).toHaveBeenCalledOnce();
+      expect(applyTemplate).toHaveBeenCalledWith('conversation-1', 'coffee-story');
 
       const retry = await postChoice({
         action: 'apply',
@@ -128,6 +132,7 @@ describe('inspiration routes', () => {
       });
       expect(retry.status).toBe(200);
       expect(saveConversationFlow).toHaveBeenCalledTimes(1);
+      expect(applyTemplate).toHaveBeenCalledOnce();
 
       const conflict = await postChoice({ action: 'skip' });
       expect(conflict.status).toBe(409);

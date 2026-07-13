@@ -416,7 +416,7 @@ describe('AssistantMessage question forms', () => {
     expect(screen.queryByText('What are we making?')).toBeNull();
   });
 
-  it('renders an answered question banner as a disabled, non-clickable done state', () => {
+  it('reopens an answered question banner in a read-only Questions view', () => {
     const form = [
       '<question-form id="discovery" title="Quick brief — tailored">',
       JSON.stringify({
@@ -450,13 +450,14 @@ describe('AssistantMessage question forms', () => {
     );
 
     const banner = screen.getByTestId('questions-banner') as HTMLButtonElement;
-    // Answered: no longer an open affordance — disabled, marked answered, and
-    // clicking it must not re-open the Questions panel.
-    expect(banner.disabled).toBe(true);
+    expect(banner.disabled).toBe(false);
     expect(banner.getAttribute('data-answered')).toBe('true');
     expect(banner.textContent).toContain('Questions answered');
     fireEvent.click(banner);
-    expect(onOpenQuestions).not.toHaveBeenCalled();
+    expect(onOpenQuestions).toHaveBeenCalledWith(expect.objectContaining({
+      form: expect.objectContaining({ id: 'discovery', title: 'Quick brief — tailored' }),
+      submittedAnswers: { audience: 'Product evaluators' },
+    }));
     expect(screen.queryByText('Quick brief — tailored')).toBeNull();
     expect(screen.queryByText('Who is this for?')).toBeNull();
     expect(screen.queryByText('Product evaluators')).toBeNull();

@@ -26,6 +26,7 @@ import {
   resolveExclusiveSurface,
 } from './prompts/system.js';
 import { emittedRenderableQuestionForm } from './question-form-detect.js';
+import { materializeFlowArtifacts } from './flow/artifacts.js';
 import { createFlowTracker, resolveFlowShape } from './flow/engine.js';
 import { resolveProjectRoot } from './project-root.js';
 import {
@@ -586,6 +587,7 @@ import { registerAutomationRoutes } from './routes/automation.js';
 import { registerDaemonRoutes } from './routes/daemon.js';
 import { registerGenuiRoutes } from './routes/genui.js';
 import { registerFlowRoutes } from './routes/flow.js';
+import { registerInspireRoutes } from './routes/inspire.js';
 import { registerDesignSystemRoutes } from './routes/design-systems.js';
 import { registerHostToolsRoutes } from './routes/host-tools.js';
 import { registerPluginAssetRoutes } from './routes/plugins/assets.js';
@@ -623,6 +625,7 @@ import { registerRoutineRoutes, routineDbRowToContract } from './routes/routine.
 import { resolveAmrModelProbe } from './runtimes/amr-model-probe.js';
 import { createPluginInstallationHelpers, normalizeProjectPluginFolderPath, resolveProjectChildDirectory } from './services/plugin-installation.js';
 import { createPluginShareTaskStore } from './services/plugin-share-tasks.js';
+import { materializeTemplateShell } from './services/template-materialization.js';
 import { getRouteRegistrationInventory, installRouteRegistrationGuard } from './route-registration-guard.js';
 import { assertServerContextSatisfiesRoutes } from './route-context-contract.js';
 import { configureConnectorCredentialStore, connectorService, FileConnectorCredentialStore } from './connectors/service.js';
@@ -3419,7 +3422,56 @@ export async function startServer({
     paths: { PROJECTS_DIR },
   });
 
-  registerFlowRoutes(app, { db });
+  registerFlowRoutes(app, {
+    db,
+    paths: { PROJECTS_DIR },
+  });
+  app.use('/api/inspire', requireLocalDaemonRequest);
+  app.use('/api/conversations/:id/flow/inspire', requireLocalDaemonRequest);
+  registerInspireRoutes(app, {
+    listCatalogueEntries: async () =>
+      (await listAllDesignTemplates()).map((template) => ({
+        id: template.id,
+        name: template.name,
+        description: template.description,
+        mode: template.mode,
+        platform: template.platform,
+        triggers: template.triggers.filter(
+          (trigger): trigger is string => typeof trigger === 'string',
+        ),
+        category: template.category,
+        scenario: template.scenario,
+        examplePrompt: template.examplePrompt,
+        defaultFor: template.defaultFor,
+      })),
+    loadConversationFlow: (conversationId) => {
+      const conversation = getConversation(db, conversationId);
+      return conversation ? getConversationFlow(db, conversationId) : undefined;
+    },
+    saveConversationFlow: (conversationId, flow) => {
+      setConversationFlow(db, conversationId, flow);
+    },
+    applyTemplate: async (conversationId, templateId) => {
+      const conversation = getConversation(db, conversationId);
+      if (!conversation) throw new Error('conversation not found');
+      const project = getProject(db, conversation.projectId);
+      if (!project) throw new Error('project not found');
+      const template = (await listAllDesignTemplates()).find(
+        (candidate) => candidate.id === templateId,
+      );
+      if (!template) throw new Error('design template not found');
+      const projectRoot = resolveProjectDir(
+        PROJECTS_DIR,
+        project.id,
+        project.metadata,
+      );
+      await materializeTemplateShell({
+        templateRoot: template.dir,
+        projectRoot,
+      });
+      updateProject(db, project.id, { skillId: template.id });
+    },
+  });
 
   registerProjectPluginRoutes(app, {
     db,
@@ -4711,8 +4763,18 @@ export async function startServer({
       extraAllowedDirs,
       mediaExecution: run?.mediaExecution,
     });
+    const persistedResearchMode =
+      typeof conversationId === 'string' && conversationId
+        ? getConversationFlow(db, conversationId)?.researchMode
+        : null;
+    const effectiveResearch =
+      research != null
+        ? research
+        : persistedResearchMode === 'deep'
+          ? { enabled: true, depth: 'deep' as const }
+          : research;
     const researchCommandContract = resolveResearchCommandContract(
-      research,
+      effectiveResearch,
       message,
     );
     // Resume-capable adapters continue their own upstream session so they
@@ -5107,8 +5169,14 @@ export async function startServer({
       ? createFlowTracker({
           shape: flowShape,
           initial: persistedFlow,
-          ...(research?.enabled
-            ? { researchMode: research.depth === 'deep' ? 'deep' : 'basic' }
+          ...(research
+            ? {
+                researchMode: research.enabled
+                  ? research.depth === 'deep'
+                    ? 'deep'
+                    : 'basic'
+                  : 'off',
+              }
             : {}),
         })
       : null;
@@ -5128,13 +5196,36 @@ export async function startServer({
       emitFlowSnapshot(flowTracker.observeAgentEvent(ev));
     };
     if (flowTracker) {
-      flowTracker.noteUserMessage(
+      const userMessageText =
         typeof message === 'string' && message
           ? message
           : typeof currentPrompt === 'string'
             ? currentPrompt
-            : '',
-      );
+            : '';
+      flowTracker.noteUserMessage(userMessageText);
+      if (projectRecord && run.conversationId) {
+        try {
+          const artifactMessages = listMessages(db, run.conversationId);
+          if (
+            userMessageText &&
+            artifactMessages.at(-1)?.content !== userMessageText
+          ) {
+            artifactMessages.push({ role: 'user', content: userMessageText });
+          }
+          await materializeFlowArtifacts({
+            conversationId: run.conversationId,
+            flow: flowTracker.snapshot,
+            messages: artifactMessages,
+            projectRoot: resolveProjectDir(
+              PROJECTS_DIR,
+              projectRecord.id,
+              projectRecord.metadata,
+            ),
+          });
+        } catch (error) {
+          console.warn('[flow] failed to materialize Design Files artifacts', error);
+        }
+      }
       // Always surface the ladder at run start so the progress card renders
       // from the first frame, even before any stage advances this turn.
       emitFlowSnapshot(flowTracker.snapshot);

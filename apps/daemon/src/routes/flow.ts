@@ -1,19 +1,120 @@
 import type { Express } from 'express';
 import type Database from 'better-sqlite3';
 import type {
+  FlowSnapshot,
   FlowResearchMode,
   FlowStatusResponse,
   UpdateFlowResearchModeRequest,
 } from '@open-design/contracts';
+import { applyFlowMarker } from '@open-design/contracts';
 
-import { getConversation, getConversationFlow, setConversationFlow } from '../db.js';
+import {
+  getConversation,
+  getConversationFlow,
+  getProject,
+  listMessages,
+  setConversationFlow,
+} from '../db.js';
+import { materializeFlowArtifacts } from '../flow/artifacts.js';
+import { createFlowTracker, resolveFlowShape } from '../flow/engine.js';
+import { resolveProjectDir } from '../projects.js';
 
 export interface RegisterFlowRoutesDeps {
   db: Database.Database;
+  paths: {
+    PROJECTS_DIR: string;
+  };
   now?: () => number;
 }
 
 const FLOW_RESEARCH_MODES = new Set<FlowResearchMode>(['deep', 'basic', 'off']);
+
+function persistedEventForFlow(event: unknown): unknown {
+  if (!event || typeof event !== 'object') return event;
+  const record = event as Record<string, unknown>;
+  if (record.kind === 'text' && typeof record.text === 'string') {
+    return { type: 'text_delta', delta: record.text };
+  }
+  return typeof record.kind === 'string'
+    ? { ...record, type: record.kind }
+    : record;
+}
+
+function eventCompletesDeclaredWork(event: unknown): boolean {
+  if (!event || typeof event !== 'object') return false;
+  const record = event as Record<string, unknown>;
+  if (record.kind !== 'tool_use') return false;
+  const name = typeof record.name === 'string' ? record.name.toLowerCase() : '';
+  if (!['todowrite', 'todo_write', 'update_plan'].includes(name)) return false;
+  if (!record.input || typeof record.input !== 'object') return false;
+  const input = record.input as Record<string, unknown>;
+  const items = Array.isArray(input.todos)
+    ? input.todos
+    : Array.isArray(input.plan)
+      ? input.plan
+      : [];
+  return items.length > 0 && items.every(
+    (item) =>
+      item != null &&
+      typeof item === 'object' &&
+      (item as Record<string, unknown>).status === 'completed',
+  );
+}
+
+function recoverConversationFlow(
+  db: Database.Database,
+  conversation: NonNullable<ReturnType<typeof getConversation>>,
+  initial: FlowSnapshot | null,
+  now: () => number,
+): FlowSnapshot | null {
+  const project = getProject(db, conversation.projectId);
+  if (project?.metadata?.kind !== 'other') return null;
+  const messages = listMessages(db, conversation.id);
+  const userMessages = messages.filter(
+    (message) =>
+      message.role === 'user' &&
+      message.sessionMode !== 'chat' &&
+      message.sessionMode !== 'plan',
+  );
+  const shape =
+    initial?.shape ??
+    [...userMessages].reverse().reduce<FlowSnapshot['shape'] | null>(
+      (resolved, message) =>
+        resolved ??
+        resolveFlowShape({
+          sessionMode: message.sessionMode ?? null,
+          projectKind: project.metadata.kind,
+          projectPlatform: project.metadata.platform,
+          requestText: message.content,
+        }),
+      null,
+    );
+  if (!shape) return null;
+
+  const tracker = createFlowTracker({ shape, initial, now });
+  let completedDeclaredWork = false;
+  for (const message of messages) {
+    if (message.role === 'user') tracker.noteUserMessage(message.content);
+    for (const event of message.events ?? []) {
+      tracker.observeAgentEvent(persistedEventForFlow(event));
+      if (message.runStatus === 'succeeded' && eventCompletesDeclaredWork(event)) {
+        completedDeclaredWork = true;
+      }
+    }
+    if (message.role === 'assistant') tracker.noteRunEnd(message.runStatus);
+  }
+  let snapshot = tracker.snapshot;
+  if (completedDeclaredWork) {
+    snapshot = applyFlowMarker(
+      snapshot,
+      { stage: 'generate', state: 'complete', detail: 'Generation completed' },
+      now(),
+    );
+    snapshot = applyFlowMarker(snapshot, { stage: 'deliver', state: 'active' }, now());
+  }
+  if (snapshot !== initial) setConversationFlow(db, conversation.id, snapshot);
+  return snapshot;
+}
 
 /**
  * Staged-flow read surface (specs/current/staged-flow-north-star.zh-CN.md).
@@ -27,16 +128,39 @@ export function registerFlowRoutes(app: Express, deps: RegisterFlowRoutesDeps): 
   const { db } = deps;
   const now = deps.now ?? Date.now;
 
-  app.get('/api/conversations/:id/flow', (req, res) => {
+  app.get('/api/conversations/:id/flow', async (req, res) => {
     const id = String(req.params.id ?? '');
     const conversation = getConversation(db, id);
     if (!conversation) {
       res.status(404).json({ error: 'conversation not found' });
       return;
     }
+    const persistedFlow = getConversationFlow(db, id);
+    const flow =
+      recoverConversationFlow(db, conversation, persistedFlow, now) ??
+      persistedFlow;
+    if (flow) {
+      const project = getProject(db, conversation.projectId);
+      if (project) {
+        try {
+          await materializeFlowArtifacts({
+            conversationId: id,
+            flow,
+            messages: listMessages(db, id),
+            projectRoot: resolveProjectDir(
+              deps.paths.PROJECTS_DIR,
+              project.id,
+              project.metadata,
+            ),
+          });
+        } catch (error) {
+          console.warn('[flow] failed to materialize Design Files artifacts', error);
+        }
+      }
+    }
     const body: FlowStatusResponse = {
       conversationId: id,
-      flow: getConversationFlow(db, id),
+      flow,
     };
     res.json(body);
   });

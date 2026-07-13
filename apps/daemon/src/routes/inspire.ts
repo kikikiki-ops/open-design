@@ -24,6 +24,10 @@ export interface RegisterInspireRoutesDeps {
     conversationId: string,
     flow: FlowSnapshot,
   ) => MaybePromise<void>;
+  applyTemplate?: (
+    conversationId: string,
+    templateId: string,
+  ) => MaybePromise<void>;
   now?: () => number;
 }
 
@@ -118,6 +122,9 @@ export function registerInspireRoutes(
         return;
       }
       if (result.status === 'updated') {
+        if (request.action === 'apply') {
+          await deps.applyTemplate?.(conversationId, request.templateId);
+        }
         await deps.saveConversationFlow(conversationId, result.flow);
       }
       const body: InspireChoiceResponse = {

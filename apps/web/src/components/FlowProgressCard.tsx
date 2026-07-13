@@ -10,6 +10,7 @@ import type { FlowSnapshot, FlowStageId, FlowStageState } from '@open-design/con
 import { FLOW_SHAPES } from '@open-design/contracts';
 import { useT } from '../i18n';
 import type { Dict } from '../i18n/types';
+import type { FlowStageArtifactPaths } from '../runtime/flow-artifacts';
 import styles from './FlowProgressCard.module.css';
 
 const STAGE_LABEL_KEY: Record<FlowStageId, keyof Dict> = {
@@ -48,9 +49,13 @@ const STAGE_GLYPH: Record<FlowStageState, string> = {
 export function FlowProgressCard({
   flow,
   containerRef,
+  stageArtifactPaths,
+  onOpenArtifact,
 }: {
   flow: FlowSnapshot;
   containerRef?: MutableRefObject<HTMLDivElement | null>;
+  stageArtifactPaths?: FlowStageArtifactPaths;
+  onOpenArtifact?: (path: string) => void;
 }) {
   const t = useT();
   const visibleStages = flow.stages.filter(
@@ -82,14 +87,16 @@ export function FlowProgressCard({
             (stage.state === 'pending'
               ? t(STAGE_HINT_KEY[stage.id])
               : t(STATE_KEY[stage.state]));
-          return (
-            <li key={stage.id} className={`${styles.step} ${styles[stage.state]}`}>
+          const label = t(STAGE_LABEL_KEY[stage.id]);
+          const artifactPath = stageArtifactPaths?.[stage.id]?.[0];
+          const content = (
+            <>
               <span className={styles.icon} aria-hidden>
                 {STAGE_GLYPH[stage.state]}
               </span>
               <div className={styles.copy}>
                 <div className={styles.labelRow}>
-                  <span className={styles.label}>{t(STAGE_LABEL_KEY[stage.id])}</span>
+                  <span className={styles.label}>{label}</span>
                   {stage.progress && stage.progress.total > 0 ? (
                     <span className={styles.count}>
                       {stage.progress.done} / {stage.progress.total} {unit}
@@ -98,6 +105,28 @@ export function FlowProgressCard({
                 </div>
                 <div className={styles.detail}>{detail}</div>
               </div>
+              {artifactPath && onOpenArtifact ? (
+                <span className={styles.openIcon} aria-hidden>
+                  ↗
+                </span>
+              ) : null}
+            </>
+          );
+          return (
+            <li key={stage.id} className={`${styles.step} ${styles[stage.state]}`}>
+              {artifactPath && onOpenArtifact ? (
+                <button
+                  type="button"
+                  className={styles.stepAction}
+                  title={artifactPath}
+                  aria-label={`${label}: ${artifactPath}`}
+                  onClick={() => onOpenArtifact(artifactPath)}
+                >
+                  {content}
+                </button>
+              ) : (
+                <div className={styles.stepContent}>{content}</div>
+              )}
             </li>
           );
         })}

@@ -15,7 +15,11 @@ import type {
   CreatePluginShareProjectResponse,
   FlowSnapshot,
   FlowStatusResponse,
-  type FlowResearchMode,
+  FlowResearchMode,
+  InspireChoiceRequest,
+  InspireChoiceResponse,
+  InspireRankRequest,
+  InspireRankResponse,
   CreateTerminalRequest,
   ImportFolderRequest,
   ImportFolderResponse,
@@ -522,6 +526,41 @@ export async function patchConversationFlowResearchMode(
   } catch {
     return null;
   }
+}
+
+export async function rankInspiration(
+  request: InspireRankRequest,
+): Promise<InspireRankResponse> {
+  const resp = await fetch('/api/inspire/rank', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+  if (!resp.ok) throw new Error(`Could not rank inspiration (${resp.status})`);
+  return (await resp.json()) as InspireRankResponse;
+}
+
+export async function chooseConversationInspiration(
+  conversationId: string,
+  request: InspireChoiceRequest,
+): Promise<InspireChoiceResponse> {
+  const resp = await fetch(
+    `/api/conversations/${encodeURIComponent(conversationId)}/flow/inspire`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    },
+  );
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => null) as { error?: unknown } | null;
+    throw new Error(
+      typeof body?.error === 'string'
+        ? body.error
+        : `Could not save inspiration (${resp.status})`,
+    );
+  }
+  return (await resp.json()) as InspireChoiceResponse;
 }
 
 // ---------- messages ----------

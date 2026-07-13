@@ -3803,6 +3803,38 @@ describe('FileViewer SVG artifacts', () => {
     expect(screen.queryByRole('menuitem', { name: /Deploy to Vercel/i })).toBeNull();
   });
 
+  it('opens durable staged-flow markdown in read-only preview mode', async () => {
+    const file = baseFile({
+      name: 'generated/brief.md',
+      path: 'generated/brief.md',
+      mime: 'text/markdown',
+      kind: 'text',
+      artifactManifest: {
+        version: 1,
+        kind: 'markdown-document',
+        title: 'Decisions and answers',
+        entry: 'generated/brief.md',
+        renderer: 'markdown',
+        exports: ['md'],
+      },
+    });
+    vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
+      if (url === '/api/projects/project-1/raw/generated/brief.md') {
+        return new Response('# Decisions and answers\n\n- Audience: Design leads');
+      }
+      return new Response('', { status: 404 });
+    }));
+
+    render(<FileViewer projectId="project-1" projectKind="prototype" file={file} />);
+
+    expect(await screen.findByLabelText(/markdown preview/i)).toBeTruthy();
+    expect(screen.queryByRole('textbox', { name: /markdown editor/i })).toBeNull();
+    expect(screen.getByRole('tab', { name: 'Preview' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+  });
+
   it('coalesces markdown split-pane scroll sync to one animation frame', async () => {
     const file = baseFile({
       name: 'notes.md',

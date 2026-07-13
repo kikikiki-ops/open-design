@@ -2499,17 +2499,16 @@ function QuestionsBanner({
   answered?: boolean;
 }) {
   const t = useT();
-  // Once the form has been answered there is nothing left to open, so the
-  // banner becomes a non-interactive "done" marker: no chevron affordance, no
-  // click target, muted styling.
+  // Answered forms remain useful as a durable decision record. Reopen them in
+  // the Questions tab, where submitted answers render in a locked state.
   return (
     <button
       type="button"
       className={`questions-banner${answered ? " questions-banner-answered" : ""}`}
       data-testid="questions-banner"
       data-answered={answered ? "true" : undefined}
-      disabled={answered}
-      onClick={answered ? undefined : () => onOpen?.()}
+      disabled={!onOpen}
+      onClick={() => onOpen?.()}
     >
       <span className="questions-banner-icon" aria-hidden>
         <Icon name={answered ? "check" : "help-circle"} size={15} />
@@ -2517,11 +2516,11 @@ function QuestionsBanner({
       <span className="questions-banner-label">
         {answered ? t("questions.bannerAnswered") : t("questions.banner")}
       </span>
-      {answered ? null : (
+      {onOpen ? (
         <span className="questions-banner-cta" aria-hidden>
           <Icon name="chevron-right" size={14} />
         </span>
-      )}
+      ) : null}
     </button>
   );
 }

@@ -2097,6 +2097,75 @@ describe('FileWorkspace Questions tab', () => {
   });
 });
 
+describe('FileWorkspace staged-flow tab', () => {
+  const baseProps: React.ComponentProps<typeof FileWorkspace> = {
+    projectId: 'project-1',
+    projectKind: 'prototype',
+    files: [],
+    liveArtifacts: [],
+    onRefreshFiles: vi.fn(),
+    isDeck: true,
+    tabsState: { tabs: [], active: null },
+    onTabsStateChange: vi.fn(),
+  };
+
+  it('opens transient stage content and updates it without creating a file tab', async () => {
+    const { rerender } = render(
+      <FileWorkspace
+        {...baseProps}
+        flowWorkspace={{
+          label: 'Research',
+          nonce: 1,
+          content: <div>Research round 1</div>,
+        }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Research round 1')).toBeTruthy();
+    });
+    expect(screen.getByTestId('flow-stage-tab').textContent).toContain('Research');
+
+    rerender(
+      <FileWorkspace
+        {...baseProps}
+        flowWorkspace={{
+          label: 'Outline',
+          nonce: 2,
+          content: <div>Editable outline</div>,
+        }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Editable outline')).toBeTruthy();
+    });
+    expect(screen.queryByText('Research round 1')).toBeNull();
+  });
+
+  it('removes the transient tab when the staged workspace finishes', async () => {
+    const { rerender } = render(
+      <FileWorkspace
+        {...baseProps}
+        flowWorkspace={{
+          label: 'Inspiration',
+          nonce: 1,
+          content: <div>Template choices</div>,
+        }}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('flow-stage-tab')).toBeTruthy();
+    });
+
+    rerender(<FileWorkspace {...baseProps} flowWorkspace={null} />);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('flow-stage-tab')).toBeNull();
+    });
+  });
+});
+
 describe('projectSplitClassName', () => {
   it('marks the project split as focused so the chat pane can collapse globally', () => {
     expect(projectSplitClassName(false)).toBe('split');

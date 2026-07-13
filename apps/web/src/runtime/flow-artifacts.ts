@@ -1,0 +1,102 @@
+import { FLOW_SHAPES, type FlowSnapshot, type FlowStageId } from '@open-design/contracts';
+
+import type { ProjectFile } from '../types';
+
+export type FlowStageArtifactPaths = Partial<Record<FlowStageId, string[]>>;
+
+const FLOW_MARKDOWN_ARTIFACT_PATHS = new Set<string>(
+  Object.values(FLOW_SHAPES).flatMap((shape) => shape.planArtifacts),
+);
+
+export function isFlowStageArtifactPath(filePath: string): boolean {
+  const normalized = filePath.replace(/^[/\\]+/u, '');
+  return (
+    FLOW_MARKDOWN_ARTIFACT_PATHS.has(normalized) ||
+    normalized === 'generated/research.md' ||
+    normalized === 'generated/research-report.md' ||
+    (normalized.startsWith('research/') && normalized.endsWith('.md'))
+  );
+}
+
+/**
+ * Projects durable flow files back onto progress-card stages. The files remain
+ * ordinary Design Files; this mapping only provides a stable chat-side entry.
+ */
+export function flowStageArtifactPaths(
+  flow: FlowSnapshot,
+  files: ProjectFile[],
+): FlowStageArtifactPaths {
+  const fileByName = new Map(files.map((file) => [file.name, file]));
+  const result: FlowStageArtifactPaths = {};
+
+  addExisting(result, 'clarify', ['generated/brief.md'], fileByName);
+
+  const research = files
+    .filter(
+      (file) =>
+        file.name === 'generated/research.md' ||
+        file.name === 'generated/research-report.md' ||
+        (file.name.startsWith('research/') && file.name.endsWith('.md')),
+    )
+    .sort((left, right) => right.mtime - left.mtime)
+    .map((file) => file.name);
+  if (research.length > 0) result.research = research;
+
+  addExisting(
+    result,
+    'plan',
+    FLOW_SHAPES[flow.shape].planArtifacts.filter(
+      (artifact) => artifact !== 'generated/brief.md',
+    ),
+    fileByName,
+  );
+  addExisting(result, 'inspire', ['generated/inspiration.json'], fileByName);
+
+  const generated = generationCandidates(flow, files);
+  if (generated.length > 0) result.generate = generated;
+
+  const delivered = files
+    .filter((file) => /\.(?:pptx|pdf|zip)$/iu.test(file.name))
+    .sort((left, right) => right.mtime - left.mtime)
+    .map((file) => file.name);
+  if (delivered.length > 0) result.deliver = delivered;
+
+  return result;
+}
+
+function addExisting(
+  result: FlowStageArtifactPaths,
+  stage: FlowStageId,
+  candidates: readonly string[],
+  fileByName: ReadonlyMap<string, ProjectFile>,
+): void {
+  const existing = candidates.filter((candidate) => fileByName.has(candidate));
+  if (existing.length > 0) result[stage] = existing;
+}
+
+function generationCandidates(flow: FlowSnapshot, files: ProjectFile[]): string[] {
+  const matching = files.filter((file) => {
+    if (file.name.startsWith('generated/') || file.name.startsWith('research/')) {
+      return false;
+    }
+    switch (flow.shape) {
+      case 'deck':
+      case 'landing':
+      case 'mobile':
+      case 'webapp':
+        return file.kind === 'html';
+      case 'document':
+      case 'report':
+        return file.kind === 'text' && /\.(?:md|markdown)$/iu.test(file.name);
+      case 'media':
+        return file.kind === 'image' || file.kind === 'video' || file.kind === 'audio';
+    }
+  });
+  return matching
+    .sort((left, right) => {
+      if (left.name === 'index.html') return -1;
+      if (right.name === 'index.html') return 1;
+      return right.mtime - left.mtime;
+    })
+    .map((file) => file.name);
+}

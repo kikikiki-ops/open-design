@@ -113,6 +113,7 @@ import {
   type ImageExportFormat,
 } from '../runtime/exports';
 import { copyToClipboard } from '../lib/copy-to-clipboard';
+import { isFlowStageArtifactPath } from '../runtime/flow-artifacts';
 import { buildReactComponentSrcdoc } from '../runtime/react-component';
 import { shouldConsumeSlideNav } from '../runtime/slide-nav';
 import { findHtmlEntriesReferencing } from '../runtime/jsx-module-refs';
@@ -13581,7 +13582,9 @@ function MarkdownViewer({
   const [text, setText] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
-  const [mode, setMode] = useState<MarkdownViewerMode>('split');
+  const [mode, setMode] = useState<MarkdownViewerMode>(() =>
+    isFlowStageArtifactPath(file.name) ? 'preview' : 'split',
+  );
   const [saveState, setSaveState] = useState<MarkdownSaveState>('idle');
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [highlightedHtml, setHighlightedHtml] = useState<{ source: string; html: string; themeRevision: number } | null>(null);

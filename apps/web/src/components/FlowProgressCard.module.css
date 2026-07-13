@@ -43,10 +43,39 @@
 }
 
 .step {
+  min-width: 0;
+}
+
+.stepContent,
+.stepAction {
   display: flex;
   align-items: flex-start;
   gap: 8px;
+  width: 100%;
   min-width: 0;
+  box-sizing: border-box;
+}
+
+.stepAction {
+  margin: -2px -4px;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.stepAction:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.stepAction:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .icon {
@@ -106,4 +135,15 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.openIcon {
+  flex: 0 0 auto;
+  color: var(--text-muted, var(--text));
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.stepAction:hover .openIcon {
+  color: var(--accent);
 }

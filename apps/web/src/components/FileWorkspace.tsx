@@ -3571,6 +3571,23 @@ export function FileWorkspace({
               <span className="ws-tab-label">{t('questions.tabLabel')}</span>
             </button>
           ) : null}
+          {flowWorkspace ? (
+            <button
+              type="button"
+              className={`ws-tab flow-stage-tab ${activeTab === FLOW_STAGE_TAB ? 'active' : ''}`}
+              role="tab"
+              aria-selected={activeTab === FLOW_STAGE_TAB}
+              tabIndex={0}
+              data-testid="flow-stage-tab"
+              onClick={() => setActiveTab(FLOW_STAGE_TAB)}
+              title={flowWorkspace.label}
+            >
+              <span className="tab-icon" aria-hidden>
+                <Icon name="sparkles" size={13} />
+              </span>
+              <span className="ws-tab-label">{flowWorkspace.label}</span>
+            </button>
+          ) : null}
           {visibleOrderedWorkspaceTabs.map((entry) => {
             if (entry.kind === 'browser') {
               const browserTab = entry.browserTab;
@@ -3770,7 +3787,9 @@ export function FileWorkspace({
             />
           </div>
         ))}
-        {activeTab === QUESTIONS_TAB ? (
+        {activeTab === FLOW_STAGE_TAB && flowWorkspace ? (
+          flowWorkspace.content
+        ) : activeTab === QUESTIONS_TAB ? (
           <QuestionsPanel
             key={questionFormKey ?? undefined}
             projectId={projectId}
@@ -6342,6 +6361,7 @@ function isPrimaryWorkspaceTab(
     || isSideChatTabId(name)
     || name === DESIGN_SYSTEM_TAB
     || name === QUESTIONS_TAB
+    || name === FLOW_STAGE_TAB
   ) {
     return true;
   }

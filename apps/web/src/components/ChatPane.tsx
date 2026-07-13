@@ -34,6 +34,7 @@ import { projectRawUrl } from '../providers/registry';
 import { takeComposerSeedFor } from '../state/libraryHandoff';
 import { splitOnQuestionForms } from '../artifacts/question-form';
 import { stripArtifact } from '../artifacts/strip';
+import { flowStageArtifactPaths } from '../runtime/flow-artifacts';
 import type { TodoItem } from '../runtime/todos';
 import type { AppliedPluginSnapshot, ChatSessionMode, FlowSnapshot, WorkspaceContextItem } from '@open-design/contracts';
 import { FlowProgressCard } from './FlowProgressCard';
@@ -926,6 +927,10 @@ export function ChatPane({
   const composerLayerRef = useRef<HTMLDivElement | null>(null);
   const queuedSendStripRef = useRef<HTMLDivElement | null>(null);
   const flowCardRef = useRef<HTMLDivElement | null>(null);
+  const stageArtifactPaths = useMemo(
+    () => (flowSnapshot ? flowStageArtifactPaths(flowSnapshot, projectFiles) : {}),
+    [flowSnapshot, projectFiles],
+  );
   const didInitialScrollRef = useRef(false);
   const runFailedToastSurfaceKeysRef = useRef<Set<string>>(new Set());
   // Tracks whether the user is glued close enough to the bottom that
@@ -2260,7 +2265,12 @@ export function ChatPane({
       {tab === 'chat' ? (
         <>
           {flowSnapshot ? (
-            <FlowProgressCard flow={flowSnapshot} containerRef={flowCardRef} />
+            <FlowProgressCard
+              flow={flowSnapshot}
+              containerRef={flowCardRef}
+              stageArtifactPaths={stageArtifactPaths}
+              onOpenArtifact={onRequestOpenFile}
+            />
           ) : null}
           <div className={`chat-log-wrap${chatLogTray ? ' has-chat-log-tray' : ''}`}>
             <div

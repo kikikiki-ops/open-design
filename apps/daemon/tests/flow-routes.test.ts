@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import express from 'express';
 import http from 'node:http';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -13,17 +13,19 @@ import {
   insertProject,
   openDatabase,
   setConversationFlow,
+  upsertMessage,
 } from '../src/db.js';
 import { applyFlowMarker, createFlowSnapshot } from '@open-design/contracts';
 
 describe('flow routes', () => {
   let tempDir: string;
+  let projectsRoot: string;
   let db: ReturnType<typeof openDatabase>;
 
   beforeEach(() => {
     tempDir = mkdtempSync(path.join(os.tmpdir(), 'od-flow-routes-'));
     const dataDir = path.join(tempDir, '.od');
-    const projectsRoot = path.join(dataDir, 'projects');
+    projectsRoot = path.join(dataDir, 'projects');
     mkdirSync(projectsRoot, { recursive: true });
     db = openDatabase(projectsRoot, { dataDir });
     insertProject(db, {
@@ -51,7 +53,7 @@ describe('flow routes', () => {
 
   async function getFlow(conversationId: string) {
     const app = express();
-    registerFlowRoutes(app, { db });
+    registerFlowRoutes(app, { db, paths: { PROJECTS_DIR: projectsRoot } });
     const server = http.createServer(app);
     await new Promise<void>((resolve) => server.listen(0, resolve));
     const { port } = server.address() as { port: number };
@@ -74,7 +76,11 @@ describe('flow routes', () => {
   async function patchFlow(conversationId: string, body: unknown) {
     const app = express();
     app.use(express.json());
-    registerFlowRoutes(app, { db, now: () => 50 });
+    registerFlowRoutes(app, {
+      db,
+      paths: { PROJECTS_DIR: projectsRoot },
+      now: () => 50,
+    });
     const server = http.createServer(app);
     await new Promise<void>((resolve) => server.listen(0, resolve));
     const { port } = server.address() as { port: number };
@@ -129,6 +135,59 @@ describe('flow routes', () => {
     );
   });
 
+  it('materializes submitted questions and inspiration in Design Files', async () => {
+    upsertMessage(db, 'conv-1', {
+      id: 'assistant-form',
+      role: 'assistant',
+      content: [
+        '<question-form id="discovery" title="Quick brief">',
+        JSON.stringify({
+          questions: [
+            {
+              id: 'audience',
+              label: 'Who is this for?',
+              type: 'text',
+              defaultValue: 'Product teams',
+            },
+          ],
+        }),
+        '</question-form>',
+      ].join('\n'),
+    });
+    upsertMessage(db, 'conv-1', {
+      id: 'user-answers',
+      role: 'user',
+      content: [
+        '[form answers — discovery]',
+        '- Who is this for?: Design leads',
+      ].join('\n'),
+    });
+    setConversationFlow(db, 'conv-1', {
+      ...createFlowSnapshot('deck', { now: 10 }),
+      inspireChoice: { templateId: 'tech-utility', skipped: false },
+    });
+
+    const response = await getFlow('conv-1');
+
+    expect(response.status).toBe(200);
+    const brief = readFileSync(
+      path.join(projectsRoot, 'project-1', 'generated', 'brief.md'),
+      'utf8',
+    );
+    expect(brief).toContain('Who is this for?');
+    expect(brief).toContain('Design leads');
+    const inspiration = JSON.parse(
+      readFileSync(
+        path.join(projectsRoot, 'project-1', 'generated', 'inspiration.json'),
+        'utf8',
+      ),
+    ) as { selectedTemplateId: string; skipped: boolean };
+    expect(inspiration).toMatchObject({
+      selectedTemplateId: 'tech-utility',
+      skipped: false,
+    });
+  });
+
   it('patches research mode and keeps an exact retry idempotent', async () => {
     setConversationFlow(db, 'conv-1', createFlowSnapshot('deck', { now: 10 }));
 
@@ -153,5 +212,56 @@ describe('flow routes', () => {
     setConversationFlow(db, 'conv-1', createFlowSnapshot('deck', { now: 10 }));
     const response = await patchFlow('conv-1', { researchMode: 'turbo' });
     expect(response.status).toBe(400);
+  });
+
+  it('recovers a missing generic-project flow from the persisted transcript', async () => {
+    insertProject(db, {
+      id: 'project-generic',
+      name: 'Generic PPT Project',
+      skillId: null,
+      designSystemId: null,
+      createdAt: 1,
+      updatedAt: 1,
+      metadata: { kind: 'other' },
+    });
+    insertConversation(db, {
+      id: 'conv-generic',
+      projectId: 'project-generic',
+      title: 'Agent Native PPT',
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    upsertMessage(db, 'conv-generic', {
+      id: 'user-generic',
+      role: 'user',
+      content: '做一个 Agent Native 的 PPT',
+      sessionMode: 'design',
+    });
+    upsertMessage(db, 'conv-generic', {
+      id: 'assistant-generic',
+      role: 'assistant',
+      content: 'Generated the deck.',
+      runStatus: 'succeeded',
+      events: [
+        {
+          kind: 'tool_use',
+          id: 'completed-todos',
+          name: 'TodoWrite',
+          input: {
+            todos: [
+              { content: 'Build the deck', status: 'completed' },
+              { content: 'Review the output', status: 'completed' },
+            ],
+          },
+        },
+      ],
+    });
+
+    const { status, body } = await getFlow('conv-generic');
+
+    expect(status).toBe(200);
+    expect(body.flow?.shape).toBe('deck');
+    expect(body.flow?.activeStage).toBe('deliver');
+    expect(getConversationFlow(db, 'conv-generic')).toEqual(body.flow);
   });
 });

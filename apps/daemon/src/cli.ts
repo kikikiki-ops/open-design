@@ -121,6 +121,16 @@ const RESEARCH_SEARCH_BOOLEAN_FLAGS = new Set([
   'help',
   'h',
 ]);
+const INSPIRE_STRING_FLAGS = new Set([
+  'daemon-url',
+  'conversation',
+  'brief',
+  'prompt-file',
+  'outline',
+  'mode',
+  'template',
+]);
+const INSPIRE_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 
 const PLUGIN_STRING_FLAGS = new Set([
   'daemon-url',
@@ -319,6 +329,7 @@ const SUBCOMMAND_MAP = {
   mcp: runMcp,
   amr: runAmr,
   research: runResearch,
+  inspire: runInspire,
   plugin: runPlugin,
   ui: runUi,
   marketplace: runMarketplace,
@@ -557,12 +568,15 @@ function printRootHelp() {
   od mcp live-artifacts
       Start the MCP server exposing live-artifact and connector tools.
 
-  od research search --query <text> [--max-sources 5] [--daemon-url <url>]
+  od research search --query <text> [--depth shallow|medium|deep] [--max-sources 5]
       Run agent-callable Tavily research through the local daemon.
 
   od flow status <conversationId> [--json]
       Print a conversation's staged-flow progress (clarify → research →
       plan → inspire → generate → deliver).
+
+  od inspire <rank|apply|skip> [options]
+      Rank deck templates or finalize a conversation's inspiration choice.
 
   od plugin <list|info|install|uninstall|apply|doctor|replay|trust> [args]
       Discover, install, and apply plugins through the local daemon.
@@ -784,6 +798,101 @@ Flags:
   --depth        Search depth. shallow uses basic search; medium/deep use advanced search.
   --max-sources  Optional source cap. Defaults follow depth and are clamped to Tavily's max.
   --daemon-url   Local daemon URL. Defaults to OD_DAEMON_URL, OD_SIDECAR_IPC_PATH discovery, or http://127.0.0.1:7456.`);
+}
+
+async function runInspire(args) {
+  if (args.length === 0 || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
+    console.log(`Usage:
+  od inspire rank --brief <text> [--outline "Title 1|Title 2"] [--mode deck] [--json]
+  od inspire rank --prompt-file <path|-> [--outline "Title 1|Title 2"] [--mode deck] [--json]
+  od inspire apply --conversation <id> --template <templateId> [--json]
+  od inspire skip --conversation <id> [--json]
+
+Ranks the design-template catalogue for a staged flow, or finalizes the
+conversation's inspiration choice. Long briefs may be read from a file or stdin.
+
+Common options:
+  --daemon-url <url>   Open Design daemon HTTP base.
+  --json               Emit raw JSON.`);
+    process.exit(args.length === 0 ? 2 : 0);
+  }
+
+  const sub = args[0];
+  const rest = args.slice(1);
+  const flags = parseFlags(rest, {
+    string: INSPIRE_STRING_FLAGS,
+    boolean: INSPIRE_BOOLEAN_FLAGS,
+  });
+  const base = (await cliDaemonUrl(flags)).replace(/\/$/, '');
+
+  if (sub === 'rank') {
+    const fromFile = await readPromptFromFlags(flags);
+    const brief =
+      typeof flags.brief === 'string' && flags.brief.trim()
+        ? flags.brief.trim()
+        : fromFile?.trim();
+    if (!brief) {
+      console.error('--brief or --prompt-file is required');
+      process.exit(2);
+    }
+    const mode = typeof flags.mode === 'string' ? flags.mode : 'deck';
+    const outlineTitles =
+      typeof flags.outline === 'string'
+        ? flags.outline.split('|').map((title) => title.trim()).filter(Boolean)
+        : [];
+    const resp = await fetch(`${base}/api/inspire/rank`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ brief, outlineTitles, mode }),
+    });
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+    for (const [index, templateId] of (data.ranked ?? []).entries()) {
+      const reason = data.reasons?.[templateId];
+      console.log(`${index + 1}. ${templateId}${reason ? ` — ${reason}` : ''}`);
+    }
+    return;
+  }
+
+  if (sub === 'apply' || sub === 'skip') {
+    const conversationId =
+      typeof flags.conversation === 'string' && flags.conversation.trim()
+        ? flags.conversation.trim()
+        : positionalArgs(rest, INSPIRE_STRING_FLAGS)[0];
+    if (!conversationId) {
+      console.error('--conversation <id> is required');
+      process.exit(2);
+    }
+    if (sub === 'apply' && (!flags.template || !String(flags.template).trim())) {
+      console.error('--template <templateId> is required');
+      process.exit(2);
+    }
+    const resp = await fetch(
+      `${base}/api/conversations/${encodeURIComponent(conversationId)}/flow/inspire`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(
+          sub === 'skip'
+            ? { action: 'skip' }
+            : { action: 'apply', templateId: String(flags.template).trim() },
+        ),
+      },
+    );
+    if (!resp.ok) return structuredHttpFailure(resp);
+    const data = await resp.json();
+    if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+    console.log(
+      sub === 'skip'
+        ? '[inspire] skipped'
+        : `[inspire] applied ${String(flags.template).trim()}`,
+    );
+    return;
+  }
+
+  console.error(`unknown subcommand: od inspire ${sub}`);
+  process.exit(2);
 }
 
 // ---------------------------------------------------------------------------
