@@ -1193,7 +1193,7 @@ describe('EntryShell onboarding Open Design AMR runtime', () => {
     expect(trackedEvents('onboarding_complete_result')).toHaveLength(0);
   });
 
-  it('lets users skip each optional profile question and continue to design-system creation', async () => {
+  it('shows no Skip affordance on profile questions', async () => {
     globalThis.fetch = vi.fn(async () =>
       jsonResponse({
         loggedIn: true,
@@ -1202,26 +1202,12 @@ describe('EntryShell onboarding Open Design AMR runtime', () => {
         user: { id: 'u', email: 'user@example.com' },
       }),
     ) as typeof fetch;
-    const props = renderOnboarding();
+    renderOnboarding();
 
-    const continueButton = await screen.findByRole('button', { name: /Continue \(signed in\)/i });
-    fireEvent.click(continueButton);
+    fireEvent.click(await screen.findByRole('button', { name: /Continue \(signed in\)/i }));
 
-    for (const heading of [
-      'Your role',
-      'Organization size',
-      'Use case',
-      'Where did you hear about us?',
-    ]) {
-      await screen.findByRole('heading', { name: heading });
-      fireEvent.click(screen.getByRole('button', { name: 'Skip for now' }));
-    }
-
-    await waitFor(() => expect(props.onCompleteOnboarding).toHaveBeenCalledTimes(1));
-    expect(window.location.pathname).toBe('/design-systems/create');
-    const skipClicks = trackedEvents('ui_click')
-      .map(([, payload]) => payload as Record<string, unknown>)
-      .filter((payload) => payload.element === 'skip' && payload.action === 'skip');
-    expect(skipClicks).toHaveLength(4);
+    expect(await screen.findByRole('heading', { name: 'Your role' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Skip for now/i })).toBeNull();
   });
+
 });

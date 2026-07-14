@@ -1850,15 +1850,6 @@ function OnboardingView({
     setProfileQuestionIndex((current) => current + 1);
   }
 
-  function handleProfileQuestionSkip(): void {
-    emitOnboardingClick('skip', 'skip');
-    if (profileQuestionIndex === profileQuestionIds.length - 1) {
-      void handleFinishToBuild();
-      return;
-    }
-    setProfileQuestionIndex((current) => current + 1);
-  }
-
   function cleanOnboardingOptionLabel(label: string): string {
     const trimmed = label.trim();
     return trimmed.replace(/^[^\p{L}\p{N}]+/u, '').trim() || trimmed;
@@ -2779,13 +2770,6 @@ function OnboardingView({
                   }
                   onSelect={handleProfileQuestionSelect}
                 />
-                <button
-                  type="button"
-                  className="onboarding-question-flow__skip"
-                  onClick={handleProfileQuestionSkip}
-                >
-                  {t('settings.skipForNow')}
-                </button>
               </div>
             </div>
           ) : null}

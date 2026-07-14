@@ -605,7 +605,7 @@ export type TrackingOnboardingClickElement =
   // Action buttons
   | 'continue'
   | 'back'
-  /** Optional profile-question skip. The required Connect step never emits it. */
+  /** @deprecated no longer emitted — Skip was removed from onboarding. */
   | 'skip'
   | 'generate'
   // About you fields
@@ -631,7 +631,7 @@ export type TrackingOnboardingClickAction =
   | 'select_runtime'
   | 'continue'
   | 'back'
-  /** Optional profile-question skip. The required Connect step never emits it. */
+  /** @deprecated no longer emitted — Skip was removed from onboarding. */
   | 'skip'
   | 'generate'
   | 'select_option'
