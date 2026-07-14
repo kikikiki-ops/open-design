@@ -1987,6 +1987,7 @@ describe('buildTracePayload', () => {
           sensitivity: 'private',
           source: 'agent_generated',
           expires_at: null,
+          approved_by: null,
         },
       ],
       attachmentManifest: [
