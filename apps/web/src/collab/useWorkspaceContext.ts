@@ -199,7 +199,7 @@ export interface TeamProjectsState {
 // Poll cadence for the team-shared list. Match the foreground collab cadence so
 // a teammate sees a newly shared project within a few seconds, while focus and
 // visibility changes still refresh immediately.
-const TEAM_PROJECTS_POLL_MS = 5_000;
+const TEAM_PROJECTS_POLL_MS = 15_000;
 export const TEAM_PROJECTS_CHANGED_EVENT = 'od:team-projects-changed';
 const TEAM_PROJECTS_CHANGED_STORAGE_KEY = 'od.teamProjects.changedAt';
 
@@ -265,7 +265,11 @@ export function useTeamProjects(): TeamProjectsState {
   // last snapshot until the next tick.
   useEffect(() => {
     const interval = setInterval(() => {
-      void loadFull();
+      // Only poll while the tab is actually visible — an idle/backgrounded tab
+      // was refetching the whole team list (and cascading cover fetches) every
+      // few seconds for nothing. Focus/visibility/changed-event handlers below
+      // still refresh immediately, so a teammate's share shows up right away.
+      if (document.visibilityState === 'visible') void loadFull();
     }, TEAM_PROJECTS_POLL_MS);
     return () => clearInterval(interval);
   }, [loadFull]);

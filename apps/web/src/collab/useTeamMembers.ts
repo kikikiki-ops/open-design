@@ -59,7 +59,9 @@ export function useTeamMembers(): TeamMembersState {
   useEffect(() => {
     void load();
     const interval = setInterval(() => {
-      void load();
+      // Skip the poll while the tab is hidden — no point refreshing the member
+      // directory for a backgrounded window.
+      if (document.visibilityState === 'visible') void load();
     }, TEAM_MEMBERS_POLL_MS);
     return () => clearInterval(interval);
   }, [load]);
