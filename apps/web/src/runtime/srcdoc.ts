@@ -290,6 +290,7 @@ export function buildSrcdoc(
     ? injectDeckBridge(withDeckChrome, {
         initialSlideIndex: options.initialSlideIndex,
         clickNavigation: !!options.deckClickNavigation,
+        artifactHasKeydownNavigation: detectArtifactKeyboardNavigation(html),
       })
     : withDeckChrome;
   // Comment + Inspect share an element-selection bridge: both pick a
@@ -2161,9 +2162,29 @@ function injectDeckStageShadowChromeHiding(doc: string): string {
 })();</script>`);
 }
 
+// Whether the artifact ships its own keyboard slide navigation. Must be
+// evaluated against the artifact source BEFORE any od bridge is injected:
+// injected bridges (preview focus guard, edit bridge) register keydown
+// listeners of their own, and matching those would put every deck on the
+// key-probe path. Requiring a navigation-key token alongside the keydown
+// registration keeps unrelated keyboard handling (shortcuts, form helpers)
+// from triggering probes, mirroring how odMaybeHandlesSlideMessages screens
+// message listeners.
+function detectArtifactKeyboardNavigation(artifactHtml: string): boolean {
+  const registersKeydown =
+    /addEventListener\s*\(\s*['"]keydown['"]/i.test(artifactHtml) ||
+    /\bonkeydown\b/i.test(artifactHtml);
+  if (!registersKeydown) return false;
+  return /\bArrow(?:Right|Left)\b|\bPage(?:Up|Down)\b|\bkeyCode\b/.test(artifactHtml);
+}
+
 function injectDeckBridge(
   doc: string,
-  options: { initialSlideIndex?: number; clickNavigation?: boolean } = {},
+  options: {
+    initialSlideIndex?: number;
+    clickNavigation?: boolean;
+    artifactHasKeydownNavigation?: boolean;
+  } = {},
 ): string {
   const initialSlideIndex = options.initialSlideIndex ?? 0;
   const safeInitialSlideIndex = Number.isFinite(initialSlideIndex)
@@ -2171,6 +2192,7 @@ function injectDeckBridge(
     : 0;
   const hasInlineSlideMessageListener =
     /addEventListener\s*\(\s*['"]message['"]/i.test(doc) && /\bod:slide\b/.test(doc);
+  const hasInlineKeydownListener = !!options.artifactHasKeydownNavigation;
   const isFrameworkDeck = /\bid\s*=\s*["']deck-stage["']/i.test(doc);
   const clickNavigation = !!options.clickNavigation && !isFrameworkDeck;
   const styleFix = isFrameworkDeck
@@ -2514,36 +2536,116 @@ function injectDeckBridge(
   // handler and render their own page counter / dots / progress from it, so
   // flipping classes or transforms from the bridge moves the canvas while the
   // artifact's chrome (and its internal position) stays frozen on the first
-  // slide. Returns true when the handler moved the deck synchronously; direct
-  // mutation stays available as the fallback for decks without key handling.
-  function goViaArtifactKeys(key){
-    if (!key) return false;
-    var before = activeIndex(slides());
-    dispatchKey(key);
-    return activeIndex(slides()) !== before;
+  // slide. Handlers may defer their state update (requestAnimationFrame or
+  // setTimeout), so the probe is asynchronous: after dispatching the key it
+  // waits one bounded mutation window for the deck to move before concluding
+  // the artifact did not handle it. Falling back synchronously would
+  // double-drive the deck — the bridge mutates the DOM immediately and the
+  // deferred artifact handler still runs afterwards, advancing a second time
+  // and desyncing the artifact's internal index from the visible slide.
+  var KEY_PROBE_WINDOW_MS = 48;
+  var preferredKeyTarget = null;
+  // Seeded from a source scan (inline artifact scripts run before this
+  // bridge); the addEventListener patches below catch later registrations.
+  // Decks with no keyboard handling at all skip the probe entirely, so their
+  // direct-DOM fallback stays synchronous.
+  var odHasArtifactKeydownListener = ${JSON.stringify(hasInlineKeydownListener)};
+  function trackTransformSnapshot(){
+    var track = transformTrack(slides());
+    return track ? (track.style.transform || '') : '';
   }
-  function stepToIndexViaKeys(target){
-    var current = activeIndex(slides());
-    var guard = slides().length + 4;
-    while (current !== target && guard > 0) {
-      guard -= 1;
-      if (!goViaArtifactKeys(target > current ? 'ArrowRight' : 'ArrowLeft')) return false;
-      current = activeIndex(slides());
+  function deckMovedSince(beforeIndex, beforeTrack){
+    return activeIndex(slides()) !== beforeIndex || trackTransformSnapshot() !== beforeTrack;
+  }
+  function waitForDeckMove(beforeIndex, beforeTrack, onDone){
+    if (deckMovedSince(beforeIndex, beforeTrack)) { onDone(true); return; }
+    var settled = false;
+    var observer = null;
+    var timer = null;
+    function finish(moved){
+      if (settled) return;
+      settled = true;
+      if (observer) { try { observer.disconnect(); } catch (_) {} }
+      if (timer) clearTimeout(timer);
+      onDone(moved);
     }
-    return current === target;
+    try {
+      observer = new MutationObserver(function(){
+        if (deckMovedSince(beforeIndex, beforeTrack)) finish(true);
+      });
+      observer.observe(document.body, {
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'style', 'hidden'],
+      });
+    } catch (_) {}
+    timer = setTimeout(function(){ finish(deckMovedSince(beforeIndex, beforeTrack)); }, KEY_PROBE_WINDOW_MS);
+  }
+  function dispatchKeysTo(target, key){
+    var init = { key: key, code: key, bubbles: true, cancelable: true, composed: true };
+    try {
+      target.dispatchEvent(new KeyboardEvent('keydown', init));
+      target.dispatchEvent(new KeyboardEvent('keyup', init));
+    } catch (_) {}
+  }
+  function goViaArtifactKeys(key, onDone){
+    if (!key || !odHasArtifactKeydownListener) { onDone(false); return; }
+    var beforeIndex = activeIndex(slides());
+    var beforeTrack = trackTransformSnapshot();
+    // Once a dispatch target has proven responsive, keep using it: probing
+    // window first on every keypress would tax document-listening decks one
+    // probe window per navigation.
+    if (preferredKeyTarget) {
+      dispatchKeysTo(preferredKeyTarget, key);
+      waitForDeckMove(beforeIndex, beforeTrack, onDone);
+      return;
+    }
+    // Window first, then document, waiting out each stage before the next:
+    // events dispatched at document also propagate to window listeners, so
+    // dispatching the second stage while the first stage's possibly deferred
+    // handler is still pending turns one host "next" request into two moves.
+    dispatchKeysTo(window, key);
+    waitForDeckMove(beforeIndex, beforeTrack, function(moved){
+      if (moved) { preferredKeyTarget = window; onDone(true); return; }
+      dispatchKeysTo(document, key);
+      waitForDeckMove(beforeIndex, beforeTrack, function(movedViaDocument){
+        if (movedViaDocument) preferredKeyTarget = document;
+        onDone(movedViaDocument);
+      });
+    });
+  }
+  function stepToIndexViaKeys(target, onDone){
+    var guard = slides().length + 4;
+    function step(){
+      var current = activeIndex(slides());
+      if (current === target) { onDone(true); return; }
+      if (guard <= 0) { onDone(false); return; }
+      guard -= 1;
+      goViaArtifactKeys(target > current ? 'ArrowRight' : 'ArrowLeft', function(moved){
+        if (!moved) { onDone(false); return; }
+        step();
+      });
+    }
+    step();
   }
   function go(action){
     var list = slides();
     if (!list.length) return;
-    var target = Math.max(0, Math.min(list.length - 1, targetFor(action, list)));
     if (isScrollDeck()) {
-      scrollGo(target);
+      scrollGo(Math.max(0, Math.min(list.length - 1, targetFor(action, list))));
       return;
     }
-    if (goViaArtifactKeys(keyForAction(action))) { report(); return; }
-    if (canSetActive(list) && setActive(target)) return;
-    if (transformGo(target)) return;
-    setTimeout(report, 280);
+    goViaArtifactKeys(keyForAction(action), function(moved){
+      if (moved) { report(); return; }
+      // Recompute the target at fallback time: rapid host requests can have
+      // several probes in flight, and each fallback must step from the deck's
+      // position as it is now, not as it was when its probe started.
+      var now = slides();
+      var target = Math.max(0, Math.min(now.length - 1, targetFor(action, now)));
+      if (canSetActive(now) && setActive(target)) return;
+      if (transformGo(target)) return;
+      setTimeout(report, 280);
+    });
   }
   function gotoIndex(i){
     var list = slides();
@@ -2551,16 +2653,19 @@ function injectDeckBridge(
     var target = Math.max(0, Math.min(list.length - 1, i));
     if (isScrollDeck()) { scrollGo(target); return; }
     if (activeIndex(list) === target) { report(); return; }
-    if (stepToIndexViaKeys(target)) { report(); return; }
-    if (canSetActive(list) && setActive(target)) return;
-    if (transformGo(target)) return;
-    var current = activeIndex(slides());
-    var diff = target - current;
-    if (!diff) { report(); return; }
-    var key = diff > 0 ? 'ArrowRight' : 'ArrowLeft';
-    var n = Math.abs(diff);
-    for (var k = 0; k < n; k++) dispatchKey(key);
-    setTimeout(report, 320);
+    stepToIndexViaKeys(target, function(stepped){
+      if (stepped) { report(); return; }
+      var now = slides();
+      if (canSetActive(now) && setActive(target)) return;
+      if (transformGo(target)) return;
+      var current = activeIndex(slides());
+      var diff = target - current;
+      if (!diff) { report(); return; }
+      var key = diff > 0 ? 'ArrowRight' : 'ArrowLeft';
+      var n = Math.abs(diff);
+      for (var k = 0; k < n; k++) dispatchKey(key);
+      setTimeout(report, 320);
+    });
   }
   function isInteractiveClickTarget(target){
     while (target && target !== document.body && target !== document.documentElement) {
@@ -2654,6 +2759,21 @@ function injectDeckBridge(
       return false;
     }
   }
+  // Screens keydown registrations the same way odMaybeHandlesSlideMessages
+  // screens message listeners: only handlers that mention navigation keys
+  // mark the artifact as keyboard-navigable. Other od bridges and artifact
+  // shortcut helpers also register keydown listeners, and counting those
+  // would put every deck on the key-probe path.
+  function odLooksLikeNavKeydownListener(listener) {
+    try {
+      var source = '';
+      if (typeof listener === 'function') source = String(listener);
+      else if (listener && typeof listener.handleEvent === 'function') source = String(listener.handleEvent);
+      return /\\bArrow(?:Right|Left)\\b|\\bPage(?:Up|Down)\\b|\\bkeyCode\\b/.test(source);
+    } catch (_) {
+      return false;
+    }
+  }
   try {
     var odOriginalAddEventListener = window.addEventListener;
     window.addEventListener = function(type, listener, options) {
@@ -2664,7 +2784,19 @@ function injectDeckBridge(
       ) {
         odHasExternalSlideMessageListener = true;
       }
+      if (type === 'keydown' && odLooksLikeNavKeydownListener(listener)) {
+        odHasArtifactKeydownListener = true;
+      }
       return odOriginalAddEventListener.call(this, type, listener, options);
+    };
+  } catch (_) {}
+  try {
+    var odOriginalDocumentAddEventListener = document.addEventListener;
+    document.addEventListener = function(type, listener, options) {
+      if (type === 'keydown' && odLooksLikeNavKeydownListener(listener)) {
+        odHasArtifactKeydownListener = true;
+      }
+      return odOriginalDocumentAddEventListener.call(this, type, listener, options);
     };
   } catch (_) {}
   function addOdSlideMessageListener(listener, options) {

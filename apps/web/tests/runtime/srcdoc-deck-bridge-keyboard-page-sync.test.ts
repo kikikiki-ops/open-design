@@ -25,7 +25,18 @@ function extractDeckBridgeScript(srcdoc: string): string {
   return match[1];
 }
 
-function setupCustomCounterDeck() {
+interface CustomDeckOptions {
+  /** Where the artifact registers its keydown handler. */
+  listenOn?: 'document' | 'window';
+  /**
+   * Defer the handler's state update to a later task (the
+   * requestAnimationFrame / setTimeout shape some generated decks use),
+   * instead of mutating synchronously inside the keydown listener.
+   */
+  deferUpdate?: boolean;
+}
+
+function setupCustomCounterDeck(options: CustomDeckOptions = {}) {
   const bodyHtml = `
     <style>
       html, body { margin: 0; }
@@ -67,9 +78,16 @@ function setupCustomCounterDeck() {
     value: win.document.documentElement,
   });
 
+  const evaluate = new win.Function(script);
+  evaluate.call(win);
+
   // The artifact's own navigation runtime: internal index + self-rendered
   // page counter, driven by its own keydown handler — the shape agent
-  // decks author when they do not copy the framework skeleton.
+  // decks author when they do not copy the framework skeleton. Registered
+  // after the bridge evaluates so the registration flows through the
+  // bridge's patched addEventListener (the late-initializing deck shape);
+  // decks whose inline scripts run before the bridge are covered by the
+  // build-time source scan, asserted separately below.
   const slides = Array.from(win.document.querySelectorAll<HTMLElement>('.slide'));
   const track = win.document.getElementById('deck-track') as HTMLElement;
   const pagerCur = win.document.getElementById('pager-cur') as HTMLElement;
@@ -79,16 +97,25 @@ function setupCustomCounterDeck() {
     track.style.transform = `translateX(-${active * 100}vw)`;
     pagerCur.textContent = String(active + 1);
   }
-  win.document.addEventListener('keydown', (event) => {
-    if (event.key === 'ArrowRight') apply(active + 1);
-    else if (event.key === 'ArrowLeft') apply(active - 1);
-    else if (event.key === 'Home') apply(0);
-    else if (event.key === 'End') apply(slides.length - 1);
-  });
+  const onKeydown = (event: KeyboardEvent) => {
+    const key = event.key;
+    if (key !== 'ArrowRight' && key !== 'ArrowLeft' && key !== 'Home' && key !== 'End') return;
+    // Recompute from the live index inside the step, the way generated decks
+    // do: when the update is deferred, every extra key event the bridge leaks
+    // in becomes a visible extra advance.
+    const step = () => {
+      if (key === 'ArrowRight') apply(active + 1);
+      else if (key === 'ArrowLeft') apply(active - 1);
+      else if (key === 'Home') apply(0);
+      else apply(slides.length - 1);
+    };
+    if (options.deferUpdate) win.setTimeout(step, 0);
+    else step();
+  };
+  const listenTarget = options.listenOn === 'window' ? win : win.document;
+  listenTarget.addEventListener('keydown', onKeydown as EventListener);
   apply(0);
 
-  const evaluate = new win.Function(script);
-  evaluate.call(win);
   return { win, parentPostMessage, track, pagerCur };
 }
 
@@ -115,6 +142,31 @@ describe('deck bridge - keyboard paging keeps page counters in sync', () => {
     expect(slideStatesOf(parentPostMessage).at(-1)).toMatchObject({ active: 1, count: 3 });
   });
 
+  it('one host request advances a deferred-handler deck exactly once (no double advance, no direct-DOM fallback)', async () => {
+    // The artifact defers its state update to a later task and listens on
+    // window — the shape where a synchronous probe is wrong twice over: the
+    // bridge sees no immediate movement, so (a) it re-dispatches the key at
+    // document, which propagates back to the window listener as a second
+    // press, and (b) it falls back to direct DOM mutation while the deferred
+    // handler is still pending. The probe must instead wait out a bounded
+    // window before concluding the artifact did not respond.
+    const { win, parentPostMessage, track, pagerCur } = setupCustomCounterDeck({
+      listenOn: 'window',
+      deferUpdate: true,
+    });
+
+    win.dispatchEvent(new win.MessageEvent('message', {
+      data: { type: 'od:slide', action: 'next' },
+    }));
+    await new Promise<void>((resolve) => win.setTimeout(resolve, 360));
+
+    // Exactly one advance: slide 2, not slide 3, and the artifact's own
+    // counter agrees with the visible slide.
+    expect(track.style.transform).toBe('translateX(-100vw)');
+    expect(pagerCur.textContent).toBe('2');
+    expect(slideStatesOf(parentPostMessage).at(-1)).toMatchObject({ active: 1, count: 3 });
+  });
+
   it('iframe-focused keyboard navigation on a transform-track deck still reports slide state to the host', async () => {
     const { win, parentPostMessage } = setupCustomCounterDeck();
     // Let the bridge's delayed initial-load report fire first, so the
@@ -135,5 +187,24 @@ describe('deck bridge - keyboard paging keeps page counters in sync', () => {
     await new Promise<void>((resolve) => win.setTimeout(resolve, 240));
 
     expect(slideStatesOf(parentPostMessage).at(-1)).toMatchObject({ active: 1, count: 3 });
+  });
+
+  it('seeds the keyboard-navigation flag from the artifact source, ignoring od-injected bridge scripts', () => {
+    const slideMarkup = '<section class="slide active">One</section>';
+    const navScript =
+      '<script>document.addEventListener("keydown", (e) => { if (e.key === "ArrowRight") {} });</script>';
+    // previewFocusGuard injects a bridge that itself registers a keydown
+    // listener; the seed must come from the artifact source alone.
+    const withNav = buildSrcdoc(
+      `<!doctype html><html><body>${slideMarkup}${navScript}</body></html>`,
+      { deck: true, previewFocusGuard: true },
+    );
+    expect(withNav).toContain('odHasArtifactKeydownListener = true');
+
+    const withoutNav = buildSrcdoc(
+      `<!doctype html><html><body>${slideMarkup}</body></html>`,
+      { deck: true, previewFocusGuard: true },
+    );
+    expect(withoutNav).toContain('odHasArtifactKeydownListener = false');
   });
 });
