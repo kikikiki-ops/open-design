@@ -1,8 +1,10 @@
 <h1 align="center">Open Design: Die quelloffene Alternative zu Claude Design</h1>
 
-> 🔥 **Open Design 0.9.0 ist da: gestalten ohne Einrichtung.** Der [offizielle Model Router](https://open-design.ai/amr) ist direkt in die App integriert — keine zusätzliche Konfiguration, kein zu installierendes CLI, kein vorzubereitender API-Schlüssel. Einfach die App öffnen, anmelden und sofort mit dem Gestalten und Erstellen loslegen. [0.9.0 herunterladen](https://github.com/nexu-io/open-design/releases) · [An der Diskussion teilnehmen](https://github.com/nexu-io/open-design/discussions/3524)
+> 🔥 **Open Design 0.13.0 — _Stay in Flow_ ist da.** Lange Design-Sitzungen scheiterten früher an jeder Unterbrechung — ein Lauf verlor seine Position, ein Modell-Picker ließ dich raten, ein Export brauchte noch einen Umweg. 0.13.0 hält die Sitzung am Leben: Setze Codex- / OpenCode- / Pi- / Open Design Cloud-Läufe über Runden hinweg fort, wähle schneller das richtige Modell und übergib per Screenshot gestützte PPTX / PDF, ohne die App zu verlassen. [0.13.0 herunterladen](https://github.com/nexu-io/open-design/releases) · [Release Notes](https://github.com/nexu-io/open-design/releases/tag/open-design-v0.13.0)
 >
-> 🏅 **Das Open Design Fellow-Programm ist jetzt offen.** Wenn auch du glaubst, dass Design offen sein sollte — werde Open Design Fellow, gestalte das Produkt gemeinsam mit dem Kernteam und hilf mehr Menschen dabei, die Zukunft des Designs mitzubestimmen. Details → [`MAINTAINERS.md`](../../MAINTAINERS.md) und [Discord](https://discord.gg/qhbcCH8Am4).
+> ⚡ **Open Design Cloud — der offizielle Modell-Service.** Einmal aufladen und GPT, Claude, Gemini und DeepSeek direkt in Open Design nutzen: 20+ Flaggschiff-Modelle, null Konfiguration, Abrechnung nach realem Token-Verbrauch. [Open Design Cloud ausprobieren](https://open-design.ai/cloud/)
+>
+> 🏅 **Das Open Design Fellow-Programm ist jetzt offen.** Wenn auch du glaubst, dass Design offen sein sollte — werde Open Design Fellow, gestalte das Produkt gemeinsam mit dem Kernteam und hilf mehr Menschen dabei, die Zukunft des Designs mitzubestimmen. Details → [`MAINTAINERS.md`](../../MAINTAINERS.md) und [Discord](https://discord.gg/mHAjSMV6gz).
 
 <p align="center">
   <img src="https://repo-assets.open-design.ai/resources/images/hero.png" alt="Open Design — The open-source Claude Design alternative · 150 Design Systems · 261 Plugins · 21 Coding Agents · 14 Media Providers" width="100%" />
@@ -11,30 +13,30 @@
 <p align="center">
   <a href="https://open-design.ai/">Website</a> ·
   <a href="https://open-design.ai/">Download</a> ·
-  <a href="https://discord.gg/qhbcCH8Am4">Discord</a> ·
-  <a href="https://x.com/nexudotio">@nexudotio folgen</a>
+  <a href="https://open-design.ai/cloud/">Open Design Cloud</a> ·
+  <a href="https://discord.gg/mHAjSMV6gz">Discord</a> ·
+  <a href="https://x.com/OpenDesignHQ">@OpenDesignHQ folgen</a>
 </p>
 
 <p align="center">
   <a href="https://github.com/nexu-io/open-design/releases"><img alt="release" src="https://img.shields.io/github/v/release/nexu-io/open-design?style=flat&color=blueviolet&label=release&include_prereleases&display_name=tag" /></a>
   <a href="../../LICENSE"><img alt="license" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg?style=flat" /></a>
-  <a href="https://discord.gg/qhbcCH8Am4"><img alt="discord" src="https://img.shields.io/discord/1479002485040480266?style=flat&logo=discord&logoColor=white&label=discord&color=5865F2&cacheSeconds=3600" /></a>
+  <a href="https://discord.gg/mHAjSMV6gz"><img alt="discord" src="https://img.shields.io/discord/1479002485040480266?style=flat&logo=discord&logoColor=white&label=discord&color=5865F2&cacheSeconds=3600" /></a>
   <a href="QUICKSTART.de.md"><img alt="quickstart" src="https://img.shields.io/badge/quickstart-3%20commands-green?style=flat" /></a>
 </p>
 
-<p align="center"><a href="../../README.md">English</a> · <a href="README.es.md">Español</a> · <a href="README.pt-BR.md">Português</a> · <b>Deutsch</b> · <a href="README.fr.md">Français</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · <a href="README.ko.md">한국어</a> · <a href="README.ja-JP.md">日本語</a> · <a href="README.ar.md">العربية</a> · <a href="README.ru.md">Русский</a> · <a href="README.uk.md">Українська</a> · <a href="README.tr.md">Türkçe</a></p>
+<p align="center"><a href="../../README.md">English</a> · <a href="README.es.md">Español</a> · <a href="README.pt-BR.md">Português</a> · <b>Deutsch</b> · <a href="README.fr.md">Français</a> · <a href="README.zh-CN.md">简体中文</a> · <a href="README.zh-TW.md">繁體中文</a> · <a href="README.ko.md">한국어</a> · <a href="README.ja-JP.md">日本語</a> · <a href="README.ar.md">العربية</a> · <a href="README.ru.md">Русский</a> · <a href="README.uk.md">Українська</a> · <a href="README.tr.md">Türkçe</a> · <a href="README.th.md">ภาษาไทย</a></p>
 
 ---
 
 ## Was ist Open Design
 
-🎨 **Die local-first, quelloffene Alternative zu [Claude Design][cd].** &nbsp;🖥️ **Native Desktop-App für macOS und Windows.** &nbsp;⚡ **100+ Skills** · ✨ **150 markenreife `DESIGN.md`-Systeme** · 📦 **261 sofort einsetzbare Plugins.** &nbsp;🖼️ Erzeugt **Web- · Desktop- · Mobile-Prototypen**, **Live-Dashboards / Artefakte**, **Präsentationen**, **Bilder**, **Videos** sowie **HyperFrames**-Motion-Graphics. 🔒 Sandboxed iframe-Vorschau · Export als HTML / PDF / PPTX / MP4. &nbsp;🤖 **Läuft auf Claude Code · OpenClaw · Codex · Cursor · OpenCode · Qwen · Copilot · Hermes · Kimi · Antigravity und 21 lokalen CLIs**, oder über BYOK an jedem OpenAI-kompatiblen Endpunkt.
+🎨 **Die local-first, quelloffene Alternative zu Claude Design.** &nbsp;🖥️ **Native Desktop-App für macOS und Windows.** &nbsp;⚡ **100+ Skills** · ✨ **150 markenreife `DESIGN.md`-Systeme** · 📦 **261 sofort einsetzbare Plugins.** &nbsp;🖼️ Erzeugt **Web- · Desktop- · Mobile-Prototypen**, **Live-Dashboards / Artefakte**, **Präsentationen**, **Bilder**, **Videos** sowie **HyperFrames**-Motion-Graphics. 🔒 Sandboxed iframe-Vorschau · Export als HTML / PDF / PPTX / MP4. &nbsp;🤖 **Läuft auf Claude Code · OpenClaw · Codex · Cursor · OpenCode · Qwen · Copilot · Hermes · Kimi · Antigravity und 21 lokalen CLIs**, oder über BYOK an jedem OpenAI-kompatiblen Endpunkt.
 
 Open Design ist das, was entsteht, wenn die **agent-native** Schleife, die Anthropic mit Claude Design eingeführt hat — das Briefing erkunden, die Richtung festlegen, das Artefakt streamen, kritisieren, ausliefern — nicht länger geschlossen ist und zu einem **Dateisystem aus Skills, Designsystemen und Plugins** wird, das die Coding-Agents, die schon auf deinem Laptop liegen, lesen, schreiben und neu kombinieren können. Dein CLI wird zur Design-Engine, dein Laptop zum Studio und die `DESIGN.md` deines Teams zum Markenvertrag.
 
 Es ist außerdem die **Figma-Alternative für das Agent-Zeitalter** — statt Pixel auf einer Leinwand zu schieben, liefert es einseitige Artefakte in echtem CSS, echten Schriften, echten Komponenten, direkt exportiert als HTML / PDF / PPTX / MP4 — bereits durch dein Designsystem geformt, bereits lauffähig in dem Agent, den du jeden Tag verwendest.
 
-[cd]: https://x.com/claudeai/status/2045156267690213649
 
 ---
 
@@ -113,16 +115,18 @@ Im Studio eines Projekts streamt dasselbe Designsystem mehrere Artefakttypen her
 |---|:---:|---|
 | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) | ✅ Unterstützt | `od mcp install claude` |
 | [Codex CLI](https://github.com/openai/codex) | ✅ Unterstützt | `od mcp install codex` |
+| [DeepSeek Reasonix](https://github.com/esengine/DeepSeek-Reasonix) | ✅ Unterstützt | `od mcp install reasonix` |
 | [Cursor](https://www.cursor.com/cli) | ✅ Unterstützt | `od mcp install cursor` |
 | [VS Code + GitHub Copilot](https://github.com/features/copilot) | ✅ Unterstützt | `od mcp install copilot` |
 | [GitHub Copilot CLI](https://github.com/features/copilot/cli) | ✅ Unterstützt | `od mcp install copilot` |
-| Gemini CLI | ✅ Unterstützt | `od mcp install gemini` |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | ✅ Unterstützt | `od mcp install gemini` |
 | [OpenCode](https://opencode.ai/) | ✅ Unterstützt | `od mcp install opencode` |
 | [OpenClaw](https://github.com/openclaw/openclaw) | ✅ Unterstützt | `od mcp install openclaw` |
 | [Antigravity](https://antigravity.google) | ✅ Unterstützt | `od mcp install antigravity` |
 | [Cline](https://github.com/cline/cline) | ✅ Unterstützt | `od mcp install cline` |
 | [Trae](https://www.trae.ai/) | ✅ Unterstützt | `od mcp install trae` |
-| Kimi CLI | ✅ Unterstützt | `od mcp install kimi` |
+| [Kimi CLI](https://github.com/MoonshotAI/kimi-cli) | ✅ Unterstützt | `od mcp install kimi` |
+| [Kiro](https://kiro.dev) | ✅ Unterstützt | `od mcp install kiro` |
 | [Pi Agent](https://github.com/badlogic/pi-mono) | ✅ Unterstützt | `od mcp install pi` |
 | [Mistral Vibe CLI](https://github.com/mistralai/mistral-vibe) | ✅ Unterstützt | `od mcp install vibe` |
 | [Hermes Agent](https://github.com/nousresearch/hermes-agent) | ✅ Unterstützt | `od mcp install hermes` |
@@ -255,20 +259,20 @@ Jedes Deck exportiert als **HTML** (einzelne Datei, eingebettete Assets), **PDF*
 
 ## Warum Open Design
 
-> **Im April 2026 veröffentlichte Anthropic [Claude Design][cd] — das erste Mal, dass ein LLM aufhörte, Prosa zu schreiben, und begann, Design-Artefakte direkt auszuliefern.** Es ging viral. Aber es blieb closed-source, nur kostenpflichtig, nur cloudbasiert, gebunden an Anthropics Modell, Anthropics Skills, Anthropics Oberfläche. Kein Checkout, kein Self-Hosting, kein Vercel-Deploy, kein eigener Agent zum Einsetzen.
+> **Im April 2026 veröffentlichte Anthropic Claude Design — das erste Mal, dass ein LLM aufhörte, Prosa zu schreiben, und begann, Design-Artefakte direkt auszuliefern.** Es ging viral. Aber es blieb closed-source, nur kostenpflichtig, nur cloudbasiert, gebunden an Anthropics Modell, Anthropics Skills, Anthropics Oberfläche. Kein Checkout, kein Self-Hosting, kein Vercel-Deploy, kein eigener Agent zum Einsetzen.
 
 Open Design (OD) ist die quelloffene Alternative. Dieselbe Schleife, dasselbe artefakt-zentrierte mentale Modell, ohne den Lock-in:
 
 - 🤖 **Agent-native, modellunabhängig.** Wir liefern keinen Agent. Die `claude` / `codex` / `cursor-agent` / `copilot` / `hermes` / `kimi`, die bereits in deinem `PATH` liegen, sind die Design-Engine. Mit einem Klick wechseln.
 - 🧠 **Markenreif von Haus aus.** Jedes Rendering liest die aktive `DESIGN.md` — ein 9-teiliges Schema, das Farbpalette, Typografie, Abstände, Bewegung, Stimme und Anti-Patterns abdeckt. 150 Systeme werden mit dem Repo ausgeliefert (Linear, Stripe, Vercel, Airbnb, Apple, Tesla, Notion, Anthropic, Cursor, Supabase, Figma…). Lege einen Ordner ab, der Picker findet ihn.
-- 🖥️ **Local-first, BYOK auf jeder Ebene.** Native Desktop-Apps für macOS (Apple Silicon + Intel) und Windows (x64). Linux-AppImage auf der optionalen Release-Spur. SQLite unter `.od/app.sqlite`, Dateien unter `.od/projects/<id>/`, keine Telemetrie, kein Cloud-Roundtrip.
+- 🖥️ **Local-first, BYOK auf jeder Ebene.** Native Desktop-Apps bleiben local-first, ohne Cloud-Roundtrip. Bevor Sie Daemon-Datenpfade beschreiben, MÜSSEN Sie `AGENTS.md` im Repository-Stamm lesen, Abschnitt **Daemon data directory contract**.
 - 🌍 **Komponierbar auf drei Ebenen.** **Plugins** tragen lauffähige Workflows · **Skills** tragen den Design-Geschmack des Agents · **Designsysteme** tragen die Marke. Alle drei sind einfache Dateien, die jeder erstellen, versionieren und veröffentlichen kann.
 - 🔁 **Eine bestehende Codebasis auffrischen.** Übergib dem Agent ein `git`-Repo + `DESIGN.md`, und er refaktoriert deine echten Komponenten auf die Markenvorgabe. Dedizierte Plugins migrieren Figma- / Pencil-Workflows in React- / Next.js- / Vue-Code.
 - 🔒 **Datenschutz aus Überzeugung.** Alles läuft dort, wo deine Daten liegen — dein Laptop, der Server deines Teams, dein Vercel-Projekt. Wenn das Netzwerk gebraucht wird, ist der BYOK-Proxy SSRF-geschützt.
 
 ### Vergleich
 
-| | [Claude Design][cd] | Figma | Lovable / v0 / Bolt | **Open Design** |
+| | Claude Design | Figma | Lovable / v0 / Bolt | **Open Design** |
 |---|---|---|---|---|
 | Open Source | ❌ | ❌ | ❌ | **✅ Apache-2.0** |
 | Self-Hosting / Desktop | ❌ | ❌ | ❌ | **✅ macOS + Windows + Vercel** |
@@ -299,7 +303,7 @@ Du kannst Open Design nutzen, ohne jemals die GUI zu öffnen — rufe es als Ski
 
 ```bash
 # One-line install into the agent you're using:
-curl -fsSL https://open-design.ai/install.sh | sh -s <agent>
+od mcp install <agent>
 # <agent> = claude | codex | cursor | copilot | openclaw | antigravity | gemini
 #         | pi | vibe | hermes | cline | kimi | trae | opencode
 ```
@@ -322,6 +326,12 @@ echo "OD_API_TOKEN=$(openssl rand -hex 32)" >> .env
 docker compose up -d
 # open http://localhost:7456
 ```
+
+### 🚀 Auf Sealos bereitstellen
+
+[![Deploy on Sealos](https://sealos.io/Deploy-on-Sealos.svg)](https://sealos.io/products/app-store/open-design/)
+
+Die Sealos-App-Store-Vorlage führt das veröffentlichte Open-Design-Docker-Image mit persistentem Workspace-Speicher und Basic Auth am öffentlichen Proxy aus. Folgen Sie für eigene öffentliche oder gemeinsam genutzte Docker-Deployments den Reverse-Proxy- und `OPEN_DESIGN_ALLOWED_ORIGINS`-Hinweisen in [`deploy/README.md`](../../deploy/README.md#local-compose).
 
 ### 🧑‍💻 Aus dem Quellcode ausführen
 
@@ -352,7 +362,7 @@ Open Design liefert einen **stdio-MCP-Server** und **Installationsskripte pro Ag
 
 ```bash
 # One-line install (16+ CLIs supported):
-curl -fsSL https://open-design.ai/install.sh | sh -s <agent>
+od mcp install <agent>
 
 # Then the agent can:
 od search-files "primary button"      # search files across projects
@@ -533,7 +543,7 @@ Plugin-Registry-Endpunkt: `GET /api/plugins`. Verzeichnisübersicht → [`plugin
    │  /api/import/claude-design      │
    │  MCP stdio server                │
    └─────────┬───────────────────────┘
-             │ spawn(cli, [...], { cwd: .od/projects/<id> })
+             │ spawn(cli, [...], { cwd: managed project cwd })
              ▼
    ┌──────────────────────────────────────────────────────────────────┐
    │  claude · codex · cursor-agent · copilot · openclaw · antigravity ·│
@@ -547,7 +557,7 @@ Plugin-Registry-Endpunkt: `GET /api/plugins`. Verzeichnisübersicht → [`plugin
 |---|---|
 | Frontend | Next.js 16 App Router + React 18 + TypeScript |
 | Daemon | Node 24 · Express · SSE-Streaming · `better-sqlite3` |
-| Speicher | Dateien unter `.od/projects/<id>/` + SQLite unter `.od/app.sqlite` + `media-config.json` (gitignored, automatisch erstellt). `OD_DATA_DIR` verschiebt alles. |
+| Speicher | Bevor Sie Daemon-Speicherpfade ändern oder dokumentieren, MÜSSEN Sie `AGENTS.md` im Repository-Stamm lesen, Abschnitt **Daemon data directory contract**. Dieses README DARF ihn NICHT wiederholen. |
 | Vorschau | Sandboxed `srcdoc`-iframe + Streaming-`<artifact>`-Parser |
 | Export | HTML (eingebettet) · PDF (Browser-Druck) · PPTX (agentengesteuert) · ZIP · Markdown · MP4 (HyperFrames) |
 | Desktop | Electron-Shell + Sandboxed Renderer + Sidecar-IPC (STATUS · EVAL · SCREENSHOT · CONSOLE · CLICK · SHUTDOWN) |
@@ -568,7 +578,7 @@ Vollständige Architektur → [`docs/architecture.md`](../../docs/architecture.m
 - [x] Sidecar-Protokoll + Electron-Desktop + IPC-Automatisierung
 - [x] Artefakt-Lint-API + 5-dimensionales Selbstkritik-Pre-Emit-Gate
 - [x] **0.8.0** — Plugin-Marktplatz-Infrastruktur (261 offizielle Plugins, Manifest-Spezifikation, Installationsskripte pro Agent)
-- [x] **0.9.0** — Open Design AMR (offizieller Model Router in die App integriert: keine Konfiguration, Ein-Klick-Anmeldung)
+- [x] **0.9.0** — Open Design Cloud (offizieller Model Router in die App integriert: keine Konfiguration, Ein-Klick-Anmeldung)
 - [x] Gepackte Electron-Builds — macOS (Apple Silicon + Intel) + Windows (x64) + Linux-AppImage (optionale Spur)
 - [ ] Kommentar-Modus für chirurgische Bearbeitungen — teilweise ausgeliefert; zuverlässiges gezieltes Patchen in Arbeit
 - [ ] KI-ausgegebenes Tweaks-Panel-UX — noch nicht implementiert
@@ -585,8 +595,8 @@ Phasenweise Auslieferung → [`docs/roadmap.md`](../../docs/roadmap.md).
 
 Hinter jedem Kanal stehen echte Menschen.
 
-- 💬 **Discord** — täglicher Chat, Plugin-Sharing, Fragen → [**discord.gg/qhbcCH8Am4**](https://discord.gg/qhbcCH8Am4)
-- 🐦 **X / Twitter** — Release-Notes, Meilensteine, Hinter-den-Kulissen → [**@nexudotio**](https://x.com/nexudotio)
+- 💬 **Discord** — täglicher Chat, Plugin-Sharing, Fragen → [**discord.gg/mHAjSMV6gz**](https://discord.gg/mHAjSMV6gz)
+- 🐦 **X / Twitter** — Release-Notes, Meilensteine, Hinter-den-Kulissen → [**@OpenDesignHQ**](https://x.com/OpenDesignHQ)
 - 🗣️ **GitHub Discussions** — tiefe Q&A, RFCs, „show your work" → [**Discussions**](https://github.com/nexu-io/open-design/discussions)
 - 🐛 **GitHub Issues** — Fehlerberichte, Feature-Wünsche → [**Issues**](https://github.com/nexu-io/open-design/issues)
 
@@ -635,7 +645,7 @@ Vollständiger agentenfreundlicher Beitragsablauf, Code-Stil und PR-Maßstab →
 
 ### 🏅 Open Design Fellow-Programm
 
-Wir rekrutieren weltweit **Open Design Fellows** — Fellows gestalten das Produkt gemeinsam mit dem Kernteam, vertreten Open Design offiziell in ihrer Region und lassen die Community vor Ort wachsen, unterstützt durch finanzielle Förderung ($1,000 / MR), kostenlose LLM-Credits und einen direkten Review-Track. Details → [`MAINTAINERS.md`](../../MAINTAINERS.md) und die Ankündigung auf [Discord](https://discord.gg/qhbcCH8Am4).
+Wir rekrutieren weltweit **Open Design Fellows** — Fellows gestalten das Produkt gemeinsam mit dem Kernteam, vertreten Open Design offiziell in ihrer Region und lassen die Community vor Ort wachsen, unterstützt durch finanzielle Förderung ($1,000 / MR), kostenlose LLM-Credits und einen direkten Review-Track. Details → [`MAINTAINERS.md`](../../MAINTAINERS.md) und die Ankündigung auf [Discord](https://discord.gg/mHAjSMV6gz).
 
 ---
 
@@ -669,7 +679,7 @@ Maintainer-Regeln, Beförderungskriterien und das Ausstiegsprotokoll → [`MAINT
 Dank an alle, die teilgenommen haben — Code, Doku, Feedback, ein scharfsinniges Issue, einen neuen Skill, ein neues Designsystem.
 
 <a href="https://github.com/nexu-io/open-design/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=nexu-io/open-design&max=500&columns=20&anon=1&cache_bust=2026-05-30" alt="Open Design contributors" />
+  <img src="https://contrib.rocks/image?repo=nexu-io/open-design&max=500&columns=20&anon=1&cache_bust=2026-06-29" alt="Open Design contributors" />
 </a>
 
 ---
@@ -694,9 +704,9 @@ Wenn dir das dreißig Minuten gespart hat, gib ihm ein ★. Sterne zahlen keine 
 
 <a href="https://star-history.com/#nexu-io/open-design&Date">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=nexu-io/open-design&type=Date&theme=dark&cache_bust=2026-05-28" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=nexu-io/open-design&type=Date&cache_bust=2026-05-28" />
-    <img alt="Open Design star history" src="https://api.star-history.com/svg?repos=nexu-io/open-design&type=Date&cache_bust=2026-05-28" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=nexu-io/open-design&type=Date&theme=dark&cache_bust=2026-06-29" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=nexu-io/open-design&type=Date&cache_bust=2026-06-29" />
+    <img alt="Open Design star history" src="https://api.star-history.com/svg?repos=nexu-io/open-design&type=Date&cache_bust=2026-06-29" />
   </picture>
 </a>
 
@@ -706,7 +716,7 @@ Wenn dir das dreißig Minuten gespart hat, gib ihm ein ★. Sterne zahlen keine 
 
 | Projekt | Rolle |
 |---|---|
-| [Claude Design][cd] | Das Closed-Source-Produkt, zu dem dieses Repo die quelloffene Alternative ist. |
+| Claude Design | Das Closed-Source-Produkt, zu dem dieses Repo die quelloffene Alternative ist. |
 | [`alchaincyf/huashu-design`](https://github.com/alchaincyf/huashu-design) | Der Design-Philosophie-Kompass — Junior-Designer-Workflow, Markenasset-Protokoll, Anti-AI-Slop-Checkliste, fünfdimensionale Kritik. |
 | [`op7418/guizang-ppt-skill`](https://github.com/op7418/guizang-ppt-skill) | Der Web-PPT-Skill im Magazin-Stil, wortgetreu gebündelt unter [`design-templates/guizang-ppt/`](../../design-templates/guizang-ppt/). Standard für den Deck-Modus. |
 | [`lewislulu/html-ppt-skill`](https://github.com/lewislulu/html-ppt-skill) | Die HTML-PPT-Studio-Familie — 15 Deck-Vorlagen, 36 Themes, 31 Seitenlayouts, Animations-Runtime, Magnetic-Card-Presenter-Modus. |

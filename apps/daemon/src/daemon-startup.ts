@@ -28,6 +28,13 @@ export type DaemonCliStartupParseResult =
   | { ok: false; kind: 'help' }
   | { ok: false; kind: 'error'; message: string };
 
+export const DEFAULT_DAEMON_BIND_HOST = '127.0.0.1';
+
+export function normalizeDaemonBindHost(input: unknown): string {
+  const host = String(input ?? '').trim();
+  return host || DEFAULT_DAEMON_BIND_HOST;
+}
+
 function requiredOptionValue(flag: string, value: string | undefined, label: string): string | DaemonCliStartupParseResult {
   if (value == null || value.startsWith('-')) {
     return { ok: false, kind: 'error', message: `${flag} requires ${label}` };
@@ -40,7 +47,7 @@ export function parseDaemonCliStartupArgs(
   env: NodeJS.ProcessEnv = process.env,
 ): DaemonCliStartupParseResult {
   let port = Number(env.OD_PORT) || 7456;
-  let host = env.OD_BIND_HOST || '127.0.0.1';
+  let host = normalizeDaemonBindHost(env.OD_BIND_HOST);
   let open = true;
 
   for (let i = 0; i < argv.length; i++) {
@@ -57,7 +64,7 @@ export function parseDaemonCliStartupArgs(
     } else if (a === '--host') {
       const next = requiredOptionValue(a, argv[++i], 'an address');
       if (typeof next !== 'string') return next;
-      host = next;
+      host = normalizeDaemonBindHost(next);
     } else if (a === '--no-open') {
       open = false;
     } else if (a === '-h' || a === '--help') {
@@ -131,7 +138,7 @@ export async function startDaemonRuntime(options: DaemonRuntimeOptions = {}): Pr
     console.log(`[od] listening on ${started.url}`);
   }
   if (shouldOpenBrowser) {
-    const { openBrowser } = await import('./browser-open.js');
+    const { openBrowser } = await import('./browser/index.js');
     openBrowser(started.url);
   }
 

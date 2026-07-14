@@ -31,6 +31,14 @@ type FetchedRuntimeModels = {
   source: RuntimeModelSource;
 };
 
+function configuredEnvForAgent(
+  configuredEnvByAgent: Record<string, Record<string, string>>,
+  agentId: string,
+): Record<string, string> {
+  const configAgentId = agentId === 'byok-opencode' ? 'opencode' : agentId;
+  return configuredEnvByAgent?.[configAgentId] ?? {};
+}
+
 function amrModelScopeFromEnv(env: NodeJS.ProcessEnv): string {
   return resolveAmrProfile(env);
 }
@@ -265,6 +273,9 @@ function stripFns(
   // `fallbackModels` slot here too. `helpArgs` / `capabilityFlags` /
   // `fallbackBins` / `maxPromptArgBytes` / `env` are probe-or-spawn-only
   // metadata and shouldn't bleed into the API response either.
+  // `inactivityTimeoutMs` is a spawn-time hint for the chat-run watchdog
+  // and is not part of the public AgentInfo contract — strip it here so
+  // the runtime registry stays the only consumer.
   const {
     buildArgs,
     listModels,
@@ -276,6 +287,7 @@ function stripFns(
     versionProbeTimeoutMs,
     maxPromptArgBytes,
     env,
+    inactivityTimeoutMs,
     authProbe,
     ...rest
   } = def;
@@ -320,7 +332,7 @@ export async function detectAgents(
   configuredEnvByAgent: Record<string, Record<string, string>> = {},
 ) {
   const results = await Promise.all(
-    AGENT_DEFS.map((def) => safeProbe(def, configuredEnvByAgent?.[def.id] ?? {})),
+    AGENT_DEFS.map((def) => safeProbe(def, configuredEnvForAgent(configuredEnvByAgent, def.id))),
   );
   // Refresh the validation cache from whatever we just surfaced to the UI
   // so /api/chat can accept any model the user could have just picked,
@@ -328,7 +340,7 @@ export async function detectAgents(
   for (const [index, agent] of results.entries()) {
     const def = AGENT_DEFS[index];
     if (!def) continue;
-    rememberDetectedLiveModels(def, configuredEnvByAgent?.[def.id] ?? {}, agent);
+    rememberDetectedLiveModels(def, configuredEnvForAgent(configuredEnvByAgent, def.id), agent);
   }
   return results;
 }
@@ -343,8 +355,8 @@ export async function* detectAgentsStream(
   configuredEnvByAgent: Record<string, Record<string, string>> = {},
 ): AsyncGenerator<DetectedAgent> {
   const tagged = AGENT_DEFS.map((def, index) =>
-    safeProbe(def, configuredEnvByAgent?.[def.id] ?? {}).then((agent) => {
-      rememberDetectedLiveModels(def, configuredEnvByAgent?.[def.id] ?? {}, agent);
+    safeProbe(def, configuredEnvForAgent(configuredEnvByAgent, def.id)).then((agent) => {
+      rememberDetectedLiveModels(def, configuredEnvForAgent(configuredEnvByAgent, def.id), agent);
       return { index, agent };
     }),
   );

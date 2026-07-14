@@ -1,6 +1,7 @@
-import { expect, test } from '@playwright/test';
-import { ensureRailOpen } from '@/playwright/rail';
+import { expect, test } from '@/playwright/suite';
+import { openNewProjectModal as openNewProjectModalFromProjects } from '@/playwright/rail';
 import { routeAgents } from '@/playwright/mock-factory';
+import { clickDeckNextSlide, clickDeckPreviousSlide, openAllProjectFiles } from '@/playwright/workspace';
 import type { Dialog, Locator, Page, Request, Response } from '@playwright/test';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -558,7 +559,10 @@ test('[P0] sending preview comments opens the refreshed follow-up artifact', asy
   expect(revisedFileName).not.toBe('');
   await page.goto(`/projects/${projectId}/files/${revisedFileName}`, { waitUntil: 'domcontentloaded' });
   await waitForLoadingToClear(page);
-  await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/files/${revisedFileName.replace('.', '\\.')}$`));
+  const escapedRevisedFileName = revisedFileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  await expect(page).toHaveURL(
+    new RegExp(`/projects/${projectId}(?:/conversations/[^/]+)?/files/${escapedRevisedFileName}$`),
+  );
   await expect(artifactPreview(page)).toBeVisible();
   await expectProjectFileToContain(page, projectId, revisedFileName, 'Revised headline');
   await expectProjectFileToContain(page, projectId, revisedFileName, 'Preview copy refreshed after comment send.');
@@ -677,7 +681,7 @@ async function seedHtmlArtifact(
 }
 
 async function openDesignFile(page: Page, fileName: string) {
-  await page.getByTestId('design-files-tab').click();
+  await openAllProjectFiles(page);
   const fileRow = page.locator('[data-testid^="design-file-row-"]', {
     hasText: fileName,
   });
@@ -761,6 +765,7 @@ async function expectWorkspaceReady(page: Page) {
   await expect(page).toHaveURL(/\/projects\//);
   await expect(page.getByTestId('chat-composer')).toBeVisible();
   await expect(page.getByTestId('chat-composer-input')).toBeVisible();
+  await expect(page.locator('.chat-loading-state')).toHaveCount(0, { timeout: T.medium });
   await expect(page.getByTestId('file-workspace')).toBeVisible();
 }
 
@@ -778,7 +783,7 @@ async function sendPrompt(page: Page, prompt: string) {
   await input.click();
   await input.fill(prompt);
   await expect(input).toHaveText(prompt, { timeout: T.short });
-  await expect(sendButton).toBeEnabled({ timeout: T.short });
+  await expect(sendButton).toBeEnabled({ timeout: T.medium });
   await Promise.all([
     page.waitForResponse(isCreateRunResponse, { timeout: 5_000 }),
     sendButton.evaluate((button: HTMLButtonElement) => button.click()),
@@ -1160,11 +1165,11 @@ async function runDeckPaginationNextPrevCorrectnessFlow(page: Page) {
 
   const frame = artifactPreviewFrame(page);
   await expect(frame.getByText('Slide One')).toBeVisible();
-  await page.getByLabel('Next slide').click();
+  await clickDeckNextSlide(page);
   await expect(frame.getByText('Slide Two')).toBeVisible();
-  await page.getByLabel('Next slide').click();
+  await clickDeckNextSlide(page);
   await expect(frame.getByText('Slide Three')).toBeVisible();
-  await page.getByLabel('Previous slide').click();
+  await clickDeckPreviousSlide(page);
   await expect(frame.getByText('Slide Two')).toBeVisible();
 }
 
@@ -1177,13 +1182,13 @@ async function runDeckPaginationPerFileIsolatedFlow(page: Page) {
   await openDesignFile(page, 'deck-alpha.html');
   const frame = artifactPreviewFrame(page);
   await expect(frame.getByText('Alpha One')).toBeVisible();
-  await page.getByLabel('Next slide').click();
+  await clickDeckNextSlide(page);
   await expect(frame.getByText('Alpha Two')).toBeVisible();
 
-  await page.getByTestId('design-files-tab').click();
+  await openAllProjectFiles(page);
   await openDesignFile(page, 'deck-beta.html');
   await expect(frame.getByText('Beta One')).toBeVisible();
-  await page.getByLabel('Next slide').click();
+  await clickDeckNextSlide(page);
   await expect(frame.getByText('Beta Two')).toBeVisible();
 
   await page.getByRole('tab', { name: /deck-alpha\.html/i }).click();
@@ -1214,7 +1219,7 @@ async function seedDeckArtifact(
       title,
       entry: fileName,
       renderer: 'deck-html',
-      exports: ['html', 'pptx'],
+      exports: ['html', 'pdf'],
     },
   );
 }
@@ -1245,10 +1250,12 @@ async function createProjectNameOnly(
   await openNewProjectModal(page);
   await expect(page.getByTestId('new-project-panel')).toBeVisible();
   if (entry.create.tab) {
-    await page.getByTestId(`new-project-tab-${entry.create.tab}`).click();
+    await clickVisible(page.getByTestId(`new-project-tab-${entry.create.tab}`));
+    await expect(page.getByTestId(`new-project-tab-${entry.create.tab}`)).toHaveAttribute('aria-selected', 'true');
   }
   if (entry.create.tab === 'media' && entry.create.mediaSurface) {
-    await page.getByTestId(`new-project-media-surface-${entry.create.mediaSurface}`).click();
+    await clickVisible(page.getByTestId(`new-project-media-surface-${entry.create.mediaSurface}`));
+    await expect(page.getByTestId(`new-project-media-surface-${entry.create.mediaSurface}`)).toHaveAttribute('aria-selected', 'true');
   }
   if (entry.create.tab === 'media' && entry.create.mediaSurface === 'video' && entry.create.videoModel) {
     await page.getByTestId('model-picker-trigger').click();
@@ -1258,6 +1265,11 @@ async function createProjectNameOnly(
     await page.getByRole('button', { name: 'SFX' }).click();
   }
   await page.getByTestId('new-project-name').fill(entry.create.projectName);
+}
+
+async function clickVisible(locator: Locator) {
+  await expect(locator).toBeVisible({ timeout: T.medium });
+  await locator.evaluate((element: HTMLElement) => element.click());
 }
 
 async function gotoEntryHome(page: Page) {
@@ -1273,14 +1285,11 @@ async function gotoEntryHome(page: Page) {
 }
 
 async function openNewProjectModal(page: Page) {
-  await ensureRailOpen(page);
-  await page.getByTestId('entry-nav-new-project').click();
-  await expect(page.getByTestId('new-project-modal')).toBeVisible();
-  await expect(page.getByTestId('new-project-panel')).toBeVisible();
+  await openNewProjectModalFromProjects(page);
 }
 
 async function waitForLoadingToClear(page: Page) {
-  await page.getByText('Loading Open Design…').waitFor({ state: 'hidden', timeout: T.medium });
+  await page.getByText('Loading Open Design…').waitFor({ state: 'hidden', timeout: T.long });
 }
 
 async function getCurrentProjectContext(
@@ -1517,12 +1526,7 @@ async function runConversationPersistenceFlow(
   const historyList = page.getByTestId('conversation-list');
   await expect(historyList).toBeVisible();
   await expect(historyList.locator('.chat-conv-item')).toHaveCount(2);
-  await historyList
-    .locator('.chat-conv-item')
-    .filter({ hasText: entry.prompt })
-    .first()
-    .locator('[data-testid^="conversation-select-"]')
-    .click();
+  await historyList.getByTestId(`conversation-select-${firstConversationId}`).click();
 
   await expect(page.locator('.msg.user').getByText(entry.prompt, { exact: true })).toBeVisible();
   await expect(page.locator('.msg.user').getByText(nextPrompt, { exact: true })).toHaveCount(0);

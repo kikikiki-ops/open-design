@@ -14,28 +14,36 @@ import {
   inferLegacyManifest,
   parsePersistedManifest,
   validateArtifactManifestInput,
-} from './artifact-manifest.js';
+} from './artifacts/manifest.js';
 import {
   ArtifactRegressionError,
   STUB_GUARDED_MANIFEST_KINDS,
   evaluateArtifactStubGuard,
   readArtifactStubGuardConfigFromEnv,
-} from './artifact-stub-guard.js';
+} from './artifacts/stub-guard.js';
 import {
   assertArtifactPublicationAllowed,
   isPublicationGuardedArtifactKind,
-} from './artifact-publication-guard.js';
-import { normalizeArtifactRuntimeImports } from './artifact-runtime-compat.js';
+} from './artifacts/publication-guard.js';
+import { normalizeArtifactRuntimeImports } from './artifacts/runtime-compat.js';
 import { isIgnoredProjectDirName } from './project-ignored-dirs.js';
-import { isSandboxModeEnabled } from './sandbox-mode.js';
+import {
+  isSandboxImportedProjectRootAllowed,
+  isSandboxModeEnabled,
+  SANDBOX_IMPORTED_PROJECT_UNAVAILABLE_MESSAGE,
+} from './sandbox-mode.js';
+import { isOrchestratorScratchWorkspace } from './workspace-contract.js';
 
 const FORBIDDEN_SEGMENT = /^$|^\.\.?$/;
-const RESERVED_PROJECT_FILE_SEGMENTS = new Set(['.live-artifacts']);
+const RESERVED_PROJECT_FILE_SEGMENTS = new Set(['.file-versions', '.live-artifacts']);
 const DESIGN_HANDOFF_FILENAME = 'DESIGN-HANDOFF.md';
 const DESIGN_MANIFEST_FILENAME = 'DESIGN-MANIFEST.json';
 export const RUN_ARTIFACT_RECONCILE_MTIME_GRACE_MS = 1000;
 export const projectFileRenameTestHooks = {
   beforeCommit: null as null | ((paths: { source: string; target: string }) => Promise<void> | void),
+};
+export const projectFileWriteTestHooks = {
+  afterCommit: null as null | ((write: { safeName: string; target: string; body: Buffer | string }) => Promise<void> | void),
 };
 
 export function isRunTouchedProjectFile(fileMtimeMs, runStartTimeMs) {
@@ -59,9 +67,7 @@ export class SandboxImportedProjectError extends Error {
   code = 'SANDBOX_IMPORTED_PROJECT_UNAVAILABLE';
 
   constructor() {
-    super(
-      'Imported-folder projects are not available in OD_SANDBOX_MODE until their files are mirrored into the managed project directory.',
-    );
+    super(SANDBOX_IMPORTED_PROJECT_UNAVAILABLE_MESSAGE);
     this.name = 'SandboxImportedProjectError';
   }
 }
@@ -72,14 +78,21 @@ function hasExternalProjectRoot(metadata?) {
 }
 
 export function assertSandboxProjectRootAvailable(metadata?) {
-  if (isSandboxModeEnabled(process.env) && hasExternalProjectRoot(metadata)) {
+  if (
+    isSandboxModeEnabled(process.env) &&
+    hasExternalProjectRoot(metadata) &&
+    !isOrchestratorScratchWorkspace(metadata) &&
+    !isSandboxImportedProjectRootAllowed(metadata.baseDir)
+  ) {
     throw new SandboxImportedProjectError();
   }
 }
 
 function usesExternalProjectRoot(metadata?) {
-  if (isSandboxModeEnabled(process.env)) return false;
-  return hasExternalProjectRoot(metadata);
+  if (!hasExternalProjectRoot(metadata)) return false;
+  if (isOrchestratorScratchWorkspace(metadata)) return true;
+  if (!isSandboxModeEnabled(process.env)) return true;
+  return isSandboxImportedProjectRootAllowed(metadata.baseDir);
 }
 
 // Returns the folder a project's files live in. For git-linked projects
@@ -255,6 +268,7 @@ async function collectFiles(dir, relDir, out, shouldSkipDir?: (name: string) => 
     out.push({
       name: rel,
       path: rel,
+      localPath: path.resolve(full),
       type: 'file',
       size: st.size,
       mtime: st.mtimeMs,
@@ -823,6 +837,7 @@ export async function writeProjectFile(
     }
   }
   await writeFile(target, body);
+  await projectFileWriteTestHooks.afterCommit?.({ safeName, target, body });
   if (validatedManifest) {
     const manifestFileName = artifactManifestNameFor(safeName);
     const manifestTarget = await resolveSafeReal(dir, manifestFileName);

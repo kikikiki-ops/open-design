@@ -17,9 +17,10 @@ import { chromium, expect as playwrightExpect, type Browser, type Page } from '@
 import { afterEach, describe, expect, test } from 'vitest';
 
 import { createFakeAgentRuntimes } from '@/fake-agents';
+import { T } from '@/timeouts';
 import { requestJson } from '@/vitest/http';
 import { waitForRunTerminal } from '@/vitest/runs';
-import { createSmokeSuite } from '@/vitest/smoke-suite';
+import { createSmokeSuite } from '@/vitest/suite';
 
 const HELD_PROMPT = 'Hold the daemon run open until canceled for the send-now smoke';
 const QUEUED_PROMPT = 'Create a deterministic smoke artifact';
@@ -95,6 +96,7 @@ describe('dialog send-now interrupt', () => {
       }, { key: STORAGE_KEY, codexEnv: fakeAgents.codex.env });
 
       const page = await context.newPage();
+      page.setDefaultNavigationTimeout(T.xlong);
       await page.goto('/', { waitUntil: 'domcontentloaded' });
       await waitForLoadingToClear(page);
       const target = `/projects/${encodeURIComponent(project.project.id)}/conversations/${encodeURIComponent(project.conversationId)}`;

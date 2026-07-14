@@ -28,8 +28,13 @@ import {
 import {
   LAUNCHER_SCHEMA_VERSION,
   buildLauncherAfterQuitArgs,
+  compareLauncherVersions,
+  resolveLauncherPaths,
   resolveLauncherVersionPaths,
+  validateLauncherCleanupDescriptor,
   validateLauncherRuntimeDescriptor,
+  type LauncherCleanupDescriptor,
+  type LauncherCleanupEntry,
   type LauncherRuntimeDescriptor,
 } from "@open-design/launcher-proto";
 import {
@@ -51,6 +56,7 @@ import {
   type DesktopUpdateState,
   type SidecarSource,
 } from "@open-design/sidecar-proto";
+import { releaseChannelFromVersion } from "@open-design/release";
 
 import {
   markInstallerObservationOpenFailed,
@@ -98,6 +104,7 @@ const STABLE_POLL_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const DEFAULT_POLL_INITIAL_DELAY_MS = 5000;
 const DEFAULT_POLL_BACKOFF_INITIAL_MS = 60 * 1000;
 const DEFAULT_POLL_BACKOFF_MAX_MS = 30 * 60 * 1000;
+const MIN_SCHEDULED_POLL_DELAY_MS = 1000;
 const MAC_DEFERRED_INSTALLER_TIMEOUT_MS = 10 * 60 * 1000;
 const WINDOWS_DEFERRED_INSTALLER_TIMEOUT_MS = 10 * 60 * 1000;
 const ARTIFACT_DOWNLOAD_MAX_ATTEMPTS = 3;
@@ -302,6 +309,14 @@ type ReleaseCleanupDescriptor = {
   version: typeof RELEASE_CLEANUP_DESCRIPTOR_VERSION;
 };
 
+type LauncherCleanupLifecycleSummary = {
+  cleanupDeferred: number;
+  cleanupRemoved: number;
+  deprecated: number;
+  retained: number;
+  total: number;
+};
+
 export type DesktopUpdater = {
   checkForUpdates(options?: ActionOptions): Promise<DesktopUpdateStatusSnapshot>;
   config: DesktopUpdaterConfig;
@@ -318,6 +333,11 @@ export type DesktopUpdaterScheduler = {
   isRunning(): boolean;
   start(): void;
   stop(reason?: string): void;
+};
+
+type StartupSilentPayloadUpdateOptions = {
+  isEnabled(): Promise<boolean>;
+  requestQuit(): void;
 };
 
 function isTruthyEnv(value: string | undefined): boolean | null {
@@ -373,6 +393,12 @@ function durationEnv(value: string | undefined, fallback: number, name: string):
   return parsed;
 }
 
+function positiveDurationEnv(value: string | undefined, fallback: number, name: string): number {
+  const parsed = durationEnv(value, fallback, name);
+  if (parsed === 0) throw new Error(`${name} must be greater than 0 milliseconds`);
+  return parsed;
+}
+
 function defaultPollIntervalMs(channel: DesktopUpdateChannel): number {
   return channel === DESKTOP_UPDATE_CHANNELS.STABLE ? STABLE_POLL_INTERVAL_MS : BETA_POLL_INTERVAL_MS;
 }
@@ -406,12 +432,12 @@ export function resolveDesktopUpdaterConfig(input: DesktopUpdaterConfigInput): D
     autoCheck: isTruthyEnv(env[DESKTOP_UPDATE_ENV.AUTO_CHECK]) ?? enabled,
     autoDownload: isTruthyEnv(env[DESKTOP_UPDATE_ENV.AUTO_DOWNLOAD]) ?? true,
     autoOpen: isTruthyEnv(env[DESKTOP_UPDATE_ENV.AUTO_OPEN]) ?? false,
-    checkBackoffInitialMs: durationEnv(
+    checkBackoffInitialMs: positiveDurationEnv(
       env[DESKTOP_UPDATE_ENV.CHECK_BACKOFF_INITIAL_MS],
       DEFAULT_POLL_BACKOFF_INITIAL_MS,
       DESKTOP_UPDATE_ENV.CHECK_BACKOFF_INITIAL_MS,
     ),
-    checkBackoffMaxMs: durationEnv(
+    checkBackoffMaxMs: positiveDurationEnv(
       env[DESKTOP_UPDATE_ENV.CHECK_BACKOFF_MAX_MS],
       DEFAULT_POLL_BACKOFF_MAX_MS,
       DESKTOP_UPDATE_ENV.CHECK_BACKOFF_MAX_MS,
@@ -421,7 +447,7 @@ export function resolveDesktopUpdaterConfig(input: DesktopUpdaterConfigInput): D
       DEFAULT_POLL_INITIAL_DELAY_MS,
       DESKTOP_UPDATE_ENV.CHECK_INITIAL_DELAY_MS,
     ),
-    checkIntervalMs: durationEnv(
+    checkIntervalMs: positiveDurationEnv(
       env[DESKTOP_UPDATE_ENV.CHECK_INTERVAL_MS],
       defaultPollIntervalMs(channel),
       DESKTOP_UPDATE_ENV.CHECK_INTERVAL_MS,
@@ -448,16 +474,19 @@ function isSupportedPackageLauncherPlatform(platform: string): boolean {
   return platform === "darwin" || platform === "win32";
 }
 
-function capabilitiesFor(status: { mode: DesktopUpdateMode; platform: string; supported: boolean }) {
+function capabilitiesFor(status: { artifactType?: string; mode: DesktopUpdateMode; platform: string; supported: boolean }) {
   const packageLauncher =
     status.mode === DESKTOP_UPDATE_MODES.PACKAGE_LAUNCHER &&
     isSupportedPackageLauncherPlatform(status.platform) &&
     status.supported;
+  const payloadUpdate = status.artifactType === "payload";
+  const hasSelectedArtifact = status.artifactType != null && status.artifactType.length > 0;
+  const manualInstaller = packageLauncher && (!hasSelectedArtifact || !payloadUpdate);
   return {
-    canApplyInPlace: false,
+    canApplyInPlace: packageLauncher && payloadUpdate,
     canDownload: packageLauncher,
-    canOpenInstaller: packageLauncher,
-    requiresManualInstall: packageLauncher,
+    canOpenInstaller: manualInstaller,
+    requiresManualInstall: manualInstaller,
   };
 }
 
@@ -783,77 +812,13 @@ async function ensureOwnedUpdateRoot(
   }
 }
 
-type ParsedComparableVersion = {
-  nums: [number, number, number];
-  pre: string[];
-};
-
-function numberPart(value: string | undefined): number {
-  return value != null && /^[0-9]+$/.test(value) ? Number(value) : 0;
-}
-
-function parseComparableVersion(value: string): ParsedComparableVersion {
-  const cleaned = value.trim().replace(/^v/i, "").split("+", 1)[0] ?? "";
-  const nightlyMatch = /^(\d+)\.(\d+)\.(\d+)\.nightly\.(\d+)$/i.exec(cleaned);
-  if (nightlyMatch?.[1] != null && nightlyMatch[2] != null && nightlyMatch[3] != null && nightlyMatch[4] != null) {
-    return {
-      nums: [Number(nightlyMatch[1]), Number(nightlyMatch[2]), Number(nightlyMatch[3])],
-      pre: ["nightly", nightlyMatch[4]],
-    };
-  }
-
-  const prereleaseSeparator = cleaned.indexOf("-");
-  const core = prereleaseSeparator === -1 ? cleaned : cleaned.slice(0, prereleaseSeparator);
-  const prerelease = prereleaseSeparator === -1 ? "" : cleaned.slice(prereleaseSeparator + 1);
-  const nums = core.split(".");
-  return {
-    nums: [numberPart(nums[0]), numberPart(nums[1]), numberPart(nums[2])],
-    pre: prerelease.length === 0 ? [] : prerelease.split("."),
-  };
-}
-
-function hasCountedPrerelease(version: string): boolean {
-  const parsed = parseComparableVersion(version);
-  const last = parsed.pre.at(-1);
-  return parsed.pre.length >= 2 && last != null && /^[0-9]+$/.test(last);
-}
-
 function defaultChannelForVersion(version: string): DesktopUpdateChannel {
-  if (/(?:^|[-.])beta(?:[-.]|$)/i.test(version)) return DESKTOP_UPDATE_CHANNELS.BETA;
-  if (/(?:^|[-.])preview(?:[-.]|$)/i.test(version)) return DESKTOP_UPDATE_CHANNELS.PREVIEW;
-  if (/(?:^|[-.])nightly(?:[-.]|$)/i.test(version)) return DESKTOP_UPDATE_CHANNELS.NIGHTLY;
-  return hasCountedPrerelease(version) ? DESKTOP_UPDATE_CHANNELS.BETA : DESKTOP_UPDATE_CHANNELS.STABLE;
-}
-
-function compareIdentifier(a: string, b: string): number {
-  const aNum = /^[0-9]+$/.test(a) ? Number(a) : null;
-  const bNum = /^[0-9]+$/.test(b) ? Number(b) : null;
-  if (aNum != null && bNum != null) return Math.sign(aNum - bNum);
-  if (aNum != null) return -1;
-  if (bNum != null) return 1;
-  return a.localeCompare(b);
+  const channel = releaseChannelFromVersion(version);
+  return channel ?? DESKTOP_UPDATE_CHANNELS.STABLE;
 }
 
 export function compareVersions(a: string, b: string): number {
-  const left = parseComparableVersion(a);
-  const right = parseComparableVersion(b);
-  for (let index = 0; index < 3; index += 1) {
-    const delta = (left.nums[index] ?? 0) - (right.nums[index] ?? 0);
-    if (delta !== 0) return Math.sign(delta);
-  }
-  if (left.pre.length === 0 && right.pre.length === 0) return 0;
-  if (left.pre.length === 0) return 1;
-  if (right.pre.length === 0) return -1;
-  const max = Math.max(left.pre.length, right.pre.length);
-  for (let index = 0; index < max; index += 1) {
-    const l = left.pre[index];
-    const r = right.pre[index];
-    if (l == null) return -1;
-    if (r == null) return 1;
-    const delta = compareIdentifier(l, r);
-    if (delta !== 0) return delta;
-  }
-  return 0;
+  return compareLauncherVersions(a, b);
 }
 
 function metadataChannel(metadata: Record<string, unknown>): DesktopUpdateChannel | null {
@@ -862,9 +827,10 @@ function metadataChannel(metadata: Record<string, unknown>): DesktopUpdateChanne
 }
 
 function releaseVersionForChannel(metadata: Record<string, unknown>, channel: DesktopUpdateChannel): string | null {
-  if (channel === DESKTOP_UPDATE_CHANNELS.BETA) return stringField(metadata, "betaVersion");
-  if (channel === DESKTOP_UPDATE_CHANNELS.NIGHTLY) return stringField(metadata, "nightlyVersion") ?? stringField(metadata, "releaseVersion");
-  if (channel === DESKTOP_UPDATE_CHANNELS.PREVIEW) return stringField(metadata, "previewVersion") ?? stringField(metadata, "releaseVersion");
+  if (channel === DESKTOP_UPDATE_CHANNELS.BETA) return stringField(metadata, "releaseVersion") ?? stringField(metadata, "betaVersion");
+  if (channel === DESKTOP_UPDATE_CHANNELS.BETAS) return stringField(metadata, "releaseVersion");
+  if (channel === DESKTOP_UPDATE_CHANNELS.PRERELEASE) return stringField(metadata, "releaseVersion") ?? stringField(metadata, "prereleaseVersion");
+  if (channel === DESKTOP_UPDATE_CHANNELS.PREVIEW) return stringField(metadata, "releaseVersion") ?? stringField(metadata, "previewVersion");
   return stringField(metadata, "releaseVersion") ?? stringField(metadata, "stableVersion");
 }
 
@@ -1054,6 +1020,41 @@ function selectUpdateCandidateWithFallback(
   const payload = selectUpdateCandidate(metadata, config, true);
   if (payload.ok || payload.error.code !== "no-compatible-artifact") return payload;
   return selectUpdateCandidate(metadata, config);
+}
+
+function controlLauncherVersionMin(metadata: Record<string, unknown>): string | null {
+  const control = objectField(metadata, "control");
+  const launcher = control == null ? null : objectField(control, "launcher");
+  const version = launcher == null ? null : objectField(launcher, "version");
+  return version == null ? null : stringField(version, "min");
+}
+
+/**
+ * Installed-base escape hatch: decide whether the remote release is beyond what
+ * this build can adopt as an in-place payload update, forcing a full installer
+ * instead. Two orthogonal guardrails, either of which trips → installer:
+ *
+ *  - `launcher.schema` (ABI axis): the release declares a launcher-contract schema
+ *    number this build cannot interpret (`feed.launcher.schema >
+ *    LAUNCHER_SCHEMA_VERSION`). This is the reseed boundary — a pure int compare.
+ *  - `control.launcher.version.min` (recency axis): the release requires a
+ *    launcher/build version newer than this one (`min > currentVersion`).
+ *
+ * Both are feed declarations read here; a future launcher enforces the same schema
+ * floor locally against on-disk manifests. Missing/malformed fields are ignored
+ * (fail-open) so older feeds keep updating seamlessly.
+ */
+export function remoteRequiresReinstall(metadata: Record<string, unknown>, config: DesktopUpdaterConfig): boolean {
+  const launcher = objectField(metadata, "launcher");
+  const remoteLauncherSchema = launcher == null ? undefined : numberField(launcher, "schema");
+  if (remoteLauncherSchema != null && remoteLauncherSchema > LAUNCHER_SCHEMA_VERSION) {
+    return true;
+  }
+  const minVersion = controlLauncherVersionMin(metadata);
+  if (minVersion != null && compareVersions(minVersion, config.currentVersion) > 0) {
+    return true;
+  }
+  return false;
 }
 
 async function fetchJson(fetchImpl: typeof globalThis.fetch, url: string): Promise<Record<string, unknown>> {
@@ -2073,6 +2074,137 @@ async function runUpdateReleaseLifecycle(input: {
   });
 }
 
+function launcherCleanupError(code: string, message: string): LauncherCleanupEntry["error"] {
+  return { code, message };
+}
+
+function summarizeLauncherCleanupDescriptor(descriptor: LauncherCleanupDescriptor): LauncherCleanupLifecycleSummary {
+  const summary: LauncherCleanupLifecycleSummary = {
+    cleanupDeferred: 0,
+    cleanupRemoved: 0,
+    deprecated: 0,
+    retained: 0,
+    total: descriptor.versions.length,
+  };
+  for (const version of descriptor.versions) {
+    if (version.state === "cleanup-deferred") summary.cleanupDeferred += 1;
+    if (version.state === "cleanup-removed") summary.cleanupRemoved += 1;
+    if (version.state === "deprecated") summary.deprecated += 1;
+    if (version.state === "retained") summary.retained += 1;
+  }
+  return summary;
+}
+
+async function runLauncherCleanupLifecycle(input: {
+  config: DesktopUpdaterConfig;
+  logger: DesktopUpdaterLogger;
+  now: () => Date;
+}): Promise<LauncherCleanupLifecycleSummary | null> {
+  const { config, logger, now } = input;
+  if (config.launcherRoot == null || config.launcherRuntimePath == null || config.namespace == null) return null;
+
+  const launcherPaths = resolveLauncherPaths({
+    channel: config.channel,
+    namespace: config.namespace,
+    root: config.launcherRoot,
+  });
+  const rawCleanup = await readJson<unknown>(launcherPaths.cleanupPath);
+  if (rawCleanup == null) return null;
+
+  let cleanup: LauncherCleanupDescriptor;
+  let runtime: LauncherRuntimeDescriptor;
+  try {
+    cleanup = validateLauncherCleanupDescriptor(rawCleanup as LauncherCleanupDescriptor, {
+      channel: config.channel,
+      namespace: config.namespace,
+    });
+    runtime = validateLauncherRuntimeDescriptor(
+      await readJsonStrict<LauncherRuntimeDescriptor>(config.launcherRuntimePath),
+      { channel: config.channel, namespace: config.namespace },
+    );
+  } catch (error) {
+    logger.warn("[open-design updater] failed to read launcher cleanup lifecycle inputs", {
+      error: error instanceof Error ? error.message : String(error),
+      cleanupPath: launcherPaths.cleanupPath,
+      runtimePath: config.launcherRuntimePath,
+    });
+    return null;
+  }
+
+  const nowIso = now().toISOString();
+  const retainedVersions = new Set<string>([
+    ...(runtime.active == null ? [] : [runtime.active.version]),
+    ...(runtime.lastSuccessful == null ? [] : [runtime.lastSuccessful.version]),
+    ...cleanup.versions.filter((entry) => entry.state === "retained").map((entry) => entry.version),
+  ]);
+  const nextVersions: LauncherCleanupEntry[] = [];
+
+  for (const entry of cleanup.versions) {
+    if (entry.state !== "deprecated" && entry.state !== "cleanup-deferred") {
+      nextVersions.push(entry);
+      continue;
+    }
+    if (retainedVersions.has(entry.version)) {
+      nextVersions.push({
+        ...entry,
+        error: launcherCleanupError("launcher-cleanup-retained", "deprecated launcher version is retained by runtime state"),
+        reason: "cleanup-failed",
+        state: "cleanup-deferred",
+        updatedAt: nowIso,
+      });
+      continue;
+    }
+
+    const versionPaths = resolveLauncherVersionPaths({
+      channel: config.channel,
+      namespace: config.namespace,
+      root: config.launcherRoot,
+      version: entry.version,
+    });
+    try {
+      const versionEntry = await lstat(versionPaths.versionRoot).catch(() => null);
+      if (versionEntry != null && (!versionEntry.isDirectory() || versionEntry.isSymbolicLink())) {
+        throw new Error(`launcher cleanup target is not a plain directory: ${versionPaths.versionRoot}`);
+      }
+      if (versionEntry?.isDirectory()) {
+        const realVersionRoot = await realpath(versionPaths.versionRoot);
+        if (!containsPath(versionPaths.versionsRoot, realVersionRoot)) {
+          throw new Error(`launcher cleanup target escaped versions root: ${realVersionRoot}`);
+        }
+      }
+      await rm(versionPaths.versionRoot, { force: true, recursive: true });
+      nextVersions.push({
+        ...entry,
+        error: undefined,
+        removedAt: entry.removedAt ?? nowIso,
+        state: "cleanup-removed",
+        updatedAt: nowIso,
+      });
+    } catch (error) {
+      logger.warn("[open-design updater] failed to clean deprecated launcher payload", {
+        error: error instanceof Error ? error.message : String(error),
+        path: versionPaths.versionRoot,
+        version: entry.version,
+      });
+      nextVersions.push({
+        ...entry,
+        error: launcherCleanupError("launcher-cleanup-failed", error instanceof Error ? error.message : String(error)),
+        reason: "cleanup-failed",
+        state: "cleanup-deferred",
+        updatedAt: nowIso,
+      });
+    }
+  }
+
+  const next: LauncherCleanupDescriptor = {
+    ...cleanup,
+    updatedAt: nowIso,
+    versions: nextVersions,
+  };
+  await writeJson(launcherPaths.cleanupPath, next);
+  return summarizeLauncherCleanupDescriptor(next);
+}
+
 async function readStoreMetadata(root: OwnedRoot & { ok: true }, logger: DesktopUpdaterLogger): Promise<
   | { metadata: UpdateStoreMetadata; ok: true }
   | { error: DesktopUpdateErrorSnapshot; ok: false }
@@ -2336,6 +2468,7 @@ export function createDesktopUpdater(
     const statusSupported = supported();
     const active = activeRelease == null ? undefined : releaseSnapshot(activeRelease);
     const activeArtifact = activeRelease?.ref.artifact ?? (state === DESKTOP_UPDATE_STATES.AVAILABLE ? candidate?.artifact : undefined);
+    const capabilityArtifactType = activeArtifact?.type ?? incomingRelease?.artifact.type ?? candidate?.artifact.type;
     const activeChecksum = activeRelease?.ref.checksum ?? (state === DESKTOP_UPDATE_STATES.AVAILABLE ? candidate?.checksum : undefined);
     const availableVersion = activeRelease?.ref.version ?? candidate?.version;
     const downloadPath = activeRelease?.path;
@@ -2347,7 +2480,12 @@ export function createDesktopUpdater(
       ...(activeArtifact?.url == null ? {} : { artifactUrl: activeArtifact.url }),
       ...(availableVersion == null ? {} : { availableVersion }),
       ...(lifecycleSummary == null ? {} : { cache: { lifecycle: lifecycleSummary } }),
-      capabilities: capabilitiesFor({ mode: config.mode, platform: config.platform, supported: statusSupported }),
+      capabilities: capabilitiesFor({
+        artifactType: capabilityArtifactType,
+        mode: config.mode,
+        platform: config.platform,
+        supported: statusSupported,
+      }),
       channel: config.channel,
       ...(activeChecksum == null ? {} : { checksum: activeChecksum }),
       currentVersion: config.currentVersion,
@@ -2474,6 +2612,24 @@ export function createDesktopUpdater(
         trigger: coldStartLifecycle.lastTrigger,
       });
     }
+    const launcherLifecycle = await runLauncherCleanupLifecycle({
+      config,
+      logger,
+      now,
+    }).catch((lifecycleError: unknown) => {
+      logger.warn("[open-design updater] failed to run launcher cleanup lifecycle", lifecycleError);
+      return null;
+    });
+    if (launcherLifecycle != null) {
+      logUpdateEvent("launcher-lifecycle", {
+        deferred: launcherLifecycle.cleanupDeferred,
+        deprecated: launcherLifecycle.deprecated,
+        removed: launcherLifecycle.cleanupRemoved,
+        retained: launcherLifecycle.retained,
+        total: launcherLifecycle.total,
+        trigger: "cold-start",
+      });
+    }
     return setState(activeRelease == null ? DESKTOP_UPDATE_STATES.IDLE : DESKTOP_UPDATE_STATES.DOWNLOADED);
   }
 
@@ -2507,7 +2663,15 @@ export function createDesktopUpdater(
         lastCheckedAt,
       }));
       if (root != null) scheduleBackCleanup(root.realRoot, logger);
-      const selected = selectUpdateCandidateWithFallback(body, config, await hasValidLauncherPayloadContext(config));
+      const launcherPayloadContextValid = await hasValidLauncherPayloadContext(config);
+      const reseedRequired = launcherPayloadContextValid && remoteRequiresReinstall(body, config);
+      if (reseedRequired) {
+        logUpdateEvent("reseed-required-installer-route", {
+          currentVersion: config.currentVersion,
+          supportedLauncherSchema: LAUNCHER_SCHEMA_VERSION,
+        });
+      }
+      const selected = selectUpdateCandidateWithFallback(body, config, launcherPayloadContextValid && !reseedRequired);
       if (!selected.ok) return setState(selected.state, selected.error);
       if (compareVersions(selected.candidate.version, config.currentVersion) <= 0) {
         logUpdateEvent("check-not-available", { candidateVersion: selected.candidate.version });
@@ -3000,6 +3164,7 @@ export function createDesktopUpdaterScheduler(
     initialDelayMs: number;
     intervalMs: number;
     logger?: DesktopUpdaterLogger;
+    startupSilentPayloadUpdate?: StartupSilentPayloadUpdateOptions;
   },
 ): DesktopUpdaterScheduler {
   const logger = options.logger ?? console;
@@ -3008,6 +3173,8 @@ export function createDesktopUpdaterScheduler(
   let failureCount = 0;
   let tickRunning = false;
   let unsubscribe: (() => void) | null = null;
+  let warnedZeroDelay = false;
+  let startupTickPending = true;
 
   const clearTimer = () => {
     if (timer == null) return;
@@ -3023,6 +3190,18 @@ export function createDesktopUpdaterScheduler(
     unsubscribe = null;
   };
 
+  const normalizeScheduledDelay = (delayMs: number): number => {
+    if (delayMs > 0) return delayMs;
+    if (!warnedZeroDelay) {
+      warnedZeroDelay = true;
+      logger.warn(
+        `[open-design updater] refusing non-positive scheduled poll delay (${delayMs}ms); `
+          + `using ${MIN_SCHEDULED_POLL_DELAY_MS}ms floor`,
+      );
+    }
+    return MIN_SCHEDULED_POLL_DELAY_MS;
+  };
+
   const nextDelay = (status: DesktopUpdateStatusSnapshot | null): number => {
     if (status != null && status.state !== DESKTOP_UPDATE_STATES.ERROR) {
       failureCount = 0;
@@ -3035,10 +3214,11 @@ export function createDesktopUpdaterScheduler(
 
   const schedule = (delayMs: number) => {
     if (!running || timer != null) return;
+    const boundedDelayMs = normalizeScheduledDelay(delayMs);
     timer = setTimeout(() => {
       timer = null;
       void tick();
-    }, delayMs);
+    }, boundedDelayMs);
     timer.unref?.();
   };
 
@@ -3046,8 +3226,32 @@ export function createDesktopUpdaterScheduler(
     if (!running || tickRunning) return;
     tickRunning = true;
     let status: DesktopUpdateStatusSnapshot | null = null;
+    const startupTick = startupTickPending;
+    startupTickPending = false;
     try {
       status = await updater.checkForUpdates();
+      if (
+        startupTick
+        && options.startupSilentPayloadUpdate != null
+        && status.installResult == null
+        && status.state === DESKTOP_UPDATE_STATES.DOWNLOADED
+        && status.artifact?.type === "payload"
+        && status.capabilities.canApplyInPlace
+      ) {
+        try {
+          const enabled = await options.startupSilentPayloadUpdate.isEnabled();
+          if (enabled) {
+            status = await updater.installUpdate();
+            if (status.installResult != null) {
+              stop("silent-payload-installed");
+              options.startupSilentPayloadUpdate.requestQuit();
+              return;
+            }
+          }
+        } catch (silentError) {
+          logger.warn("[open-design updater] startup silent payload update failed", silentError);
+        }
+      }
       if (status.installResult != null) {
         stop("installer-opened");
         return;

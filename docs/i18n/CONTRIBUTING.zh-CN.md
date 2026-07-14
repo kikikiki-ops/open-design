@@ -4,7 +4,7 @@
 
 这份指南会告诉你：每种贡献该往哪里看、合并之前 PR 需要过哪些线。
 
-<p align="center"><a href="../../CONTRIBUTING.md">English</a> · <a href="CONTRIBUTING.pt-BR.md">Português (Brasil)</a> · <a href="CONTRIBUTING.de.md">Deutsch</a> · <a href="CONTRIBUTING.fr.md">Français</a> · <b>简体中文</b> · <a href="CONTRIBUTING.ja-JP.md">日本語</a></p>
+<p align="center"><a href="../../CONTRIBUTING.md">English</a> · <a href="CONTRIBUTING.pt-BR.md">Português (Brasil)</a> · <a href="CONTRIBUTING.de.md">Deutsch</a> · <a href="CONTRIBUTING.fr.md">Français</a> · <b>简体中文</b> · <a href="CONTRIBUTING.ja-JP.md">日本語</a> · <a href="CONTRIBUTING.ko.md">한국어</a> · <a href="CONTRIBUTING.th.md">ภาษาไทย</a></p>
 
 ---
 
@@ -182,7 +182,7 @@ design-systems/your-brand/
 }
 ```
 
-完事 —— daemon 会在 `PATH` 上检测到它、picker 显示出来、对话路径就通了。如果这个 CLI 吐 **类型化事件**（像 Claude Code 的 `--output-format stream-json`），在 [`apps/daemon/src/claude-stream.ts`](../../apps/daemon/src/claude-stream.ts) 里写一个 parser，并把 `streamFormat` 设成 `'claude-stream-json'`。
+完事 —— daemon 会在 `PATH` 上检测到它、picker 显示出来、对话路径就通了。如果这个 CLI 吐 **类型化事件**（像 Claude Code 的 `--output-format stream-json`），在 [`apps/daemon/src/runtimes/claude-stream.ts`](../../apps/daemon/src/runtimes/claude-stream.ts) 里写一个 parser，并把 `streamFormat` 设成 `'claude-stream-json'`。
 
 合并硬线：
 
@@ -233,7 +233,7 @@ node --experimental-strip-types scripts/sync-litellm-models.ts
 ## Commit 与 PR
 
 - **一个 PR 只做一件事。** 加 skill + 重构 parser + 升依赖，是三个 PR。
-- **标题用动词起头 + 范围。** `add dating-web skill`、`fix daemon SSE backpressure when CLI hangs`、`docs: clarify .od layout`。
+- **标题用动词起头 + 范围。** `add dating-web skill`、`fix daemon SSE backpressure when CLI hangs`、`docs: clarify storage contract`。
 - **使用 PR 模板。** 把 [`.github/pull_request_template.md`](../../.github/pull_request_template.md) 的每一节都填上 —— Why、What users will see、Surface area、Screenshots（如果有 UI 改动）、Bug fix verification（如果是修 bug）、Validation。留空的节会被 reviewer 回 "please fill in"。
 - **正文解释 why。** 「这个 PR 改了什么」从 diff 一般能看出来；「为什么要改」很少能。
 - **如果有 issue，引用它。** 没有、且改动非平凡，请先开 issue 让我们先就「值不值得做」达成一致，再投入时间。
@@ -291,7 +291,7 @@ node --experimental-strip-types scripts/sync-litellm-models.ts
 tl;dr：好好提 PR、认真 review、在 [Discussions][discussions] / [Discord][discord] 多冒泡，剩下的自然会发生。
 
 [discussions]: https://github.com/nexu-io/open-design/discussions
-[discord]: https://discord.gg/qhbcCH8Am4
+[discord]: https://discord.gg/mHAjSMV6gz
 
 ---
 
