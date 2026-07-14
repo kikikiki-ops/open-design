@@ -2502,6 +2502,36 @@ function injectDeckBridge(
     if (action === 'last') return list.length - 1;
     return i;
   }
+  function keyForAction(action){
+    if (action === 'next') return 'ArrowRight';
+    if (action === 'prev') return 'ArrowLeft';
+    if (action === 'first') return 'Home';
+    if (action === 'last') return 'End';
+    return null;
+  }
+  // Deck navigation must prefer the artifact's own keyboard handler over
+  // direct DOM mutation: generated decks track their slide index inside that
+  // handler and render their own page counter / dots / progress from it, so
+  // flipping classes or transforms from the bridge moves the canvas while the
+  // artifact's chrome (and its internal position) stays frozen on the first
+  // slide. Returns true when the handler moved the deck synchronously; direct
+  // mutation stays available as the fallback for decks without key handling.
+  function goViaArtifactKeys(key){
+    if (!key) return false;
+    var before = activeIndex(slides());
+    dispatchKey(key);
+    return activeIndex(slides()) !== before;
+  }
+  function stepToIndexViaKeys(target){
+    var current = activeIndex(slides());
+    var guard = slides().length + 4;
+    while (current !== target && guard > 0) {
+      guard -= 1;
+      if (!goViaArtifactKeys(target > current ? 'ArrowRight' : 'ArrowLeft')) return false;
+      current = activeIndex(slides());
+    }
+    return current === target;
+  }
   function go(action){
     var list = slides();
     if (!list.length) return;
@@ -2510,12 +2540,9 @@ function injectDeckBridge(
       scrollGo(target);
       return;
     }
+    if (goViaArtifactKeys(keyForAction(action))) { report(); return; }
     if (canSetActive(list) && setActive(target)) return;
     if (transformGo(target)) return;
-    if (action === 'next') dispatchKey('ArrowRight');
-    else if (action === 'prev') dispatchKey('ArrowLeft');
-    else if (action === 'first') dispatchKey('Home');
-    else if (action === 'last') dispatchKey('End');
     setTimeout(report, 280);
   }
   function gotoIndex(i){
@@ -2523,9 +2550,11 @@ function injectDeckBridge(
     if (!list.length) return;
     var target = Math.max(0, Math.min(list.length - 1, i));
     if (isScrollDeck()) { scrollGo(target); return; }
+    if (activeIndex(list) === target) { report(); return; }
+    if (stepToIndexViaKeys(target)) { report(); return; }
     if (canSetActive(list) && setActive(target)) return;
     if (transformGo(target)) return;
-    var current = activeIndex(list);
+    var current = activeIndex(slides());
     var diff = target - current;
     if (!diff) { report(); return; }
     var key = diff > 0 ? 'ArrowRight' : 'ArrowLeft';
@@ -2753,6 +2782,12 @@ function injectDeckBridge(
       for (var i = 0; i < list.length; i++) {
         mo.observe(list[i], { attributes: true, attributeFilter: ['class', 'style', 'hidden', 'aria-hidden'] });
       }
+      // Transform-track decks translate a shared parent instead of mutating
+      // slide attributes, so the artifact's own keyboard handler would never
+      // trip the observer above and the host counter would drift. Watch the
+      // track's style too.
+      var track = transformTrack(list);
+      if (track) mo.observe(track, { attributes: true, attributeFilter: ['style'] });
     } catch (e) {}
     setTimeout(restoreInitialSlide, 100);
   }
