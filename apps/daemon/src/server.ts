@@ -3966,6 +3966,40 @@ export async function startServer({
     workspaceContext: collab.workspaceContext,
     ...(velaCliTeamProjectCatalog ? { teamProjectCatalog: velaCliTeamProjectCatalog } : {}),
   });
+  // Short-TTL, single-flight cache for the read-only DISPLAY path
+  // (GET /api/workspace/projects/team). Keyed on the active workspace id, so it
+  // can never serve another workspace's list and a workspace switch is an
+  // automatic miss. Deliberately NOT used by resolveSharedProject below: the
+  // pull gate and comment/presence relays must observe an unshare immediately,
+  // so those stay on the uncached lister. A just-shared/unshared project shows
+  // up in this list within the TTL.
+  const teamProjectsDisplayCache = (() => {
+    const ttlMs = 2000;
+    // settledAt: null while the fetch is in flight (always coalesce concurrent
+    // callers, however slow the backend is), then the completion time so the
+    // freshness window starts when the data actually arrived.
+    let entry:
+      | { key: string; settledAt: number | null; value: ReturnType<typeof teamProjectsLister> }
+      | null = null;
+    return () => {
+      const key = activeWorkspace.get() ?? '';
+      if (entry && entry.key === key && (entry.settledAt === null || Date.now() - entry.settledAt < ttlMs)) {
+        return entry.value;
+      }
+      const value = teamProjectsLister();
+      const created = { key, settledAt: null as number | null, value };
+      entry = created;
+      value.then(
+        () => {
+          if (entry === created) created.settledAt = Date.now();
+        },
+        () => {
+          if (entry === created) entry = null;
+        },
+      );
+      return value;
+    };
+  })();
   const resolveSharedProject = async (projectId: string) => {
     const list = await teamProjectsLister();
     return list.find((entry) => entry.projectId === projectId) ?? null;
@@ -4067,7 +4101,7 @@ export async function startServer({
     // request and re-ran the one-off `vela team-projects --help` capability
     // probe — an extra CLI spawn (and, on the current CLI, a blocking analytics
     // POST) on every workspace projects load.
-    listTeamProjects: teamProjectsLister,
+    listTeamProjects: teamProjectsDisplayCache,
     // Expose the collab-cloud member directory so the web client can resolve
     // comment authors + owner names to a name + role.
     ...(collabCloud ? { listMembers: () => collabCloud.listMembers() } : {}),
