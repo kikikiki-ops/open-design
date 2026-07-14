@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildFeedbackPayload,
   buildTelemetryIdempotencyKey,
+  feedbackIngestionRevision,
   buildTracePayload,
   deriveLangfuseDeliveryState,
   readAnonymousTelemetrySinkConfig,
@@ -2524,6 +2525,54 @@ describe('buildFeedbackPayload', () => {
     expect(batch).toHaveLength(1);
     expect(batch[0]!.body.name).toBe('user_rating');
     expect(batch[0]!.body.value).toBe(1);
+  });
+
+  it('keeps score body.id stable but changes event ids when feedback payload edits', () => {
+    const positive = makeFeedbackCtx({
+      rating: 'positive',
+      reasonCodes: ['matched_request'],
+    });
+    const negative = makeFeedbackCtx({
+      rating: 'negative',
+      reasonCodes: ['matched_request'],
+    });
+    const positiveBatch = buildFeedbackPayload(positive) as Array<Record<string, any>>;
+    const negativeBatch = buildFeedbackPayload(negative) as Array<Record<string, any>>;
+    const positiveRetry = buildFeedbackPayload(positive) as Array<Record<string, any>>;
+
+    expect(positiveBatch[0]!.body.id).toBe('run-feedback-1-rating');
+    expect(negativeBatch[0]!.body.id).toBe('run-feedback-1-rating');
+    expect(positiveBatch[1]!.body.id).toBe('run-feedback-1-reason-matched_request');
+    expect(negativeBatch[1]!.body.id).toBe('run-feedback-1-reason-matched_request');
+
+    expect(positiveBatch[0]!.id).not.toBe(negativeBatch[0]!.id);
+    expect(positiveBatch[1]!.id).not.toBe(negativeBatch[1]!.id);
+    expect(positiveBatch[0]!.id).toBe(positiveRetry[0]!.id);
+
+    const revisionPos = feedbackIngestionRevision(positive);
+    const revisionNeg = feedbackIngestionRevision(negative);
+    expect(revisionPos).not.toBe(revisionNeg);
+    expect(positiveBatch[0]!.id).toBe(
+      stableIngestionEventId(`run-feedback-1-rating:${revisionPos}`),
+    );
+    expect(negativeBatch[0]!.id).toBe(
+      stableIngestionEventId(`run-feedback-1-rating:${revisionNeg}`),
+    );
+
+    const keyPos = buildTelemetryIdempotencyKey(
+      positiveBatch as Array<{ id: string }>,
+      'run-feedback-1',
+    );
+    const keyNeg = buildTelemetryIdempotencyKey(
+      negativeBatch as Array<{ id: string }>,
+      'run-feedback-1',
+    );
+    const keyRetry = buildTelemetryIdempotencyKey(
+      positiveRetry as Array<{ id: string }>,
+      'run-feedback-1',
+    );
+    expect(keyPos).not.toBe(keyNeg);
+    expect(keyPos).toBe(keyRetry);
   });
 });
 

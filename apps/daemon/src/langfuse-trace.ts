@@ -2476,15 +2476,37 @@ export async function reportRunCompleted(
 // user opted into telemetry.content; the consent gate lives in
 // reportRunFeedback below, so this builder stays content-agnostic.
 //
-// Limitation: stable score ids (`${traceId}-rating`, `${traceId}-reason-${code}`)
-// mean re-submission overwrites cleanly, but reason codes the user removes
-// in a follow-up submission do not get a tombstone. A future change can
-// thread `removedReasonCodes` through and emit overwriting "cleared"
-// scores for them; not done here to keep this PR scoped to the bridge.
+// Limitation: stable score body ids (`${traceId}-rating`,
+// `${traceId}-reason-${code}`) mean re-submission overwrites cleanly, but
+// reason codes the user removes in a follow-up submission do not get a
+// tombstone. A future change can thread `removedReasonCodes` through and
+// emit overwriting "cleared" scores for them; not done here to keep this
+// PR scoped to the bridge.
+//
+// Ingestion event ids intentionally include a payload revision so Vela's
+// Idempotency-Key (derived from event ids) changes when the user edits
+// feedback. Score body.id stays stable for Langfuse overwrite semantics.
+/**
+ * Short digest of mutable feedback fields. Identical re-submissions keep the
+ * same revision (true retries); edits (rating flip, reason codes, custom
+ * text) produce a new revision so ingestion event ids — and therefore the
+ * Vela Idempotency-Key — differ from the previous submission.
+ */
+export function feedbackIngestionRevision(ctx: FeedbackReportContext): string {
+  const material = [
+    ctx.rating,
+    [...ctx.reasonCodes].sort().join('\0'),
+    ctx.hasCustomReason ? '1' : '0',
+    ctx.customReason ?? '',
+  ].join('\n');
+  return createHash('sha256').update(material).digest('hex').slice(0, 16);
+}
+
 export function buildFeedbackPayload(ctx: FeedbackReportContext): unknown[] {
   const traceId = ctx.runId;
   const nowIso = new Date().toISOString();
   const batch: unknown[] = [];
+  const revision = feedbackIngestionRevision(ctx);
 
   const ratingMetadata: Record<string, unknown> = {
     reasonCodes: ctx.reasonCodes,
@@ -2498,7 +2520,7 @@ export function buildFeedbackPayload(ctx: FeedbackReportContext): unknown[] {
 
   const ratingScoreId = `${traceId}-rating`;
   batch.push({
-    id: stableIngestionEventId(ratingScoreId),
+    id: stableIngestionEventId(`${ratingScoreId}:${revision}`),
     type: 'score-create',
     timestamp: nowIso,
     body: {
@@ -2513,10 +2535,11 @@ export function buildFeedbackPayload(ctx: FeedbackReportContext): unknown[] {
   });
 
   for (const code of ctx.reasonCodes) {
-    // Stable per (run, code) so re-submission overwrites cleanly.
+    // body.id stable per (run, code) so re-submission overwrites cleanly;
+    // event id includes revision so rating flips are not treated as retries.
     const reasonScoreId = `${traceId}-reason-${code}`;
     batch.push({
-      id: stableIngestionEventId(reasonScoreId),
+      id: stableIngestionEventId(`${reasonScoreId}:${revision}`),
       type: 'score-create',
       timestamp: nowIso,
       body: {
