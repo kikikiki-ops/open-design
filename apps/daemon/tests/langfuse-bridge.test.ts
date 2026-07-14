@@ -2257,6 +2257,59 @@ describe('langfuse-bridge.reportRunFeedbackFromDaemon', () => {
     );
   });
 
+  it('keeps legacy null-channel accepted anchors on anonymous relay when Vela is configured', async () => {
+    // Pre-migration rows: finalized/accepted body with no delivery_channel.
+    // Later Vela login must not re-route feedback onto a different namespace.
+    await writeAppCfg({
+      installationId: 'install-uuid-1',
+      telemetry: { metrics: true, content: true },
+    });
+    process.env.VELA_CONTROL_KEY = 'ck_test_key';
+    process.env.VELA_API_URL = 'https://amr-api.example.com';
+    process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL =
+      'https://telemetry.open-design.ai/api/langfuse';
+    const fetchSpy = vi.fn().mockResolvedValue(new Response('{}', { status: 207 }));
+    const db = {
+      prepare: (sql: string) => {
+        if (
+          sql.includes('telemetry_accepted_body_id') ||
+          sql.includes('run_telemetry_accepted_anchors')
+        ) {
+          return {
+            get: () => ({
+              runStatus: 'succeeded',
+              telemetryFinalizedAt: Date.now(),
+              acceptedTraceBodyId: 'run-legacy-null-channel',
+              acceptedReportTrigger: 'final_message',
+              acceptedDeliveryChannel: null,
+            }),
+          };
+        }
+        return { get: () => undefined, run: () => ({ changes: 0 }), all: () => [] };
+      },
+    };
+    const outcome = await reportRunFeedbackFromDaemon({
+      dataDir,
+      runId: 'run-legacy-null-channel',
+      rating: 'positive',
+      reasonCodes: [],
+      hasCustomReason: false,
+      customReason: '',
+      db,
+      fetchImpl: fetchSpy as any,
+    });
+    expect(outcome).toEqual({ status: 'accepted' });
+    await vi.waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalled();
+    });
+    expect(String(fetchSpy.mock.calls[0]![0])).toBe(
+      'https://telemetry.open-design.ai/api/langfuse',
+    );
+    expect(String(fetchSpy.mock.calls[0]![0])).not.toContain(
+      '/api/v1/open-design/telemetry',
+    );
+  });
+
   it('replays the latest mid-window re-rating onto final_message after terminal_fallback', async () => {
     // terminal_fallback accepted → bridge pins :tf → user flips rating →
     // final_message wins. Canonical replay must use the edited rating, not a
