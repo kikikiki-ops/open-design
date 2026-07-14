@@ -3974,30 +3974,61 @@ export async function startServer({
   // so those stay on the uncached lister. A just-shared/unshared project shows
   // up in this list within the TTL.
   const teamProjectsDisplayCache = (() => {
-    const ttlMs = 2000;
-    // settledAt: null while the fetch is in flight (always coalesce concurrent
-    // callers, however slow the backend is), then the completion time so the
-    // freshness window starts when the data actually arrived.
+    // Stale-while-revalidate: after the first load every call returns the last
+    // known list immediately and only kicks a background refresh once the value
+    // is older than freshMs, so repeat navigation is instant regardless of the
+    // remote round-trip and freshness catches up one request later. Keyed on the
+    // active workspace id (a switch is an automatic miss); concurrent callers
+    // coalesce on the in-flight fetch. Stays off the revocation path —
+    // resolveSharedProject below is uncached so the pull gate and comment/
+    // presence relays observe an unshare immediately.
+    const freshMs = 3000;
     let entry:
-      | { key: string; settledAt: number | null; value: ReturnType<typeof teamProjectsLister> }
+      | {
+          key: string;
+          value: Awaited<ReturnType<typeof teamProjectsLister>> | null;
+          settledAt: number;
+          inflight: ReturnType<typeof teamProjectsLister> | null;
+        }
       | null = null;
-    return () => {
-      const key = activeWorkspace.get() ?? '';
-      if (entry && entry.key === key && (entry.settledAt === null || Date.now() - entry.settledAt < ttlMs)) {
-        return entry.value;
-      }
+    const refresh = (key: string) => {
+      if (!entry || entry.key !== key) entry = { key, value: null, settledAt: 0, inflight: null };
+      const cur = entry;
       const value = teamProjectsLister();
-      const created = { key, settledAt: null as number | null, value };
-      entry = created;
+      cur.inflight = value;
       value.then(
-        () => {
-          if (entry === created) created.settledAt = Date.now();
+        (list) => {
+          if (entry === cur) {
+            cur.value = list;
+            cur.settledAt = Date.now();
+            cur.inflight = null;
+          }
         },
         () => {
-          if (entry === created) entry = null;
+          if (entry === cur) {
+            cur.inflight = null;
+            if (cur.value === null) entry = null;
+          }
         },
       );
       return value;
+    };
+    return () => {
+      const key = activeWorkspace.get() ?? '';
+      if (!entry || entry.key !== key) return refresh(key);
+      if (entry.value !== null) {
+        const cached = entry.value;
+        // Serve the cached list instantly — even while a background refresh is in
+        // flight — and only kick a new refresh when the value is stale and none
+        // is already running.
+        if (!entry.inflight && Date.now() - entry.settledAt >= freshMs) {
+          void refresh(key).catch(() => {});
+        }
+        return Promise.resolve(cached);
+      }
+      // No value yet (first load for this workspace): coalesce onto any in-flight
+      // fetch, otherwise start one.
+      return entry.inflight ?? refresh(key);
     };
   })();
   const resolveSharedProject = async (projectId: string) => {
