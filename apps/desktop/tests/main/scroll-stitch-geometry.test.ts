@@ -375,15 +375,14 @@ describe('deck capture DOM prep', () => {
     }
   });
 
-  // Regression for issue #990 ("导出PPT多页时后续页面内容丢失"): <deck-stage> decks
-  // (the custom element and the injected fallback in
-  // packages/contracts/src/runtime/deck-stage-fallback.ts) hide every slotted
-  // slide with `::slotted(*){visibility:hidden!important}` and reveal only the one
-  // carrying the `data-od-deck-active` attribute. showSlide picks the page to
-  // capture, so it MUST win that !important cascade. A non-important inline
-  // `visibility:visible` (and class-only toggling) lost it — so every slide but the
-  // first captured blank, exporting one populated page followed by blanks.
-  test('per-slide selection wins the deck-stage !important visibility cascade', async () => {
+  // Regression for issue #990 ("导出PPT多页时后续页面内容丢失"): the injected
+  // <deck-stage> fallback (packages/contracts/src/runtime/deck-stage-fallback.ts)
+  // hides every slotted slide with `::slotted(*){visibility:hidden!important}` and
+  // reveals only the one carrying the `data-od-deck-active` attribute. showSlide
+  // picks the page to capture, so it must set that attribute on the selected slide;
+  // the pre-fix code toggled classes and set non-important inline styles only, so
+  // every slide but the first captured blank (one populated page followed by blanks).
+  test('per-slide selection marks the deck-stage fallback active attribute', async () => {
     class FakeStyle {
       private readonly values = new Map<string, { priority: string; value: string }>();
       setProperty(name: string, value: string, priority = ''): void {
@@ -437,23 +436,18 @@ describe('deck capture DOM prep', () => {
       }
     }
 
-    // Resolve the deck-stage fallback cascade EXACTLY as
-    // packages/contracts/src/runtime/deck-stage-fallback.ts defines it:
-    //   ::slotted(*){visibility:hidden!important}
-    //   ::slotted([data-od-deck-active]){visibility:visible!important}
-    // A slotted slide is hidden unless the host wins that cascade — either via an
-    // inline `visibility` at `!important` priority (an inline !important beats a
-    // shadow ::slotted !important rule) or via the `data-od-deck-active` attribute
-    // the reveal rule keys on. The fallback keys ONLY on `data-od-deck-active`
-    // (`data-deck-active` belongs to the real deck-stage.js runtime), so the oracle
-    // must not accept it — otherwise a relapse that drops `data-od-deck-active` and
-    // the `!important` visibility could still keep this test green.
-    const slideRendersUnderFallback = (slide: Slide): boolean => {
-      if (slide.style.getPropertyPriority('visibility') === 'important') {
-        return slide.style.getPropertyValue('visibility') === 'visible';
-      }
-      return slide.hasAttribute('data-od-deck-active');
-    };
+    // The fallback (packages/contracts/src/runtime/deck-stage-fallback.ts) hides
+    // slotted slides with `::slotted(*){visibility:hidden!important}` in its shadow
+    // root and reveals ONLY `::slotted([data-od-deck-active])`. Because a shadow
+    // `!important` declaration beats an outer inline `!important` one (for
+    // `!important`, the inner tree wins BEFORE inline precedence is considered —
+    // verified in a real browser), inline `visibility:visible !important` on a
+    // slotted slide does NOT reveal it. Under the fallback a slide renders iff it
+    // carries `data-od-deck-active` — that attribute toggle is the mechanism this
+    // unit test guards. (The inline `!important` override handles the OTHER runtimes
+    // — real deck-stage.js with non-`!important` `::slotted`, and class-based decks
+    // — where importance wins outright; that path is covered separately below.)
+    const revealedByFallback = (slide: Slide): boolean => slide.hasAttribute('data-od-deck-active');
 
     const slides = [new Slide(), new Slide(), new Slide()];
     const previousDocument = globalThis.document;
@@ -468,23 +462,23 @@ describe('deck capture DOM prep', () => {
     try {
       // Export the SECOND page (index 1) — the one the bug left blank.
       await showSlide('.slide, [data-screen-label], .deck-slide, .ppt-slide', 1);
-      // Only the selected page renders under the fallback cascade; the rest stay hidden.
-      expect(slideRendersUnderFallback(slides[1])).toBe(true);
-      expect(slideRendersUnderFallback(slides[0])).toBe(false);
-      expect(slideRendersUnderFallback(slides[2])).toBe(false);
-      // Pin the exact mechanism: the selected slide must be revealed by an inline
-      // `visibility:visible` at `!important` priority (the universal win that also
-      // beats non-important or differently-keyed runtimes) AND carry the
-      // `data-od-deck-active` marker the fallback reveal rule requires. Either half
-      // regressing re-blanks fallback-backed exports.
+      // Fallback mechanism: exactly the selected slide is marked, so only it renders.
+      expect(revealedByFallback(slides[1])).toBe(true);
+      expect(revealedByFallback(slides[0])).toBe(false);
+      expect(revealedByFallback(slides[2])).toBe(false);
+      // The toggle is exact and does NOT set the real runtime's `data-deck-active`
+      // (setting that would replay authored `[data-deck-active]` entrance animations
+      // mid-capture).
+      expect(slides[1].hasAttribute('data-deck-active')).toBe(false);
+      // Inline override for the non-shadow / non-`!important`-hide runtimes: the
+      // selected slide is forced visible and the rest hidden. This is a DIFFERENT
+      // mechanism from the fallback attribute above — it wins for those runtimes by
+      // importance, and does not (need to) beat the fallback's shadow `!important`.
       expect(slides[1].style.getPropertyValue('visibility')).toBe('visible');
       expect(slides[1].style.getPropertyPriority('visibility')).toBe('important');
-      expect(slides[1].hasAttribute('data-od-deck-active')).toBe(true);
-      // Non-selected slides are affirmatively hidden with `!important` and unmarked.
       for (const off of [slides[0], slides[2]]) {
         expect(off.style.getPropertyValue('visibility')).toBe('hidden');
         expect(off.style.getPropertyPriority('visibility')).toBe('important');
-        expect(off.hasAttribute('data-od-deck-active')).toBe(false);
       }
     } finally {
       Object.assign(globalThis, {

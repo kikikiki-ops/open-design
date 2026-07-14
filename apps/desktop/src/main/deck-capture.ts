@@ -1325,20 +1325,27 @@ export function showSlide(slideSelector: string, index: number): Promise<{ x: nu
   // the slide (incl. visibility:hidden->visible and reveal animations), plus
   // inline overrides as a backstop for decks that hide via opacity/visibility.
   const activeClasses = ["active", "visible", "is-active", "current"];
-  // Some deck runtimes gate slide visibility on an ATTRIBUTE, not a class. The
-  // <deck-stage> custom element and the injected fallback both key their shadow
-  // `::slotted([data-deck-active]) / ([data-od-deck-active])` reveal rule off
-  // these attributes — toggling only classes leaves every non-first slide hidden.
-  const activeAttributes = ["data-deck-active", "data-od-deck-active"];
+  // The injected <deck-stage> fallback (packages/contracts/src/runtime/
+  // deck-stage-fallback.ts) hides slotted slides with an `!important` shadow rule
+  // and reveals ONLY the one carrying `data-od-deck-active`. We toggle exactly
+  // that attribute — and deliberately NOT the real deck-stage.js runtime's
+  // `data-deck-active`: that attribute is unnecessary for reveal (see below) and
+  // setting it would replay authored `[data-deck-active]` entrance animations on
+  // the slide's descendants mid-capture, so slide 2..N could be caught in a
+  // transitional frame instead of their settled state.
+  const activeAttributes = ["data-od-deck-active"];
   slides.forEach((node, k) => {
     const el = node as HTMLElement;
     const on = k === index;
-    // Set the show/hide with `!important` priority. A plain inline value LOSES to
-    // a deck runtime's own `!important` rule — most importantly the deck-stage
-    // fallback's `::slotted(*){visibility:hidden!important}` — which otherwise keeps
-    // every slide but the first hidden and exports slide 2..N as blank pages.
-    // An inline `!important` declaration wins over a shadow `::slotted()!important`
-    // rule, so this reliably reveals exactly the slide we are capturing.
+    // Reveal the captured slide through the two mechanisms real decks actually use:
+    //   1. Inline `!important` styles beat a deck's own NON-important hide rules —
+    //      the real <deck-stage> runtime's `::slotted(*){visibility:hidden}` and
+    //      class-based `.slide` decks — because importance wins outright there.
+    //   2. The `data-od-deck-active` attribute is the ONLY thing that reveals the
+    //      fallback, whose hide rule is `::slotted(*){visibility:hidden!important}`
+    //      in its shadow root: a shadow-tree `!important` declaration beats an outer
+    //      inline `!important` one (for `!important`, the inner context wins), so
+    //      inline styles alone cannot reveal a fallback slide — the attribute can.
     el.style.setProperty("transition", "none", "important");
     el.style.setProperty("animation", "none", "important");
     el.style.setProperty("opacity", on ? "1" : "0", "important");
