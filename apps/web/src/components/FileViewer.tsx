@@ -10547,7 +10547,7 @@ function HtmlViewer({
       sending={sendingBoardBatch}
       queueOnSend={commentQueueOnSend}
       sendDisabled={commentSendDisabled || viewerOnly}
-      sendDisabledReason={viewerOnly ? viewerOnlySendDisabledTitle : undefined}
+      sendDisabledReason={viewerOnly ? viewerOnlyDisabledTitle : undefined}
       allowSendToChat={!viewerOnly}
       t={t}
       scale={overlayPreviewScale}
@@ -10673,7 +10673,7 @@ function HtmlViewer({
       sending={sendingBoardBatch}
       queueOnSend={commentQueueOnSend}
       sendDisabled={commentSendDisabled || viewerOnly}
-      sendDisabledReason={viewerOnly ? viewerOnlySendDisabledTitle : undefined}
+      sendDisabledReason={viewerOnly ? viewerOnlyDisabledTitle : undefined}
       allowSendToChat={!viewerOnly}
       renderCreateForm={!commentPortalHost}
       t={t}
