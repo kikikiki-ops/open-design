@@ -1291,20 +1291,28 @@ export async function reportRunFeedbackFromDaemon(
     acceptedDeliveryChannel === 'langfuse'
       ? acceptedDeliveryChannel
       : null;
-  // Pre-migration accepted anchors may still have telemetryFinalized /
-  // acceptedTraceBodyId while acceptedDeliveryChannel is null. Those runs
-  // completed on the anonymous relay/Langfuse path; falling forward to the
-  // global Vela-first preference after a later login would score a different
-  // namespace than the already-accepted anonymous trace.
+  // Pre-migration accepted anchors may still have acceptedTraceBodyId while
+  // acceptedDeliveryChannel is null. Those runs completed on the anonymous
+  // relay/Langfuse path; falling forward to the global Vela-first preference
+  // after a later login would score a different namespace than the already-
+  // accepted anonymous trace.
+  //
+  // Only rows with a *persisted* accepted body (and no channel) are legacy.
+  // `telemetryFinalized` alone is not enough: createFinalizedMessageTelemetryReporter
+  // marks the assistant message finalized before async reportRunCompleted
+  // records an accepted anchor, so a just-finished successful run can briefly
+  // look "finalized" with null body/channel. Treat that window as live
+  // finalization (global sink preflight + shouldDeferRunFeedback queue) rather
+  // than legacy-anonymous, which would skip Vela-only installs or mis-attach
+  // scores when both backends exist.
   //
   // When both relay and direct Langfuse are viable, the original backend is
   // ambiguous — skip rather than relay-first guess (see
   // readLegacyAnonymousAcceptedSinkConfig).
   const legacyAnonymousAccepted =
     requireChannel == null &&
-    (telemetryFinalized === true ||
-      (typeof acceptedTraceBodyId === 'string' &&
-        acceptedTraceBodyId.trim().length > 0));
+    typeof acceptedTraceBodyId === 'string' &&
+    acceptedTraceBodyId.trim().length > 0;
   const sink = legacyAnonymousAccepted
     ? readLegacyAnonymousAcceptedSinkConfig(process.env)
     : readTelemetrySinkConfigForChannel(

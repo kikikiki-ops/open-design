@@ -283,9 +283,15 @@ const pendingRunFeedbackByRunId = new Map<string, PendingRunFeedbackEntry>();
 /**
  * True when feedback should wait for an accepted final-purpose body id.
  *
- * Defer only for failed/canceled runs that are not yet telemetry-finalized and
- * have no accepted body (process-local or persisted). Once final_message owns
- * the delivery (telemetryFinalized) or any body has been accepted, send now.
+ * Defer when no accepted body is known yet (process-local or persisted) and
+ * either:
+ * - the run failed/canceled (terminal_fallback delay window), or
+ * - the message is already telemetry-finalized (live finalization race:
+ *   createFinalizedMessageTelemetryReporter marks finalized before
+ *   reportRunCompleted / rememberAcceptedFinalTraceBodyId records the anchor).
+ *
+ * Once any body has been accepted — or the caller already pinned an explicit
+ * `traceId` — send now so scores attach to the known body/channel.
  */
 export function shouldDeferRunFeedback(input: {
   runId: string;
@@ -304,7 +310,9 @@ export function shouldDeferRunFeedback(input: {
       ? input.acceptedTraceBodyId.trim()
       : '';
   if (accepted) return false;
-  if (input.telemetryFinalized === true) return false;
+  // Finalized-without-accepted is the live finalization race, not "safe to
+  // ship on a guessed channel". Queue until rememberAcceptedFinalTraceBodyId.
+  if (input.telemetryFinalized === true) return true;
   return input.runStatus === 'failed' || input.runStatus === 'canceled';
 }
 

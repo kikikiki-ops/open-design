@@ -3959,6 +3959,34 @@ describe('reportRunFeedback', () => {
     expect(feedbackBody.batch[0].body.traceId).not.toBe(runId);
   });
 
+  it('defers feedback when telemetryFinalized without an accepted anchor yet', () => {
+    // Live finalization race: message row is finalized before reportRunCompleted
+    // persists acceptedTraceBodyId / acceptedDeliveryChannel.
+    resetAcceptedFinalTraceBodyIdsForTests();
+    resetPendingRunFeedbackForTests();
+    expect(
+      shouldDeferRunFeedback({
+        runId: 'run-finalized-no-anchor',
+        runStatus: 'succeeded',
+        telemetryFinalized: true,
+      }),
+    ).toBe(true);
+    expect(
+      shouldDeferRunFeedback({
+        runId: 'run-finalized-with-body',
+        runStatus: 'succeeded',
+        telemetryFinalized: true,
+        acceptedTraceBodyId: 'run-finalized-with-body',
+      }),
+    ).toBe(false);
+    // Unscoped feedback (no status / finalized signal) still ships immediately.
+    expect(
+      shouldDeferRunFeedback({
+        runId: 'run-no-context',
+      }),
+    ).toBe(false);
+  });
+
   it('defers feedback submitted before terminal_fallback acceptance onto runId:tf', async () => {
     resetAcceptedFinalTraceBodyIdsForTests();
     resetPendingRunFeedbackForTests();
