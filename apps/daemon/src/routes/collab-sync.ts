@@ -317,19 +317,24 @@ export function registerCollabSyncRoutes(app: Express, deps: RegisterCollabSyncR
     },
   ): Promise<ResourceHubPrincipal | null> {
     const viewerPrincipal = await principalForRequest(req);
-    let sharedProject: TeamProject | null = null;
+    // Only the owner id is needed to route the pull/head at the resource hub, so
+    // read it through the cached owner resolver rather than the uncached
+    // resolveSharedProject — this keeps /collab/status and the pull principal off
+    // a fresh catalog round-trip. Revocation still uses the uncached
+    // resolveSharedProject in the pull gate.
+    let ownerMemberId: string | null = null;
     try {
-      sharedProject = await resolveSharedProject?.(projectId) ?? null;
+      ownerMemberId = (await resolveSharedProjectOwner?.(projectId)) ?? null;
     } catch {
-      sharedProject = null;
+      ownerMemberId = null;
     }
-    if (!sharedProject?.ownerMemberId || !viewerPrincipal?.teamId) {
+    if (!ownerMemberId || !viewerPrincipal?.teamId) {
       return viewerPrincipal;
     }
     return {
       ...viewerPrincipal,
-      memberId: sharedProject.ownerMemberId,
-      role: sharedProject.ownerMemberId === viewerPrincipal.memberId ? viewerPrincipal.role : 'member',
+      memberId: ownerMemberId,
+      role: ownerMemberId === viewerPrincipal.memberId ? viewerPrincipal.role : 'member',
     };
   }
 
@@ -698,40 +703,50 @@ export function registerCollabSyncRoutes(app: Express, deps: RegisterCollabSyncR
 
   app.get('/api/projects/:id/collab/status', async (req, res) => {
     const projectId = req.params.id;
-    const principal = await principalForRequest(req);
-    const resourcePrincipal = await resourcePrincipalForSharedProject(projectId, req);
+    // The two principal resolutions and the owner/head lookups are independent
+    // remote round-trips; run them concurrently so a project view is not gated
+    // on ~5 serial vela calls. (Owner lookup reads the SWR-cached catalog.)
+    const [principal, resourcePrincipal] = await Promise.all([
+      principalForRequest(req),
+      resourcePrincipalForSharedProject(projectId, req),
+    ]);
     let syncState = projectSyncState(projectId, principal);
     let ownerMemberId = projectOwnerMemberId(projectId, principal);
-    if (ownerMemberId == null && resolveSharedProjectOwner) {
-      try {
-        const hubOwner = await resolveSharedProjectOwner(projectId);
-        if (hubOwner != null) {
-          if (syncState === 'local_only') syncState = 'synced';
-          ownerMemberId = hubOwner;
-        }
-      } catch {
-        // Hub unavailable: fall back to the local state.
-      }
-    }
     let ownerDisplayName: string | undefined;
     let ownerRole: 'owner' | 'admin' | 'member' | undefined;
-    if (ownerMemberId && resolveOwnerDisplayName) {
-      try {
-        const entry = await resolveOwnerDisplayName(ownerMemberId);
-        if (entry) {
-          ownerDisplayName = entry.displayName;
-          ownerRole = entry.role;
+    const ownerChain = (async () => {
+      if (ownerMemberId == null && resolveSharedProjectOwner) {
+        try {
+          const hubOwner = await resolveSharedProjectOwner(projectId);
+          if (hubOwner != null) {
+            if (syncState === 'local_only') syncState = 'synced';
+            ownerMemberId = hubOwner;
+          }
+        } catch {
+          // Hub unavailable: fall back to the local state.
         }
-      } catch {
-        /* directory unavailable: omit the name */
       }
-    }
-    let head: number | null;
-    try {
-      head = await publishedHead(projectId, resourcePrincipal);
-    } catch {
-      head = publishedVersion(projectId, principal);
-    }
+      if (ownerMemberId && resolveOwnerDisplayName) {
+        try {
+          const entry = await resolveOwnerDisplayName(ownerMemberId);
+          if (entry) {
+            ownerDisplayName = entry.displayName;
+            ownerRole = entry.role;
+          }
+        } catch {
+          /* directory unavailable: omit the name */
+        }
+      }
+    })();
+    const headPromise = (async () => {
+      try {
+        return await publishedHead(projectId, resourcePrincipal);
+      } catch {
+        return publishedVersion(projectId, principal);
+      }
+    })();
+    await ownerChain;
+    const head = await headPromise;
     res.json({
       publishedVersion: head,
       syncState,

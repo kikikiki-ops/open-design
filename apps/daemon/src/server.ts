@@ -3845,6 +3845,59 @@ export async function startServer({
   const velaCliTeamProjectCatalog = createVelaCliTeamProjectCatalogFromEnv();
   const velaCliWorkspaceTeamProjectCatalog = createVelaCliTeamProjectCatalogClientFromEnv();
   const activeWorkspace = createActiveWorkspaceSelectionStore(RUNTIME_DATA_DIR);
+  // Generic stale-while-revalidate cache: after the first load every call
+  // returns the last value for the key immediately and refreshes in the
+  // background once it is older than freshMs; concurrent callers coalesce on the
+  // in-flight fetch. Keyed so a workspace switch is an automatic miss.
+  const createSwrCache = <T>(fetcher: () => Promise<T>, keyFn: () => string, freshMs: number): (() => Promise<T>) => {
+    let entry: { key: string; value: T | null; settledAt: number; inflight: Promise<T> | null } | null = null;
+    const refresh = (key: string) => {
+      if (!entry || entry.key !== key) entry = { key, value: null, settledAt: 0, inflight: null };
+      const cur = entry;
+      const p = fetcher();
+      cur.inflight = p;
+      p.then(
+        (value) => {
+          if (entry === cur) {
+            cur.value = value;
+            cur.settledAt = Date.now();
+            cur.inflight = null;
+          }
+        },
+        () => {
+          if (entry === cur) {
+            cur.inflight = null;
+            if (cur.value === null) entry = null;
+          }
+        },
+      );
+      return p;
+    };
+    return () => {
+      const key = keyFn();
+      if (!entry || entry.key !== key) return refresh(key);
+      if (entry.value !== null) {
+        const cached = entry.value;
+        if (!entry.inflight && Date.now() - entry.settledAt >= freshMs) void refresh(key).catch(() => {});
+        return Promise.resolve(cached);
+      }
+      return entry.inflight ?? refresh(key);
+    };
+  };
+  // Cache the workspace-scoped team catalog behind /api/workspaces/:id/projects
+  // ?view=… (the "All projects"/"Recent" pages) the same way — keyed on the
+  // active workspace so navigation is instant instead of flashing an empty "no
+  // team projects" state while a fresh catalog round-trip is in flight.
+  const workspaceTeamProjectCatalog = velaCliWorkspaceTeamProjectCatalog
+    ? (() => {
+        const cachedList = createSwrCache(
+          () => velaCliWorkspaceTeamProjectCatalog.list(),
+          () => activeWorkspace.get() ?? '',
+          3000,
+        );
+        return { ...velaCliWorkspaceTeamProjectCatalog, list: () => cachedList() };
+      })()
+    : velaCliWorkspaceTeamProjectCatalog;
   const workspaceContext = createWorkspaceContextProviderFromEnv(process.env, {
     getActiveWorkspaceId: () => activeWorkspace.get(),
   });
@@ -4035,8 +4088,15 @@ export async function startServer({
     const list = await teamProjectsLister();
     return list.find((entry) => entry.projectId === projectId) ?? null;
   };
+  // Owner lookup is a display concern (the "shared project" banner, comment
+  // author names, the publish trigger) and the owner changes only when a project
+  // is (re)shared, so it reads through the stale-while-revalidate cache — a
+  // project-view no longer waits ~1s on a fresh catalog round-trip just to learn
+  // it is owned by the current member. Revocation stays on the uncached
+  // resolveSharedProject (pull gate) so an unshare is still seen immediately.
   const resolveSharedProjectOwner = async (projectId: string): Promise<string | null> => {
-    return (await resolveSharedProject(projectId))?.ownerMemberId ?? null;
+    const list = await teamProjectsDisplayCache();
+    return list.find((entry) => entry.projectId === projectId)?.ownerMemberId ?? null;
   };
   const isSharedTeamProject = async (projectId: string): Promise<boolean> => {
     return (await resolveSharedProject(projectId)) != null;
@@ -4828,7 +4888,7 @@ export async function startServer({
       requestTeamShare: (projectId, ownerMemberId) => collab.requestTeamShare(projectId, ownerMemberId),
       requestTeamUnshare: (projectId, ownerMemberId) => collab.requestTeamUnshare(projectId, ownerMemberId),
     },
-    ...(velaCliWorkspaceTeamProjectCatalog ? { teamProjectCatalog: velaCliWorkspaceTeamProjectCatalog } : {}),
+    ...(workspaceTeamProjectCatalog ? { teamProjectCatalog: workspaceTeamProjectCatalog } : {}),
     // Collab-cloud comment seams (no-op off-team / when unconfigured): stamp the
     // server-authoritative author, gate status/delete on the caller vs the
     // comment author / project owner, and push the comment lifecycle (create/edit,
