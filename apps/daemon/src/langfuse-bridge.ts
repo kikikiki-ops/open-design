@@ -16,7 +16,11 @@ import { modelIdForTracking } from '@open-design/contracts/analytics';
 
 import { agentCliEnvForAgent, readAppConfig } from './app-config.js';
 import type { AppVersionInfo } from './app-version.js';
-import { getRunFeedbackTelemetryAnchor, listMessages } from './db.js';
+import {
+  getRunFeedbackTelemetryAnchor,
+  listMessages,
+  setRunTelemetryAcceptedAnchor,
+} from './db.js';
 import {
   canDeliverRunFeedback,
   deriveLangfuseDeliveryState,
@@ -24,6 +28,7 @@ import {
   reportRunCompleted,
   reportRunFeedback,
   resolveFeedbackTraceId,
+  scopedTelemetryBodyId,
   type AgentEventSummary,
   type ArtifactManifestEntry,
   type ArtifactSummary,
@@ -1135,18 +1140,37 @@ export async function reportRunCompletedFromDaemon(
 
     const uploadedManifests = await buildTraceObjectManifests(objectManifestOptions);
     const finalManifests = mergeTraceSafeManifests(manifests, uploadedManifests);
-    return await reportRunCompleted(
+    const reportTrigger = opts.reportTrigger ?? 'final_message';
+    const delivery = await reportRunCompleted(
       buildContext(finalManifests, buildTraceObjectSummary({
         traceObjectFilesRaw,
         ...(uploadedManifests ? { uploaded: uploadedManifests } : {}),
       })),
       {
         deliveryPurpose: 'final',
-        reportTrigger: opts.reportTrigger ?? 'final_message',
+        reportTrigger,
         configuredEnv,
         ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}),
       },
     );
+    // Persist the accepted final-purpose body id so feedback can still attach
+    // after a daemon restart when process-local memory is cold.
+    if (delivery.langfuse_delivery_status === 'accepted') {
+      try {
+        setRunTelemetryAcceptedAnchor(db as Parameters<typeof setRunTelemetryAcceptedAnchor>[0], {
+          runId: run.id,
+          assistantMessageId: run.assistantMessageId ?? null,
+          bodyId: scopedTelemetryBodyId(run.id, 'final', reportTrigger),
+          reportTrigger,
+        });
+      } catch (err) {
+        console.warn(
+          '[langfuse-bridge] failed to persist accepted telemetry anchor:',
+          String(err),
+        );
+      }
+    }
+    return delivery;
   } catch (err) {
     console.warn('[langfuse-bridge] report failed:', String(err));
     return {
@@ -1217,6 +1241,7 @@ export async function reportRunFeedbackFromDaemon(
       : null;
   let runStatus: string | null | undefined;
   let telemetryFinalized: boolean | undefined;
+  let acceptedTraceBodyId: string | null | undefined;
   if (opts.db) {
     try {
       const anchor = getRunFeedbackTelemetryAnchor(
@@ -1227,6 +1252,7 @@ export async function reportRunFeedbackFromDaemon(
       if (anchor) {
         runStatus = anchor.runStatus;
         telemetryFinalized = anchor.telemetryFinalized;
+        acceptedTraceBodyId = anchor.acceptedTraceBodyId;
       }
     } catch (err) {
       console.warn(
@@ -1239,6 +1265,9 @@ export async function reportRunFeedbackFromDaemon(
     runId: opts.runId,
     ...(runStatus !== undefined ? { runStatus } : {}),
     ...(telemetryFinalized !== undefined ? { telemetryFinalized } : {}),
+    ...(acceptedTraceBodyId !== undefined
+      ? { acceptedTraceBodyId }
+      : {}),
   });
   const ctx: FeedbackReportContext = {
     runId: opts.runId,

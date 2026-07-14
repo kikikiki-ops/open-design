@@ -1999,6 +1999,15 @@ function makeDbWithListMessages(messagesByConvo: Record<string, FakeMessage[]>) 
             position: 0,
           }));
         },
+        // Accepted-telemetry-anchor writes use prepare().get/.run after a
+        // successful final delivery. These unit tests use a stub DB; return
+        // empty so setRunTelemetryAcceptedAnchor no-ops without throwing.
+        get() {
+          return undefined;
+        },
+        run() {
+          return { changes: 0 };
+        },
       };
     },
   };

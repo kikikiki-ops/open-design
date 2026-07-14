@@ -193,8 +193,14 @@ export function resetAcceptedFinalTraceBodyIdsForTests(): void {
  * Priority:
  * 1. Explicit override (`traceId`)
  * 2. Process-local accepted final delivery body id
- * 3. Derive from run status + message finalization (mirrors terminal_fallback rules)
- * 4. Canonical runId
+ * 3. Persisted accepted final-purpose body id (survives daemon restart)
+ * 4. Derive from run status + message finalization (mirrors terminal_fallback rules)
+ * 5. Canonical runId
+ *
+ * Prefer accepted delivery memory/persistence over raw `telemetry_finalized_at`:
+ * a failed/canceled run may accept `terminal_fallback`, later finalize a
+ * message, then fail `final_message` delivery. Feedback must still target the
+ * accepted `:tf` body rather than a never-accepted canonical id.
  */
 export function resolveFeedbackTraceId(input: {
   runId: string;
@@ -203,6 +209,11 @@ export function resolveFeedbackTraceId(input: {
   runStatus?: string | null;
   /** True when the assistant message was telemetry-finalized (final_message path). */
   telemetryFinalized?: boolean;
+  /**
+   * Accepted final-purpose body id persisted on the message row. Used when
+   * process-local memory is cold after a daemon restart.
+   */
+  acceptedTraceBodyId?: string | null;
 }): string {
   const runId = typeof input.runId === 'string' ? input.runId.trim() : '';
   if (!runId) return typeof input.runId === 'string' ? input.runId : '';
@@ -210,6 +221,11 @@ export function resolveFeedbackTraceId(input: {
   if (explicit) return explicit;
   const remembered = acceptedFinalTraceBodyIds.get(runId);
   if (remembered?.bodyId) return remembered.bodyId;
+  const accepted =
+    typeof input.acceptedTraceBodyId === 'string'
+      ? input.acceptedTraceBodyId.trim()
+      : '';
+  if (accepted) return accepted;
   // Failed/canceled runs that never reach a telemetry-finalized final_message
   // only have the terminal_fallback body namespace in Langfuse/Vela.
   if (
@@ -1576,8 +1592,9 @@ export function buildTracePayload(
 ): unknown[] {
   // Object-registration needs manifests for upload authority but must not
   // double-write turn text when the final delivery goes through Vela.
-  // `wantsTextContent` gates prompt/output/tool I/O; `wantsArtifacts` gates
-  // object manifests used by the worker object-scope registry.
+  // `wantsTextContent` gates prompt/output/tool I/O and stream-tail metadata
+  // (stderr/stdout/diagnostics); `wantsArtifacts` gates object manifests used
+  // by the worker object-scope registry.
   const consentOn =
     ctx.prefs.metrics === true && ctx.prefs.content === true;
   const wantsTextContent = deliveryPurpose === 'final' && consentOn;
@@ -1705,9 +1722,12 @@ export function buildTracePayload(
     ...langfuseDelivery,
     ...(ctx.run.failure ?? {}),
     ...(ctx.run.timings ?? {}),
-    stderr: ctx.run.stderr,
-    stdout: ctx.run.stdout,
-    diagnostics: ctx.run.diagnostics,
+    // Stream tails and run diagnostics can contain raw CLI output after secret
+    // redaction. Keep them off object-registration so the anonymous relay never
+    // double-writes turn content that the final Vela delivery owns.
+    stderr: wantsTextContent ? ctx.run.stderr : undefined,
+    stdout: wantsTextContent ? ctx.run.stdout : undefined,
+    diagnostics: wantsTextContent ? ctx.run.diagnostics : undefined,
     eventsSummary: ctx.eventsSummary,
     tokens,
     cost_usd: costBreakdown.cost_usd,

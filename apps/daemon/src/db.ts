@@ -126,6 +126,8 @@ function migrate(db: SqliteDb): void {
       run_context_json TEXT,
       applied_plugin_snapshot_json TEXT,
       telemetry_finalized_at INTEGER,
+      telemetry_accepted_body_id TEXT,
+      telemetry_accepted_report_trigger TEXT,
       started_at INTEGER,
       ended_at INTEGER,
       position INTEGER NOT NULL,
@@ -308,6 +310,12 @@ function migrate(db: SqliteDb): void {
   }
   if (!messageCols.some((c: DbRow) => c.name === 'telemetry_finalized_at')) {
     db.exec(`ALTER TABLE messages ADD COLUMN telemetry_finalized_at INTEGER`);
+  }
+  if (!messageCols.some((c: DbRow) => c.name === 'telemetry_accepted_body_id')) {
+    db.exec(`ALTER TABLE messages ADD COLUMN telemetry_accepted_body_id TEXT`);
+  }
+  if (!messageCols.some((c: DbRow) => c.name === 'telemetry_accepted_report_trigger')) {
+    db.exec(`ALTER TABLE messages ADD COLUMN telemetry_accepted_report_trigger TEXT`);
   }
   const routineRunCols = db.prepare(`PRAGMA table_info(routine_runs)`).all() as DbRow[];
   if (!routineRunCols.some((c: DbRow) => c.name === 'error_code')) {
@@ -1564,10 +1572,126 @@ export function getMessageTelemetryFinalizationState(db: SqliteDb, messageId: st
   };
 }
 
+type TelemetryAcceptedReportTrigger = 'final_message' | 'terminal_fallback';
+
+function normalizeTelemetryAcceptedReportTrigger(
+  value: unknown,
+): TelemetryAcceptedReportTrigger | null {
+  return value === 'final_message' || value === 'terminal_fallback'
+    ? value
+    : null;
+}
+
+function rowToFeedbackTelemetryAnchor(row: DbRow): {
+  runStatus: string | null;
+  telemetryFinalized: boolean;
+  acceptedTraceBodyId: string | null;
+  acceptedReportTrigger: TelemetryAcceptedReportTrigger | null;
+} {
+  const acceptedTraceBodyId =
+    typeof row.acceptedTraceBodyId === 'string' && row.acceptedTraceBodyId.trim()
+      ? row.acceptedTraceBodyId.trim()
+      : null;
+  return {
+    runStatus: typeof row.runStatus === 'string' ? row.runStatus : null,
+    telemetryFinalized: typeof row.telemetryFinalizedAt === 'number',
+    acceptedTraceBodyId,
+    acceptedReportTrigger: normalizeTelemetryAcceptedReportTrigger(
+      row.acceptedReportTrigger,
+    ),
+  };
+}
+
 /**
- * Best-effort anchor for feedback → Langfuse score attachment: run status and
- * whether the assistant message was telemetry-finalized. Used to derive the
- * terminal_fallback body id (`runId:tf`) when no final_message was delivered.
+ * Persist the accepted final-purpose Langfuse body id for feedback attachment.
+ *
+ * Survives daemon restart so scores still target the body that Langfuse/Vela
+ * actually accepted (e.g. `runId:tf` after terminal_fallback) even when a later
+ * final_message delivery fails and process-local memory is cold.
+ *
+ * Preference matches process-local memory: an accepted final_message is never
+ * demoted by a later terminal_fallback write.
+ */
+export function setRunTelemetryAcceptedAnchor(
+  db: SqliteDb,
+  opts: {
+    runId: string;
+    assistantMessageId?: string | null;
+    bodyId: string;
+    reportTrigger: TelemetryAcceptedReportTrigger;
+  },
+): boolean {
+  const runId = typeof opts.runId === 'string' ? opts.runId.trim() : '';
+  const bodyId = typeof opts.bodyId === 'string' ? opts.bodyId.trim() : '';
+  const reportTrigger = normalizeTelemetryAcceptedReportTrigger(opts.reportTrigger);
+  if (!runId || !bodyId || !reportTrigger) return false;
+
+  let messageId: string | null = null;
+  let existingTrigger: TelemetryAcceptedReportTrigger | null = null;
+  const assistantMessageId =
+    typeof opts.assistantMessageId === 'string'
+      ? opts.assistantMessageId.trim()
+      : '';
+  if (assistantMessageId) {
+    const byId = db
+      .prepare(
+        `SELECT id,
+                telemetry_accepted_report_trigger AS acceptedReportTrigger
+           FROM messages
+          WHERE id = ?`,
+      )
+      .get(assistantMessageId) as DbRow | undefined;
+    if (byId && typeof byId.id === 'string') {
+      messageId = byId.id;
+      existingTrigger = normalizeTelemetryAcceptedReportTrigger(
+        byId.acceptedReportTrigger,
+      );
+    }
+  }
+  if (!messageId) {
+    const byRun = db
+      .prepare(
+        `SELECT id,
+                telemetry_accepted_report_trigger AS acceptedReportTrigger
+           FROM messages
+          WHERE run_id = ?
+          ORDER BY position DESC
+          LIMIT 1`,
+      )
+      .get(runId) as DbRow | undefined;
+    if (byRun && typeof byRun.id === 'string') {
+      messageId = byRun.id;
+      existingTrigger = normalizeTelemetryAcceptedReportTrigger(
+        byRun.acceptedReportTrigger,
+      );
+    }
+  }
+  if (!messageId) return false;
+  if (
+    existingTrigger === 'final_message' &&
+    reportTrigger === 'terminal_fallback'
+  ) {
+    return false;
+  }
+
+  const result = db
+    .prepare(
+      `UPDATE messages
+          SET telemetry_accepted_body_id = ?,
+              telemetry_accepted_report_trigger = ?
+        WHERE id = ?`,
+    )
+    .run(bodyId, reportTrigger, messageId);
+  return Number(result.changes ?? 0) > 0;
+}
+
+/**
+ * Best-effort anchor for feedback → Langfuse score attachment: run status,
+ * whether the assistant message was telemetry-finalized, and any accepted
+ * final-purpose body id persisted after a successful telemetry delivery.
+ *
+ * Prefer the accepted body id over raw finalization when resolving the score
+ * target — finalization alone does not mean a final_message body was accepted.
  */
 export function getRunFeedbackTelemetryAnchor(
   db: SqliteDb,
@@ -1576,28 +1700,30 @@ export function getRunFeedbackTelemetryAnchor(
 ): {
   runStatus: string | null;
   telemetryFinalized: boolean;
+  acceptedTraceBodyId: string | null;
+  acceptedReportTrigger: TelemetryAcceptedReportTrigger | null;
 } | null {
   if (typeof assistantMessageId === 'string' && assistantMessageId.trim()) {
     const byId = db
       .prepare(
         `SELECT run_status AS runStatus,
-                telemetry_finalized_at AS telemetryFinalizedAt
+                telemetry_finalized_at AS telemetryFinalizedAt,
+                telemetry_accepted_body_id AS acceptedTraceBodyId,
+                telemetry_accepted_report_trigger AS acceptedReportTrigger
            FROM messages
           WHERE id = ?`,
       )
       .get(assistantMessageId.trim()) as DbRow | undefined;
     if (byId) {
-      return {
-        runStatus: typeof byId.runStatus === 'string' ? byId.runStatus : null,
-        telemetryFinalized:
-          typeof byId.telemetryFinalizedAt === 'number',
-      };
+      return rowToFeedbackTelemetryAnchor(byId);
     }
   }
   const byRun = db
     .prepare(
       `SELECT run_status AS runStatus,
-              telemetry_finalized_at AS telemetryFinalizedAt
+              telemetry_finalized_at AS telemetryFinalizedAt,
+              telemetry_accepted_body_id AS acceptedTraceBodyId,
+              telemetry_accepted_report_trigger AS acceptedReportTrigger
          FROM messages
         WHERE run_id = ?
         ORDER BY position DESC
@@ -1605,10 +1731,7 @@ export function getRunFeedbackTelemetryAnchor(
     )
     .get(runId) as DbRow | undefined;
   if (!byRun) return null;
-  return {
-    runStatus: typeof byRun.runStatus === 'string' ? byRun.runStatus : null,
-    telemetryFinalized: typeof byRun.telemetryFinalizedAt === 'number',
-  };
+  return rowToFeedbackTelemetryAnchor(byRun);
 }
 
 export function appendMessageStatusEvent(db: SqliteDb, messageId: string, event: DbRow) {

@@ -470,6 +470,19 @@ describe('resolveFeedbackTraceId', () => {
     rememberAcceptedFinalTraceBodyId('run-mem', 'run-mem:tf', 'terminal_fallback');
     expect(resolveFeedbackTraceId({ runId: 'run-mem' })).toBe('run-mem');
   });
+
+  it('prefers a persisted accepted :tf body over telemetry_finalized after cold start', () => {
+    // Simulates daemon restart: process-local memory empty, but DB recorded that
+    // terminal_fallback was accepted while a later final_message failed.
+    expect(
+      resolveFeedbackTraceId({
+        runId: 'run-restart',
+        runStatus: 'failed',
+        telemetryFinalized: true,
+        acceptedTraceBodyId: 'run-restart:tf',
+      }),
+    ).toBe('run-restart:tf');
+  });
 });
 
 describe('buildTracePayload', () => {
@@ -1811,15 +1824,35 @@ describe('buildTracePayload', () => {
   });
 
   it('uses distinct stable ids and omits turn content for object-registration', () => {
+    const streamRun = {
+      runId: 'run-1',
+      status: 'failed' as const,
+      startedAt: 1_700_000_000_000,
+      endedAt: 1_700_000_004_500,
+      error: 'provider failed',
+      stderr: {
+        tail: 'CLI stream tail with secret-redacted provider noise',
+        lineCount: 8,
+        truncated: true,
+      },
+      stdout: {
+        tail: 'partial assistant stream text',
+        lineCount: 3,
+        truncated: false,
+      },
+      diagnostics: { stage: 'agent_stream', raw: 'turn content' },
+    };
     const finalBatch = buildTracePayload(
       makeCtx({
         prefs: { metrics: true, content: true, artifactManifest: false },
+        run: streamRun,
       }),
       'final',
     ) as Array<{ id: string; body: Record<string, any> }>;
     const regBatch = buildTracePayload(
       makeCtx({
         prefs: { metrics: true, content: true, artifactManifest: false },
+        run: streamRun,
       }),
       'object-registration',
     ) as Array<{ id: string; body: Record<string, any> }>;
@@ -1829,7 +1862,15 @@ describe('buildTracePayload', () => {
     expect(regBatch[0]!.body.metadata.telemetry_delivery_purpose).toBe(
       'object-registration',
     );
+    // Object-registration must not carry stream tails / diagnostics either —
+    // those are turn content the final Vela path owns.
+    expect(regBatch[0]!.body.metadata.stderr).toBeUndefined();
+    expect(regBatch[0]!.body.metadata.stdout).toBeUndefined();
+    expect(regBatch[0]!.body.metadata.diagnostics).toBeUndefined();
     expect(finalBatch[0]!.body.input).toBe('Make a landing page for a coffee shop.');
+    expect(finalBatch[0]!.body.metadata.stderr).toEqual(streamRun.stderr);
+    expect(finalBatch[0]!.body.metadata.stdout).toEqual(streamRun.stdout);
+    expect(finalBatch[0]!.body.metadata.diagnostics).toEqual(streamRun.diagnostics);
   });
 
   it('uses distinct body and event ids for terminal_fallback vs final_message', () => {
