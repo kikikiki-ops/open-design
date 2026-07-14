@@ -1842,10 +1842,28 @@ describe('buildTracePayload', () => {
       },
       diagnostics: { stage: 'agent_stream', raw: 'turn content' },
     };
+    const agentEvents = [
+      {
+        id: 'diagnostic-plain_stream_artifacts_persist_failed-0',
+        name: 'agent-diagnostic:plain_stream_artifacts_persist_failed',
+        timestamp: 1_700_000_003_000,
+        input: { source: 'daemon-run-finalize', event_type: 'diagnostic' },
+        output: {
+          name: 'plain_stream_artifacts_persist_failed',
+          message: 'Failed to persist plain-stream artifact(s): disk full',
+        },
+        statusMessage: 'Failed to persist plain-stream artifact(s): disk full',
+        level: 'ERROR' as const,
+        metadata: {
+          diagnostic_name: 'plain_stream_artifacts_persist_failed',
+        },
+      },
+    ];
     const finalBatch = buildTracePayload(
       makeCtx({
         prefs: { metrics: true, content: true, artifactManifest: false },
         run: streamRun,
+        agentEvents,
       }),
       'final',
     ) as Array<{ id: string; body: Record<string, any> }>;
@@ -1853,6 +1871,7 @@ describe('buildTracePayload', () => {
       makeCtx({
         prefs: { metrics: true, content: true, artifactManifest: false },
         run: streamRun,
+        agentEvents,
       }),
       'object-registration',
     ) as Array<{ id: string; body: Record<string, any> }>;
@@ -1879,6 +1898,25 @@ describe('buildTracePayload', () => {
     expect(
       regBatch.find((e) => e.body?.name === 'run-error')?.body.statusMessage,
     ).toBeUndefined();
+    // Agent-event diagnostic payloads (output/statusMessage) must not leak
+    // into the anonymous registration relay either.
+    const regAgentDiagnostic = regBatch.find(
+      (e) => e.body?.name === 'agent-diagnostic:plain_stream_artifacts_persist_failed',
+    );
+    expect(regAgentDiagnostic).toBeDefined();
+    expect(regAgentDiagnostic!.body.output).toBeUndefined();
+    expect(regAgentDiagnostic!.body.statusMessage).toBeUndefined();
+    expect(regAgentDiagnostic!.body.input).toEqual({
+      source: 'daemon-run-finalize',
+      event_type: 'diagnostic',
+    });
+    const finalAgentDiagnostic = finalBatch.find(
+      (e) => e.body?.name === 'agent-diagnostic:plain_stream_artifacts_persist_failed',
+    );
+    expect(finalAgentDiagnostic!.body.output).toEqual(agentEvents[0]!.output);
+    expect(finalAgentDiagnostic!.body.statusMessage).toBe(
+      agentEvents[0]!.statusMessage,
+    );
     expect(finalBatch[0]!.body.input).toBe('Make a landing page for a coffee shop.');
     expect(finalBatch[0]!.body.metadata.error).toBe('provider failed');
     expect(finalBatch[0]!.body.metadata.stderr).toEqual(streamRun.stderr);

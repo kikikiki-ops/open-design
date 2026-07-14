@@ -1592,10 +1592,12 @@ export function buildTracePayload(
 ): unknown[] {
   // Object-registration needs manifests for upload authority but must not
   // double-write turn text when the final delivery goes through Vela.
-  // `wantsTextContent` gates prompt/output/tool I/O and stream-tail metadata
-  // (stderr/stdout/diagnostics). Agent/runtime error strings (`error` /
-  // `statusMessage`) are additionally stripped for object-registration so the
-  // anonymous relay never receives turn/error text before final Vela delivery.
+  // `wantsTextContent` gates prompt/output/tool I/O, stream-tail metadata
+  // (stderr/stdout/diagnostics), and agent-event payloads (`output` /
+  // `statusMessage`, including diagnostic messages). Agent/runtime error
+  // strings (`error` / span `statusMessage`) are additionally stripped for
+  // object-registration so the anonymous relay never receives turn/error text
+  // before final Vela delivery.
   // `wantsArtifacts` gates object manifests used by the worker object-scope
   // registry.
   const consentOn =
@@ -1954,10 +1956,13 @@ export function buildTracePayload(
           parentObservationId: agentEventParentObservationId,
           name: event.name,
           startTime: new Date(event.timestamp).toISOString(),
+          // Keep structural input (event_type/source) for both deliveries;
+          // free-text diagnostic/runtime payloads stay on final only so the
+          // object-registration anonymous relay never sees turn/error text.
           input: event.input,
-          output: event.output,
+          output: wantsTextContent ? event.output : undefined,
           level: event.level ?? 'DEFAULT',
-          statusMessage: event.statusMessage,
+          statusMessage: wantsTextContent ? event.statusMessage : undefined,
           metadata: event.metadata,
         },
       });
