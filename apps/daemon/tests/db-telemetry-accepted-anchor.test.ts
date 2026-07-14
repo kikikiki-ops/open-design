@@ -284,6 +284,80 @@ describe('persisted telemetry accepted anchor', () => {
     ).toBe(foreignBodyId);
   });
 
+  it('clears accepted telemetry anchors when upsert reuses a message for a new run_id', () => {
+    const oldRunId = 'run-failed-original';
+    const newRunId = 'run-retry';
+    const staleBodyId = scopedTelemetryBodyId(oldRunId, 'final', 'terminal_fallback');
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+    seedFailedAssistant(db, oldRunId);
+    expect(
+      setRunTelemetryAcceptedAnchor(db, {
+        runId: oldRunId,
+        assistantMessageId: 'assistant-1',
+        bodyId: staleBodyId,
+        reportTrigger: 'terminal_fallback',
+      }),
+    ).toBe(true);
+    expect(getRunFeedbackTelemetryAnchor(db, oldRunId, 'assistant-1')).toEqual({
+      runStatus: 'failed',
+      telemetryFinalized: true,
+      acceptedTraceBodyId: staleBodyId,
+      acceptedReportTrigger: 'terminal_fallback',
+    });
+
+    // Side-chat retry reuses the failed assistant message id with a new run.
+    upsertMessage(db, 'conv-1', {
+      id: 'assistant-1',
+      role: 'assistant',
+      content: '',
+      runId: newRunId,
+      runStatus: null,
+      telemetryFinalized: false,
+    });
+
+    // Old run row is gone; new run must not inherit the previous :tf anchor.
+    expect(getRunFeedbackTelemetryAnchor(db, oldRunId, 'assistant-1')).toBeNull();
+    expect(getRunFeedbackTelemetryAnchor(db, newRunId, 'assistant-1')).toEqual({
+      runStatus: null,
+      telemetryFinalized: true,
+      acceptedTraceBodyId: null,
+      acceptedReportTrigger: null,
+    });
+    expect(
+      resolveFeedbackTraceId({
+        runId: newRunId,
+        runStatus: 'failed',
+        telemetryFinalized: true,
+        acceptedTraceBodyId: null,
+      }),
+    ).toBe(newRunId);
+
+    // Same run_id updates keep an accepted anchor (mid-stream / finalize path).
+    expect(
+      setRunTelemetryAcceptedAnchor(db, {
+        runId: newRunId,
+        assistantMessageId: 'assistant-1',
+        bodyId: newRunId,
+        reportTrigger: 'final_message',
+      }),
+    ).toBe(true);
+    upsertMessage(db, 'conv-1', {
+      id: 'assistant-1',
+      role: 'assistant',
+      content: 'retry reply',
+      runId: newRunId,
+      runStatus: 'succeeded',
+      telemetryFinalized: true,
+      endedAt: Date.now(),
+    });
+    expect(getRunFeedbackTelemetryAnchor(db, newRunId, 'assistant-1')).toEqual({
+      runStatus: 'succeeded',
+      telemetryFinalized: true,
+      acceptedTraceBodyId: newRunId,
+      acceptedReportTrigger: 'final_message',
+    });
+  });
+
   it('accepted write with stale assistantMessageId still lands on the run row after restart', () => {
     const runId = 'run-stale-write';
     const otherRunId = 'run-other-stale-write';

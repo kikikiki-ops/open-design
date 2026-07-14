@@ -1426,10 +1426,20 @@ export function listMessages(db: SqliteDb, conversationId: string) {
 
 export function upsertMessage(db: SqliteDb, conversationId: string, m: DbRow) {
   const existing = db
-    .prepare(`SELECT position FROM messages WHERE id = ?`)
+    .prepare(`SELECT position, run_id AS runId FROM messages WHERE id = ?`)
     .get(m.id) as DbRow | undefined;
   const now = Date.now();
   if (existing) {
+    // Side-chat retry reuses the failed assistant message id with a new
+    // run_id. Drop accepted-telemetry anchors from the previous run so
+    // early feedback cannot score the old `${oldRunId}:tf` body.
+    const prevRunId =
+      typeof existing.runId === 'string' && existing.runId.trim()
+        ? existing.runId.trim()
+        : null;
+    const nextRunId =
+      typeof m.runId === 'string' && m.runId.trim() ? m.runId.trim() : null;
+    const clearAcceptedTelemetryAnchor = prevRunId !== nextRunId;
     db.prepare(
       `UPDATE messages
           SET role = ?, content = ?, agent_id = ?, agent_name = ?,
@@ -1441,6 +1451,14 @@ export function upsertMessage(db: SqliteDb, conversationId: string, m: DbRow) {
               telemetry_finalized_at = CASE
                 WHEN ? THEN COALESCE(telemetry_finalized_at, ?)
                 ELSE telemetry_finalized_at
+              END,
+              telemetry_accepted_body_id = CASE
+                WHEN ? THEN NULL
+                ELSE telemetry_accepted_body_id
+              END,
+              telemetry_accepted_report_trigger = CASE
+                WHEN ? THEN NULL
+                ELSE telemetry_accepted_report_trigger
               END,
               started_at = ?, ended_at = ?
         WHERE id = ?`,
@@ -1465,6 +1483,8 @@ export function upsertMessage(db: SqliteDb, conversationId: string, m: DbRow) {
       m.appliedPluginSnapshot ? JSON.stringify(m.appliedPluginSnapshot) : null,
       m.telemetryFinalized === true ? 1 : 0,
       now,
+      clearAcceptedTelemetryAnchor ? 1 : 0,
+      clearAcceptedTelemetryAnchor ? 1 : 0,
       m.startedAt ?? null,
       m.endedAt ?? null,
       m.id,
