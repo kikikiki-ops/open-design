@@ -201,7 +201,7 @@ describe('QuestionFormView', () => {
     const onSubmit = vi.fn();
     render(<QuestionFormView form={richForm} interactive onSubmit={onSubmit} />);
 
-    fireEvent.click(screen.getByLabelText('Other'));
+    fireEvent.click(screen.getByRole('button', { name: 'Other' }));
     fireEvent.change(screen.getByLabelText('Custom answer'), {
       target: { value: 'Wearable kiosk' },
     });
@@ -211,6 +211,26 @@ describe('QuestionFormView', () => {
       expect.stringContaining('- Primary surface: Wearable kiosk'),
       { platform: 'Wearable kiosk' },
     );
+  });
+
+  it('exposes the Other escape hatch as a focusable button for keyboard users', () => {
+    // Second-round reviewer finding (#5603): the chip used to be a
+    // display:none checkbox inside a label — unreachable by Tab, making the
+    // custom-answer field mouse-only. A real button restores keyboard access.
+    const { container } = render(
+      <QuestionFormView form={richForm} interactive onSubmit={vi.fn()} />,
+    );
+
+    const chip = screen.getByRole('button', { name: 'Other' });
+    expect(chip.tagName).toBe('BUTTON');
+    expect(chip.getAttribute('aria-pressed')).toBe('false');
+    chip.focus();
+    expect(document.activeElement).toBe(chip);
+
+    fireEvent.click(chip);
+    expect(chip.getAttribute('aria-pressed')).toBe('true');
+    const collapsible = container.querySelector('.qf-custom-collapsible');
+    expect(collapsible?.classList.contains('open')).toBe(true);
   });
 
   it('keeps the custom input collapsed behind the Other chip until clicked', () => {
@@ -223,7 +243,7 @@ describe('QuestionFormView', () => {
     expect(collapsible.classList.contains('open')).toBe(false);
     expect((screen.getByLabelText('Custom answer') as HTMLInputElement).disabled).toBe(true);
 
-    fireEvent.click(screen.getByLabelText('Other'));
+    fireEvent.click(screen.getByRole('button', { name: 'Other' }));
 
     expect(collapsible.classList.contains('open')).toBe(true);
     expect((screen.getByLabelText('Custom answer') as HTMLInputElement).disabled).toBe(false);
@@ -235,7 +255,7 @@ describe('QuestionFormView', () => {
     );
 
     fireEvent.click(screen.getByLabelText('Mobile (iOS/Android)'));
-    fireEvent.click(screen.getByLabelText('Other'));
+    fireEvent.click(screen.getByRole('button', { name: 'Other' }));
     // Opening "Other" on a single-choice question means "none of these".
     expect(container.querySelectorAll('input[type="radio"]:checked')).toHaveLength(0);
 
@@ -288,7 +308,7 @@ describe('QuestionFormView', () => {
     render(<QuestionFormView form={checkboxObjectForm} interactive onSubmit={onSubmit} />);
 
     fireEvent.click(screen.getByLabelText('Editorial / magazine'));
-    fireEvent.click(screen.getByLabelText('Other'));
+    fireEvent.click(screen.getByRole('button', { name: 'Other' }));
     fireEvent.change(screen.getByLabelText('Custom answer'), {
       target: { value: 'Neo-museum, Field notebook' },
     });
@@ -495,7 +515,7 @@ describe('QuestionFormView', () => {
 
     render(<QuestionFormView form={zhForm} interactive onSubmit={vi.fn()} />);
 
-    expect(screen.getByLabelText('其他')).toBeTruthy();
+    expect(screen.getByRole('button', { name: '其他' })).toBeTruthy();
     expect(screen.queryByLabelText('Other')).toBeNull();
     expect(screen.getByLabelText('自定义填写')).toBeTruthy();
   });

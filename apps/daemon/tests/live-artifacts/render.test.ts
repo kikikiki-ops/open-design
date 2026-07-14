@@ -177,6 +177,28 @@ describe('renderHtmlTemplateV1', () => {
     );
   });
 
+  it('keeps literal data-od-repeat text inside a repeated element inert', () => {
+    // Second-round reviewer repro (#5603): the nested-repeat guard scanned
+    // the whole item template, so a literal mention INSIDE the repeated body
+    // threw "nested data-od-repeat is not supported".
+    const result = renderHtmlTemplateV1({
+      templateHtml:
+        '<ul><li data-od-repeat="row in data.rows"><span>docs: data-od-repeat="x in data.y"</span>{{ row }}</li></ul>',
+      dataJson: { rows: ['a', 'b'] },
+    });
+    expect(result.html).toBe(
+      '<ul><li><span>docs: data-od-repeat="x in data.y"</span>a</li><li><span>docs: data-od-repeat="x in data.y"</span>b</li></ul>',
+    );
+  });
+
+  it('still rejects a REAL nested data-od-repeat element', () => {
+    expect(() => renderHtmlTemplateV1({
+      templateHtml:
+        '<ul><li data-od-repeat="row in data.rows"><span data-od-repeat="x in data.y">{{ x }}</span></li></ul>',
+      dataJson: { rows: ['a'], y: ['b'] },
+    })).toThrow(/nested data-od-repeat/);
+  });
+
   it('lets a bare {{item}} binding render each scalar array entry', () => {
     const result = renderHtmlTemplateV1({
       templateHtml: '<ul><li data-od-repeat="tag in data.tags">{{ tag }}</li></ul>',

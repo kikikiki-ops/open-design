@@ -147,19 +147,22 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
 
   function renderOtherChip(q: QuestionForm['questions'][number]) {
     const on = customChoiceExpanded(q);
+    // A real <button> keeps the escape hatch in the tab order — the previous
+    // display:none checkbox inside a label was mouse-only for keyboard and
+    // screen-reader users.
     return (
-      <label className={`qf-chip qf-chip-other${on ? ' qf-chip-on' : ''}`}>
-        <input
-          type="checkbox"
-          checked={on}
-          disabled={locked}
-          aria-label={t('qf.otherOption')}
-          onChange={() => toggleOther(q)}
-        />
+      <button
+        type="button"
+        className={`qf-chip qf-chip-other${on ? ' qf-chip-on' : ''}`}
+        aria-pressed={on}
+        aria-expanded={on}
+        disabled={locked}
+        onClick={() => toggleOther(q)}
+      >
         <span className="qf-chip-copy">
           <span>{t('qf.otherOption')}</span>
         </span>
-      </label>
+      </button>
     );
   }
 

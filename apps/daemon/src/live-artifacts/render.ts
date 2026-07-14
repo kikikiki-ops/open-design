@@ -149,36 +149,49 @@ type ArrayReader = (arrayPath: string) => unknown[];
  * a `data-od-repeat` nested inside another is rejected, matching the
  * documented html_template_v1 contract.
  */
-function renderFragment(html: string, resolve: BindingResolver, readArray: ArrayReader): string {
-  let out = '';
-  let cursor = 0;
+/**
+ * Locate the next REAL `data-od-repeat` directive at or after `from`. A match
+ * is a directive only when it sits inside an element's open tag: the nearest
+ * `<` to its left starts a named tag that has not closed yet. Literal
+ * `data-od-repeat="..."` text — prose, code samples, comments — is content
+ * per the html_template_v1 contract and is skipped, wherever it appears
+ * (top level or inside a repeated element's body).
+ */
+function findRepeatDirective(
+  html: string,
+  from = 0,
+): { openTagStart: number; tagName: string; spec: string; matchEnd: number } | null {
+  let cursor = from;
   while (cursor < html.length) {
-    const directive = REPEAT_DIRECTIVE.exec(html.slice(cursor));
-    if (!directive) {
-      out += interpolateScalars(html.slice(cursor), resolve);
-      break;
-    }
-
-    const directiveIndex = cursor + directive.index;
-    // A directive is only real when the match sits inside an element's open
-    // tag: the nearest `<` to its left starts a named tag that has not closed
-    // yet. Literal `data-od-repeat="..."` text — prose, code samples,
-    // comments — is content per the html_template_v1 contract; emit it
-    // (scalar-interpolated) and keep scanning instead of repeating or
-    // throwing on authored copy.
+    const match = REPEAT_DIRECTIVE.exec(html.slice(cursor));
+    if (!match) return null;
+    const directiveIndex = cursor + match.index;
+    const matchEnd = directiveIndex + match[0].length;
     const openTagStart = html.lastIndexOf('<', directiveIndex);
     const nameMatch =
       openTagStart >= 0 ? /^<([A-Za-z][A-Za-z0-9_-]*)/.exec(html.slice(openTagStart)) : null;
     const tagName = nameMatch?.[1];
-    if (!tagName || html.slice(openTagStart, directiveIndex).includes('>')) {
-      const literalEnd = directiveIndex + directive[0].length;
-      out += interpolateScalars(html.slice(cursor, literalEnd), resolve);
-      cursor = literalEnd;
-      continue;
+    if (tagName && !html.slice(openTagStart, directiveIndex).includes('>')) {
+      return { openTagStart, tagName, spec: match[1] ?? '', matchEnd };
     }
+    cursor = matchEnd;
+  }
+  return null;
+}
 
-    const spec = REPEAT_DIRECTIVE_SPEC.exec(directive[1] ?? '');
-    if (!spec?.[1] || !spec[2]) throw new Error(`invalid data-od-repeat directive: "${directive[1]}" (expected "item in data.path")`);
+function renderFragment(html: string, resolve: BindingResolver, readArray: ArrayReader): string {
+  let out = '';
+  let cursor = 0;
+  while (cursor < html.length) {
+    const directive = findRepeatDirective(html, cursor);
+    if (!directive) {
+      out += interpolateScalars(html.slice(cursor), resolve);
+      break;
+    }
+    const { openTagStart, tagName } = directive;
+
+    const spec = REPEAT_DIRECTIVE_SPEC.exec(directive.spec);
+    if (!spec?.[1] || !spec[2]) throw new Error(`invalid data-od-repeat directive: "${directive.spec}" (expected "item in data.path")`);
     const varName = spec[1];
     const arrayPath = spec[2];
 
@@ -187,10 +200,12 @@ function renderFragment(html: string, resolve: BindingResolver, readArray: Array
     const elementEnd = selfClosed ? openTagEnd + 1 : findElementEnd(html, tagName, openTagEnd + 1);
     const element = html.slice(openTagStart, elementEnd);
 
-    // Strip only this element's own directive from its opening tag; anything
-    // left means a nested repeat, which the contract does not support.
+    // Strip only this element's own directive from its opening tag; a REAL
+    // directive anywhere in what remains means a nested repeat, which the
+    // contract does not support. Literal mentions inside the repeated body
+    // stay inert — same rule as the top-level scan.
     const itemTemplate = element.replace(REPEAT_DIRECTIVE, '');
-    if (REPEAT_DIRECTIVE.test(itemTemplate)) {
+    if (findRepeatDirective(itemTemplate)) {
       throw new Error('nested data-od-repeat is not supported');
     }
 
