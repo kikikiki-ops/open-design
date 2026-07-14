@@ -32,6 +32,7 @@ import {
 import {
   createConversation,
   getProject,
+  getProjectDetail,
   listConversations,
   listMessages,
   loadTabs,
@@ -1642,6 +1643,26 @@ export function DesignSystemDetailView({
   const [chatSeed, setChatSeed] = useState<{ id: string; text: string } | null>(null);
   const [workspaceProjectId, setWorkspaceProjectId] = useState<string | null>(null);
   const [workspaceProjectFiles, setWorkspaceProjectFiles] = useState<ProjectFile[]>([]);
+  // Daemon-resolved working directory of the workspace project — proof anchor
+  // for classifying absolute disk hrefs in chat file links (AssistantMessage).
+  const [workspaceProjectResolvedDir, setWorkspaceProjectResolvedDir] = useState<string | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!workspaceProjectId) {
+      setWorkspaceProjectResolvedDir(null);
+      return undefined;
+    }
+    let cancelled = false;
+    void getProjectDetail(workspaceProjectId).then((detail) => {
+      if (cancelled) return;
+      setWorkspaceProjectResolvedDir(detail?.resolvedDir ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceProjectId]);
   const [workspaceLoadError, setWorkspaceLoadError] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
@@ -2545,6 +2566,7 @@ export function DesignSystemDetailView({
             config={config}
             projectId={workspaceProjectId}
             projectFiles={workspaceProjectFiles}
+            projectResolvedDir={workspaceProjectResolvedDir}
             onEnsureProject={ensureWorkspaceProject}
             onSend={(prompt, attachments, commentAttachments) => {
               void sendProjectChatMessage(prompt, attachments, commentAttachments);

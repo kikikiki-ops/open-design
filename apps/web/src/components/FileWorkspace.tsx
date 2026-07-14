@@ -1453,6 +1453,10 @@ export function FileWorkspace({
     [files],
   );
 
+  // Known-file set for the side chat's file-link routing — same shape
+  // ProjectView feeds its primary ChatPane.
+  const sideChatFileNames = useMemo(() => new Set(files.map((file) => file.name)), [files]);
+
   const projectPagePresets = useMemo(
     () => [
       ...BLANK_PAGE_PRESETS,
@@ -3932,6 +3936,8 @@ export function FileWorkspace({
             agentsById={chatAgentsById}
             locale={chatLocale ?? 'en'}
             projectFiles={visibleFiles}
+            projectFileNames={sideChatFileNames}
+            projectResolvedDir={resolvedDir}
             conversations={conversations}
             onSelectConversation={onSelectConversation ?? (() => {})}
             onDeleteConversation={onDeleteConversation ?? (() => {})}
