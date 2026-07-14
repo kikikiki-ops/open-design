@@ -13,6 +13,7 @@ import {
   readDomToPptxBundleFile,
   requestedRenderSize,
   restackActiveSlide,
+  restoreActiveSlideCapture,
   runDomToPptx,
   scrollStitchGeometry,
   scrollStitchRowOffset,
@@ -111,7 +112,7 @@ describe('deck capture DOM prep', () => {
     );
   });
 
-  test('off-stage slide fallback leaves only the capture clone visible', () => {
+  test('off-stage slide fallback captures the live canvas instead of a structural clone', () => {
     class FakeStyle {
       cssText = '';
       private readonly values = new Map<string, { priority: string; value: string }>();
@@ -128,6 +129,10 @@ describe('deck capture DOM prep', () => {
         return this.values.get(name)?.value ?? '';
       }
 
+      removeProperty(name: string): void {
+        this.values.delete(name);
+      }
+
       clone(): FakeStyle {
         const style = new FakeStyle();
         style.cssText = this.cssText;
@@ -142,21 +147,43 @@ describe('deck capture DOM prep', () => {
       children: FakeElement[] = [];
       id = '';
       parentElement: FakeElement | null = null;
+      runtimeFrame: symbol | undefined;
       style = new FakeStyle();
 
-      constructor(private readonly rect: { x: number; y: number } = { x: 32, y: 24 }) {}
+      constructor(
+        private rect: { x: number; y: number } = { x: 32, y: 24 },
+        private readonly restacksChildren = false,
+      ) {}
+
+      get firstElementChild(): FakeElement | null {
+        return this.children[0] ?? null;
+      }
+
+      get parentNode(): FakeElement | null {
+        return this.parentElement;
+      }
 
       appendChild(child: FakeElement): FakeElement {
+        child.remove();
         child.parentElement = this;
+        if (this.restacksChildren) child.rect = { x: 0, y: 0 };
         this.children.push(child);
         return child;
       }
 
-      cloneNode(): FakeElement {
+      before(sibling: FakeElement): void {
+        this.parentElement?.moveBefore(sibling, this);
+      }
+
+      cloneNode(deep = false): FakeElement {
         // The source is off-stage because its parent deck is translated. Once
-        // cloned outside that parent, the clone itself starts at the origin.
+        // cloned outside that parent, the clone itself starts at the origin,
+        // but runtime-rendered state such as a canvas bitmap is not cloned.
         const clone = new FakeElement({ x: 0, y: 0 });
         clone.style = this.style.clone();
+        if (deep) {
+          for (const child of this.children) clone.appendChild(child.cloneNode(true));
+        }
         return clone;
       }
 
@@ -172,13 +199,33 @@ describe('deck capture DOM prep', () => {
         if (!this.parentElement) return;
         this.parentElement.children = this.parentElement.children.filter((child) => child !== this);
         this.parentElement = null;
+        this.clearRuntimeFrames();
+      }
+
+      moveBefore(child: FakeElement, reference: FakeElement | null): void {
+        if (child.parentElement) {
+          child.parentElement.children = child.parentElement.children.filter((entry) => entry !== child);
+        }
+        const index = reference == null ? this.children.length : this.children.indexOf(reference);
+        child.parentElement = this;
+        if (this.restacksChildren) child.rect = { x: 0, y: 0 };
+        this.children.splice(index, 0, child);
+      }
+
+      private clearRuntimeFrames(): void {
+        this.runtimeFrame = undefined;
+        for (const child of this.children) child.clearRuntimeFrames();
       }
 
       setAttribute(): void {}
     }
 
+    const runtimeFrame = Symbol('painted chart frame');
+    const canvas = new FakeElement();
+    canvas.runtimeFrame = runtimeFrame;
     const slide = new FakeElement();
     slide.style.setProperty('opacity', '1');
+    slide.appendChild(canvas);
     const body = new FakeElement();
     body.appendChild(slide);
     const findById = (root: FakeElement, id: string): FakeElement | null => {
@@ -191,7 +238,7 @@ describe('deck capture DOM prep', () => {
     };
     const fakeDocument = {
       body,
-      createElement: () => new FakeElement(),
+      createElement: () => new FakeElement({ x: 0, y: 0 }, true),
       getElementById: (id: string) => findById(body, id),
       querySelectorAll: () => [slide],
     };
@@ -199,25 +246,31 @@ describe('deck capture DOM prep', () => {
     Object.assign(globalThis, { document: fakeDocument });
     try {
       restackActiveSlide('.slide', 0, 960, 540);
+
+      const layer = findById(body, '__od_export_active_slide_capture');
+      const offset = layer?.children[0];
+      const capturedSlide = offset?.children[0];
+
+      // cloneNode(true) would produce a blank canvas. The live slide must be the
+      // sole paintable capture subtree so its current canvas/WebGL/media state is
+      // preserved without rendering the slide's ordinary DOM twice.
+      expect(capturedSlide).toBe(slide);
+      expect(capturedSlide?.children[0]).toBe(canvas);
+      expect(capturedSlide?.children[0]?.runtimeFrame).toBe(runtimeFrame);
+      // Align from the moved slide's live rect. Reusing the source rect would
+      // apply the translated parent's offset a second time and move it off-screen.
+      expect(offset?.style.getPropertyValue('transform')).toBe('translate(0px, 0px)');
+      expect(offset?.style.getPropertyPriority('transform')).toBe('important');
+
+      restoreActiveSlideCapture();
+      expect(findById(body, '__od_export_active_slide_capture')).toBeNull();
+      expect(body.children[0]).toBe(slide);
+      expect(slide.children[0]).toBe(canvas);
+      expect(slide.style.getPropertyValue('opacity')).toBe('1');
+      expect(slide.style.getPropertyPriority('opacity')).toBe('');
     } finally {
       Object.assign(globalThis, { document: previousDocument });
     }
-
-    // Transparent slides otherwise paint twice: the translated source stays
-    // visible underneath the clone restacked at (0, 0), producing the exact
-    // offset title/body overlap seen in PDF and image exports.
-    expect(slide.style.getPropertyValue('opacity')).toBe('0');
-    expect(slide.style.getPropertyPriority('opacity')).toBe('important');
-
-    const layer = findById(body, '__od_export_active_slide_capture');
-    const offset = layer?.children[0];
-    const clone = offset?.children[0];
-    expect(clone?.style.getPropertyValue('opacity')).toBe('1');
-    expect(clone?.style.getPropertyPriority('opacity')).toBe('important');
-    // Align from the clone's live rect. Reusing the source rect would apply the
-    // translated parent's offset a second time and move this clone off-screen.
-    expect(offset?.style.getPropertyValue('transform')).toBe('translate(0px, 0px)');
-    expect(offset?.style.getPropertyPriority('transform')).toBe('important');
   });
 });
 

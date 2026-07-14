@@ -363,7 +363,7 @@ async function measureSlideStage(window: BrowserWindow): Promise<Stage> {
 // matters for long decks where the loop dominates.
 async function showDeckSlide(window: BrowserWindow, i: number, stage: Stage): Promise<void> {
   const rect = (await window.webContents.executeJavaScript(
-    `(${showSlide.toString()})(${JSON.stringify(SLIDE_SELECTOR)}, ${i})`,
+    `(() => { const restoreActiveSlideCapture = ${restoreActiveSlideCapture.toString()}; return (${showSlide.toString()})(${JSON.stringify(SLIDE_SELECTOR)}, ${i}); })()`,
     true,
   )) as { x: number; y: number; w: number; h: number } | null;
   // If the active slide did not land in the top-left capture viewport (a
@@ -377,7 +377,7 @@ async function showDeckSlide(window: BrowserWindow, i: number, stage: Stage): Pr
     rect.h >= stage.h * 0.5;
   if (!onStage) {
     await window.webContents.executeJavaScript(
-      `(() => { const activeSlideCaptureOffsetTransform = ${activeSlideCaptureOffsetTransform.toString()}; return (${restackActiveSlide.toString()})(${JSON.stringify(SLIDE_SELECTOR)}, ${i}, ${stage.w}, ${stage.h}); })()`,
+      `(() => { const activeSlideCaptureOffsetTransform = ${activeSlideCaptureOffsetTransform.toString()}; const restoreActiveSlideCapture = ${restoreActiveSlideCapture.toString()}; return (${restackActiveSlide.toString()})(${JSON.stringify(SLIDE_SELECTOR)}, ${i}, ${stage.w}, ${stage.h}); })()`,
       true,
     );
     await nextFrames(window);
@@ -1289,10 +1289,33 @@ function positiveCssNumber(value: unknown): number | null {
   return Number.isFinite(n) && n > 1 ? n : null;
 }
 
+// Restores the live slide moved into the capture layer before the next slide is
+// selected. The temporary style overrides are capture-only and must not leak
+// into later selector/index passes.
+export function restoreActiveSlideCapture(): void {
+  const layer = document.getElementById("__od_export_active_slide_capture") as
+    | (HTMLElement & {
+        __odSourceStyles?: Array<{ name: string; priority: string; value: string }>;
+      })
+    | null;
+  if (!layer) return;
+  const placeholder = document.getElementById("__od_export_active_slide_placeholder");
+  const liveSlide = layer.firstElementChild?.firstElementChild as HTMLElement | null;
+  if (placeholder?.parentNode && liveSlide) {
+    placeholder.parentNode.moveBefore(liveSlide, placeholder);
+    placeholder.remove();
+    for (const { name, priority, value } of layer.__odSourceStyles ?? []) {
+      if (value) liveSlide.style.setProperty(name, value, priority);
+      else liveSlide.style.removeProperty(name);
+    }
+  }
+  layer.remove();
+}
+
 // Returns a Promise that resolves after the style change has settled for two
 // animation frames, so the caller can show + wait in a single round trip.
 function showSlide(slideSelector: string, index: number): Promise<{ x: number; y: number; w: number; h: number } | null> {
-  document.getElementById("__od_export_active_slide_capture")?.remove();
+  restoreActiveSlideCapture();
   const slides = Array.prototype.slice
     .call(document.querySelectorAll(slideSelector))
     .filter((el) => !(el as HTMLElement).closest(".mini-slide, .overview, .notes-overlay, .thumb"));
@@ -1327,15 +1350,16 @@ function showSlide(slideSelector: string, index: number): Promise<{ x: number; y
   });
 }
 
-// Serialized into the page: overlays a capture-only clone of the active slide in
-// the top-left viewport for decks that position the real slide elsewhere
-// (translated carousel strip). The source slide itself must stop painting while
-// the clone is present, or every child renders twice. Align from the CLONE's live
-// rect after insertion: cloning outside a translated parent drops that parent's
-// transform, so reusing the source rect would apply the lost offset a second time
-// and move every off-stage clone out of the capture viewport.
+// Serialized into the page: temporarily moves the live active slide into a
+// capture-only layer for decks that position it outside the viewport (translated
+// carousel strip). A state-preserving DOM move rather than cloning keeps
+// canvas/WebGL bitmaps, media frames, iframe browsing state, and other runtime
+// content continuously connected in the only paintable subtree. Align from its
+// live rect after insertion: moving outside a translated parent drops that
+// parent's transform, so reusing the source rect would apply the lost offset a
+// second time.
 export function restackActiveSlide(slideSelector: string, index: number, w: number, h: number): void {
-  document.getElementById("__od_export_active_slide_capture")?.remove();
+  restoreActiveSlideCapture();
   const slides = Array.prototype.slice
     .call(document.querySelectorAll(slideSelector))
     .filter((el) => !(el as HTMLElement).closest(".mini-slide, .overview, .notes-overlay, .thumb"));
@@ -1367,16 +1391,24 @@ export function restackActiveSlide(slideSelector: string, index: number, w: numb
     "transform-origin:top left",
   ].join("!important;") + "!important";
 
-  const clone = el.cloneNode(true) as HTMLElement;
-  clone.style.setProperty("opacity", "1", "important");
-  clone.style.setProperty("visibility", "visible", "important");
-  clone.style.setProperty("pointer-events", "none", "important");
-  clone.style.setProperty("z-index", "2147483647", "important");
-  el.style.setProperty("opacity", "0", "important");
-  el.style.setProperty("visibility", "hidden", "important");
-  offset.appendChild(clone);
+  const sourceStyleNames = ["opacity", "visibility", "pointer-events", "z-index"];
+  (layer as typeof layer & {
+    __odSourceStyles: Array<{ name: string; priority: string; value: string }>;
+  }).__odSourceStyles = sourceStyleNames.map((name) => ({
+    name,
+    priority: el.style.getPropertyPriority(name),
+    value: el.style.getPropertyValue(name),
+  }));
+  const placeholder = document.createElement("template");
+  placeholder.id = "__od_export_active_slide_placeholder";
+  el.before(placeholder);
   layer.appendChild(offset);
   document.body.appendChild(layer);
-  const cloneRect = clone.getBoundingClientRect();
-  offset.style.setProperty("transform", activeSlideCaptureOffsetTransform(cloneRect), "important");
+  el.style.setProperty("opacity", "1", "important");
+  el.style.setProperty("visibility", "visible", "important");
+  el.style.setProperty("pointer-events", "none", "important");
+  el.style.setProperty("z-index", "2147483647", "important");
+  offset.moveBefore(el, null);
+  const liveRect = el.getBoundingClientRect();
+  offset.style.setProperty("transform", activeSlideCaptureOffsetTransform(liveRect), "important");
 }
