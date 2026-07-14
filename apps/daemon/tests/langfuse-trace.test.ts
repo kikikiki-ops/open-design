@@ -192,7 +192,6 @@ describe('readTelemetrySinkConfig', () => {
       retries: 1,
       profile: 'prod',
       authSource: 'env',
-      clearLoginOnAuthFailure: false,
     });
   });
 
@@ -215,7 +214,6 @@ describe('readTelemetrySinkConfig', () => {
       retries: 1,
       profile: 'test',
       authSource: 'env',
-      clearLoginOnAuthFailure: false,
     });
   });
 
@@ -396,7 +394,6 @@ describe('canDeliverRunFeedback', () => {
     retries: 1,
     profile: 'prod',
     authSource: 'env',
-    clearLoginOnAuthFailure: false,
   };
   const relaySink: TelemetrySinkConfig = {
     kind: 'relay',
@@ -577,7 +574,6 @@ describe('deriveLangfuseDeliveryState', () => {
       retries: 1,
       profile: 'prod',
       authSource: 'env',
-      clearLoginOnAuthFailure: false,
     };
     expect(
       deriveLangfuseDeliveryState(
@@ -602,7 +598,6 @@ describe('deriveLangfuseDeliveryState', () => {
       retries: 1,
       profile: 'prod',
       authSource: 'env',
-      clearLoginOnAuthFailure: false,
     };
     expect(
       deriveLangfuseDeliveryState(
@@ -2730,7 +2725,6 @@ describe('reportRunCompleted', () => {
       retries: 0,
       profile: 'prod',
       authSource: 'env',
-      clearLoginOnAuthFailure: false,
       ...overrides,
     };
   }
@@ -3036,10 +3030,6 @@ describe('reportRunCompleted', () => {
     process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL =
       'https://telemetry.open-design.ai/api/langfuse';
     process.env.OPEN_DESIGN_VELA_TELEMETRY = '0';
-    const velaModule = await import('../src/integrations/vela.js');
-    const forgetSpy = vi
-      .spyOn(velaModule, 'forgetVelaLogin')
-      .mockImplementation(() => undefined);
     try {
       const fetchSpy = vi
         .fn()
@@ -3067,10 +3057,7 @@ describe('reportRunCompleted', () => {
       );
       const relayHeaders = fetchSpy.mock.calls[1]![1].headers as Record<string, string>;
       expect(relayHeaders['X-Open-Design-Telemetry']).toBe('langfuse-ingestion-v1');
-      // Explicit sinks must not clear an unrelated local login.
-      expect(forgetSpy).not.toHaveBeenCalled();
     } finally {
-      forgetSpy.mockRestore();
       if (prevRelay === undefined) delete process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL;
       else process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL = prevRelay;
       if (prevVela === undefined) delete process.env.OPEN_DESIGN_VELA_TELEMETRY;
@@ -3079,10 +3066,9 @@ describe('reportRunCompleted', () => {
   });
 
   /**
-   * File-backed login cleanup on Vela 401/403: only a matching profile/key
-   * may be cleared. These cases resolve the live sink via
-   * `readTelemetrySinkConfig()` against a seeded `~/.amr` profile (not an
-   * explicit env-backed override), so `clearLoginOnAuthFailure` is true.
+   * File-backed Vela sink fixtures: resolve the live sink via
+   * `readTelemetrySinkConfig()` against a seeded `~/.amr` profile.
+   * Telemetry 401/403 must fall back anonymously without mutating login.
    */
   async function withSeededAmrHome<T>(
     profiles: Record<string, Record<string, unknown>>,
@@ -3146,7 +3132,7 @@ describe('reportRunCompleted', () => {
   }
 
   it.each([401, 403] as const)(
-    'clears matching file-backed login and falls back anonymously on Vela %s',
+    'preserves file-backed login and falls back anonymously on Vela %s',
     async (status) => {
       await withSeededAmrHome(
         {
@@ -3170,7 +3156,6 @@ describe('reportRunCompleted', () => {
             authSource: 'file',
             profile: 'local',
             controlKey: 'ck_local_expired',
-            clearLoginOnAuthFailure: true,
           });
 
           const fetchSpy = vi
@@ -3209,10 +3194,13 @@ describe('reportRunCompleted', () => {
           );
 
           const profiles = readProfiles();
-          // Matching profile/key is cleared; other profiles stay intact.
-          expect(profiles.local?.controlKey).toBeUndefined();
-          expect(profiles.local?.runtimeKey).toBeUndefined();
-          expect(profiles.local?.user).toBeUndefined();
+          // Telemetry auth failure must not revoke product credentials.
+          expect(profiles.local?.controlKey).toBe('ck_local_expired');
+          expect(profiles.local?.runtimeKey).toBe('rt_local');
+          expect(profiles.local?.user).toEqual({
+            id: 'u-local',
+            email: 'local@example.com',
+          });
           expect(profiles.local?.apiUrl).toBe('https://amr-api.example.com');
           expect(profiles.prod?.controlKey).toBe('ck_prod_keep');
           expect(profiles.prod?.runtimeKey).toBe('rt_prod');
@@ -3220,121 +3208,6 @@ describe('reportRunCompleted', () => {
       );
     },
   );
-
-  it('does not clear file-backed login when the stored control key no longer matches', async () => {
-    await withSeededAmrHome(
-      {
-        local: {
-          controlKey: 'ck_request_key',
-          runtimeKey: 'rt_local',
-          user: { id: 'u-local', email: 'local@example.com' },
-        },
-      },
-      async ({ readProfiles, writeProfiles }) => {
-        process.env.OPEN_DESIGN_AMR_PROFILE = 'local';
-        const sink = readTelemetrySinkConfig(process.env);
-        expect(sink).toMatchObject({
-          kind: 'vela',
-          authSource: 'file',
-          profile: 'local',
-          controlKey: 'ck_request_key',
-          clearLoginOnAuthFailure: true,
-        });
-
-        // Simulate account switch after the sink was resolved: live file key
-        // no longer matches the in-flight request key.
-        writeProfiles({
-          local: {
-            controlKey: 'ck_switched_account',
-            runtimeKey: 'rt_switched',
-            user: { id: 'u-switched', email: 'switched@example.com' },
-          },
-        });
-
-        const fetchSpy = vi
-          .fn()
-          .mockResolvedValueOnce(
-            new Response(JSON.stringify({ error: 'unauthenticated' }), { status: 401 }),
-          )
-          .mockResolvedValueOnce(new Response('{}', { status: 200 }));
-
-        const result = await reportRunCompleted(
-          makeCtx({
-            prefs: { metrics: true, content: true, artifactManifest: false },
-          }),
-          {
-            config: sink!,
-            fetchImpl: fetchSpy as any,
-            configuredEnv: { OPEN_DESIGN_AMR_PROFILE: 'local' },
-          },
-        );
-
-        expect(result.langfuse_delivery_status).toBe('accepted');
-        const profiles = readProfiles();
-        expect(profiles.local?.controlKey).toBe('ck_switched_account');
-        expect(profiles.local?.runtimeKey).toBe('rt_switched');
-        expect(profiles.local?.user).toEqual({
-          id: 'u-switched',
-          email: 'switched@example.com',
-        });
-      },
-    );
-  });
-
-  it('does not clear a different AMR profile on Vela auth failure', async () => {
-    await withSeededAmrHome(
-      {
-        local: {
-          controlKey: 'ck_local',
-          runtimeKey: 'rt_local',
-          user: { id: 'u-local', email: 'local@example.com' },
-        },
-        prod: {
-          controlKey: 'ck_prod',
-          runtimeKey: 'rt_prod',
-          user: { id: 'u-prod', email: 'prod@example.com' },
-        },
-      },
-      async ({ readProfiles }) => {
-        process.env.OPEN_DESIGN_AMR_PROFILE = 'local';
-        const sink = readTelemetrySinkConfig(process.env);
-        expect(sink).toMatchObject({
-          kind: 'vela',
-          authSource: 'file',
-          profile: 'local',
-          controlKey: 'ck_local',
-          clearLoginOnAuthFailure: true,
-        });
-
-        const fetchSpy = vi
-          .fn()
-          .mockResolvedValueOnce(
-            new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 }),
-          )
-          .mockResolvedValueOnce(new Response('{}', { status: 200 }));
-
-        // Live re-read uses the switched profile selection; the in-flight sink
-        // still targets `local`, so cleanup must not touch either profile.
-        const result = await reportRunCompleted(
-          makeCtx({
-            prefs: { metrics: true, content: true, artifactManifest: false },
-          }),
-          {
-            config: sink!,
-            fetchImpl: fetchSpy as any,
-            configuredEnv: { OPEN_DESIGN_AMR_PROFILE: 'prod' },
-          },
-        );
-
-        expect(result.langfuse_delivery_status).toBe('accepted');
-        const profiles = readProfiles();
-        expect(profiles.local?.controlKey).toBe('ck_local');
-        expect(profiles.local?.runtimeKey).toBe('rt_local');
-        expect(profiles.prod?.controlKey).toBe('ck_prod');
-        expect(profiles.prod?.runtimeKey).toBe('rt_prod');
-      },
-    );
-  });
 
   it('forces object-registration onto the anonymous relay even when Vela is configured', async () => {
     const prevRelay = process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL;
@@ -3799,7 +3672,6 @@ describe('reportRunFeedback', () => {
       retries: 0,
       profile: 'prod',
       authSource: 'env',
-      clearLoginOnAuthFailure: false,
     };
     await reportRunFeedback(
       makeFeedbackCtx({
@@ -3863,7 +3735,6 @@ describe('reportRunFeedback', () => {
       retries: 0,
       profile: 'prod',
       authSource: 'env',
-      clearLoginOnAuthFailure: false,
     };
     await reportRunFeedback(
       makeFeedbackCtx({
@@ -3887,7 +3758,6 @@ describe('reportRunFeedback', () => {
       retries: 0,
       profile: 'prod',
       authSource: 'env',
-      clearLoginOnAuthFailure: false,
     };
     await reportRunFeedback(
       makeFeedbackCtx({
@@ -4178,7 +4048,6 @@ describe('reportRunFeedback', () => {
       retries: 0,
       profile: 'prod',
       authSource: 'env',
-      clearLoginOnAuthFailure: false,
     };
     const fetchSpy = vi.fn().mockResolvedValue(new Response('{}', { status: 207 }));
 
@@ -4260,7 +4129,6 @@ describe('reportRunFeedback', () => {
       retries: 0,
       profile: 'prod',
       authSource: 'env',
-      clearLoginOnAuthFailure: false,
     };
     const acceptingIdentity = velaSinkIdentityFingerprint(
       'prod',

@@ -27,10 +27,7 @@
 import { createHash } from 'node:crypto';
 
 import type { TelemetryPrefs } from './app-config.js';
-import {
-  forgetVelaLogin,
-  readVelaControlApiContext,
-} from './integrations/vela.js';
+import { readVelaControlApiContext } from './integrations/vela.js';
 import {
   buildPromptStackFlatMetadata,
   promptStackWithoutContent,
@@ -478,16 +475,10 @@ export type TelemetrySinkConfig =
       controlKey: string;
       timeoutMs: number;
       retries: number;
-      /** AMR profile used to resolve this sink (for stale-auth cleanup). */
+      /** AMR profile used to resolve this sink. */
       profile: string;
       /** Whether the Control Key came from process/app env or ~/.amr config. */
       authSource: 'env' | 'file';
-      /**
-       * When true, a 401/403 may clear the matching local file login.
-       * Explicit test/config sinks leave this false so they cannot log out
-       * an unrelated real account.
-       */
-      clearLoginOnAuthFailure: boolean;
     }
   | AnonymousTelemetrySinkConfig;
 
@@ -930,9 +921,6 @@ function readVelaTelemetrySinkConfig(
     retries: readTelemetryRetries(env),
     profile: context.profile,
     authSource,
-    // Only file-backed logins can be cleared, and only when we resolved the
-    // live sink ourselves (not an explicit test/config override).
-    clearLoginOnAuthFailure: authSource === 'file',
   };
 }
 
@@ -2498,35 +2486,6 @@ function classifyFetchError(error: unknown): 'timeout' | 'network_error' {
   return 'network_error';
 }
 
-/**
- * Clear local login only when the failed request still matches the currently
- * stored file-backed Control Key for the same profile. Prevents a late 401
- * from account A from logging out account B after a switch.
- */
-function maybeForgetVelaLoginOnAuthFailure(
-  config: Extract<TelemetrySinkConfig, { kind: 'vela' }>,
-  env: NodeJS.ProcessEnv,
-  configuredEnv: Record<string, string>,
-): void {
-  if (!config.clearLoginOnAuthFailure) return;
-  if (config.authSource !== 'file') return;
-  try {
-    const current = readVelaControlApiContext(env, configuredEnv);
-    if (!current) return;
-    if (current.profile !== config.profile) return;
-    if (current.controlKey !== config.controlKey) return;
-    // Pass profile selection through env so forgetVelaLogin targets the same profile.
-    const profileEnv: NodeJS.ProcessEnv = {
-      ...env,
-      ...configuredEnv,
-      OPEN_DESIGN_AMR_PROFILE: config.profile,
-    };
-    forgetVelaLogin(profileEnv);
-  } catch {
-    // Best-effort cleanup only.
-  }
-}
-
 /** Convert a Langfuse ingestion batch into the vendor-neutral Vela envelope. */
 export function toVelaTelemetryEnvelope(
   batch: unknown[],
@@ -2595,7 +2554,6 @@ async function postVelaBatch(
   fetchImpl: typeof fetch,
   opts: {
     env?: NodeJS.ProcessEnv;
-    configuredEnv?: Record<string, string>;
     deliveryPurpose?: TelemetryDeliveryPurpose;
     reportTrigger?: TelemetryReportTrigger;
     /**
@@ -2606,7 +2564,6 @@ async function postVelaBatch(
   } = {},
 ): Promise<LangfuseDeliveryState> {
   const env = opts.env ?? process.env;
-  const configuredEnv = opts.configuredEnv ?? {};
   const deliveryPurpose = opts.deliveryPurpose ?? 'final';
   const reportTrigger = opts.reportTrigger ?? 'final_message';
   const allowAnonymousFallback = opts.allowAnonymousFallback !== false;
@@ -2672,13 +2629,14 @@ async function postVelaBatch(
       // Drain body without logging it (may contain reflected payload / PII).
       await response.text().catch(() => '');
 
-      // Auth failures: optionally clear matching local login and allow a
-      // one-shot anonymous fallback. Do not anonymous-fallback on 400 / 429 /
-      // 5xx / timeout — that can overwrite an authenticated identity if Vela
-      // already accepted the batch. Feedback for Vela-scoped bodies also
-      // suppresses anonymous fallback so scores cannot attach to raw ids.
+      // Auth failures: report drop reason and allow a one-shot anonymous
+      // fallback. Telemetry must not mutate AMR login state — login
+      // invalidation belongs to explicit Vela auth flows only.
+      // Do not anonymous-fallback on 400 / 429 / 5xx / timeout — that can
+      // overwrite an authenticated identity if Vela already accepted the
+      // batch. Feedback for Vela-scoped bodies also suppresses anonymous
+      // fallback so scores cannot attach to raw ids.
       if (response.status === 401 || response.status === 403) {
-        maybeForgetVelaLoginOnAuthFailure(config, env, configuredEnv);
         if (!allowAnonymousFallback) {
           console.warn(
             `[langfuse-trace] Vela telemetry auth failed status=${response.status}; anonymous fallback suppressed`,
@@ -2924,8 +2882,6 @@ function normalizeTelemetrySinkConfig(
         ...config,
         profile: config.profile || 'prod',
         authSource: config.authSource ?? 'env',
-        // Explicit sinks never clear an unrelated local login by default.
-        clearLoginOnAuthFailure: config.clearLoginOnAuthFailure ?? false,
       };
     }
     return config;
@@ -3084,7 +3040,6 @@ export async function reportRunCompleted(
   }
 
   const fetchImpl = opts.fetchImpl ?? globalThis.fetch;
-  const configuredEnv = opts.configuredEnv ?? {};
   const noteAcceptedFinalTrace = (state: LangfuseDeliveryState): LangfuseDeliveryState => {
     if (
       deliveryPurpose === 'final' &&
@@ -3134,7 +3089,6 @@ export async function reportRunCompleted(
     }
     return noteAcceptedFinalTrace(
       await postVelaBatch(config, batch, installationId, fetchImpl, {
-        configuredEnv,
         deliveryPurpose,
         reportTrigger,
       }),
@@ -3342,7 +3296,6 @@ export async function reportRunFeedback(
   }
 
   const fetchImpl = opts.fetchImpl ?? globalThis.fetch;
-  const configuredEnv = opts.configuredEnv ?? {};
   // When an accepted channel is sticky, never fall back to a different sink.
   const stickyChannel = requireChannel != null;
   if (config.kind === 'vela') {
@@ -3357,7 +3310,6 @@ export async function reportRunFeedback(
       return;
     }
     await postVelaBatch(config, batch, installationId, fetchImpl, {
-      configuredEnv,
       deliveryPurpose: opts.deliveryPurpose ?? 'final',
       // Keep scores on the accepted channel; never anonymous-overwrite sticky.
       allowAnonymousFallback: !stickyChannel,
