@@ -14,6 +14,7 @@ import {
   readAnonymousTelemetrySinkConfig,
   readLangfuseConfig,
   readTelemetrySinkConfig,
+  readTelemetrySinkConfigForChannel,
   rememberAcceptedFinalTraceBodyId,
   reportRunCompleted,
   reportRunFeedback,
@@ -281,6 +282,59 @@ describe('readTelemetrySinkConfig', () => {
       OPEN_DESIGN_TELEMETRY_RELAY_URL: 'https://telemetry.open-design.ai/api/langfuse',
     });
     expect(cfg).toMatchObject({ kind: 'relay' });
+  });
+});
+
+describe('readTelemetrySinkConfigForChannel', () => {
+  const bothSinksEnv = {
+    VELA_CONTROL_KEY: 'ck_test_key',
+    VELA_API_URL: 'https://amr-api.example.com',
+    OPEN_DESIGN_TELEMETRY_RELAY_URL: 'https://telemetry.open-design.ai/api/langfuse',
+    LANGFUSE_PUBLIC_KEY: 'pk',
+    LANGFUSE_SECRET_KEY: 'sk',
+  } as const;
+
+  it('returns the preferred sink when no sticky channel is set', () => {
+    expect(readTelemetrySinkConfigForChannel(null, bothSinksEnv)).toMatchObject({
+      kind: 'vela',
+    });
+  });
+
+  it('selects relay even when Vela is preferred globally', () => {
+    expect(readTelemetrySinkConfigForChannel('relay', bothSinksEnv)).toEqual({
+      kind: 'relay',
+      relayUrl: 'https://telemetry.open-design.ai/api/langfuse',
+      timeoutMs: 20_000,
+      retries: 1,
+    });
+  });
+
+  it('selects direct Langfuse even when relay is preferred anonymously', () => {
+    expect(readTelemetrySinkConfigForChannel('langfuse', bothSinksEnv)).toMatchObject({
+      kind: 'langfuse',
+      baseUrl: 'https://us.cloud.langfuse.com',
+    });
+  });
+
+  it('selects Vela when the sticky channel is Vela', () => {
+    expect(readTelemetrySinkConfigForChannel('vela', bothSinksEnv)).toMatchObject({
+      kind: 'vela',
+      controlKey: 'ck_test_key',
+    });
+  });
+
+  it('returns null when the sticky channel is unavailable', () => {
+    expect(
+      readTelemetrySinkConfigForChannel('relay', {
+        VELA_CONTROL_KEY: 'ck_test_key',
+      }),
+    ).toBeNull();
+    expect(
+      readTelemetrySinkConfigForChannel('langfuse', {
+        OPEN_DESIGN_TELEMETRY_RELAY_URL:
+          'https://telemetry.open-design.ai/api/langfuse',
+      }),
+    ).toBeNull();
   });
 });
 
@@ -3707,6 +3761,46 @@ describe('reportRunFeedback', () => {
       { config: velaConfig, fetchImpl: fetchSpy as any },
     );
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('posts relay-accepted feedback through relay when Vela is also configured', async () => {
+    const previous = {
+      VELA_CONTROL_KEY: process.env.VELA_CONTROL_KEY,
+      VELA_API_URL: process.env.VELA_API_URL,
+      OPEN_DESIGN_TELEMETRY_RELAY_URL: process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL,
+      LANGFUSE_PUBLIC_KEY: process.env.LANGFUSE_PUBLIC_KEY,
+      LANGFUSE_SECRET_KEY: process.env.LANGFUSE_SECRET_KEY,
+    };
+    process.env.VELA_CONTROL_KEY = 'ck_test_key';
+    process.env.VELA_API_URL = 'https://amr-api.example.com';
+    process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL =
+      'https://telemetry.open-design.ai/api/langfuse';
+    delete process.env.LANGFUSE_PUBLIC_KEY;
+    delete process.env.LANGFUSE_SECRET_KEY;
+    const fetchSpy = vi.fn().mockResolvedValue(new Response('{}', { status: 207 }));
+    try {
+      // No explicit config: env resolution would prefer Vela unless sticky.
+      await reportRunFeedback(
+        makeFeedbackCtx({
+          runId: 'run-relay-sticky-with-vela',
+          acceptedDeliveryChannel: 'relay',
+          reasonCodes: [],
+        }),
+        { fetchImpl: fetchSpy as any },
+      );
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(String(fetchSpy.mock.calls[0]![0])).toBe(
+        'https://telemetry.open-design.ai/api/langfuse',
+      );
+      expect(String(fetchSpy.mock.calls[0]![0])).not.toContain(
+        '/api/v1/open-design/telemetry',
+      );
+    } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
   });
 
   it('does not post feedback through a different Vela account than the accepting one', async () => {

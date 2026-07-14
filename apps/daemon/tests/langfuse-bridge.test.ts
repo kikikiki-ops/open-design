@@ -2163,13 +2163,15 @@ describe('langfuse-bridge.reportRunFeedbackFromDaemon', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('returns skipped_no_sink when relay-accepted feedback would ship through Vela', async () => {
+  it('returns skipped_no_sink when relay-accepted feedback has no relay endpoint left', async () => {
     await writeAppCfg({
       installationId: 'install-uuid-1',
       telemetry: { metrics: true, content: true },
     });
+    // Only Vela remains — sticky relay cannot fall forward onto Vela.
     process.env.VELA_CONTROL_KEY = 'ck_test_key';
     process.env.VELA_API_URL = 'https://amr-api.example.com';
+    delete process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL;
     const fetchSpy = vi.fn();
     const db = {
       prepare: (sql: string) => {
@@ -2202,6 +2204,57 @@ describe('langfuse-bridge.reportRunFeedbackFromDaemon', () => {
     });
     expect(outcome).toEqual({ status: 'skipped_no_sink' });
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('ships relay-accepted feedback through relay when Vela is also configured', async () => {
+    await writeAppCfg({
+      installationId: 'install-uuid-1',
+      telemetry: { metrics: true, content: true },
+    });
+    process.env.VELA_CONTROL_KEY = 'ck_test_key';
+    process.env.VELA_API_URL = 'https://amr-api.example.com';
+    process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL =
+      'https://telemetry.open-design.ai/api/langfuse';
+    const fetchSpy = vi.fn().mockResolvedValue(new Response('{}', { status: 207 }));
+    const db = {
+      prepare: (sql: string) => {
+        if (
+          sql.includes('telemetry_accepted_body_id') ||
+          sql.includes('run_telemetry_accepted_anchors')
+        ) {
+          return {
+            get: () => ({
+              runStatus: 'succeeded',
+              telemetryFinalizedAt: Date.now(),
+              acceptedTraceBodyId: 'run-relay-sticky',
+              acceptedReportTrigger: 'final_message',
+              acceptedDeliveryChannel: 'relay',
+            }),
+          };
+        }
+        return { get: () => undefined, run: () => ({ changes: 0 }), all: () => [] };
+      },
+    };
+    const outcome = await reportRunFeedbackFromDaemon({
+      dataDir,
+      runId: 'run-relay-sticky',
+      rating: 'positive',
+      reasonCodes: [],
+      hasCustomReason: false,
+      customReason: '',
+      db,
+      fetchImpl: fetchSpy as any,
+    });
+    expect(outcome).toEqual({ status: 'accepted' });
+    await vi.waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalled();
+    });
+    expect(String(fetchSpy.mock.calls[0]![0])).toBe(
+      'https://telemetry.open-design.ai/api/langfuse',
+    );
+    expect(String(fetchSpy.mock.calls[0]![0])).not.toContain(
+      '/api/v1/open-design/telemetry',
+    );
   });
 
   it('replays the latest mid-window re-rating onto final_message after terminal_fallback', async () => {

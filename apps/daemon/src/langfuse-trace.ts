@@ -864,6 +864,41 @@ export function readTelemetrySinkConfig(
 }
 
 /**
+ * Resolve the sink for a sticky accepted delivery channel.
+ *
+ * Feedback scores must attach to the same transport that accepted the final
+ * body. Preferring the global Vela → relay → langfuse order would skip a still-
+ * available lower-priority channel when a higher one appears later (login,
+ * env change) and fail sticky delivery with `skipped_no_sink`.
+ *
+ * When `channel` is null/undefined, falls back to {@link readTelemetrySinkConfig}.
+ */
+export function readTelemetrySinkConfigForChannel(
+  channel: TelemetryDeliveryChannel | null | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+  configuredEnv: Record<string, string> = {},
+): TelemetrySinkConfig | null {
+  if (channel === 'vela') {
+    return readVelaTelemetrySinkConfig(env, configuredEnv);
+  }
+  if (channel === 'relay') {
+    const relayUrl = env.OPEN_DESIGN_TELEMETRY_RELAY_URL?.trim();
+    if (!relayUrl) return null;
+    return {
+      kind: 'relay',
+      relayUrl: relayUrl.replace(/\/+$/, ''),
+      timeoutMs: readTelemetryTimeoutMs(env),
+      retries: readTelemetryRetries(env),
+    };
+  }
+  if (channel === 'langfuse') {
+    const config = readLangfuseConfig(env);
+    return config == null ? null : { kind: 'langfuse', ...config };
+  }
+  return readTelemetrySinkConfig(env, configuredEnv);
+}
+
+/**
  * Whether feedback telemetry can actually be delivered for this sink +
  * installation. Shared by the daemon preflight (`accepted` vs
  * `skipped_no_sink`) and `reportRunFeedback` so both use the same rule:
@@ -889,18 +924,21 @@ export function canDeliverRunFeedback(
   const requireChannel = opts.requireChannel ?? null;
   if (requireChannel) {
     if (sink.kind !== requireChannel) return false;
-    // Narrow on sink.kind (not requireChannel): TS does not refine a union
-    // through equality with a separate variable of the same string-literal union.
-    if (sink.kind === 'vela') {
-      if (!installationId?.trim()) return false;
-      const requiredIdentity =
-        typeof opts.requireVelaIdentity === 'string'
-          ? opts.requireVelaIdentity.trim()
-          : '';
-      if (requiredIdentity) {
-        const current = velaSinkIdentityFingerprint(sink.profile, sink.controlKey);
-        if (!current || current !== requiredIdentity) return false;
-      }
+    // Explicit early return so TS narrows to the Vela variant before we read
+    // profile/controlKey (requireChannel equality alone does not narrow sink).
+    if (sink.kind !== 'vela') return true;
+    const velaSink: Extract<TelemetrySinkConfig, { kind: 'vela' }> = sink;
+    if (!installationId?.trim()) return false;
+    const requiredIdentity =
+      typeof opts.requireVelaIdentity === 'string'
+        ? opts.requireVelaIdentity.trim()
+        : '';
+    if (requiredIdentity) {
+      const current = velaSinkIdentityFingerprint(
+        velaSink.profile,
+        velaSink.controlKey,
+      );
+      if (!current || current !== requiredIdentity) return false;
     }
     return true;
   }
@@ -2807,9 +2845,16 @@ function normalizeTelemetrySinkConfig(
 
 function resolveReportConfig(
   opts: ReportRunOpts,
+  stickyChannel: TelemetryDeliveryChannel | null = null,
 ): TelemetrySinkConfig | null {
   if (opts.config === undefined) {
-    return readTelemetrySinkConfig(process.env, opts.configuredEnv ?? {});
+    // Honor sticky accepted channel so feedback does not jump to a higher-
+    // priority sink that appeared after the final body was accepted.
+    return readTelemetrySinkConfigForChannel(
+      stickyChannel,
+      process.env,
+      opts.configuredEnv ?? {},
+    );
   }
   if (opts.config == null) return null;
   return normalizeTelemetrySinkConfig(opts.config);
@@ -3124,9 +3169,9 @@ export async function reportRunFeedback(
   if (ctx.prefs.metrics !== true) return;
   if (ctx.prefs.content !== true) return;
 
-  const config = resolveReportConfig(opts);
   // Sticky exact channel: once a final body was accepted on relay/langfuse/vela,
   // feedback must stay on that same transport (body id namespaces diverge).
+  // Resolve the channel first so sink selection honors it over global priority.
   const requireChannel: TelemetryDeliveryChannel | null =
     ctx.acceptedDeliveryChannel === 'vela' ||
     ctx.acceptedDeliveryChannel === 'relay' ||
@@ -3140,6 +3185,7 @@ export async function reportRunFeedback(
           ? ctx.acceptedVelaIdentity.trim()
           : getAcceptedFinalVelaIdentity(ctx.runId))
       : null;
+  const config = resolveReportConfig(opts, requireChannel);
   // Same eligibility as reportRunFeedbackFromDaemon preflight: exact channel
   // match when an accepted anchor exists; Vela also needs installationId +
   // matching accepting-account fingerprint when known.

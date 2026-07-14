@@ -24,7 +24,7 @@ import {
 import {
   canDeliverRunFeedback,
   deriveLangfuseDeliveryState,
-  readTelemetrySinkConfig,
+  readTelemetrySinkConfigForChannel,
   reportRunCompleted,
   reportRunFeedback,
   resolveFeedbackTraceId,
@@ -1240,8 +1240,9 @@ export async function reportRunFeedbackFromDaemon(
   // configured to ship the score to. Share eligibility with reportRunFeedback:
   // a Vela sink still needs installationId (or an anonymous fallback) unless
   // the accepted final body was Vela-scoped (anonymous must not misattach).
+  // Load the accepted-channel anchor first so sink selection sticks to that
+  // transport instead of the global Vela → relay → langfuse preference.
   const configuredEnv = agentCliEnvForAgent(cfg.agentCliEnv, 'amr');
-  const sink = readTelemetrySinkConfig(process.env, configuredEnv);
   const installationId = cfg.installationId ?? null;
   const assistantMessageId =
     opts.scoreMetadata &&
@@ -1289,6 +1290,11 @@ export async function reportRunFeedbackFromDaemon(
     acceptedDeliveryChannel === 'langfuse'
       ? acceptedDeliveryChannel
       : null;
+  const sink = readTelemetrySinkConfigForChannel(
+    requireChannel,
+    process.env,
+    configuredEnv,
+  );
   if (
     !canDeliverRunFeedback(sink, installationId, process.env, {
       requireChannel,
