@@ -2080,7 +2080,7 @@ export function HomeView({
         demoScenario={demoScenario}
       />
 
-      {demoScenario === 'onboarding-new' ? null : <RecentProjectsStrip
+      <RecentProjectsStrip
         projects={demoPresetProjects}
         designSystems={designSystems}
         promptTemplates={promptTemplates}
@@ -2123,7 +2123,7 @@ export function HomeView({
         }}
         {...(onDeleteProject ? { onDelete: onDeleteProject } : {})}
         {...(onRenameProject ? { onRename: onRenameProject } : {})}
-      />}
+      />
 
       {/* Community gallery now lives in the left-sidebar "Community" entry
           (PluginsView → PluginsHomeSection), so it is no longer embedded on
