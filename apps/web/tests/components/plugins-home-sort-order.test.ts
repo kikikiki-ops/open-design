@@ -137,6 +137,26 @@ describe('sortByNewest', () => {
     ]);
   });
 
+  it('preserves the incoming appeal order inside a same-publishedAt batch despite differing local timestamps', () => {
+    // One catalog release stamps many templates with the same
+    // publishedAt (the largest current batch is 322 manifests). A fresh
+    // install then seeds those records milliseconds apart in folder-walk
+    // order — local updatedAt/installedAt carry no publication signal
+    // inside the batch, so they must not reshuffle it. The incoming
+    // visual-appeal ranking is the shipped within-batch order.
+    const publishedAt = '2026-05-12T07:18:16Z';
+    const records = [
+      fixture({ id: 'appeal-first', updatedAt: 5_000, installedAt: 5_000, publishedAt }),
+      fixture({ id: 'appeal-second', updatedAt: 9_000, installedAt: 9_000, publishedAt }),
+      fixture({ id: 'appeal-third', updatedAt: 7_000, installedAt: 7_000, publishedAt }),
+    ];
+    expect(sortByNewest(records).map((r) => r.id)).toEqual([
+      'appeal-first',
+      'appeal-second',
+      'appeal-third',
+    ]);
+  });
+
   it('falls back to updatedAt for records without a parseable publishedAt', () => {
     // A user-installed plugin has no publication date; its local install
     // recency is its freshness. An invalid date string must not be

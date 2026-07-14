@@ -64,22 +64,35 @@ function publishedAtMs(record: InstalledPluginRecord): number | null {
 // Newest-first ordering. Freshness is the manifest publication date when
 // the plugin ships one, else `updatedAt` (which moves on
 // reinstall/upgrade — the right signal for user-installed plugins that
-// have no catalog date). `updatedAt` then `installedAt` break ties for
-// records published or written in the same batch. The sort is stable, so
-// fully tied records (e.g. one catalog PR landing several templates in a
-// single commit) keep their incoming visual-appeal order instead of
-// degrading to raw daemon order.
+// have no catalog date).
+//
+// Ties: when BOTH records ship the same usable `publishedAt` (one catalog
+// release stamps whole batches — hundreds of manifests — with a single
+// date), local `updatedAt`/`installedAt` carry no publication signal: a
+// fresh install writes them milliseconds apart in folder-walk order, so
+// consulting them would reshuffle every batch per machine (#1457). The
+// incoming visual-appeal ranking is the shipped within-batch order, so
+// same-publication records keep their incoming position. Local
+// timestamps break ties only when at least one side has no usable
+// `publishedAt`, where local write recency is the best signal left.
 export function sortByNewest<T extends InstalledPluginRecord>(
   records: readonly T[],
 ): T[] {
-  const annotated = records.map((record, idx) => ({
-    record,
-    idx,
-    freshness: publishedAtMs(record) ?? record.updatedAt,
-  }));
+  const annotated = records.map((record, idx) => {
+    const published = publishedAtMs(record);
+    return {
+      record,
+      idx,
+      published,
+      freshness: published ?? record.updatedAt,
+    };
+  });
   annotated.sort((a, b) => {
     if (b.freshness !== a.freshness) {
       return b.freshness - a.freshness;
+    }
+    if (a.published !== null && b.published !== null) {
+      return a.idx - b.idx;
     }
     if (b.record.updatedAt !== a.record.updatedAt) {
       return b.record.updatedAt - a.record.updatedAt;
