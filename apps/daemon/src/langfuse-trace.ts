@@ -1,11 +1,13 @@
 // Langfuse trace forwarding for completed agent runs.
 //
 // This module is intentionally dependency-free (no `langfuse` SDK). It builds
-// Langfuse ingestion batches for completed runs and sends them either to the
-// official Open Design telemetry relay or, for local smoke tests, directly to
-// Langfuse. Without OPEN_DESIGN_TELEMETRY_RELAY_URL or LANGFUSE_PUBLIC_KEY /
-// LANGFUSE_SECRET_KEY in the env, every entry point becomes a no-op so that
-// dev runs and forks of this open-source repo do not accidentally report.
+// Langfuse ingestion batches for completed runs and sends them either through
+// the Vela authenticated telemetry entry (when a Control Key is present), the
+// official Open Design telemetry relay (anonymous installation identity), or,
+// for local smoke tests, directly to Langfuse. Without a Vela Control Key,
+// OPEN_DESIGN_TELEMETRY_RELAY_URL, or LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY
+// in the env, every entry point becomes a no-op so that dev runs and forks of
+// this open-source repo do not accidentally report.
 //
 // Privacy gates are layered: `prefs.metrics` is the master switch, and
 // `prefs.content` is required for Langfuse traces because this sink is used
@@ -14,11 +16,21 @@
 // content are both enabled, Langfuse receives the trace and associated object
 // references. If either is off, no network call is made.
 //
+// Identity trust boundary:
+// - daemon submits installationId + redacted batch only
+// - Vela server injects app_user_id / email from Control Key auth
+// - anonymous path keeps userId = installationId and never claims app identity
+//
 // See: specs/change/20260507-langfuse-telemetry/spec.md
+// See: docs/LANGFUSE_VELA_ACCOUNT_INTEGRATION_PLAN.md (open-design-evals)
 
-import { randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 
 import type { TelemetryPrefs } from './app-config.js';
+import {
+  forgetVelaLogin,
+  readVelaControlApiContext,
+} from './integrations/vela.js';
 import {
   buildPromptStackFlatMetadata,
   promptStackWithoutContent,
@@ -74,6 +86,12 @@ export type LangfuseDropReason =
   | 'relay_5xx'
   | 'langfuse_4xx'
   | 'langfuse_5xx'
+  | 'vela_400'
+  | 'vela_401'
+  | 'vela_403'
+  | 'vela_413'
+  | 'vela_429'
+  | 'vela_5xx'
   | 'network_error';
 
 export interface LangfuseDeliveryState {
@@ -82,7 +100,7 @@ export interface LangfuseDeliveryState {
   langfuse_drop_reason?: LangfuseDropReason;
 }
 
-export type TelemetrySinkConfig =
+export type AnonymousTelemetrySinkConfig =
   | {
       kind: 'relay';
       relayUrl: string;
@@ -92,6 +110,56 @@ export type TelemetrySinkConfig =
   | ({
       kind: 'langfuse';
     } & LangfuseConfig);
+
+export type TelemetryDeliveryPurpose = 'object-registration' | 'final';
+
+export type TelemetrySinkConfig =
+  | {
+      kind: 'vela';
+      apiUrl: string;
+      controlKey: string;
+      timeoutMs: number;
+      retries: number;
+      /** AMR profile used to resolve this sink (for stale-auth cleanup). */
+      profile: string;
+      /** Whether the Control Key came from process/app env or ~/.amr config. */
+      authSource: 'env' | 'file';
+      /**
+       * When true, a 401/403 may clear the matching local file login.
+       * Explicit test/config sinks leave this false so they cannot log out
+       * an unrelated real account.
+       */
+      clearLoginOnAuthFailure: boolean;
+    }
+  | AnonymousTelemetrySinkConfig;
+
+const LANGFUSE_TYPE_TO_ENVELOPE_KIND = {
+  'trace-create': 'trace',
+  'span-create': 'span',
+  'generation-create': 'generation',
+  'event-create': 'event',
+  'score-create': 'score',
+} as const;
+
+type LangfuseIngestionType = keyof typeof LANGFUSE_TYPE_TO_ENVELOPE_KIND;
+
+interface LangfuseIngestionEvent {
+  id: string;
+  type: LangfuseIngestionType;
+  timestamp: string;
+  body: Record<string, unknown>;
+}
+
+export interface VelaTelemetryEnvelope {
+  version: 1;
+  installationId: string;
+  events: Array<{
+    id: string;
+    kind: (typeof LANGFUSE_TYPE_TO_ENVELOPE_KIND)[LangfuseIngestionType];
+    timestamp: string;
+    data: Record<string, unknown>;
+  }>;
+}
 
 export interface RunSummary {
   runId: string;
@@ -312,6 +380,19 @@ export interface ReportContext {
 export interface ReportRunOpts {
   config?: TelemetrySinkConfig | LangfuseConfig | null;
   fetchImpl?: typeof fetch;
+  /**
+   * Distinguishes the pre-upload object-scope registration pass from the
+   * final delivery. Registration keeps original run IDs on the anonymous
+   * relay (object authority is keyed by installation + original runId) and
+   * uses distinct stable ingestion event IDs so the final batch is not
+   * deduped.
+   */
+  deliveryPurpose?: TelemetryDeliveryPurpose;
+  /**
+   * App-config AMR env (`agentCliEnv.amr`), e.g. OPEN_DESIGN_AMR_PROFILE /
+   * VELA_API_URL. Merged into Vela Control Key resolution.
+   */
+  configuredEnv?: Record<string, string>;
 }
 
 /**
@@ -361,31 +442,91 @@ export function readLangfuseConfig(
   };
 }
 
+function isVelaTelemetryEnabled(env: NodeJS.ProcessEnv): boolean {
+  const raw = env.OPEN_DESIGN_VELA_TELEMETRY?.trim().toLowerCase();
+  if (!raw) return true;
+  return raw !== '0' && raw !== 'false' && raw !== 'off' && raw !== 'no';
+}
+
+function readTelemetryTimeoutMs(env: NodeJS.ProcessEnv): number {
+  return parsePositiveInt(
+    env.OPEN_DESIGN_TELEMETRY_TIMEOUT_MS ?? env.LANGFUSE_TIMEOUT_MS,
+    DEFAULT_FETCH_TIMEOUT_MS,
+  );
+}
+
+function readTelemetryRetries(env: NodeJS.ProcessEnv): number {
+  return parseNonNegativeInt(
+    env.OPEN_DESIGN_TELEMETRY_RETRIES ?? env.LANGFUSE_RETRIES,
+    DEFAULT_FETCH_RETRIES,
+  );
+}
+
 /**
- * Resolve telemetry delivery in release-safe order: hosted relay first,
- * direct Langfuse credentials second for local smoke tests, disabled last.
+ * Anonymous sinks only: hosted relay first, direct Langfuse second.
+ * Used when no Vela Control Key is available, and as the 401/403 fallback.
  */
-export function readTelemetrySinkConfig(
+export function readAnonymousTelemetrySinkConfig(
   env: NodeJS.ProcessEnv = process.env,
-): TelemetrySinkConfig | null {
+): AnonymousTelemetrySinkConfig | null {
   const relayUrl = env.OPEN_DESIGN_TELEMETRY_RELAY_URL?.trim();
   if (relayUrl) {
     return {
       kind: 'relay',
       relayUrl: relayUrl.replace(/\/+$/, ''),
-      timeoutMs: parsePositiveInt(
-        env.OPEN_DESIGN_TELEMETRY_TIMEOUT_MS ?? env.LANGFUSE_TIMEOUT_MS,
-        DEFAULT_FETCH_TIMEOUT_MS,
-      ),
-      retries: parseNonNegativeInt(
-        env.OPEN_DESIGN_TELEMETRY_RETRIES ?? env.LANGFUSE_RETRIES,
-        DEFAULT_FETCH_RETRIES,
-      ),
+      timeoutMs: readTelemetryTimeoutMs(env),
+      retries: readTelemetryRetries(env),
     };
   }
 
   const config = readLangfuseConfig(env);
   return config == null ? null : { kind: 'langfuse', ...config };
+}
+
+function readVelaTelemetrySinkConfig(
+  env: NodeJS.ProcessEnv = process.env,
+  configuredEnv: Record<string, string> = {},
+): Extract<TelemetrySinkConfig, { kind: 'vela' }> | null {
+  if (!isVelaTelemetryEnabled(env)) return null;
+  const mergedForAuthSource = { ...env, ...configuredEnv };
+  const envControlKey = mergedForAuthSource.VELA_CONTROL_KEY?.trim() ?? '';
+  const authSource: 'env' | 'file' = envControlKey ? 'env' : 'file';
+  const context = readVelaControlApiContext(env, configuredEnv);
+  const controlKey = context?.controlKey?.trim() ?? '';
+  if (!controlKey) return null;
+  const apiUrl = (context?.apiUrl?.trim() || 'https://amr-api.open-design.ai').replace(
+    /\/+$/,
+    '',
+  );
+  return {
+    kind: 'vela',
+    apiUrl,
+    controlKey,
+    timeoutMs: readTelemetryTimeoutMs(env),
+    retries: readTelemetryRetries(env),
+    profile: context.profile,
+    authSource,
+    // Only file-backed logins can be cleared, and only when we resolved the
+    // live sink ourselves (not an explicit test/config override).
+    clearLoginOnAuthFailure: authSource === 'file',
+  };
+}
+
+/**
+ * Resolve telemetry delivery in release-safe order:
+ * 1. Vela authenticated sink when a Control Key is present
+ * 2. hosted anonymous relay
+ * 3. direct Langfuse credentials for local smoke tests
+ * 4. disabled
+ */
+export function readTelemetrySinkConfig(
+  env: NodeJS.ProcessEnv = process.env,
+  configuredEnv: Record<string, string> = {},
+): TelemetrySinkConfig | null {
+  return (
+    readVelaTelemetrySinkConfig(env, configuredEnv) ??
+    readAnonymousTelemetrySinkConfig(env)
+  );
 }
 
 export function deriveLangfuseDeliveryState(
@@ -1258,9 +1399,18 @@ function shouldCreateGenerationObservation(ctx: ReportContext): boolean {
   return ctx.run.failure?.failure_stage !== 'session_init';
 }
 
-export function buildTracePayload(ctx: ReportContext): unknown[] {
-  const wantsContent = ctx.prefs.metrics === true && ctx.prefs.content === true;
-  const wantsArtifacts = wantsContent;
+export function buildTracePayload(
+  ctx: ReportContext,
+  deliveryPurpose: TelemetryDeliveryPurpose = 'final',
+): unknown[] {
+  // Object-registration needs manifests for upload authority but must not
+  // double-write turn text when the final delivery goes through Vela.
+  // `wantsTextContent` gates prompt/output/tool I/O; `wantsArtifacts` gates
+  // object manifests used by the worker object-scope registry.
+  const consentOn =
+    ctx.prefs.metrics === true && ctx.prefs.content === true;
+  const wantsTextContent = deliveryPurpose === 'final' && consentOn;
+  const wantsArtifacts = consentOn;
 
   const sessionId =
     ctx.conversationId.length <= SESSION_ID_MAX ? ctx.conversationId : undefined;
@@ -1269,10 +1419,10 @@ export function buildTracePayload(ctx: ReportContext): unknown[] {
   const endTimeIso = new Date(ctx.run.endedAt).toISOString();
   const nowIso = new Date().toISOString();
 
-  const inputText = wantsContent
+  const inputText = wantsTextContent
     ? truncate(ctx.message.prompt, INPUT_MAX_BYTES)
     : undefined;
-  const outputText = wantsContent
+  const outputText = wantsTextContent
     ? truncate(redactArtifactBlocks(ctx.message.output), OUTPUT_MAX_BYTES)
     : undefined;
 
@@ -1295,10 +1445,10 @@ export function buildTracePayload(ctx: ReportContext): unknown[] {
   const artifactManifestTruncated = wantsArtifacts
     ? manifestTruncated(ctx.artifactManifest)
     : undefined;
-  const inputTextSnapshotManifest = wantsArtifacts && wantsContent
+  const inputTextSnapshotManifest = wantsArtifacts
     ? cappedManifestEntries(ctx.inputTextSnapshotManifest)
     : undefined;
-  const inputTextSnapshotManifestTruncated = wantsArtifacts && wantsContent
+  const inputTextSnapshotManifestTruncated = wantsArtifacts
     ? manifestTruncated(ctx.inputTextSnapshotManifest)
     : undefined;
 
@@ -1340,7 +1490,7 @@ export function buildTracePayload(ctx: ReportContext): unknown[] {
     ? generationId
     : `${ctx.run.runId}-runtime`;
   const promptStack = ctx.promptTelemetry
-    ? wantsContent
+    ? wantsTextContent
       ? ctx.promptTelemetry
       : promptStackWithoutContent(ctx.promptTelemetry)
     : undefined;
@@ -1359,7 +1509,9 @@ export function buildTracePayload(ctx: ReportContext): unknown[] {
   // Trace metadata is the queryable + exportable fact-sheet for each turn.
   // Anything we want to slice on for evals or dataset construction lives
   // here. Fields are flat (Langfuse stores it as JSON but indexes shallow
-  // keys best). All entries are anonymous — no PII, no credentials.
+  // keys best). Daemon only asserts installation identity; Vela overwrites
+  // identity_type / app_user_id / user_email for authenticated deliveries.
+  // Never put client-claimed email or app_user_id here as trusted identity.
   const traceMetadata: Record<string, unknown> = {
     success,
     env: readTelemetryEnvironment(),
@@ -1367,6 +1519,8 @@ export function buildTracePayload(ctx: ReportContext): unknown[] {
     error: ctx.run.error ?? undefined,
     error_code: ctx.run.errorCode,
     langfuse_trace_id: traceId,
+    identity_type: 'anonymous_installation',
+    installation_id: ctx.installationId ?? undefined,
     ...langfuseDelivery,
     ...(ctx.run.failure ?? {}),
     ...(ctx.run.timings ?? {}),
@@ -1432,25 +1586,30 @@ export function buildTracePayload(ctx: ReportContext): unknown[] {
     : agentSpanId;
   const agentEventParentObservationId = toolParentObservationId;
 
-  const batch: unknown[] = [
+  const batch: LangfuseIngestionEvent[] = [
     {
-      id: randomUUID(),
+      id: stableIngestionEventId(traceId, deliveryPurpose),
       type: 'trace-create',
       timestamp: nowIso,
       body: {
         id: traceId,
         name: 'open-design-turn',
         sessionId,
+        // Anonymous / pre-auth identity. Vela overwrites userId for
+        // authenticated deliveries; never send client-claimed app ids here.
         userId: ctx.installationId ?? undefined,
         tags: buildTagList(ctx),
         input: inputText,
         output: outputText,
-        metadata: traceMetadata,
+        metadata: {
+          ...traceMetadata,
+          telemetry_delivery_purpose: deliveryPurpose,
+        },
         timestamp: startTimeIso,
       },
     },
     {
-      id: randomUUID(),
+      id: stableIngestionEventId(agentSpanId, deliveryPurpose),
       type: 'span-create',
       timestamp: nowIso,
       body: {
@@ -1479,7 +1638,7 @@ export function buildTracePayload(ctx: ReportContext): unknown[] {
 
   if (createGeneration) {
     batch.push({
-      id: randomUUID(),
+      id: stableIngestionEventId(generationId, deliveryPurpose),
       type: 'generation-create',
       timestamp: nowIso,
       body: {
@@ -1514,7 +1673,7 @@ export function buildTracePayload(ctx: ReportContext): unknown[] {
     });
   } else {
     batch.push({
-      id: randomUUID(),
+      id: stableIngestionEventId(operationSpanId, deliveryPurpose),
       type: 'span-create',
       timestamp: nowIso,
       body: {
@@ -1545,8 +1704,9 @@ export function buildTracePayload(ctx: ReportContext): unknown[] {
   }
 
   for (const span of timingSpanBodies) {
+    const spanId = typeof span.id === 'string' ? span.id : `${traceId}-phase`;
     batch.push({
-      id: randomUUID(),
+      id: stableIngestionEventId(spanId, deliveryPurpose),
       type: 'span-create',
       timestamp: nowIso,
       body: span,
@@ -1555,12 +1715,13 @@ export function buildTracePayload(ctx: ReportContext): unknown[] {
 
   if (ctx.agentEvents?.length) {
     for (const event of ctx.agentEvents) {
+      const eventBodyId = `${ctx.run.runId}-agent-event-${event.id}`;
       batch.push({
-        id: randomUUID(),
+        id: stableIngestionEventId(eventBodyId, deliveryPurpose),
         type: 'event-create',
         timestamp: nowIso,
         body: {
-          id: `${ctx.run.runId}-agent-event-${event.id}`,
+          id: eventBodyId,
           traceId,
           parentObservationId: agentEventParentObservationId,
           name: event.name,
@@ -1581,20 +1742,20 @@ export function buildTracePayload(ctx: ReportContext): unknown[] {
       const toolStartedAt = new Date(tool.startedAt).toISOString();
       const toolEndedAt = new Date(tool.endedAt).toISOString();
       const toolDurationMs = durationMs(tool.startedAt, tool.endedAt);
-      const toolInput = wantsContent
+      const toolInput = wantsTextContent
         ? truncate(
             traceSafeToolPayload(tool.name, 'input', tool.input),
             TOOL_INPUT_MAX_BYTES,
           )
         : undefined;
-      const toolOutput = wantsContent
+      const toolOutput = wantsTextContent
         ? truncate(
             traceSafeToolPayload(tool.name, 'output', tool.output),
             TOOL_OUTPUT_MAX_BYTES,
           )
         : undefined;
       batch.push({
-        id: randomUUID(),
+        id: stableIngestionEventId(toolSpanId, deliveryPurpose),
         type: 'span-create',
         timestamp: nowIso,
         body: {
@@ -1624,12 +1785,13 @@ export function buildTracePayload(ctx: ReportContext): unknown[] {
   }
 
   if (artifactsList && (artifactsList.length > 0 || artifactsTruncated)) {
+    const artifactsEventId = `${ctx.run.runId}-artifacts`;
     batch.push({
-      id: randomUUID(),
+      id: stableIngestionEventId(artifactsEventId, deliveryPurpose),
       type: 'event-create',
       timestamp: nowIso,
       body: {
-        id: `${ctx.run.runId}-artifacts`,
+        id: artifactsEventId,
         traceId,
         parentObservationId: agentSpanId,
         name: 'artifact-summary',
@@ -1656,12 +1818,13 @@ export function buildTracePayload(ctx: ReportContext): unknown[] {
   }
 
   if (!success || ctx.eventsSummary.errors > 0) {
+    const errorEventId = `${ctx.run.runId}-error`;
     batch.push({
-      id: randomUUID(),
+      id: stableIngestionEventId(errorEventId, deliveryPurpose),
       type: 'event-create',
       timestamp: nowIso,
       body: {
-        id: `${ctx.run.runId}-error`,
+        id: errorEventId,
         traceId,
         parentObservationId: agentSpanId,
         name: success ? 'error-summary' : 'run-error',
@@ -1677,6 +1840,283 @@ export function buildTracePayload(ctx: ReportContext): unknown[] {
   }
 
   return batch;
+}
+
+/**
+ * Stable ingestion event id so retries reuse the same Langfuse/Vela event ids.
+ * Object-registration and final deliveries use distinct suffixes so the
+ * two-stage object-upload flow is not deduped.
+ */
+export function stableIngestionEventId(
+  bodyId: string,
+  deliveryPurpose: TelemetryDeliveryPurpose = 'final',
+): string {
+  const trimmed = bodyId.trim() || 'ingest-unknown';
+  const suffix = deliveryPurpose === 'object-registration' ? ':reg' : '';
+  const candidate = `${trimmed}${suffix}`;
+  if (candidate.length <= 200) return candidate;
+  // Preserve uniqueness when truncating long body ids.
+  const digest = createHash('sha256').update(candidate).digest('hex').slice(0, 16);
+  const keep = 200 - 1 - digest.length;
+  return `${candidate.slice(0, Math.max(1, keep))}-${digest}`;
+}
+
+/**
+ * Stable idempotency key for one complete events envelope.
+ * sha256(purpose + traceId + sorted ingestion event ids), prefixed for the Vela key pattern.
+ */
+export function buildTelemetryIdempotencyKey(
+  batch: Array<{ id: string }>,
+  traceId: string,
+  deliveryPurpose: TelemetryDeliveryPurpose = 'final',
+): string {
+  const sortedIds = batch
+    .map((event) => event.id)
+    .filter((id) => typeof id === 'string' && id.length > 0)
+    .sort();
+  const digest = createHash('sha256')
+    .update(`${deliveryPurpose}\0${traceId}\0${sortedIds.join('\0')}`)
+    .digest('hex');
+  return `od-telemetry-${digest}`;
+}
+
+function classifyFetchError(error: unknown): 'timeout' | 'network_error' {
+  if (!error || typeof error !== 'object') return 'network_error';
+  const name = 'name' in error ? String((error as { name?: unknown }).name ?? '') : '';
+  if (name === 'TimeoutError' || name === 'AbortError') return 'timeout';
+  const message =
+    'message' in error ? String((error as { message?: unknown }).message ?? '') : '';
+  if (/timeout|aborted|AbortError/i.test(message)) return 'timeout';
+  return 'network_error';
+}
+
+/**
+ * Clear local login only when the failed request still matches the currently
+ * stored file-backed Control Key for the same profile. Prevents a late 401
+ * from account A from logging out account B after a switch.
+ */
+function maybeForgetVelaLoginOnAuthFailure(
+  config: Extract<TelemetrySinkConfig, { kind: 'vela' }>,
+  env: NodeJS.ProcessEnv,
+  configuredEnv: Record<string, string>,
+): void {
+  if (!config.clearLoginOnAuthFailure) return;
+  if (config.authSource !== 'file') return;
+  try {
+    const current = readVelaControlApiContext(env, configuredEnv);
+    if (!current) return;
+    if (current.profile !== config.profile) return;
+    if (current.controlKey !== config.controlKey) return;
+    // Pass profile selection through env so forgetVelaLogin targets the same profile.
+    const profileEnv: NodeJS.ProcessEnv = {
+      ...env,
+      ...configuredEnv,
+      OPEN_DESIGN_AMR_PROFILE: config.profile,
+    };
+    forgetVelaLogin(profileEnv);
+  } catch {
+    // Best-effort cleanup only.
+  }
+}
+
+/** Convert a Langfuse ingestion batch into the vendor-neutral Vela envelope. */
+export function toVelaTelemetryEnvelope(
+  batch: unknown[],
+  installationId: string,
+): VelaTelemetryEnvelope {
+  const events: VelaTelemetryEnvelope['events'] = [];
+  for (const item of batch) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const event = item as Partial<LangfuseIngestionEvent>;
+    if (typeof event.id !== 'string' || !event.id.trim()) continue;
+    if (typeof event.type !== 'string') continue;
+    if (!(event.type in LANGFUSE_TYPE_TO_ENVELOPE_KIND)) continue;
+    if (typeof event.timestamp !== 'string' || !event.timestamp.trim()) continue;
+    if (!event.body || typeof event.body !== 'object' || Array.isArray(event.body)) {
+      continue;
+    }
+    events.push({
+      id: stableIngestionEventId(event.id),
+      kind: LANGFUSE_TYPE_TO_ENVELOPE_KIND[event.type as LangfuseIngestionType],
+      timestamp: event.timestamp,
+      data: event.body,
+    });
+  }
+  if (events.length === 0) {
+    throw new Error('vela telemetry envelope has no convertible events');
+  }
+  return {
+    version: 1,
+    installationId,
+    events,
+  };
+}
+
+function asLangfuseIngestionBatch(batch: unknown[]): LangfuseIngestionEvent[] {
+  return batch.filter((item): item is LangfuseIngestionEvent => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+    const event = item as Partial<LangfuseIngestionEvent>;
+    return (
+      typeof event.id === 'string' &&
+      typeof event.type === 'string' &&
+      event.type in LANGFUSE_TYPE_TO_ENVELOPE_KIND &&
+      typeof event.timestamp === 'string' &&
+      !!event.body &&
+      typeof event.body === 'object' &&
+      !Array.isArray(event.body)
+    );
+  });
+}
+
+async function postAnonymousBatch(
+  config: AnonymousTelemetrySinkConfig,
+  batch: unknown[],
+  serializedLangfuseBody: string,
+  fetchImpl: typeof fetch,
+): Promise<LangfuseDeliveryState> {
+  if (config.kind === 'relay') {
+    return postRelayBatch(config, serializedLangfuseBody, fetchImpl);
+  }
+  return postLangfuseBatch(config, batch, fetchImpl);
+}
+
+async function postVelaBatch(
+  config: Extract<TelemetrySinkConfig, { kind: 'vela' }>,
+  batch: unknown[],
+  installationId: string,
+  fetchImpl: typeof fetch,
+  opts: {
+    env?: NodeJS.ProcessEnv;
+    configuredEnv?: Record<string, string>;
+    deliveryPurpose?: TelemetryDeliveryPurpose;
+  } = {},
+): Promise<LangfuseDeliveryState> {
+  const env = opts.env ?? process.env;
+  const configuredEnv = opts.configuredEnv ?? {};
+  const deliveryPurpose = opts.deliveryPurpose ?? 'final';
+  const typedBatch = asLangfuseIngestionBatch(batch);
+  const envelope = toVelaTelemetryEnvelope(typedBatch, installationId);
+  const traceId =
+    typeof typedBatch.find((event) => event.type === 'trace-create')?.body.id ===
+    'string'
+      ? String(typedBatch.find((event) => event.type === 'trace-create')!.body.id)
+      : typedBatch[0]?.body.id
+        ? String(typedBatch[0].body.id)
+        : typedBatch[0]?.id ?? 'unknown-trace';
+  const idempotencyKey = buildTelemetryIdempotencyKey(
+    typedBatch,
+    traceId,
+    deliveryPurpose,
+  );
+  const body = JSON.stringify(envelope);
+  const bodyBytes = Buffer.byteLength(body, 'utf8');
+  if (bodyBytes > HARD_BATCH_MAX_BYTES) {
+    console.warn(
+      `[langfuse-trace] Vela telemetry envelope too large (${bodyBytes}B > ${HARD_BATCH_MAX_BYTES}B)`,
+    );
+    return {
+      langfuse_expected: true,
+      langfuse_delivery_status: 'failed',
+      langfuse_drop_reason: 'payload_too_large',
+    };
+  }
+  const attempts = config.retries + 1;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const response = await fetchImpl(
+        `${config.apiUrl}/api/v1/open-design/telemetry`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${config.controlKey}`,
+            'Content-Type': 'application/json',
+            'Idempotency-Key': idempotencyKey,
+          },
+          signal: AbortSignal.timeout(config.timeoutMs),
+          body,
+        },
+      );
+
+      // Vela contract is 202 Accepted. Do not treat other 2xx as success.
+      if (response.status === 202) {
+        return {
+          langfuse_expected: true,
+          langfuse_delivery_status: 'accepted',
+        };
+      }
+
+      // Drain body without logging it (may contain reflected payload / PII).
+      await response.text().catch(() => '');
+
+      // Auth failures: optionally clear matching local login and allow a
+      // one-shot anonymous fallback. Do not anonymous-fallback on 400 / 429 /
+      // 5xx / timeout — that can overwrite an authenticated identity if Vela
+      // already accepted the batch.
+      if (response.status === 401 || response.status === 403) {
+        maybeForgetVelaLoginOnAuthFailure(config, env, configuredEnv);
+        console.warn(
+          `[langfuse-trace] Vela telemetry auth failed status=${response.status}; falling back to anonymous sink`,
+        );
+        const fallback = readAnonymousTelemetrySinkConfig(env);
+        if (!fallback) {
+          return {
+            langfuse_expected: true,
+            langfuse_delivery_status: 'failed',
+            langfuse_drop_reason: response.status === 401 ? 'vela_401' : 'vela_403',
+          };
+        }
+        const serialized = JSON.stringify({ batch });
+        return postAnonymousBatch(fallback, batch, serialized, fetchImpl);
+      }
+
+      if (response.status === 400) {
+        console.warn('[langfuse-trace] Vela telemetry rejected payload status=400');
+        return {
+          langfuse_expected: true,
+          langfuse_delivery_status: 'failed',
+          langfuse_drop_reason: 'vela_400',
+        };
+      }
+
+      if (
+        attempt < attempts &&
+        (response.status === 429 || response.status >= 500)
+      ) {
+        await waitBeforeRetry(attempt);
+        continue;
+      }
+
+      console.warn(
+        `[langfuse-trace] Vela telemetry failed status=${response.status}`,
+      );
+      return {
+        langfuse_expected: true,
+        langfuse_delivery_status: 'failed',
+        langfuse_drop_reason: ingestionDropReasonFromStatus(response.status, 'vela'),
+      };
+    } catch (error) {
+      if (attempt < attempts) {
+        await waitBeforeRetry(attempt);
+        continue;
+      }
+      // Network/timeout after retries: do NOT anonymous-fallback. Vela may have
+      // already accepted the batch; anonymous write could overwrite identity.
+      const errorKind = classifyFetchError(error);
+      console.warn(`[langfuse-trace] Vela telemetry fetch error: ${errorKind}`);
+      return {
+        langfuse_expected: true,
+        langfuse_delivery_status: 'failed',
+        langfuse_drop_reason: 'network_error',
+      };
+    }
+  }
+
+  return {
+    langfuse_expected: true,
+    langfuse_delivery_status: 'failed',
+    langfuse_drop_reason: 'network_error',
+  };
 }
 
 async function postLangfuseBatch(
@@ -1840,14 +2280,27 @@ function waitBeforeRetry(attempt: number): Promise<void> {
 function normalizeTelemetrySinkConfig(
   config: TelemetrySinkConfig | LangfuseConfig,
 ): TelemetrySinkConfig {
-  if ('kind' in config) return config;
+  if ('kind' in config) {
+    if (config.kind === 'vela') {
+      return {
+        ...config,
+        profile: config.profile || 'prod',
+        authSource: config.authSource ?? 'env',
+        // Explicit sinks never clear an unrelated local login by default.
+        clearLoginOnAuthFailure: config.clearLoginOnAuthFailure ?? false,
+      };
+    }
+    return config;
+  }
   return { kind: 'langfuse', ...config };
 }
 
 function resolveReportConfig(
   opts: ReportRunOpts,
 ): TelemetrySinkConfig | null {
-  if (opts.config === undefined) return readTelemetrySinkConfig();
+  if (opts.config === undefined) {
+    return readTelemetrySinkConfig(process.env, opts.configuredEnv ?? {});
+  }
   if (opts.config == null) return null;
   return normalizeTelemetrySinkConfig(opts.config);
 }
@@ -1856,6 +2309,15 @@ function ingestionDropReasonFromStatus(
   status: number,
   sinkKind: TelemetrySinkConfig['kind'],
 ): LangfuseDropReason {
+  if (sinkKind === 'vela') {
+    if (status === 401) return 'vela_401';
+    if (status === 403) return 'vela_403';
+    if (status === 400) return 'vela_400';
+    if (status === 413) return 'vela_413';
+    if (status === 429) return 'vela_429';
+    if (status >= 500) return 'vela_5xx';
+    return 'vela_400';
+  }
   if (sinkKind === 'relay') {
     if (status === 429) return 'relay_429';
     if (status === 413) return 'relay_413';
@@ -1868,7 +2330,7 @@ function ingestionDropReasonFromStatus(
 
 function dropReasonFromPerEventErrors(
   responseBody: string,
-  sinkKind: TelemetrySinkConfig['kind'],
+  sinkKind: Exclude<TelemetrySinkConfig['kind'], 'vela'>,
 ): LangfuseDropReason {
   let parsed: unknown;
   try {
@@ -1929,15 +2391,16 @@ export async function reportRunCompleted(
       // start, so repeated run-level warnings would only add noise.
       missingTelemetrySinkWarned = true;
       console.warn(
-        '[langfuse-trace] Telemetry metrics are enabled but no relay or Langfuse credentials are configured',
+        '[langfuse-trace] Telemetry metrics are enabled but no Vela Control Key, relay, or Langfuse credentials are configured',
       );
     }
     return langfuseDelivery;
   }
 
+  const deliveryPurpose = opts.deliveryPurpose ?? 'final';
   let batch: unknown[];
   try {
-    batch = buildTracePayload({ ...ctx, langfuse: langfuseDelivery });
+    batch = buildTracePayload({ ...ctx, langfuse: langfuseDelivery }, deliveryPurpose);
   } catch (error) {
     console.warn(`[langfuse-trace] Payload build error: ${String(error)}`);
     return {
@@ -1964,6 +2427,40 @@ export async function reportRunCompleted(
   }
 
   const fetchImpl = opts.fetchImpl ?? globalThis.fetch;
+  const configuredEnv = opts.configuredEnv ?? {};
+  if (config.kind === 'vela') {
+    // Object-registration must stay on the anonymous relay so object scope is
+    // keyed by the original runId (Vela scopes/hashes body.id for Langfuse).
+    if (deliveryPurpose === 'object-registration') {
+      const fallback = readAnonymousTelemetrySinkConfig();
+      if (!fallback) {
+        return {
+          langfuse_expected: true,
+          langfuse_delivery_status: 'failed',
+          langfuse_drop_reason: 'missing_sink_config',
+        };
+      }
+      return postAnonymousBatch(fallback, batch, serialized, fetchImpl);
+    }
+    const installationId = ctx.installationId?.trim() ?? '';
+    if (!installationId) {
+      // Vela schema requires installationId; fall back to anonymous without
+      // claiming a Vela account identity.
+      const fallback = readAnonymousTelemetrySinkConfig();
+      if (!fallback) {
+        return {
+          langfuse_expected: true,
+          langfuse_delivery_status: 'failed',
+          langfuse_drop_reason: 'missing_sink_config',
+        };
+      }
+      return postAnonymousBatch(fallback, batch, serialized, fetchImpl);
+    }
+    return postVelaBatch(config, batch, installationId, fetchImpl, {
+      configuredEnv,
+      deliveryPurpose,
+    });
+  }
   if (config.kind === 'relay') {
     return postRelayBatch(config, serialized, fetchImpl);
   }
@@ -1999,12 +2496,13 @@ export function buildFeedbackPayload(ctx: FeedbackReportContext): unknown[] {
     ...(ctx.metadata ?? {}),
   };
 
+  const ratingScoreId = `${traceId}-rating`;
   batch.push({
-    id: randomUUID(),
+    id: stableIngestionEventId(ratingScoreId),
     type: 'score-create',
     timestamp: nowIso,
     body: {
-      id: `${traceId}-rating`,
+      id: ratingScoreId,
       traceId,
       name: 'user_rating',
       value: ctx.rating === 'positive' ? 1 : -1,
@@ -2015,13 +2513,14 @@ export function buildFeedbackPayload(ctx: FeedbackReportContext): unknown[] {
   });
 
   for (const code of ctx.reasonCodes) {
+    // Stable per (run, code) so re-submission overwrites cleanly.
+    const reasonScoreId = `${traceId}-reason-${code}`;
     batch.push({
-      id: randomUUID(),
+      id: stableIngestionEventId(reasonScoreId),
       type: 'score-create',
       timestamp: nowIso,
       body: {
-        // Stable per (run, code) so re-submission overwrites cleanly.
-        id: `${traceId}-reason-${code}`,
+        id: reasonScoreId,
         traceId,
         name: 'user_rating_reason',
         value: code,
@@ -2065,6 +2564,21 @@ export async function reportRunFeedback(
   }
 
   const fetchImpl = opts.fetchImpl ?? globalThis.fetch;
+  const configuredEnv = opts.configuredEnv ?? {};
+  if (config.kind === 'vela') {
+    const installationId = ctx.installationId?.trim() ?? '';
+    if (!installationId) {
+      const fallback = readAnonymousTelemetrySinkConfig();
+      if (!fallback) return;
+      await postAnonymousBatch(fallback, batch, serialized, fetchImpl);
+      return;
+    }
+    await postVelaBatch(config, batch, installationId, fetchImpl, {
+      configuredEnv,
+      deliveryPurpose: opts.deliveryPurpose ?? 'final',
+    });
+    return;
+  }
   if (config.kind === 'relay') {
     await postRelayBatch(config, serialized, fetchImpl);
     return;

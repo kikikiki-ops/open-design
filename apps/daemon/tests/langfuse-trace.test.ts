@@ -2,12 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   buildFeedbackPayload,
+  buildTelemetryIdempotencyKey,
   buildTracePayload,
   deriveLangfuseDeliveryState,
+  readAnonymousTelemetrySinkConfig,
   readLangfuseConfig,
   readTelemetrySinkConfig,
   reportRunCompleted,
   reportRunFeedback,
+  stableIngestionEventId,
+  toVelaTelemetryEnvelope,
   type FeedbackReportContext,
   type LangfuseConfig,
   type ReportContext,
@@ -157,8 +161,67 @@ describe('readLangfuseConfig', () => {
 });
 
 describe('readTelemetrySinkConfig', () => {
+  it('prefers the Vela authenticated sink when a Control Key is present', () => {
+    const cfg = readTelemetrySinkConfig({
+      VELA_CONTROL_KEY: 'ck_test_key',
+      VELA_API_URL: 'https://amr-api.example.com//',
+      OPEN_DESIGN_TELEMETRY_RELAY_URL: 'https://telemetry.open-design.ai/api/langfuse',
+      LANGFUSE_PUBLIC_KEY: 'pk',
+      LANGFUSE_SECRET_KEY: 'sk',
+    });
+    expect(cfg).toEqual({
+      kind: 'vela',
+      apiUrl: 'https://amr-api.example.com',
+      controlKey: 'ck_test_key',
+      timeoutMs: 20_000,
+      retries: 1,
+      profile: 'prod',
+      authSource: 'env',
+      clearLoginOnAuthFailure: false,
+    });
+  });
+
+  it('uses app-config AMR profile/API URL when resolving the Vela sink', () => {
+    const cfg = readTelemetrySinkConfig(
+      {
+        OPEN_DESIGN_TELEMETRY_RELAY_URL: 'https://telemetry.open-design.ai/api/langfuse',
+      },
+      {
+        OPEN_DESIGN_AMR_PROFILE: 'test',
+        VELA_CONTROL_KEY: 'ck_from_app_config',
+        VELA_API_URL: 'https://amr-api-test.example.com//',
+      },
+    );
+    expect(cfg).toEqual({
+      kind: 'vela',
+      apiUrl: 'https://amr-api-test.example.com',
+      controlKey: 'ck_from_app_config',
+      timeoutMs: 20_000,
+      retries: 1,
+      profile: 'test',
+      authSource: 'env',
+      clearLoginOnAuthFailure: false,
+    });
+  });
+
+  it('can disable the Vela sink for gray rollback', () => {
+    const cfg = readTelemetrySinkConfig({
+      OPEN_DESIGN_VELA_TELEMETRY: '0',
+      VELA_CONTROL_KEY: 'ck_test_key',
+      OPEN_DESIGN_TELEMETRY_RELAY_URL: 'https://telemetry.open-design.ai/api/langfuse//',
+    });
+    expect(cfg).toEqual({
+      kind: 'relay',
+      relayUrl: 'https://telemetry.open-design.ai/api/langfuse',
+      timeoutMs: 20_000,
+      retries: 1,
+    });
+  });
+
   it('prefers the Open Design telemetry relay when configured', () => {
     const cfg = readTelemetrySinkConfig({
+      // Force anonymous path even if the developer machine has a local Control Key.
+      OPEN_DESIGN_VELA_TELEMETRY: '0',
       OPEN_DESIGN_TELEMETRY_RELAY_URL: 'https://telemetry.open-design.ai/api/langfuse//',
       LANGFUSE_PUBLIC_KEY: 'pk',
       LANGFUSE_SECRET_KEY: 'sk',
@@ -173,6 +236,7 @@ describe('readTelemetrySinkConfig', () => {
 
   it('uses relay-specific timeout and retry tuning when present', () => {
     const cfg = readTelemetrySinkConfig({
+      OPEN_DESIGN_VELA_TELEMETRY: '0',
       OPEN_DESIGN_TELEMETRY_RELAY_URL: 'https://telemetry.open-design.ai/api/langfuse',
       OPEN_DESIGN_TELEMETRY_TIMEOUT_MS: '30000',
       OPEN_DESIGN_TELEMETRY_RETRIES: '3',
@@ -188,6 +252,7 @@ describe('readTelemetrySinkConfig', () => {
 
   it('falls back to direct Langfuse config for local smoke tests', () => {
     const cfg = readTelemetrySinkConfig({
+      OPEN_DESIGN_VELA_TELEMETRY: '0',
       LANGFUSE_PUBLIC_KEY: 'pk',
       LANGFUSE_SECRET_KEY: 'sk',
     });
@@ -195,6 +260,14 @@ describe('readTelemetrySinkConfig', () => {
       kind: 'langfuse',
       baseUrl: 'https://us.cloud.langfuse.com',
     });
+  });
+
+  it('exposes an anonymous-only resolver that never returns Vela', () => {
+    const cfg = readAnonymousTelemetrySinkConfig({
+      VELA_CONTROL_KEY: 'ck_test_key',
+      OPEN_DESIGN_TELEMETRY_RELAY_URL: 'https://telemetry.open-design.ai/api/langfuse',
+    });
+    expect(cfg).toMatchObject({ kind: 'relay' });
   });
 });
 
@@ -1556,6 +1629,103 @@ describe('buildTracePayload', () => {
     const batch = buildTracePayload(makeCtx({ installationId: null }));
     expect((batch[0] as any).body.userId).toBeUndefined();
   });
+
+  it('stamps anonymous installation identity metadata without client-claimed account fields', () => {
+    const batch = buildTracePayload(
+      makeCtx({
+        installationId: 'install-uuid-1',
+        prefs: { metrics: true, content: true, artifactManifest: false },
+      }),
+    );
+    const trace = bodyOf(batch, 'trace-create');
+    expect(trace.userId).toBe('install-uuid-1');
+    expect(trace.metadata.identity_type).toBe('anonymous_installation');
+    expect(trace.metadata.installation_id).toBe('install-uuid-1');
+    expect(trace.metadata.app_user_id).toBeUndefined();
+    expect(trace.metadata.user_email).toBeUndefined();
+  });
+
+  it('uses stable ingestion event ids derived from body ids', () => {
+    const batch = buildTracePayload(
+      makeCtx({
+        prefs: { metrics: true, content: true, artifactManifest: false },
+      }),
+    ) as Array<{ id: string; body: { id: string } }>;
+    for (const event of batch) {
+      expect(event.id).toBe(stableIngestionEventId(event.body.id, 'final'));
+    }
+    const again = buildTracePayload(
+      makeCtx({
+        prefs: { metrics: true, content: true, artifactManifest: false },
+      }),
+    ) as Array<{ id: string }>;
+    expect(again.map((event) => event.id)).toEqual(batch.map((event) => event.id));
+  });
+
+  it('uses distinct stable ids and omits turn content for object-registration', () => {
+    const finalBatch = buildTracePayload(
+      makeCtx({
+        prefs: { metrics: true, content: true, artifactManifest: false },
+      }),
+      'final',
+    ) as Array<{ id: string; body: Record<string, any> }>;
+    const regBatch = buildTracePayload(
+      makeCtx({
+        prefs: { metrics: true, content: true, artifactManifest: false },
+      }),
+      'object-registration',
+    ) as Array<{ id: string; body: Record<string, any> }>;
+    expect(regBatch[0]!.id).toBe(`${finalBatch[0]!.id}:reg`);
+    expect(regBatch[0]!.body.input).toBeUndefined();
+    expect(regBatch[0]!.body.output).toBeUndefined();
+    expect(regBatch[0]!.body.metadata.telemetry_delivery_purpose).toBe(
+      'object-registration',
+    );
+    expect(finalBatch[0]!.body.input).toBe('Make a landing page for a coffee shop.');
+  });
+});
+
+describe('vela telemetry envelope helpers', () => {
+  it('builds a stable idempotency key from trace id + sorted event ids', () => {
+    const keyA = buildTelemetryIdempotencyKey(
+      [{ id: 'b' }, { id: 'a' }],
+      'run-1',
+    );
+    const keyB = buildTelemetryIdempotencyKey(
+      [{ id: 'a' }, { id: 'b' }],
+      'run-1',
+    );
+    const keyC = buildTelemetryIdempotencyKey(
+      [{ id: 'a' }, { id: 'b' }],
+      'run-2',
+    );
+    expect(keyA).toBe(keyB);
+    expect(keyA).toMatch(/^od-telemetry-[a-f0-9]{64}$/);
+    expect(keyA).not.toBe(keyC);
+  });
+
+  it('converts Langfuse batch events into the vendor-neutral Vela envelope', () => {
+    const batch = buildTracePayload(
+      makeCtx({
+        prefs: { metrics: true, content: true, artifactManifest: false },
+      }),
+    );
+    const envelope = toVelaTelemetryEnvelope(batch, 'install-uuid-1');
+    expect(envelope.version).toBe(1);
+    expect(envelope.installationId).toBe('install-uuid-1');
+    expect(envelope.events.length).toBeGreaterThan(0);
+    expect(envelope.events[0]).toMatchObject({
+      kind: 'trace',
+      data: {
+        id: 'run-1',
+        name: 'open-design-turn',
+        userId: 'install-uuid-1',
+      },
+    });
+    expect(envelope.events.some((event) => event.kind === 'generation')).toBe(true);
+    expect(JSON.stringify(envelope)).not.toContain('user_email');
+    expect(JSON.stringify(envelope)).not.toContain('app_user_id');
+  });
 });
 
 describe('reportRunCompleted', () => {
@@ -1870,6 +2040,218 @@ describe('reportRunCompleted', () => {
       langfuse_delivery_status: 'failed',
       langfuse_drop_reason: 'langfuse_5xx',
     });
+  });
+
+  function velaSink(
+    overrides: Partial<Extract<TelemetrySinkConfig, { kind: 'vela' }>> = {},
+  ): Extract<TelemetrySinkConfig, { kind: 'vela' }> {
+    return {
+      kind: 'vela',
+      apiUrl: 'https://amr-api.example.com',
+      controlKey: 'ck_test_key',
+      timeoutMs: 20_000,
+      retries: 0,
+      profile: 'prod',
+      authSource: 'env',
+      clearLoginOnAuthFailure: false,
+      ...overrides,
+    };
+  }
+
+  it('POSTs the vendor-neutral envelope to Vela with Control Key + idempotency key', async () => {
+    const velaConfig = velaSink();
+    const fetchSpy = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), { status: 202 }),
+    );
+    const result = await reportRunCompleted(
+      makeCtx({
+        prefs: { metrics: true, content: true, artifactManifest: false },
+      }),
+      {
+        config: velaConfig,
+        fetchImpl: fetchSpy as any,
+      },
+    );
+    expect(result).toEqual({
+      langfuse_expected: true,
+      langfuse_delivery_status: 'accepted',
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0]!;
+    expect(url).toBe('https://amr-api.example.com/api/v1/open-design/telemetry');
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer ck_test_key');
+    expect(headers['Idempotency-Key']).toMatch(/^od-telemetry-[a-f0-9]{64}$/);
+    const body = JSON.parse(init.body as string);
+    expect(body.version).toBe(1);
+    expect(body.installationId).toBe('install-uuid-1');
+    expect(Array.isArray(body.events)).toBe(true);
+    expect(body.events[0].kind).toBe('trace');
+    expect(body.events[0].data.metadata.identity_type).toBe('anonymous_installation');
+    expect(JSON.stringify(body)).not.toContain('user@');
+  });
+
+  it('reuses the same Vela idempotency key across retries', async () => {
+    const velaConfig = velaSink({ retries: 1 });
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('busy', { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 202 }));
+    const result = await reportRunCompleted(
+      makeCtx({
+        prefs: { metrics: true, content: true, artifactManifest: false },
+      }),
+      {
+        config: velaConfig,
+        fetchImpl: fetchSpy as any,
+      },
+    );
+    expect(result.langfuse_delivery_status).toBe('accepted');
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    const key1 = (fetchSpy.mock.calls[0]![1] as RequestInit).headers as Record<string, string>;
+    const key2 = (fetchSpy.mock.calls[1]![1] as RequestInit).headers as Record<string, string>;
+    expect(key1['Idempotency-Key']).toBe(key2['Idempotency-Key']);
+  });
+
+  it('does not anonymous-fallback on Vela 429/5xx or network errors', async () => {
+    const velaConfig = velaSink();
+    const prevRelay = process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL;
+    process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL =
+      'https://telemetry.open-design.ai/api/langfuse';
+    try {
+      const fetchSpy = vi.fn().mockResolvedValue(new Response('nope', { status: 503 }));
+      const result = await reportRunCompleted(
+        makeCtx({
+          prefs: { metrics: true, content: true, artifactManifest: false },
+        }),
+        {
+          config: velaConfig,
+          fetchImpl: fetchSpy as any,
+        },
+      );
+      expect(result).toEqual({
+        langfuse_expected: true,
+        langfuse_delivery_status: 'failed',
+        langfuse_drop_reason: 'vela_5xx',
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(String(fetchSpy.mock.calls[0]![0])).toContain('/api/v1/open-design/telemetry');
+    } finally {
+      if (prevRelay === undefined) delete process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL;
+      else process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL = prevRelay;
+    }
+  });
+
+  it('does not anonymous-fallback on Vela 400 protocol errors', async () => {
+    const velaConfig = velaSink();
+    const prevRelay = process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL;
+    process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL =
+      'https://telemetry.open-design.ai/api/langfuse';
+    try {
+      const fetchSpy = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: 'invalid_open_design_telemetry_payload' }), {
+          status: 400,
+        }),
+      );
+      const result = await reportRunCompleted(
+        makeCtx({
+          prefs: { metrics: true, content: true, artifactManifest: false },
+        }),
+        {
+          config: velaConfig,
+          fetchImpl: fetchSpy as any,
+        },
+      );
+      expect(result).toEqual({
+        langfuse_expected: true,
+        langfuse_delivery_status: 'failed',
+        langfuse_drop_reason: 'vela_400',
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      if (prevRelay === undefined) delete process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL;
+      else process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL = prevRelay;
+    }
+  });
+
+  it('falls back to anonymous relay on Vela 401/403', async () => {
+    const velaConfig = velaSink({ controlKey: 'ck_expired' });
+    const prevRelay = process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL;
+    const prevVela = process.env.OPEN_DESIGN_VELA_TELEMETRY;
+    process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL =
+      'https://telemetry.open-design.ai/api/langfuse';
+    process.env.OPEN_DESIGN_VELA_TELEMETRY = '0';
+    const velaModule = await import('../src/integrations/vela.js');
+    const forgetSpy = vi
+      .spyOn(velaModule, 'forgetVelaLogin')
+      .mockImplementation(() => undefined);
+    try {
+      const fetchSpy = vi
+        .fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'unauthenticated' }), { status: 401 }))
+        .mockResolvedValueOnce(new Response('{}', { status: 200 }));
+      const result = await reportRunCompleted(
+        makeCtx({
+          prefs: { metrics: true, content: true, artifactManifest: false },
+        }),
+        {
+          config: velaConfig,
+          fetchImpl: fetchSpy as any,
+        },
+      );
+      expect(result).toEqual({
+        langfuse_expected: true,
+        langfuse_delivery_status: 'accepted',
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+      expect(String(fetchSpy.mock.calls[0]![0])).toContain('/api/v1/open-design/telemetry');
+      expect(String(fetchSpy.mock.calls[1]![0])).toBe(
+        'https://telemetry.open-design.ai/api/langfuse',
+      );
+      const relayHeaders = fetchSpy.mock.calls[1]![1].headers as Record<string, string>;
+      expect(relayHeaders['X-Open-Design-Telemetry']).toBe('langfuse-ingestion-v1');
+      // Explicit sinks must not clear an unrelated local login.
+      expect(forgetSpy).not.toHaveBeenCalled();
+    } finally {
+      forgetSpy.mockRestore();
+      if (prevRelay === undefined) delete process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL;
+      else process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL = prevRelay;
+      if (prevVela === undefined) delete process.env.OPEN_DESIGN_VELA_TELEMETRY;
+      else process.env.OPEN_DESIGN_VELA_TELEMETRY = prevVela;
+    }
+  });
+
+  it('forces object-registration onto the anonymous relay even when Vela is configured', async () => {
+    const prevRelay = process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL;
+    process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL =
+      'https://telemetry.open-design.ai/api/langfuse';
+    try {
+      const fetchSpy = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+      const result = await reportRunCompleted(
+        makeCtx({
+          prefs: { metrics: true, content: true, artifactManifest: false },
+        }),
+        {
+          config: velaSink(),
+          deliveryPurpose: 'object-registration',
+          fetchImpl: fetchSpy as any,
+        },
+      );
+      expect(result.langfuse_delivery_status).toBe('accepted');
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(String(fetchSpy.mock.calls[0]![0])).toBe(
+        'https://telemetry.open-design.ai/api/langfuse',
+      );
+      const body = JSON.parse(fetchSpy.mock.calls[0]![1].body as string);
+      expect(body.batch[0].id).toMatch(/:reg$/);
+      expect(body.batch[0].body.input).toBeUndefined();
+      expect(body.batch[0].body.metadata.telemetry_delivery_purpose).toBe(
+        'object-registration',
+      );
+    } finally {
+      if (prevRelay === undefined) delete process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL;
+      else process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL = prevRelay;
+    }
   });
 
   it('classifies relay per-event 429s separately from generic 4xx', async () => {

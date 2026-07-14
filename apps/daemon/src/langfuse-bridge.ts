@@ -14,7 +14,7 @@ import path from 'node:path';
 
 import { modelIdForTracking } from '@open-design/contracts/analytics';
 
-import { readAppConfig } from './app-config.js';
+import { agentCliEnvForAgent, readAppConfig } from './app-config.js';
 import type { AppVersionInfo } from './app-version.js';
 import { listMessages } from './db.js';
 import {
@@ -1105,15 +1105,21 @@ export async function reportRunCompletedFromDaemon(
       ...(run.promptTelemetry ? { promptTelemetry: run.promptTelemetry } : {}),
     });
 
+    const configuredEnv = agentCliEnvForAgent(cfg.agentCliEnv, 'amr');
     const registrationManifests = await buildTraceObjectManifests({
       ...objectManifestOptions,
       uploadMode: 'manifest-only',
     });
     if (registrationManifests) {
+      // Always anonymous relay + distinct delivery purpose. Object scope is
+      // keyed by installationId + original runId; Vela would hash body.id and
+      // break authorize/upload. Registration also omits turn content.
       await reportRunCompleted(
         buildContext(mergeTraceSafeManifests(manifests, registrationManifests)),
         {
           config: objectRegistrationTelemetryConfig(),
+          deliveryPurpose: 'object-registration',
+          configuredEnv,
           ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}),
         },
       );
@@ -1126,7 +1132,11 @@ export async function reportRunCompletedFromDaemon(
         traceObjectFilesRaw,
         ...(uploadedManifests ? { uploaded: uploadedManifests } : {}),
       })),
-      opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {},
+      {
+        deliveryPurpose: 'final',
+        configuredEnv,
+        ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}),
+      },
     );
   } catch (err) {
     console.warn('[langfuse-bridge] report failed:', String(err));
@@ -1179,7 +1189,8 @@ export async function reportRunFeedbackFromDaemon(
   // Pre-resolve the sink before claiming `accepted`. Avoids advertising a
   // successful enqueue to callers when there's no Langfuse endpoint
   // configured to ship the score to.
-  const sink = readTelemetrySinkConfig();
+  const configuredEnv = agentCliEnvForAgent(cfg.agentCliEnv, 'amr');
+  const sink = readTelemetrySinkConfig(process.env, configuredEnv);
   if (!sink) {
     return { status: 'skipped_no_sink' };
   }
@@ -1197,10 +1208,10 @@ export async function reportRunFeedbackFromDaemon(
   // immediately. The handler's response already encodes the consent +
   // sink-presence outcome above; failures inside the send are operational
   // telemetry, not a client-facing signal.
-  void reportRunFeedback(
-    ctx,
-    opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {},
-  ).catch((err) => {
+  void reportRunFeedback(ctx, {
+    configuredEnv,
+    ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}),
+  }).catch((err) => {
     console.warn('[langfuse-bridge] feedback report failed:', String(err));
   });
   return { status: 'accepted' };

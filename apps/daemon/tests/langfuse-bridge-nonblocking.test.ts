@@ -6,6 +6,7 @@ const reportRunCompletedMock = vi.fn();
 
 vi.mock('../src/app-config.js', () => ({
   readAppConfig: readAppConfigMock,
+  agentCliEnvForAgent: () => ({}),
 }));
 
 vi.mock('../src/db.js', () => ({
