@@ -328,6 +328,11 @@ interface Props {
   projectFiles?: ProjectFile[];
   projectMetadata?: ProjectMetadata;
   projectFileNames?: Set<string>;
+  // Daemon-resolved on-disk working directory of the current project
+  // (`GET /api/projects/:id` → `resolvedDir`). Positive-proof anchor for
+  // classifying absolute disk hrefs in chat file links — see
+  // `resolveChatFileLink`.
+  projectResolvedDir?: string | null;
   onRequestOpenFile?: (name: string) => void;
   // Client-side action for a <od-card type="brand-browser-assist"> button: open
   // or focus the Browser tab so the user can clear verification. Excluded from
@@ -414,6 +419,7 @@ const ASSISTANT_MESSAGE_COMPARED_PROPS: Array<keyof Props> = [
   'projectFiles',
   'projectMetadata',
   'projectFileNames',
+  'projectResolvedDir',
   'onRequestOpenFile',
   'onRequestPluginFolderAgentAction',
   'activePluginActionPaths',
@@ -478,6 +484,7 @@ function AssistantMessageImpl({
   projectFiles = [],
   projectMetadata,
   projectFileNames,
+  projectResolvedDir,
   onRequestOpenFile,
   onBrandBrowserAssistConfirm,
   onRequestPluginFolderAgentAction,
@@ -518,8 +525,8 @@ function AssistantMessageImpl({
   // Thinking text renders markdown too — its file links must route in-app
   // exactly like prose links (ProseBlock builds the same handler itself).
   const thinkingLinkClick = useMemo(
-    () => chatFileLinkClickHandler(onRequestOpenFile, projectFileNames, projectId),
-    [onRequestOpenFile, projectFileNames, projectId],
+    () => chatFileLinkClickHandler(onRequestOpenFile, projectFileNames, projectId, projectResolvedDir),
+    [onRequestOpenFile, projectFileNames, projectId, projectResolvedDir],
   );
   const events =
     (message.events?.length ?? 0) > 0
@@ -816,6 +823,7 @@ function AssistantMessageImpl({
                 conversationId={conversationId}
                 runId={message.runId ?? null}
                 projectFileNames={projectFileNames}
+                projectResolvedDir={projectResolvedDir}
                 onRequestOpenFile={onRequestOpenFile}
                 onBrandBrowserAssistConfirm={onBrandBrowserAssistConfirm}
               />
@@ -2359,9 +2367,10 @@ function chatFileLinkClickHandler(
   onRequestOpenFile: ((name: string) => void) | undefined,
   projectFileNames: ReadonlySet<string> | undefined,
   projectId: string | null | undefined,
+  projectResolvedDir?: string | null,
 ): MarkdownLinkClickHandler {
   return (href, event) => {
-    const target = resolveChatFileLink(href, projectFileNames, projectId);
+    const target = resolveChatFileLink(href, projectFileNames, projectId, projectResolvedDir);
     if (target) {
       event.preventDefault();
       if (target.kind === "workspace-file") {
@@ -2392,6 +2401,7 @@ function ProseBlock({
   conversationId,
   runId,
   projectFileNames,
+  projectResolvedDir,
   onRequestOpenFile,
   onBrandBrowserAssistConfirm,
 }: {
@@ -2407,6 +2417,7 @@ function ProseBlock({
   conversationId?: string | null;
   runId?: string | null;
   projectFileNames?: Set<string>;
+  projectResolvedDir?: string | null;
   onOpenQuestions?: (request?: QuestionFormOpenRequest) => void;
   onRequestOpenFile?: (name: string) => void;
   onBrandBrowserAssistConfirm?: BrandBrowserAssistConfirm;
@@ -2443,8 +2454,8 @@ function ProseBlock({
   // whose href can't resolve, and the user lands on the home screen — the
   // file is never previewed (issue #1239 and the 0.14.1 chatpane file-link acceptance bug).
   const onLinkClick = useMemo<MarkdownLinkClickHandler>(
-    () => chatFileLinkClickHandler(onRequestOpenFile, projectFileNames, projectId),
-    [onRequestOpenFile, projectFileNames, projectId],
+    () => chatFileLinkClickHandler(onRequestOpenFile, projectFileNames, projectId, projectResolvedDir),
+    [onRequestOpenFile, projectFileNames, projectId, projectResolvedDir],
   );
   // Each text segment is further split on `<od-card>` blocks (so memory cards
   // render inline, composing with the surrounding question-form handling) and

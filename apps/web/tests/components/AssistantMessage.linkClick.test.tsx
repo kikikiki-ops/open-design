@@ -133,7 +133,8 @@ describe('AssistantMessage — chat file-link routing (#1239)', () => {
   it('navigates to the owning project for absolute managed-projects disk paths (0.14.1 acceptance scenario)', () => {
     // @-mentioned reference projects are handed to the agent as absolute
     // disk paths, so the assistant links their files as
-    // `<data-root>/projects/<projectId>/<file>`. Clicking one must open
+    // `<data-root>/projects/<projectId>/<file>`. With the current project's
+    // resolvedDir proving the shared managed root, clicking one must open
     // that project's file, not a new window on home.
     const onRequestOpenFile = vi.fn();
     const { container } = render(
@@ -144,6 +145,7 @@ describe('AssistantMessage — chat file-link routing (#1239)', () => {
         streaming={false}
         projectId="project-1"
         projectFileNames={new Set(['unrelated.html'])}
+        projectResolvedDir="/Users/mac/.open-design/data/projects/project-1"
         onRequestOpenFile={onRequestOpenFile}
       />,
     );
@@ -157,6 +159,38 @@ describe('AssistantMessage — chat file-link routing (#1239)', () => {
     expect(onRequestOpenFile).not.toHaveBeenCalled();
     expect(clickEvent.defaultPrevented).toBe(true);
     expect(window.location.pathname).toBe('/projects/other-project/files/deck-outline.md');
+  });
+
+  it('keeps just-written files under an imported baseDir with a projects/ segment in the current workspace', () => {
+    // Reviewer scenario (#5611 round 3): the imported workspace lives under
+    // `…/projects/acme/` and the agent just wrote `new-file.md` (not in the
+    // stale file list). The resolvedDir prefix proves it is OURS — the click
+    // must open the workspace tab, never navigate to a phantom `acme`
+    // project.
+    const onRequestOpenFile = vi.fn();
+    const { container } = render(
+      <AssistantMessage
+        message={messageWithText(
+          '新文件在 [new-file.md](/Users/mac/workspace/projects/acme/new-file.md)。',
+        )}
+        streaming={false}
+        projectId="project-1"
+        projectFileNames={new Set(['other.html'])}
+        projectResolvedDir="/Users/mac/workspace/projects/acme"
+        onRequestOpenFile={onRequestOpenFile}
+      />,
+    );
+
+    const anchor = container.querySelector('a.md-link');
+    expect(anchor).not.toBeNull();
+
+    const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true });
+    anchor!.dispatchEvent(clickEvent);
+
+    expect(onRequestOpenFile).toHaveBeenCalledTimes(1);
+    expect(onRequestOpenFile).toHaveBeenCalledWith('new-file.md');
+    expect(clickEvent.defaultPrevented).toBe(true);
+    expect(window.location.pathname).toBe('/');
   });
 
   it('suppresses unresolvable path-like links instead of opening a detached home window', () => {

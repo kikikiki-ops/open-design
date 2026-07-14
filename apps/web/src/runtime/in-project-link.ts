@@ -61,15 +61,27 @@ export type ChatFileLinkTarget =
  * Resolve a chat markdown href to an in-app file target.
  *
  * Extends `asInProjectFilePath` (current-project resolution for relative
- * paths and known-file matches) with the two cross-project shapes the
- * assistant emits for @-referenced projects: app file routes for another
- * project, and absolute managed-projects disk paths
- * (`<data-root>/projects/<projectId>/<file>` — the daemon hands
- * referenced projects to the agent as absolute paths, so its links come
- * back the same way). Without this, those links fell through to the default
- * `target="_blank"` behavior, and Electron's window-open handler produced a
- * chrome-less child window whose unroutable path rendered the HOME screen
- * instead of the file (0.14.1 acceptance bug: chatpane file links opened a home-page window).
+ * paths and known-file matches) with the disk-path shapes the daemon hands
+ * the agent as absolute paths. Ownership of an absolute path is only ever
+ * decided from POSITIVE proof against `projectResolvedDir` — the daemon-
+ * computed on-disk working directory of the CURRENT project
+ * (`GET /api/projects/:id` → `resolvedDir`):
+ *
+ * - A href under `projectResolvedDir` itself is a current-project file,
+ *   even when it doesn't appear in `projectFileNames` yet (stale file list,
+ *   or a file the agent just wrote) — imported-folder workspaces whose
+ *   `baseDir` contains a `projects/` segment of its own included.
+ * - For a daemon-managed current project, `resolvedDir` is
+ *   `<projects-root>/<projectId>`, which reveals the managed projects root;
+ *   a href under a SIBLING directory of that root provably belongs to that
+ *   other managed project (the @-reference scenario of the 0.14.1
+ *   acceptance bug) and navigates there — this outranks the basename
+ *   fallback, because the proven owner also resolves basename collisions.
+ * - A `/projects/<seg>/` boundary anywhere else proves NOTHING (legacy
+ *   0.10.x preview dirs are keyed by project NAME; imported folders carry
+ *   arbitrary structure), so unproven absolute paths only ever resolve
+ *   through the current-project known-file fallback (maintained contract:
+ *   e2e/ui/project-file-link-routing.test.ts) — never to `project-file`.
  *
  * Returns `null` when the href has no in-app file target (external URLs,
  * fragments, unresolvable paths).
@@ -78,6 +90,7 @@ export function resolveChatFileLink(
   href: string | null | undefined,
   projectFileNames?: ReadonlySet<string>,
   projectId?: string | null,
+  projectResolvedDir?: string | null,
 ): ChatFileLinkTarget | null {
   if (typeof href !== 'string') return null;
   const trimmed = href.trim();
@@ -94,28 +107,57 @@ export function resolveChatFileLink(
     }
     return { kind: 'workspace-file', filePath };
   }
-  // Current-project resolution runs BEFORE disk-route navigation, including
-  // the known-file basename fallback for absolute paths. A disk path's
-  // `/projects/<seg>/` boundary does NOT positively prove another project's
-  // ownership: legacy 0.10.x preview data dirs are keyed by project NAME and
-  // imported-folder workspaces can contain a `projects/` directory of their
-  // own — both shapes reference CURRENT-project files (maintained contract:
-  // e2e/ui/project-file-link-routing.test.ts). Only a path no current-project
-  // file matches is treated as another project's file. Upgrading the
-  // ambiguous colliding-basename case to owning-project navigation needs
-  // explicit reference-project metadata plumbed to the chat surface.
+  const provenTarget = resolveAgainstResolvedDir(normalizedHref, projectId, projectResolvedDir);
+  if (provenTarget) return provenTarget;
   const currentProjectPath = asInProjectFilePath(href, projectFileNames, projectId);
   if (currentProjectPath) return { kind: 'workspace-file', filePath: currentProjectPath };
-  if (/^[a-z][a-z0-9+.-]*:/i.test(normalizedHref)) return null;
-  const diskRoute = extractManagedProjectsDiskRoute(normalizedHref);
-  if (!diskRoute) return null;
-  if (projectId && diskRoute.projectId === projectId) {
-    // Same project even when the file doesn't appear in `projectFileNames`
-    // (stale file list, or a file the agent just wrote): still open it in
-    // the current workspace rather than re-navigating to our own project.
-    return { kind: 'workspace-file', filePath: diskRoute.filePath };
+  return null;
+}
+
+/**
+ * Classify an absolute disk href against the current project's daemon-
+ * resolved working directory. See `resolveChatFileLink` for the ownership
+ * rules; this helper only ever answers from positive prefix proof and
+ * returns `null` whenever the href is not provably owned. POSIX paths only —
+ * `resolvedDir` comparison is textual, so a Windows daemon path simply never
+ * matches and the caller falls through to the known-file fallback.
+ */
+function resolveAgainstResolvedDir(
+  href: string,
+  projectId: string | null | undefined,
+  projectResolvedDir: string | null | undefined,
+): ChatFileLinkTarget | null {
+  if (!projectResolvedDir) return null;
+  if (!href.startsWith('/') || href.startsWith('//')) return null;
+  const withoutHash = href.split('#')[0] ?? href;
+  const withoutQuery = withoutHash.split('?')[0] ?? withoutHash;
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(withoutQuery);
+  } catch {
+    return null;
   }
-  return { kind: 'project-file', projectId: diskRoute.projectId, filePath: diskRoute.filePath };
+  if (decoded.split('/').some((segment) => segment === '..')) return null;
+  const resolvedDir = projectResolvedDir.replace(/\/+$/, '');
+  if (!resolvedDir.startsWith('/')) return null;
+  if (decoded.startsWith(`${resolvedDir}/`)) {
+    const filePath = decoded.slice(resolvedDir.length + 1);
+    if (!filePath) return null;
+    return { kind: 'workspace-file', filePath };
+  }
+  // Managed current project: `resolvedDir` is `<projects-root>/<projectId>`,
+  // so a sibling `<projects-root>/<otherId>/<file>` provably belongs to that
+  // other managed project. Imported-folder projects (`resolvedDir` is the
+  // user's baseDir) reveal no managed root — no navigation is inferred.
+  if (!projectId || !resolvedDir.endsWith(`/${projectId}`)) return null;
+  const managedRoot = resolvedDir.slice(0, resolvedDir.length - projectId.length - 1);
+  if (!managedRoot || !decoded.startsWith(`${managedRoot}/`)) return null;
+  const rest = decoded.slice(managedRoot.length + 1);
+  const separator = rest.indexOf('/');
+  if (separator <= 0 || separator === rest.length - 1) return null;
+  const owningProjectId = rest.slice(0, separator);
+  const filePath = rest.slice(separator + 1);
+  return { kind: 'project-file', projectId: owningProjectId, filePath };
 }
 
 /**
@@ -203,46 +245,6 @@ function decodeRouteSegment(segment: string): string {
   } catch {
     return segment;
   }
-}
-
-/**
- * Extract `{ projectId, filePath }` from an absolute filesystem path into
- * the daemon's managed projects root (`<data-root>/projects/<id>/<file…>`).
- * The web app can't know the data root itself, so it keys on the first
- * `/projects/<segment>/` boundary — for managed projects the segment IS the
- * project id. False positives (a personal folder literally named
- * `projects`) degrade to the project-missing error + home bounce in the
- * SAME window, which is still strictly better than the detached home
- * window this path produced before.
- */
-function extractManagedProjectsDiskRoute(
-  href: string,
-): { projectId: string; filePath: string } | null {
-  if (!href.startsWith('/')) return null;
-  // Protocol-relative URLs (`//host/…`) are external network URLs, never
-  // local disk paths — `//cdn.example.com/projects/x/y.html` must not be
-  // reinterpreted as a managed-projects file.
-  if (href.startsWith('//')) return null;
-  // Daemon endpoints under /api (and static mounts) are URLs, not disk
-  // paths — `/api/projects/<id>/export/…` must not be reinterpreted as a
-  // managed-projects file.
-  if (isDaemonServedPath(href)) return null;
-  const withoutHash = href.split('#')[0] ?? href;
-  const withoutQuery = withoutHash.split('?')[0] ?? withoutHash;
-  let decoded: string;
-  try {
-    decoded = decodeURIComponent(withoutQuery);
-  } catch {
-    return null;
-  }
-  const match = /\/projects\/([^/]+)\/(.+)$/.exec(decoded);
-  if (!match?.[1] || !match[2]) return null;
-  const projectId = match[1];
-  const filePath = match[2];
-  // Same traversal guard as normalizeProjectFilePath: never hand the file
-  // router a path that climbs out of the project root.
-  if (projectId === '..' || filePath.split('/').some((segment) => segment === '..')) return null;
-  return { projectId, filePath };
 }
 
 function matchKnownProjectFilePath(

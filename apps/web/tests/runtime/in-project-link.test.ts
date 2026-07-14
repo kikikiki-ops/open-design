@@ -271,15 +271,13 @@ describe('resolveChatFileLink (issue: chatpane file links opening a home-page wi
       ).toEqual({ kind: 'project-file', projectId: 'other-project', filePath: 'deck-outline.md' });
     });
 
-    it('prefers a current-project file match over a colliding managed-looking disk path', () => {
+    it('prefers a current-project file match over a colliding UNPROVEN disk path', () => {
       // `index.html` exists in the current project AND the disk path names a
-      // `/projects/<seg>/` boundary. The client cannot positively prove the
-      // segment is another project (it is just as likely a legacy name-keyed
-      // or imported-folder directory — the maintained contract in
-      // e2e/ui/project-file-link-routing.test.ts), so the current-project
-      // basename fallback wins. Navigation to the owning project only
-      // happens when NO current-project file matches; upgrading this case
-      // needs explicit reference-project metadata plumbed to the chat.
+      // `/projects/<seg>/` boundary — but without `projectResolvedDir` the
+      // client cannot positively prove the segment is another project (it is
+      // just as likely a legacy name-keyed or imported-folder directory —
+      // the maintained contract in e2e/ui/project-file-link-routing.test.ts),
+      // so the current-project basename fallback wins.
       expect(
         resolveChatFileLink(
           '/Users/mac/.open-design/data/projects/other-project/index.html',
@@ -287,6 +285,21 @@ describe('resolveChatFileLink (issue: chatpane file links opening a home-page wi
           'project-1',
         ),
       ).toEqual({ kind: 'workspace-file', filePath: 'index.html' });
+    });
+
+    it('routes a colliding disk path to its PROVEN owning project when resolvedDir reveals the managed root', () => {
+      // With the current project's daemon-resolved dir known, a sibling
+      // directory under the same managed projects root provably belongs to
+      // that other project — proof outranks the basename fallback, so the
+      // same-named current-project file no longer captures the click.
+      expect(
+        resolveChatFileLink(
+          '/Users/mac/.open-design/data/projects/other-project/index.html',
+          new Set(['index.html']),
+          'project-1',
+          '/Users/mac/.open-design/data/projects/project-1',
+        ),
+      ).toEqual({ kind: 'project-file', projectId: 'other-project', filePath: 'index.html' });
     });
 
     it('keeps the legacy name-keyed e2e fixture shape on the current project (regression for e2e/ui/project-file-link-routing.test.ts)', () => {
@@ -303,15 +316,32 @@ describe('resolveChatFileLink (issue: chatpane file links opening a home-page wi
       ).toEqual({ kind: 'workspace-file', filePath: 'index.html' });
     });
 
-    it('resolves an absolute managed-projects disk path to the owning project', () => {
+    it('keeps the legacy fixture on the current project even when resolvedDir points at a DIFFERENT data root', () => {
+      // Runtime reality of the e2e contract: the live daemon's managed root
+      // has nothing to do with the stale 0.10.x path baked into old chat
+      // history, so the proof-based branches stay silent and the basename
+      // fallback still reopens the current project's tab.
+      expect(
+        resolveChatFileLink(
+          '/Users/mac/open-design/open-design-preview-0.10.0/projects/File%20Link%20Routing/index.html',
+          new Set(['index.html']),
+          'file-link-routing-1752480000000-abc123',
+          '/tmp/od-e2e-data/projects/file-link-routing-1752480000000-abc123',
+        ),
+      ).toEqual({ kind: 'workspace-file', filePath: 'index.html' });
+    });
+
+    it('resolves an absolute managed-projects disk path to the PROVEN owning project', () => {
       // The daemon tells the agent to reference @-mentioned projects by
       // absolute path (`chat-run-context.ts`), so chat links to their files
-      // arrive as `<data-root>/projects/<projectId>/<file>`.
+      // arrive as `<data-root>/projects/<projectId>/<file>` — siblings of
+      // the current project's resolvedDir under the same managed root.
       expect(
         resolveChatFileLink(
           '/Users/mac/.open-design/data/projects/04d5e136-0cf2-4bf4/deck-outline.md',
           new Set(['unrelated.html']),
           'project-1',
+          '/Users/mac/.open-design/data/projects/project-1',
         ),
       ).toEqual({
         kind: 'project-file',
@@ -320,12 +350,26 @@ describe('resolveChatFileLink (issue: chatpane file links opening a home-page wi
       });
     });
 
+    it('does NOT infer an owning project from a /projects/<seg>/ boundary alone', () => {
+      // Same href, but no resolvedDir proof: the path could just as well be
+      // a legacy name-keyed dir or an imported folder, so it must not
+      // navigate anywhere (the click-layer swallow keeps it inert).
+      expect(
+        resolveChatFileLink(
+          '/Users/mac/.open-design/data/projects/04d5e136-0cf2-4bf4/deck-outline.md',
+          new Set(['unrelated.html']),
+          'project-1',
+        ),
+      ).toBeNull();
+    });
+
     it('decodes percent-encoded segments in disk paths', () => {
       expect(
         resolveChatFileLink(
           '/Users/mac/data/projects/Web%20Prototype/sub%20dir/hero.html',
           undefined,
           'project-1',
+          '/Users/mac/data/projects/project-1',
         ),
       ).toEqual({
         kind: 'project-file',
@@ -336,14 +380,66 @@ describe('resolveChatFileLink (issue: chatpane file links opening a home-page wi
 
     it('keeps nested file paths under the owning project', () => {
       expect(
-        resolveChatFileLink('/data/projects/p2/assets/img/logo.svg', undefined, 'project-1'),
+        resolveChatFileLink(
+          '/data/projects/p2/assets/img/logo.svg',
+          undefined,
+          'project-1',
+          '/data/projects/project-1',
+        ),
       ).toEqual({ kind: 'project-file', projectId: 'p2', filePath: 'assets/img/logo.svg' });
     });
 
     it('routes a disk path for the CURRENT project through the workspace opener even when the file list is stale', () => {
       expect(
-        resolveChatFileLink('/data/projects/project-1/new-file.md', new Set(['other.html']), 'project-1'),
+        resolveChatFileLink(
+          '/data/projects/project-1/new-file.md',
+          new Set(['other.html']),
+          'project-1',
+          '/data/projects/project-1',
+        ),
       ).toEqual({ kind: 'workspace-file', filePath: 'new-file.md' });
+    });
+  });
+
+  describe('imported-folder current projects (resolvedDir is the baseDir)', () => {
+    it('keeps just-written files under an imported baseDir containing a projects/ segment on the CURRENT project', () => {
+      // The reviewer scenario on #5611: the imported workspace itself lives
+      // under `…/projects/acme/`, and `new-file.md` is not in the (stale)
+      // file list yet. The resolvedDir prefix proves the file is ours — it
+      // must open in the current workspace, never navigate to a phantom
+      // `acme` project.
+      expect(
+        resolveChatFileLink(
+          '/Users/mac/workspace/projects/acme/new-file.md',
+          new Set(['other.html']),
+          'project-1',
+          '/Users/mac/workspace/projects/acme',
+        ),
+      ).toEqual({ kind: 'workspace-file', filePath: 'new-file.md' });
+    });
+
+    it('resolves nested and percent-encoded files under the imported baseDir', () => {
+      expect(
+        resolveChatFileLink(
+          '/Users/mac/workspace/projects/acme/sub%20dir/hero.html',
+          undefined,
+          'project-1',
+          '/Users/mac/workspace/projects/acme',
+        ),
+      ).toEqual({ kind: 'workspace-file', filePath: 'sub dir/hero.html' });
+    });
+
+    it('never derives a managed root from an imported baseDir', () => {
+      // resolvedDir does not end with `/<projectId>`, so a sibling under the
+      // same parent is NOT provably another Open Design project.
+      expect(
+        resolveChatFileLink(
+          '/Users/mac/workspace/projects/other-folder/index.html',
+          undefined,
+          'project-1',
+          '/Users/mac/workspace/projects/acme',
+        ),
+      ).toBeNull();
     });
   });
 
@@ -354,7 +450,12 @@ describe('resolveChatFileLink (issue: chatpane file links opening a home-page wi
 
     it('protocol-relative URLs are external, never managed-projects disk paths', () => {
       expect(
-        resolveChatFileLink('//example.com/projects/x/y.html', undefined, 'project-1'),
+        resolveChatFileLink(
+          '//example.com/projects/x/y.html',
+          undefined,
+          'project-1',
+          '/data/projects/project-1',
+        ),
       ).toBeNull();
     });
 
@@ -364,7 +465,12 @@ describe('resolveChatFileLink (issue: chatpane file links opening a home-page wi
 
     it('refuses traversal segments inside a disk-path file part', () => {
       expect(
-        resolveChatFileLink('/data/projects/p2/%2E%2E/secret.html', undefined, 'project-1'),
+        resolveChatFileLink(
+          '/data/projects/p2/%2E%2E/secret.html',
+          undefined,
+          'project-1',
+          '/data/projects/project-1',
+        ),
       ).toBeNull();
     });
 

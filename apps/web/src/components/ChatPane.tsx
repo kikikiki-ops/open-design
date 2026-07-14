@@ -477,6 +477,9 @@ interface Props {
   // Names that exist in the project folder. Tool cards and chips use this
   // set to decide whether a path can be opened as a tab.
   projectFileNames?: Set<string>;
+  // Daemon-resolved on-disk working directory of the current project —
+  // positive-proof anchor for chat file-link routing (see AssistantMessage).
+  projectResolvedDir?: string | null;
   onEnsureProject: () => Promise<string | null>;
   previewComments?: PreviewComment[];
   attachedComments?: PreviewComment[];
@@ -787,6 +790,7 @@ export function ChatPane({
   hasActiveDesignSystem = false,
   activeDesignSystem = null,
   projectFileNames,
+  projectResolvedDir,
   onEnsureProject,
   previewComments = [],
   attachedComments = [],
@@ -2344,6 +2348,7 @@ export function ChatPane({
                 projectFiles={projectFiles}
                 projectMetadata={projectMetadata}
                 projectFileNames={projectFileNames}
+                projectResolvedDir={projectResolvedDir}
                 onRequestOpenFile={onRequestOpenFile}
                 onRequestPluginDetails={onRequestPluginDetails}
                 onRequestDesignSystemDetails={onRequestDesignSystemDetails}
@@ -2788,6 +2793,7 @@ function ChatRows({
   projectFiles,
   projectMetadata,
   projectFileNames,
+  projectResolvedDir,
   onRequestOpenFile,
   onRequestPluginDetails,
   onRequestDesignSystemDetails,
@@ -2842,6 +2848,9 @@ function ChatRows({
   projectFiles: ProjectFile[];
   projectMetadata?: ProjectMetadata;
   projectFileNames?: Set<string>;
+  // Daemon-resolved on-disk working directory of the current project —
+  // positive-proof anchor for chat file-link routing (see AssistantMessage).
+  projectResolvedDir?: string | null;
   onRequestOpenFile?: (name: string) => void;
   onRequestPluginDetails?: (pluginId: string) => void;
   onRequestDesignSystemDetails?: (system: DesignSystemSummary) => void;
@@ -2962,6 +2971,7 @@ function ChatRows({
         projectFiles={projectFiles}
         projectMetadata={projectMetadata}
         projectFileNames={projectFileNames}
+        projectResolvedDir={projectResolvedDir}
         onRequestOpenFile={onRequestOpenFile}
         onRequestPluginFolderAgentAction={onRequestPluginFolderAgentAction}
         activePluginActionPaths={activePluginActionPaths}
