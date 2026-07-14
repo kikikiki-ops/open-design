@@ -1003,6 +1003,20 @@ describe('collab sync routes', () => {
     expect(after.body.version).toBe(1);
   });
 
+  it('refuses to pull a project that is no longer team-shared (revocation)', async () => {
+    // The team catalog no longer lists this project (the owner moved it out of
+    // the team). A stale local copy on a former member's daemon must not be able
+    // to keep pulling fresh content.
+    const api = await startSyncServer(fixedShareContextProvider(true), {
+      resolveSharedProject: async () => null,
+    });
+
+    const pull = await api.json('/api/projects/moved-out-project/collab/pull', { method: 'POST' });
+
+    expect(pull.status).toBe(403);
+    expect(pull.body.error).toBe('WORKSPACE_PROJECT_PULL_DENIED');
+  });
+
   it('does not register a placeholder project when there is no published version to pull', async () => {
     const store = fakeProjectStore();
     const api = await startSyncServer(undefined, { projectStore: store });

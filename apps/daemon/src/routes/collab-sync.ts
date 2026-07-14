@@ -657,6 +657,22 @@ export function registerCollabSyncRoutes(app: Express, deps: RegisterCollabSyncR
 
   app.post('/api/projects/:id/collab/pull', async (req, res) => {
     const projectId = req.params.id;
+    // Revocation gate: a project may only be pulled while it is still shared to
+    // the caller's team. Once the owner moves it out of the team its catalog
+    // entry disappears, and a stale local copy must stop syncing new content.
+    // A transient catalog/hub lookup error falls through to the existing pull
+    // path rather than hard-denying a legitimate pull.
+    if (resolveSharedProject) {
+      let stillShared = true;
+      try {
+        stillShared = (await resolveSharedProject(projectId)) != null;
+      } catch {
+        stillShared = true;
+      }
+      if (!stillShared) {
+        return res.status(403).json({ error: 'WORKSPACE_PROJECT_PULL_DENIED' });
+      }
+    }
     const principal = await resourcePrincipalForSharedProject(projectId, req);
     const result = await pullLatest(projectId, principal);
     if (result.version !== null) {
