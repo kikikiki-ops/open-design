@@ -4110,6 +4110,23 @@ export async function startServer({
     resolvePullDir: (projectId) => resolveProjectDir(PROJECTS_DIR, projectId),
     resolveSharedProject,
     resolveSharedProjectOwner,
+    // Non-destructive revocation flag for a pulled team mirror: the pull gate
+    // sets it when a project has left the team (files stay on disk but stop
+    // being served) and clears it on a successful re-pull. Read routes refuse to
+    // serve a project once this is set.
+    markTeamProjectRevoked: (projectId: string, revoked: boolean) => {
+      const project = getProject(db, projectId);
+      if (!project) return;
+      const metadata: Record<string, unknown> = { ...((project.metadata as Record<string, unknown> | null) ?? {}) };
+      if (revoked) {
+        if (metadata.teamMirrorRevokedAt) return;
+        metadata.teamMirrorRevokedAt = Date.now();
+      } else {
+        if (!metadata.teamMirrorRevokedAt) return;
+        delete metadata.teamMirrorRevokedAt;
+      }
+      updateProject(db, projectId, { metadata });
+    },
     describeProject: describeCollabProject,
     onTeamShareStateChanged: persistWorkspaceProjectVisibility,
     ...(velaCliTeamProjectCatalog ? { teamProjectCatalog: velaCliTeamProjectCatalog } : {}),

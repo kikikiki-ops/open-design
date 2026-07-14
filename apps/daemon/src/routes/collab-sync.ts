@@ -69,6 +69,9 @@ export interface RegisterCollabSyncRoutesDeps {
   >;
   resolveSharedProjectOwner?: (projectId: string) => Promise<string | null>;
   resolveSharedProject?: (projectId: string) => Promise<TeamProject | null>;
+  /** Set/clear the non-destructive "team mirror revoked" flag on a local
+   *  project so read routes stop serving a project that has left the team. */
+  markTeamProjectRevoked?: (projectId: string, revoked: boolean) => void;
   resolveOwnerDisplayName?: (
     memberId: string,
   ) => Promise<{ displayName: string; role: 'owner' | 'admin' | 'member' } | null>;
@@ -289,6 +292,7 @@ export function registerCollabSyncRoutes(app: Express, deps: RegisterCollabSyncR
     resolvePullDir,
     resolveSharedProjectOwner,
     resolveSharedProject,
+    markTeamProjectRevoked,
     resolveOwnerDisplayName,
     teamProjectCatalog,
     describeProject,
@@ -670,6 +674,9 @@ export function registerCollabSyncRoutes(app: Express, deps: RegisterCollabSyncR
         stillShared = true;
       }
       if (!stillShared) {
+        // The project has left the team: mark the stale local mirror revoked so
+        // its files stop being served (non-destructive — files remain on disk).
+        markTeamProjectRevoked?.(projectId, true);
         return res.status(403).json({ error: 'WORKSPACE_PROJECT_PULL_DENIED' });
       }
     }
@@ -683,6 +690,9 @@ export function registerCollabSyncRoutes(app: Express, deps: RegisterCollabSyncR
         return res.status(502).json({ error: 'TEAM_PROJECT_PULL_REGISTER_UNAVAILABLE' });
       }
     }
+    // A successful pull means the project is shared again (or still is): clear
+    // any prior revocation so its files are served normally.
+    markTeamProjectRevoked?.(projectId, false);
     res.json({ ok: true, version: result.version });
   });
 

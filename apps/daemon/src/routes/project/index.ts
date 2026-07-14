@@ -3490,6 +3490,9 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
     try {
       const since = Number(req.query?.since);
       const project = getProject(db, req.params.id);
+      if (project?.metadata?.teamMirrorRevokedAt) {
+        return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'not found');
+      }
       const files = await listFiles(PROJECTS_DIR, req.params.id, {
         since: Number.isFinite(since) ? since : undefined,
         metadata: project?.metadata,
@@ -3727,6 +3730,9 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
       const relPath = String(params[1] ?? '');
       if (rejectInternalVersionPath(res, relPath)) return;
       const project = getProject(db, projectId);
+      if (project?.metadata?.teamMirrorRevokedAt) {
+        return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'not found');
+      }
       // PreviewModal loads artifact HTML via srcdoc, giving the iframe Origin: "null".
       // data: URIs, file://, and some sandboxed iframes also send null — all are
       // local-only callers, so this is safe. Real cross-origin sites send a real
@@ -4085,6 +4091,9 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
       const fileSplat = String(params[1] ?? '');
       if (rejectInternalVersionPath(res, fileSplat)) return;
       const project = getProject(db, projectId);
+      if (project?.metadata?.teamMirrorRevokedAt) {
+        return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'not found');
+      }
       const file = await readProjectFile(
         PROJECTS_DIR,
         projectId,
