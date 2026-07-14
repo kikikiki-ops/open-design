@@ -781,6 +781,32 @@ export function classifyRunFailure(
     );
   }
 
+  // ACP fatal paths ask the host to terminate the child after the protocol
+  // failure. The resulting exit/signal is therefore cleanup, not the cause.
+  // Prefer the runtime_close reason once specific text classifiers above have
+  // had a chance to claim auth, quota, upstream, prompt-size, and other known
+  // failures. Unlike stream_error, fatal_rpc_error may have no structured SSE
+  // error code at all, so it must also refine signal/unknown/exit fallbacks.
+  const runtimeCloseReason = readRuntimeCloseReason(input.events);
+  if (
+    runtimeCloseReason === 'fatal_rpc_error' &&
+    (
+      errorCode === 'AGENT_EXECUTION_FAILED' ||
+      errorCode === 'AGENT_TERMINATED_UNKNOWN' ||
+      errorCode.startsWith('AGENT_SIGNAL_') ||
+      errorCode.startsWith('AGENT_EXIT_')
+    )
+  ) {
+    const retryable = retryableHint ?? true;
+    return classification(
+      'process_exit',
+      'fatal_rpc_error',
+      inferFailureStageFromEvents(input.events, 'child_close'),
+      retryable,
+      retryable ? 'retry' : 'none',
+    );
+  }
+
   const signalInterrupt = signalInterruptClassification(errorCode, text, retryableHint);
   if (signalInterrupt) return signalInterrupt;
 

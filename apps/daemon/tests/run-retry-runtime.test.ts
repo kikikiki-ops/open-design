@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { startServer } from '../src/server.js';
@@ -33,6 +34,8 @@ type RunEvent = {
   event: string;
   data: Record<string, unknown>;
 };
+
+const FAKE_VELA = fileURLToPath(new URL('./fixtures/fake-vela.mjs', import.meta.url));
 
 describe('same-run retry runtime', () => {
   const originalEnv = snapshotEnv();
@@ -99,6 +102,45 @@ describe('same-run retry runtime', () => {
       retry_attempt_index: 1,
       retry_result: 'success',
     });
+  });
+
+  it('retries an ACP fatal close after persisting its runtime close reason', async () => {
+    binDir = await mkdtemp(path.join(os.tmpdir(), 'od-run-retry-acp-fatal-bin-'));
+    const fakeVela = await writeFatalThenSuccessfulVela(binDir, 'vela-fatal-then-success');
+
+    delete process.env.POSTHOG_KEY;
+    delete process.env.POSTHOG_HOST;
+    delete process.env.LANGFUSE_PUBLIC_KEY;
+    delete process.env.LANGFUSE_SECRET_KEY;
+    delete process.env.LANGFUSE_BASE_URL;
+    delete process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL;
+
+    started = await startServer({ port: 0, returnServer: true }) as StartedServer;
+    await putConfig(started.url, {
+      agentId: 'amr',
+      agentCliEnv: { amr: { VELA_BIN: fakeVela } },
+      telemetry: { metrics: true, content: false, artifactManifest: false },
+      privacyDecisionAt: Date.now(),
+    });
+
+    const run = await createAndWaitForRun(started.url, 'amr');
+    expect(run.status).toBe('succeeded');
+
+    const events = await readRunEvents(run.eventsLogPath);
+    expect(events.filter((event) => event.event === 'start')).toHaveLength(2);
+    expect(events.filter((event) => event.event === 'run_retry_attempted')).toHaveLength(1);
+    expect(events.find((event) => event.event === 'run_retry_attempted')?.data).toMatchObject({
+      failure_category: 'process_exit',
+      failure_detail: 'fatal_rpc_error',
+      retry_reason: 'transient_failure',
+    });
+
+    const fatalCloseDiagnostics = events.filter(
+      (event) => event.event === 'diagnostic' &&
+        event.data.type === 'runtime_close' &&
+        event.data.rpc_close_reason === 'fatal_rpc_error',
+    );
+    expect(fatalCloseDiagnostics).toHaveLength(1);
   });
 
   it('retries a silent first-token stall caught by the inactivity watchdog', async () => {
@@ -308,6 +350,27 @@ if (attempts === 0) {
   return bin;
 }
 
+async function writeFatalThenSuccessfulVela(dir: string, name: string): Promise<string> {
+  const bin = path.join(dir, name);
+  const counterPath = path.join(dir, `${name}-attempts`);
+  await writeFile(bin, `#!/bin/sh
+export FAKE_VELA_REQUIRE_SET_MODEL=0
+if [ "$1" = "agent" ] && [ "$2" = "run" ]; then
+  attempts=0
+  if [ -f ${JSON.stringify(counterPath)} ]; then
+    attempts=$(tr -dc '0-9' < ${JSON.stringify(counterPath)})
+  fi
+  echo $((attempts + 1)) > ${JSON.stringify(counterPath)}
+  if [ "$attempts" -eq 0 ]; then
+    export FAKE_VELA_PROMPT_ERROR='transient fatal RPC close'
+  fi
+fi
+exec ${JSON.stringify(process.execPath)} ${JSON.stringify(FAKE_VELA)} "$@"
+`, 'utf8');
+  await chmod(bin, 0o755);
+  return bin;
+}
+
 async function writeStallingClaude(
   dir: string,
   name: string,
@@ -363,7 +426,7 @@ async function putConfig(url: string, patch: Record<string, unknown>): Promise<v
   expect(response.status).toBe(200);
 }
 
-async function createAndWaitForRun(url: string): Promise<RunStatus> {
+async function createAndWaitForRun(url: string, agentId = 'claude'): Promise<RunStatus> {
   const projectId = `retry_runtime_${randomUUID()}`;
   const projectResponse = await fetch(`${url}/api/projects`, {
     method: 'POST',
@@ -391,7 +454,7 @@ async function createAndWaitForRun(url: string): Promise<RunStatus> {
       conversationId: projectBody.conversationId,
       assistantMessageId,
       clientRequestId: `client_retry_${randomUUID()}`,
-      agentId: 'claude',
+      agentId,
       message: 'please retry a transient runtime failure',
       currentPrompt: 'please retry a transient runtime failure',
     }),
