@@ -419,7 +419,7 @@ describe('Langfuse message finalization gate', () => {
         insertId: 'run-accepted-langfuse-report-terminal_fallback-accepted',
         properties: expect.objectContaining({
           run_id: 'run-accepted',
-          langfuse_trace_id: 'run-accepted',
+          langfuse_trace_id: 'run-accepted:tf',
           langfuse_expected: true,
           langfuse_delivery_status: 'accepted',
           langfuse_report_result: 'accepted',

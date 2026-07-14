@@ -385,6 +385,7 @@ import {
   snapshotAiHtmlVersionsForRun,
 } from './run-html-version-snapshots.js';
 import { reportRunCompletedFromDaemon } from './langfuse-bridge.js';
+import { scopedTelemetryBodyId } from './langfuse-trace.js';
 import { buildPromptStackTelemetry } from './prompt-telemetry.js';
 import { readAnalyticsContext } from './analytics.js';
 import {
@@ -1475,7 +1476,9 @@ export function createFinalizedMessageTelemetryReporter({
         project_id: run?.projectId ?? projectId ?? null,
         conversation_id: run?.conversationId ?? conversationId ?? null,
         run_id: runId,
-        langfuse_trace_id: runId,
+        // Correlate analytics to the body id that was actually written
+        // (terminal_fallback uses runId:tf; final_message keeps runId).
+        langfuse_trace_id: scopedTelemetryBodyId(runId, 'final', reportTrigger),
         langfuse_expected: delivery.langfuse_expected,
         langfuse_delivery_status: delivery.langfuse_delivery_status,
         ...(delivery.langfuse_drop_reason
