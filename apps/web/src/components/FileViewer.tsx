@@ -3450,6 +3450,7 @@ export function CommentSidePanel({
   queueOnSend = false,
   sendDisabled = false,
   sendDisabledReason,
+  allowSendToChat = true,
   renderCreateForm = true,
   t,
   composer,
@@ -3472,6 +3473,7 @@ export function CommentSidePanel({
   queueOnSend?: boolean;
   sendDisabled?: boolean;
   sendDisabledReason?: string;
+  allowSendToChat?: boolean;
   renderCreateForm?: boolean;
   t: TranslateFn;
   composer?: ReactNode;
@@ -3494,7 +3496,7 @@ export function CommentSidePanel({
   const sendableCount = comments.reduce((count, comment) => (canSend(comment) ? count + 1 : count), 0);
   const allSelected = sendableCount > 0 && selectedCount === sendableCount;
   const commentsLabel = t('chat.tabComments');
-  const canCreateComment = Boolean(onCreateComment) && newCommentDraft.trim().length > 0 && !sending && !sendDisabled;
+  const canCreateComment = Boolean(onCreateComment) && newCommentDraft.trim().length > 0 && !sending;
   const canReorder = Boolean(onReorder && sorted.length > 1);
   const collapsedRailRef = useRef<HTMLButtonElement | null>(null);
   const expandedToggleRef = useRef<HTMLButtonElement | null>(null);
@@ -3750,19 +3752,21 @@ export function CommentSidePanel({
           <Button variant="ghost" onClick={onClearSelection}>
             {t('chat.comments.clear')}
           </Button>
-          <Button
-            variant="primary"
-            data-testid="comment-side-send-claude"
-            disabled={sending || sendDisabled}
-            title={sendDisabled ? sendDisabledReason : undefined}
-            onClick={() => void onSendSelected()}
-          >
-            {sending
-              ? t('chat.comments.sending')
-              : queueOnSend
-                ? t('chat.annotationQueue')
-                : t('chat.comments.sendToChat')}
-          </Button>
+          {allowSendToChat ? (
+            <Button
+              variant="primary"
+              data-testid="comment-side-send-claude"
+              disabled={sending || sendDisabled}
+              title={sendDisabled ? sendDisabledReason : undefined}
+              onClick={() => void onSendSelected()}
+            >
+              {sending
+                ? t('chat.comments.sending')
+                : queueOnSend
+                  ? t('chat.annotationQueue')
+                  : t('chat.comments.sendToChat')}
+            </Button>
+          ) : null}
         </div>
       ) : null}
       {composer ? <div className="comment-side-composer">{composer}</div> : null}
@@ -3886,6 +3890,7 @@ function CommentSideDock({
   queueOnSend = false,
   sendDisabled = false,
   sendDisabledReason,
+  allowSendToChat = true,
   renderCreateForm = true,
   t,
   composer,
@@ -3910,6 +3915,7 @@ function CommentSideDock({
   queueOnSend?: boolean;
   sendDisabled?: boolean;
   sendDisabledReason?: string;
+  allowSendToChat?: boolean;
   renderCreateForm?: boolean;
   t: TranslateFn;
   composer?: ReactNode;
@@ -3938,6 +3944,7 @@ function CommentSideDock({
         queueOnSend={queueOnSend}
         sendDisabled={sendDisabled}
         sendDisabledReason={sendDisabledReason}
+        allowSendToChat={allowSendToChat}
         renderCreateForm={renderCreateForm}
         t={t}
         composer={composer}
@@ -10539,7 +10546,9 @@ function HtmlViewer({
       } : undefined}
       sending={sendingBoardBatch}
       queueOnSend={commentQueueOnSend}
-      sendDisabled={commentSendDisabled}
+      sendDisabled={commentSendDisabled || viewerOnly}
+      sendDisabledReason={viewerOnly ? viewerOnlySendDisabledTitle : undefined}
+      allowSendToChat={!viewerOnly}
       t={t}
       scale={overlayPreviewScale}
       offset={{ x: overlayPreviewTransform.offsetX, y: overlayPreviewTransform.offsetY }}
@@ -10663,7 +10672,9 @@ function HtmlViewer({
       canSendComment={canSendCommentToAgent}
       sending={sendingBoardBatch}
       queueOnSend={commentQueueOnSend}
-      sendDisabled={commentSendDisabled}
+      sendDisabled={commentSendDisabled || viewerOnly}
+      sendDisabledReason={viewerOnly ? viewerOnlySendDisabledTitle : undefined}
+      allowSendToChat={!viewerOnly}
       renderCreateForm={!commentPortalHost}
       t={t}
       composer={null}

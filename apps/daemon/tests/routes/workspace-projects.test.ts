@@ -240,7 +240,7 @@ describe('workspace project routes', () => {
     expect(all.projects.some((item) => item.id === draftId)).toBe(true);
     expect(recent.projects.map((item) => item.id)).toContain(draftId);
     expect(recent.projects.map((item) => item.id)).toContain(otherId);
-    expect(recent.projects.map((item) => item.id)).not.toContain(teamId);
+    expect(recent.projects.map((item) => item.id)).toContain(teamId);
     expect(drafts.projects.map((item) => item.id)).not.toContain(draftId);
     expect(drafts.projects.map((item) => item.id)).not.toContain(teamId);
     expect(drafts.projects.map((item) => item.id)).not.toContain(otherId);

@@ -347,6 +347,7 @@ export function BoardComposerPopover({
   canEditComment = true,
   canDeleteComment = true,
   canSendToAgent = true,
+  allowSendToChat = true,
   t,
   scale = 1,
   bounds,
@@ -395,6 +396,7 @@ export function BoardComposerPopover({
   canEditComment?: boolean;
   canDeleteComment?: boolean;
   canSendToAgent?: boolean;
+  allowSendToChat?: boolean;
   t: TranslateFn;
   scale?: number;
   bounds?: PopoverBounds;
@@ -673,7 +675,7 @@ export function BoardComposerPopover({
                       {t('chat.comments.addNote')}
                     </Button>
                   ) : null}
-                  {canSendToAgent ? (
+                  {canSendToAgent && allowSendToChat ? (
                     <Button
                       variant="primary"
                       data-testid="comment-add-send"
@@ -690,7 +692,7 @@ export function BoardComposerPopover({
                   {/* Element: comment (save) is the primary CTA (also Enter);
                       send-to-chat is secondary. Save (edit) is gated by
                       canEditComment; send-to-chat by canSendToAgent. */}
-                  {canSendToAgent ? (
+                  {canSendToAgent && allowSendToChat ? (
                     <Button
                       variant="ghost"
                       data-testid="comment-add-send"

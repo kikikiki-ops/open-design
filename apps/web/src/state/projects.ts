@@ -446,15 +446,20 @@ export async function deleteProject(id: string): Promise<boolean> {
 
 export async function listConversations(
   projectId: string,
+  options?: { throwOnError?: boolean },
 ): Promise<Conversation[]> {
   try {
     const resp = await fetch(
       `/api/projects/${encodeURIComponent(projectId)}/conversations`,
     );
-    if (!resp.ok) return [];
+    if (!resp.ok) {
+      if (options?.throwOnError) throw new Error(`conversations ${resp.status}`);
+      return [];
+    }
     const json = (await resp.json()) as { conversations: Conversation[] };
     return json.conversations ?? [];
-  } catch {
+  } catch (err) {
+    if (options?.throwOnError) throw err;
     return [];
   }
 }

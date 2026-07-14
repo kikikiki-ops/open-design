@@ -1782,9 +1782,8 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
         .filter((row: any) => workspaceProjectRowVisibleForLocations(row, locations));
       const queryCanIncludeTeam =
         view !== 'drafts' &&
-        view !== 'recent' &&
         visibility !== 'personal' &&
-        (view === 'team' || visibility === 'team' || (view === 'all' && visibility === 'all'));
+        (view === 'team' || view === 'recent' || visibility === 'team' || (view === 'all' && visibility === 'all'));
       const needsRemoteTeamProjects = queryCanIncludeTeam;
       const mergedProjects = [
         ...rows.map((row: any) => normalizeWorkspaceProjectRow(row, ctx)),
@@ -1796,7 +1795,6 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
           if (view === 'drafts') {
             if (project.visibility !== 'personal' || !createdByCurrentMember) return false;
           }
-          if (view === 'recent' && project.visibility !== 'personal') return false;
           if (view === 'team' && project.visibility !== 'team') return false;
           if ((visibility === 'personal' || visibility === 'team') && project.visibility !== visibility) return false;
           if (owner === 'mine' && !createdByCurrentMember) return false;
