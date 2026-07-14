@@ -265,6 +265,9 @@ describe('composeSystemPrompt', () => {
       expect(prompt).not.toContain('Quick brief — 30 seconds');
       expect(prompt).not.toContain('Read once, in batches');
       expect(prompt).not.toContain('Filesystem handoff is canonical');
+      // Nor the Ask-mode charter (fourth-round finding): CHAT_MODE_OVERRIDE
+      // forbids creating media, contradicting the media contract below.
+      expect(prompt).not.toContain('# Ask mode');
       expect(prompt).toContain('media generate');
     }
     // Non-media slim runs keep the charter head.

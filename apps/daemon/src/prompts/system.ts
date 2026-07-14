@@ -768,7 +768,7 @@ export function composeSystemPrompt({
         ),
         '\n\n---\n\n',
       ]
-    : isSlimCore
+    : isSlimCore && isAskModeEarly
       ? [
           // Ask mode on a plain stream still leads with the API override so
           // its "overrides every rule below" scope covers the chat charter,
@@ -779,7 +779,18 @@ export function composeSystemPrompt({
           PROMPT_INJECTION_RESISTANCE,
           '\n\n---\n\n',
         ]
-      : [PROMPT_INJECTION_RESISTANCE, '\n\n---\n\n'];
+      : isSlimCore
+        ? [
+            // Slim MEDIA runs (non-ask): no design charter and no Ask charter
+            // either — CHAT_MODE_OVERRIDE forbids creating media, which would
+            // contradict the media-generation contract appended below as the
+            // sole workflow authority. Keep classic's skeleton: API override
+            // first on plain streams, then injection resistance.
+            ...(streamFormat === 'plain' ? [API_MODE_OVERRIDE, '\n\n---\n\n'] : []),
+            PROMPT_INJECTION_RESISTANCE,
+            '\n\n---\n\n',
+          ]
+        : [PROMPT_INJECTION_RESISTANCE, '\n\n---\n\n'];
   // The slim charter's plan step is deliberately generic ("use your runtime's
   // plan/todo tool, else a numbered list") so it works on codex / opencode /
   // ACP agents that have no such tool. Claude-family runs (streamFormat

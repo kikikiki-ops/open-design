@@ -119,12 +119,31 @@ function findTagEnd(html: string, start: number): number {
 }
 
 /** Index just past the `</tagName>` that matches the element opened at `openTagEnd`. */
+/**
+ * Whether `index` falls inside an HTML comment. Comment text is authored
+ * content: neither repeat directives nor same-tag tokens inside `<!-- -->`
+ * count as structure anywhere the renderer scans. Returns the position just
+ * past the comment so scanners can resume after it.
+ */
+function insideComment(html: string, index: number): { resumeAt: number } | null {
+  const start = html.lastIndexOf('<!--', index);
+  if (start === -1) return null;
+  const end = html.indexOf('-->', start);
+  if (end !== -1 && end < index) return null;
+  return { resumeAt: end === -1 ? html.length : end + 3 };
+}
+
 function findElementEnd(html: string, tagName: string, openTagEnd: number): number {
   const re = new RegExp(`<(/?)${tagName}(?=[\\s/>])`, 'gi');
   re.lastIndex = openTagEnd;
   let depth = 1;
   let m: RegExpExecArray | null;
   while ((m = re.exec(html))) {
+    const comment = insideComment(html, m.index);
+    if (comment) {
+      re.lastIndex = comment.resumeAt;
+      continue;
+    }
     const tagEnd = findTagEnd(html, m.index);
     if (m[1] === '/') {
       depth -= 1;
@@ -173,13 +192,7 @@ function findRepeatDirective(
     const tagName = nameMatch?.[1];
     // Inside an HTML comment nothing is a directive, even text that looks
     // like a whole `<div data-od-repeat="...">` tag.
-    const commentStart = html.lastIndexOf('<!--', directiveIndex);
-    const inComment =
-      commentStart !== -1 &&
-      (() => {
-        const commentEnd = html.indexOf('-->', commentStart);
-        return commentEnd === -1 || commentEnd > directiveIndex;
-      })();
+    const inComment = insideComment(html, directiveIndex) !== null;
     // Within the open tag, the attribute must start at the top level — a
     // match inside another attribute's quoted value (title='... data-od-
     // repeat="x in y"') is authored text, not a directive.

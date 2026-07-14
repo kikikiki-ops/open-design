@@ -205,6 +205,27 @@ describe('renderHtmlTemplateV1', () => {
     );
   });
 
+  it('keeps same-tag comment text inside a repeated element inert', () => {
+    // Fourth-round reviewer repros (#5603): `<!-- <div> -->` inside a
+    // repeated <div> incremented the element-boundary depth counter and threw
+    // "unbalanced"; `<!-- </div> -->` closed the repeat early.
+    const open = renderHtmlTemplateV1({
+      templateHtml:
+        '<ul><div data-od-repeat="row in data.rows"><!-- <div> --><span>{{ row }}</span></div></ul>',
+      dataJson: { rows: ['a', 'b'] },
+    });
+    expect(open.html).toBe(
+      '<ul><div><!-- <div> --><span>a</span></div><div><!-- <div> --><span>b</span></div></ul>',
+    );
+
+    const close = renderHtmlTemplateV1({
+      templateHtml:
+        '<ul><div data-od-repeat="row in data.rows"><!-- </div> --><span>{{ row }}</span></div></ul>',
+      dataJson: { rows: ['a'] },
+    });
+    expect(close.html).toBe('<ul><div><!-- </div> --><span>a</span></div></ul>');
+  });
+
   it('ignores a full tag-like directive inside an HTML comment', () => {
     const result = renderHtmlTemplateV1({
       templateHtml:
