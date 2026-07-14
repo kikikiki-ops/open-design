@@ -17,6 +17,7 @@ import {
   runDomToPptx,
   scrollStitchGeometry,
   scrollStitchRowOffset,
+  showSlide,
   shouldCapturePageAsJpeg,
   shouldCaptureAsDeck,
   solidBgraBuffer,
@@ -174,6 +175,18 @@ describe('deck capture DOM prep', () => {
       runtimeFrame: symbol | undefined;
       style = new FakeStyle();
       classList = { toggle: () => true };
+      private readonly attributes = new Set<string>();
+
+      toggleAttribute(name: string, force?: boolean): boolean {
+        const on = force === undefined ? !this.attributes.has(name) : force;
+        if (on) this.attributes.add(name);
+        else this.attributes.delete(name);
+        return on;
+      }
+
+      hasAttribute(name: string): boolean {
+        return this.attributes.has(name);
+      }
 
       constructor(
         private rect: { x: number; y: number } = { x: 32, y: 24 },
@@ -359,6 +372,104 @@ describe('deck capture DOM prep', () => {
     } finally {
       restoreActiveSlideCapture();
       Object.assign(globalThis, { document: previousDocument });
+    }
+  });
+
+  // Regression for issue #990 ("导出PPT多页时后续页面内容丢失"): <deck-stage> decks
+  // (the custom element and the injected fallback in
+  // packages/contracts/src/runtime/deck-stage-fallback.ts) hide every slotted
+  // slide with `::slotted(*){visibility:hidden!important}` and reveal only the one
+  // carrying the `data-od-deck-active` attribute. showSlide picks the page to
+  // capture, so it MUST win that !important cascade. A non-important inline
+  // `visibility:visible` (and class-only toggling) lost it — so every slide but the
+  // first captured blank, exporting one populated page followed by blanks.
+  test('per-slide selection wins the deck-stage !important visibility cascade', async () => {
+    class FakeStyle {
+      private readonly values = new Map<string, { priority: string; value: string }>();
+      setProperty(name: string, value: string, priority = ''): void {
+        this.values.set(name, { priority, value });
+      }
+      getPropertyValue(name: string): string {
+        return this.values.get(name)?.value ?? '';
+      }
+      getPropertyPriority(name: string): string {
+        return this.values.get(name)?.priority ?? '';
+      }
+      // Plain `el.style.foo = x` assignments (how the pre-fix code showed slides)
+      // are non-`!important`, mirrored here by recording an empty priority.
+      set animation(value: string) {
+        this.setProperty('animation', value);
+      }
+      set opacity(value: string) {
+        this.setProperty('opacity', value);
+      }
+      set pointerEvents(value: string) {
+        this.setProperty('pointer-events', value);
+      }
+      set transition(value: string) {
+        this.setProperty('transition', value);
+      }
+      set visibility(value: string) {
+        this.setProperty('visibility', value);
+      }
+      set zIndex(value: string) {
+        this.setProperty('z-index', value);
+      }
+    }
+    class Slide {
+      style = new FakeStyle();
+      classList = { toggle: () => true };
+      private readonly attributes = new Set<string>();
+      closest(): null {
+        return null;
+      }
+      getBoundingClientRect(): DOMRect {
+        return { x: 0, y: 0, width: 1920, height: 1080 } as DOMRect;
+      }
+      toggleAttribute(name: string, force?: boolean): boolean {
+        const on = force === undefined ? !this.attributes.has(name) : force;
+        if (on) this.attributes.add(name);
+        else this.attributes.delete(name);
+        return on;
+      }
+      hasAttribute(name: string): boolean {
+        return this.attributes.has(name);
+      }
+    }
+
+    // Resolve the deck-stage fallback cascade for a slotted slide: hidden by
+    // `::slotted(*){visibility:hidden!important}` unless the host beats it. An
+    // inline declaration only wins with `!important` priority (inline !important
+    // beats a shadow ::slotted !important rule); the deck-active attribute the
+    // reveal rule keys on is the other way to win.
+    const slideRenders = (slide: Slide): boolean => {
+      if (slide.style.getPropertyPriority('visibility') === 'important') {
+        return slide.style.getPropertyValue('visibility') === 'visible';
+      }
+      return slide.hasAttribute('data-od-deck-active') || slide.hasAttribute('data-deck-active');
+    };
+
+    const slides = [new Slide(), new Slide(), new Slide()];
+    const previousDocument = globalThis.document;
+    const previousRaf = globalThis.requestAnimationFrame;
+    Object.assign(globalThis, {
+      document: { getElementById: () => null, querySelectorAll: () => slides },
+      requestAnimationFrame: (cb: FrameRequestCallback) => {
+        cb(0);
+        return 0;
+      },
+    });
+    try {
+      // Export the SECOND page (index 1) — the one the bug left blank.
+      await showSlide('.slide, [data-screen-label], .deck-slide, .ppt-slide', 1);
+      expect(slideRenders(slides[1])).toBe(true);
+      expect(slideRenders(slides[0])).toBe(false);
+      expect(slideRenders(slides[2])).toBe(false);
+    } finally {
+      Object.assign(globalThis, {
+        document: previousDocument,
+        requestAnimationFrame: previousRaf,
+      });
     }
   });
 });

@@ -1315,7 +1315,8 @@ export function restoreActiveSlideCapture(): void {
 
 // Returns a Promise that resolves after the style change has settled for two
 // animation frames, so the caller can show + wait in a single round trip.
-function showSlide(slideSelector: string, index: number): Promise<{ x: number; y: number; w: number; h: number } | null> {
+// Exported so focused tests can drive the real per-slide selection.
+export function showSlide(slideSelector: string, index: number): Promise<{ x: number; y: number; w: number; h: number } | null> {
   restoreActiveSlideCapture();
   const slides = Array.prototype.slice
     .call(document.querySelectorAll(slideSelector))
@@ -1324,16 +1325,28 @@ function showSlide(slideSelector: string, index: number): Promise<{ x: number; y
   // the slide (incl. visibility:hidden->visible and reveal animations), plus
   // inline overrides as a backstop for decks that hide via opacity/visibility.
   const activeClasses = ["active", "visible", "is-active", "current"];
+  // Some deck runtimes gate slide visibility on an ATTRIBUTE, not a class. The
+  // <deck-stage> custom element and the injected fallback both key their shadow
+  // `::slotted([data-deck-active]) / ([data-od-deck-active])` reveal rule off
+  // these attributes — toggling only classes leaves every non-first slide hidden.
+  const activeAttributes = ["data-deck-active", "data-od-deck-active"];
   slides.forEach((node, k) => {
     const el = node as HTMLElement;
     const on = k === index;
-    el.style.transition = "none";
-    el.style.animation = "none";
-    el.style.opacity = on ? "1" : "0";
-    el.style.visibility = on ? "visible" : "hidden";
-    el.style.pointerEvents = on ? "auto" : "none";
-    el.style.zIndex = on ? "999" : "0";
+    // Set the show/hide with `!important` priority. A plain inline value LOSES to
+    // a deck runtime's own `!important` rule — most importantly the deck-stage
+    // fallback's `::slotted(*){visibility:hidden!important}` — which otherwise keeps
+    // every slide but the first hidden and exports slide 2..N as blank pages.
+    // An inline `!important` declaration wins over a shadow `::slotted()!important`
+    // rule, so this reliably reveals exactly the slide we are capturing.
+    el.style.setProperty("transition", "none", "important");
+    el.style.setProperty("animation", "none", "important");
+    el.style.setProperty("opacity", on ? "1" : "0", "important");
+    el.style.setProperty("visibility", on ? "visible" : "hidden", "important");
+    el.style.setProperty("pointer-events", on ? "auto" : "none", "important");
+    el.style.setProperty("z-index", on ? "999" : "0", "important");
     activeClasses.forEach((c) => el.classList.toggle(c, on));
+    activeAttributes.forEach((a) => el.toggleAttribute(a, on));
   });
   // Report where the active slide actually landed after two frames, so the
   // capturer can detect a slide that the deck keeps off-screen (e.g. a
