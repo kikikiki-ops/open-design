@@ -1429,7 +1429,11 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       updatedAt,
     };
     return {
-      id: remote.projectId,
+      // Summary identity is the resource-hub id so two catalog entries that
+      // share the same projectId stay distinct in the list (unique React key /
+      // owner-scoped lookup by resource id). The web opens the card via the
+      // nested `project.id` below, so the real projectId is preserved there.
+      id: remote.resourceId,
       name,
       workspaceId: ctx.workspaceId,
       visibility: 'team',

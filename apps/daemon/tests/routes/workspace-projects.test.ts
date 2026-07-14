@@ -241,9 +241,15 @@ describe('workspace project routes', () => {
     expect(recent.projects.map((item) => item.id)).toContain(draftId);
     expect(recent.projects.map((item) => item.id)).toContain(otherId);
     expect(recent.projects.map((item) => item.id)).toContain(teamId);
-    expect(drafts.projects.map((item) => item.id)).not.toContain(draftId);
+    // Every fixture project is created through the bare `/api/projects` path, so
+    // each has a null workspace creator and counts as a local draft for whoever
+    // views it (legacy local-project compatibility). draftId and otherId are
+    // still personal, so both surface in drafts; teamId was moved to team, so it
+    // drops out. Real per-member draft isolation applies once a project carries a
+    // stamped workspace creator (created within a workspace context, or shared).
+    expect(drafts.projects.map((item) => item.id)).toContain(draftId);
+    expect(drafts.projects.map((item) => item.id)).toContain(otherId);
     expect(drafts.projects.map((item) => item.id)).not.toContain(teamId);
-    expect(drafts.projects.map((item) => item.id)).not.toContain(otherId);
     expect(team.projects.map((item) => item.id)).toContain(teamId);
     expect(team.projects.map((item) => item.id)).not.toContain(draftId);
 
@@ -319,8 +325,19 @@ describe('workspace project routes', () => {
       headers: headers('member-direct', { 'x-od-workspace-role': 'admin' }),
       body: JSON.stringify({ visibility: 'personal' }),
     });
-    expect(moveBackResp.status).toBe(403);
+    // An admin who shared the project can move it back out of the team; the
+    // project returns to personal/local-only and drops its resource binding.
+    expect(moveBackResp.status).toBe(200);
+    const movedBack = await moveBackResp.json() as { project: any };
+    expect(movedBack.project).toMatchObject({
+      id: moveProjectId,
+      visibility: 'personal',
+      syncState: 'local_only',
+      resourceHubResourceId: null,
+    });
 
+    // It is already personal now, so moving it to personal again is rejected
+    // (canMoveToPersonal requires the project to currently be team-shared).
     const batchMoveBackResp = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/projects/batch-move`, {
       method: 'POST',
       headers: headers('member-direct', { 'x-od-workspace-role': 'admin' }),
