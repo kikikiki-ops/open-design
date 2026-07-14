@@ -4062,6 +4062,12 @@ export async function startServer({
   registerCollabContextRoutes(app, {
     workspaceContext: collab.workspaceContext,
     activeWorkspace,
+    // Reuse the shared team-projects lister (which holds the shared vela-cli
+    // catalog adapter). Without this the endpoint built a fresh adapter per
+    // request and re-ran the one-off `vela team-projects --help` capability
+    // probe — an extra CLI spawn (and, on the current CLI, a blocking analytics
+    // POST) on every workspace projects load.
+    listTeamProjects: teamProjectsLister,
     // Expose the collab-cloud member directory so the web client can resolve
     // comment authors + owner names to a name + role.
     ...(collabCloud ? { listMembers: () => collabCloud.listMembers() } : {}),
