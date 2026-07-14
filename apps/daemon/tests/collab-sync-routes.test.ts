@@ -780,6 +780,48 @@ describe('collab sync routes', () => {
     expect(afterUnpublish.body.publication).toBeNull();
   });
 
+  it('publishes a public file when the project-dir resolver is async (production wiring)', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'od-public-file-'));
+    tempDirs.push(dir);
+    await writeFile(path.join(dir, 'index.html'), '<h1>Published</h1>');
+    vi.mocked(readVelaControlApiContext).mockReturnValue({
+      profile: 'test',
+      apiUrl: 'https://hub.example.test',
+      controlKey: 'ctrl-test',
+      user: null,
+      configMtimeMs: null,
+    });
+    vi.mocked(runVelaResourceCommand).mockImplementation(async (args) => {
+      if (args[0] === 'snapshot') {
+        return JSON.stringify({
+          slug: 'public-slug',
+          name: 'index.html',
+          kind: 'project',
+          versionId: 'v1',
+          createdAt: new Date(1).toISOString(),
+        });
+      }
+      return JSON.stringify({ version: 1 });
+    });
+    // Production injects resolveProjectDir as an async resolver (it awaits
+    // ensureProject before returning the share dir). The handler must await it;
+    // otherwise the raw Promise reaches realpath and the owner gets a spurious
+    // FILE_UNAVAILABLE even though the file is present and readable.
+    const api = await startSyncServer(fixedShareContextProvider(true), {
+      resolveProjectDir: async () => dir,
+      resolveSharedProject: async () => null,
+    });
+
+    const publish = await api.json('/api/projects/p1/files/index.html/publish-public', { method: 'POST' });
+
+    expect(publish.status).toBe(200);
+    expect(publish.body).toEqual({
+      url: 'https://hub.example.test/api/v1/public/snapshots/public-slug/files/index.html',
+      slug: 'public-slug',
+      fileName: 'index.html',
+    });
+  });
+
   it('rejects escaped and symlinked public file paths before publishing', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'od-public-file-'));
     const outsideDir = await mkdtemp(path.join(tmpdir(), 'od-public-outside-'));

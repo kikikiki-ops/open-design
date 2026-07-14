@@ -75,7 +75,7 @@ export interface RegisterCollabSyncRoutesDeps {
   teamProjectCatalog?: TeamProjectCatalogWriter;
   describeProject?: (projectId: string) => Promise<PulledProjectManifest | null> | PulledProjectManifest | null;
   projectStore?: PulledProjectStore;
-  resolveProjectDir?: (projectId: string) => string;
+  resolveProjectDir?: (projectId: string) => string | Promise<string>;
   resolvePullDir?: (projectId: string) => string;
   readManifest?: (projectDir: string) => Promise<PulledProjectManifest | null>;
   onTeamShareStateChanged?: (input: {
@@ -429,7 +429,7 @@ export function registerCollabSyncRoutes(app: Express, deps: RegisterCollabSyncR
       return res.status(500).json({ error: 'PROJECT_DIR_UNAVAILABLE' });
     }
 
-    const projectDir = resolveProjectDir(projectId);
+    const projectDir = await resolveProjectDir(projectId);
     let data: Buffer;
     try {
       const sourceFile = await resolvePublicSourceFile(projectDir, filePath);
