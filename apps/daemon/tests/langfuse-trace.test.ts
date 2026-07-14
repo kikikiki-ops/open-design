@@ -3298,6 +3298,11 @@ describe('reportRunFeedback', () => {
 
   beforeEach(() => {
     vi.useRealTimers();
+    resetAcceptedFinalTraceBodyIdsForTests();
+  });
+
+  afterEach(() => {
+    resetAcceptedFinalTraceBodyIdsForTests();
   });
 
   it('skips when metrics consent is off', async () => {
@@ -3334,5 +3339,58 @@ describe('reportRunFeedback', () => {
     expect(body.batch).toHaveLength(2);
     expect(body.batch[0].type).toBe('score-create');
     expect(body.batch[0].body.value).toBe(1);
+  });
+
+  it('attaches feedback to the terminal_fallback :tf body after a fallback-only completion', async () => {
+    resetAcceptedFinalTraceBodyIdsForTests();
+    const runId = 'run-fallback-feedback-e2e';
+    const expectedTraceId = scopedTelemetryBodyId(runId, 'final', 'terminal_fallback');
+    const fetchSpy = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ successes: [], errors: [] }), { status: 207 }),
+    );
+
+    // Fallback-only completion (failed run, no later telemetry-finalized message).
+    const completed = await reportRunCompleted(
+      makeCtx({
+        prefs: { metrics: true, content: true, artifactManifest: false },
+        run: {
+          runId,
+          status: 'failed',
+          startedAt: 1_700_000_000_000,
+          endedAt: 1_700_000_001_000,
+        },
+      }),
+      {
+        config: TEST_CONFIG,
+        fetchImpl: fetchSpy as any,
+        reportTrigger: 'terminal_fallback',
+      },
+    );
+    expect(completed).toEqual({
+      langfuse_expected: true,
+      langfuse_delivery_status: 'accepted',
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const completionBody = JSON.parse(fetchSpy.mock.calls[0]![1].body as string);
+    const completionTrace = completionBody.batch.find(
+      (item: { type: string }) => item.type === 'trace-create',
+    );
+    expect(completionTrace?.body?.id).toBe(expectedTraceId);
+
+    // User rates the failed run; scores must target the same :tf body id.
+    await reportRunFeedback(
+      makeFeedbackCtx({
+        runId,
+        reasonCodes: [],
+      }),
+      { config: TEST_CONFIG, fetchImpl: fetchSpy as any },
+    );
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    const feedbackBody = JSON.parse(fetchSpy.mock.calls[1]![1].body as string);
+    expect(feedbackBody.batch).toHaveLength(1);
+    expect(feedbackBody.batch[0].type).toBe('score-create');
+    expect(feedbackBody.batch[0].body.traceId).toBe(expectedTraceId);
+    expect(feedbackBody.batch[0].body.id).toBe(`${expectedTraceId}-rating`);
+    expect(feedbackBody.batch[0].body.traceId).not.toBe(runId);
   });
 });
