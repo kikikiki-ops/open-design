@@ -12,6 +12,7 @@ import {
   paginateViewportBand,
   readDomToPptxBundleFile,
   requestedRenderSize,
+  restackActiveSlide,
   runDomToPptx,
   scrollStitchGeometry,
   scrollStitchRowOffset,
@@ -108,6 +109,106 @@ describe('deck capture DOM prep', () => {
     expect(activeSlideCaptureOffsetTransform({ x: 3840, y: -120 })).toBe(
       'translate(-3840px, 120px)',
     );
+  });
+
+  test('off-stage slide fallback leaves only the capture clone visible', () => {
+    class FakeStyle {
+      cssText = '';
+      private readonly values = new Map<string, { priority: string; value: string }>();
+
+      setProperty(name: string, value: string, priority = ''): void {
+        this.values.set(name, { priority, value });
+      }
+
+      getPropertyPriority(name: string): string {
+        return this.values.get(name)?.priority ?? '';
+      }
+
+      getPropertyValue(name: string): string {
+        return this.values.get(name)?.value ?? '';
+      }
+
+      clone(): FakeStyle {
+        const style = new FakeStyle();
+        style.cssText = this.cssText;
+        for (const [name, entry] of this.values) {
+          style.setProperty(name, entry.value, entry.priority);
+        }
+        return style;
+      }
+    }
+
+    class FakeElement {
+      children: FakeElement[] = [];
+      id = '';
+      parentElement: FakeElement | null = null;
+      style = new FakeStyle();
+
+      appendChild(child: FakeElement): FakeElement {
+        child.parentElement = this;
+        this.children.push(child);
+        return child;
+      }
+
+      cloneNode(): FakeElement {
+        const clone = new FakeElement();
+        clone.style = this.style.clone();
+        return clone;
+      }
+
+      closest(): null {
+        return null;
+      }
+
+      getBoundingClientRect(): DOMRect {
+        return { x: 32, y: 24 } as DOMRect;
+      }
+
+      remove(): void {
+        if (!this.parentElement) return;
+        this.parentElement.children = this.parentElement.children.filter((child) => child !== this);
+        this.parentElement = null;
+      }
+
+      setAttribute(): void {}
+    }
+
+    const slide = new FakeElement();
+    slide.style.setProperty('opacity', '1');
+    const body = new FakeElement();
+    body.appendChild(slide);
+    const findById = (root: FakeElement, id: string): FakeElement | null => {
+      if (root.id === id) return root;
+      for (const child of root.children) {
+        const found = findById(child, id);
+        if (found) return found;
+      }
+      return null;
+    };
+    const fakeDocument = {
+      body,
+      createElement: () => new FakeElement(),
+      getElementById: (id: string) => findById(body, id),
+      querySelectorAll: () => [slide],
+    };
+    const previousDocument = globalThis.document;
+    Object.assign(globalThis, { document: fakeDocument });
+    try {
+      restackActiveSlide('.slide', 0, 960, 540);
+    } finally {
+      Object.assign(globalThis, { document: previousDocument });
+    }
+
+    // Transparent slides otherwise paint twice: the translated source stays
+    // visible underneath the clone restacked at (0, 0), producing the exact
+    // offset title/body overlap seen in PDF and image exports.
+    expect(slide.style.getPropertyValue('opacity')).toBe('0');
+    expect(slide.style.getPropertyPriority('opacity')).toBe('important');
+
+    const layer = findById(body, '__od_export_active_slide_capture');
+    const clone = layer?.children[0]?.children[0];
+    expect(clone?.style.getPropertyValue('opacity')).toBe('1');
+    expect(clone?.style.getPropertyPriority('opacity')).toBe('important');
   });
 });
 

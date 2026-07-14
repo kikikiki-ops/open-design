@@ -1329,10 +1329,12 @@ function showSlide(slideSelector: string, index: number): Promise<{ x: number; y
 
 // Serialized into the page: overlays a capture-only clone of the active slide in
 // the top-left viewport for decks that position the real slide elsewhere
-// (translated carousel strip). The real DOM tree is left intact: authored
-// transforms on the slide or its wrappers must continue to affect layout exactly
-// as they do in the preview.
-function restackActiveSlide(slideSelector: string, index: number, w: number, h: number): void {
+// (translated carousel strip). The real DOM tree stays in place so authored
+// transforms on the slide or its wrappers keep providing the clone offset, but
+// the source slide itself must stop painting while the clone is present. Leaving
+// a transparent source visible underneath the clone renders every child twice
+// (most noticeably large deck titles) in PNG/PDF/PPTX exports.
+export function restackActiveSlide(slideSelector: string, index: number, w: number, h: number): void {
   document.getElementById("__od_export_active_slide_capture")?.remove();
   const slides = Array.prototype.slice
     .call(document.querySelectorAll(slideSelector))
@@ -1372,6 +1374,8 @@ function restackActiveSlide(slideSelector: string, index: number, w: number, h: 
   clone.style.setProperty("visibility", "visible", "important");
   clone.style.setProperty("pointer-events", "none", "important");
   clone.style.setProperty("z-index", "2147483647", "important");
+  el.style.setProperty("opacity", "0", "important");
+  el.style.setProperty("visibility", "hidden", "important");
   offset.appendChild(clone);
   layer.appendChild(offset);
   document.body.appendChild(layer);
