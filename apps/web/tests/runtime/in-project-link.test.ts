@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it } from 'vitest';
-import { asInProjectFilePath } from '../../src/runtime/in-project-link';
+import {
+  asInProjectFilePath,
+  isPathLikeChatHref,
+  resolveChatFileLink,
+} from '../../src/runtime/in-project-link';
 
 describe('asInProjectFilePath', () => {
   describe('intercepts (returns normalized path)', () => {
@@ -209,5 +213,148 @@ describe('asInProjectFilePath', () => {
       expect(asInProjectFilePath('%2E%2E/secret.html')).toBeNull();
       expect(asInProjectFilePath('a/%2E%2E/b.html')).toBeNull();
     });
+  });
+});
+
+describe('resolveChatFileLink (issue: chatpane file links opening a home-page window)', () => {
+  describe('current-project targets (delegates to asInProjectFilePath)', () => {
+    it('resolves a bare relative filename to a workspace file', () => {
+      expect(resolveChatFileLink('template.html', undefined, 'project-1')).toEqual({
+        kind: 'workspace-file',
+        filePath: 'template.html',
+      });
+    });
+
+    it('resolves a matching-route raw URL to a workspace file', () => {
+      expect(
+        resolveChatFileLink('/api/projects/project-1/raw/mutuals-v2.html', undefined, 'project-1'),
+      ).toEqual({ kind: 'workspace-file', filePath: 'mutuals-v2.html' });
+    });
+
+    it('prefers the current project when a local absolute path matches a known project file', () => {
+      // Pre-existing behavior preserved: a disk path whose basename exists in
+      // the current project opens in the current workspace (covers legacy
+      // name-keyed project directories where the `/projects/<seg>/` segment
+      // is not the project id).
+      expect(
+        resolveChatFileLink(
+          '/Users/mac/open-design/data/projects/project-1/index.html',
+          new Set(['index.html']),
+          'project-1',
+        ),
+      ).toEqual({ kind: 'workspace-file', filePath: 'index.html' });
+    });
+  });
+
+  describe('cross-project targets (the 0.14.1 acceptance scenario)', () => {
+    it('resolves a workspace file route for another project instead of falling through', () => {
+      expect(
+        resolveChatFileLink('/projects/other-project/files/index.html', new Set(['index.html']), 'project-1'),
+      ).toEqual({ kind: 'project-file', projectId: 'other-project', filePath: 'index.html' });
+    });
+
+    it('resolves a raw API route for another project instead of falling through', () => {
+      expect(
+        resolveChatFileLink('/api/projects/other-project/raw/deck-outline.md', undefined, 'project-1'),
+      ).toEqual({ kind: 'project-file', projectId: 'other-project', filePath: 'deck-outline.md' });
+    });
+
+    it('resolves an absolute managed-projects disk path to the owning project', () => {
+      // The daemon tells the agent to reference @-mentioned projects by
+      // absolute path (`chat-run-context.ts`), so chat links to their files
+      // arrive as `<data-root>/projects/<projectId>/<file>`.
+      expect(
+        resolveChatFileLink(
+          '/Users/mac/.open-design/data/projects/04d5e136-0cf2-4bf4/deck-outline.md',
+          new Set(['unrelated.html']),
+          'project-1',
+        ),
+      ).toEqual({
+        kind: 'project-file',
+        projectId: '04d5e136-0cf2-4bf4',
+        filePath: 'deck-outline.md',
+      });
+    });
+
+    it('decodes percent-encoded segments in disk paths', () => {
+      expect(
+        resolveChatFileLink(
+          '/Users/mac/data/projects/Web%20Prototype/sub%20dir/hero.html',
+          undefined,
+          'project-1',
+        ),
+      ).toEqual({
+        kind: 'project-file',
+        projectId: 'Web Prototype',
+        filePath: 'sub dir/hero.html',
+      });
+    });
+
+    it('keeps nested file paths under the owning project', () => {
+      expect(
+        resolveChatFileLink('/data/projects/p2/assets/img/logo.svg', undefined, 'project-1'),
+      ).toEqual({ kind: 'project-file', projectId: 'p2', filePath: 'assets/img/logo.svg' });
+    });
+
+    it('routes a disk path for the CURRENT project through the workspace opener even when the file list is stale', () => {
+      expect(
+        resolveChatFileLink('/data/projects/project-1/new-file.md', new Set(['other.html']), 'project-1'),
+      ).toEqual({ kind: 'workspace-file', filePath: 'new-file.md' });
+    });
+  });
+
+  describe('returns null (no in-app file target)', () => {
+    it('external https URLs', () => {
+      expect(resolveChatFileLink('https://example.com/docs', undefined, 'project-1')).toBeNull();
+    });
+
+    it('absolute paths without a managed projects segment', () => {
+      expect(resolveChatFileLink('/Users/mac/code/foo/bar.ts', undefined, 'project-1')).toBeNull();
+    });
+
+    it('refuses traversal segments inside a disk-path file part', () => {
+      expect(
+        resolveChatFileLink('/data/projects/p2/%2E%2E/secret.html', undefined, 'project-1'),
+      ).toBeNull();
+    });
+
+    it('fragment-only anchors', () => {
+      expect(resolveChatFileLink('#intro', undefined, 'project-1')).toBeNull();
+    });
+  });
+});
+
+describe('isPathLikeChatHref (suppresses the detached home-window fallback)', () => {
+  it('true for unresolvable absolute filesystem paths', () => {
+    expect(isPathLikeChatHref('/Users/mac/code/foo/bar.ts')).toBe(true);
+  });
+
+  it('true for traversal-relative paths', () => {
+    expect(isPathLikeChatHref('../sibling/file.md')).toBe(true);
+  });
+
+  it('true for malformed percent-encoded relative paths', () => {
+    expect(isPathLikeChatHref('Read%this.html')).toBe(true);
+  });
+
+  it('true for same-origin app URLs (they reopen the SPA, not a document)', () => {
+    expect(isPathLikeChatHref(`${window.location.origin}/deck-outline.md`)).toBe(true);
+  });
+
+  it('false for external http(s) URLs', () => {
+    expect(isPathLikeChatHref('https://example.com/docs')).toBe(false);
+    expect(isPathLikeChatHref('http://example.com/x')).toBe(false);
+  });
+
+  it('false for mailto: and other schemes', () => {
+    expect(isPathLikeChatHref('mailto:foo@bar.com')).toBe(false);
+    expect(isPathLikeChatHref('od://app/projects/123')).toBe(false);
+    expect(isPathLikeChatHref('file:///etc/passwd')).toBe(false);
+  });
+
+  it('false for fragment-only anchors and empty hrefs', () => {
+    expect(isPathLikeChatHref('#intro')).toBe(false);
+    expect(isPathLikeChatHref('')).toBe(false);
+    expect(isPathLikeChatHref('   ')).toBe(false);
   });
 });

@@ -44,6 +44,98 @@ export function asInProjectFilePath(
   return normalizeProjectFilePath(stripped);
 }
 
+/**
+ * Where a chat file link should open.
+ *
+ * - `workspace-file`: a file of the CURRENT project — open it through the
+ *   right-pane workspace tab opener (`requestOpenFile`).
+ * - `project-file`: a file of ANOTHER Open Design project (typical when the
+ *   conversation @-references other projects and the assistant links their
+ *   files) — navigate to that project's file route in the same window.
+ */
+export type ChatFileLinkTarget =
+  | { kind: 'workspace-file'; filePath: string }
+  | { kind: 'project-file'; projectId: string; filePath: string };
+
+/**
+ * Resolve a chat markdown href to an in-app file target.
+ *
+ * Extends `asInProjectFilePath` (current-project resolution, kept intact so
+ * known-file matches keep opening in the current workspace) with the two
+ * cross-project shapes the assistant emits for @-referenced projects:
+ * app file routes for another project, and absolute managed-projects disk
+ * paths (`<data-root>/projects/<projectId>/<file>` — the daemon hands
+ * referenced projects to the agent as absolute paths, so its links come
+ * back the same way). Without this, those links fell through to the default
+ * `target="_blank"` behavior, and Electron's window-open handler produced a
+ * chrome-less child window whose unroutable path rendered the HOME screen
+ * instead of the file (0.14.1 acceptance bug: chatpane file links opened a home-page window).
+ *
+ * Returns `null` when the href has no in-app file target (external URLs,
+ * fragments, unresolvable paths).
+ */
+export function resolveChatFileLink(
+  href: string | null | undefined,
+  projectFileNames?: ReadonlySet<string>,
+  projectId?: string | null,
+): ChatFileLinkTarget | null {
+  const currentProjectPath = asInProjectFilePath(href, projectFileNames, projectId);
+  if (currentProjectPath) return { kind: 'workspace-file', filePath: currentProjectPath };
+  if (typeof href !== 'string') return null;
+  const trimmed = href.trim();
+  if (!trimmed || trimmed.startsWith('#')) return null;
+  const normalizedHref = normalizeSameOriginHref(trimmed);
+  // App file routes for another project (asInProjectFilePath refuses these
+  // when the route's project differs from the current one).
+  const appRoute = extractAppProjectFileRoute(normalizedHref);
+  if (appRoute) {
+    const filePath = normalizeProjectFilePath(appRoute.filePath);
+    if (!filePath) return null;
+    return { kind: 'project-file', projectId: appRoute.projectId, filePath };
+  }
+  if (/^[a-z][a-z0-9+.-]*:/i.test(normalizedHref)) return null;
+  const diskRoute = extractManagedProjectsDiskRoute(normalizedHref);
+  if (!diskRoute) return null;
+  if (projectId && diskRoute.projectId === projectId) {
+    // Same project but the file didn't suffix-match `projectFileNames`
+    // (stale file list, or a file the agent just wrote): still open it in
+    // the current workspace rather than re-navigating to our own project.
+    return { kind: 'workspace-file', filePath: diskRoute.filePath };
+  }
+  return { kind: 'project-file', projectId: diskRoute.projectId, filePath: diskRoute.filePath };
+}
+
+/**
+ * Whether an unresolvable chat href still LOOKS like a file/route path —
+ * i.e. it carries no scheme (after same-origin normalization) and is not a
+ * same-document fragment. For these, the default `target="_blank"` fallback
+ * can never do anything useful inside the app: Electron resolves the
+ * relative/absolute path against the app origin and opens a detached window
+ * whose SPA router lands on HOME. Callers should `preventDefault()` and
+ * treat the link as inert instead (0.14.1 acceptance bug: chatpane file links opened a home-page window).
+ */
+export function isPathLikeChatHref(href: string | null | undefined): boolean {
+  if (typeof href !== 'string') return false;
+  const trimmed = href.trim();
+  if (!trimmed || trimmed.startsWith('#')) return false;
+  const normalizedHref = normalizeSameOriginHref(trimmed);
+  if (/^[a-z][a-z0-9+.-]*:/i.test(normalizedHref)) return false;
+  // Daemon-served prefixes return real content (downloads, exports, baked
+  // previews) rather than re-entering the SPA — keep their default link
+  // behavior.
+  if (isDaemonServedPath(normalizedHref)) return false;
+  return true;
+}
+
+// Same-origin prefixes the daemon serves directly (see `apps/web/next.config.ts`
+// rewrites and the daemon's static mounts). Opening these in a new window
+// shows actual content, so they are neither file links nor SPA routes.
+function isDaemonServedPath(path: string): boolean {
+  return (
+    path.startsWith('/api/') || path.startsWith('/artifacts/') || path.startsWith('/frames/')
+  );
+}
+
 function normalizeSameOriginHref(href: string): string {
   if (!/^[a-z][a-z0-9+.-]*:/i.test(href)) return href;
   if (typeof window === 'undefined' || !window.location?.origin) return href;
@@ -87,6 +179,42 @@ function decodeRouteSegment(segment: string): string {
   } catch {
     return segment;
   }
+}
+
+/**
+ * Extract `{ projectId, filePath }` from an absolute filesystem path into
+ * the daemon's managed projects root (`<data-root>/projects/<id>/<file…>`).
+ * The web app can't know the data root itself, so it keys on the first
+ * `/projects/<segment>/` boundary — for managed projects the segment IS the
+ * project id. False positives (a personal folder literally named
+ * `projects`) degrade to the project-missing error + home bounce in the
+ * SAME window, which is still strictly better than the detached home
+ * window this path produced before.
+ */
+function extractManagedProjectsDiskRoute(
+  href: string,
+): { projectId: string; filePath: string } | null {
+  if (!href.startsWith('/')) return null;
+  // Daemon endpoints under /api (and static mounts) are URLs, not disk
+  // paths — `/api/projects/<id>/export/…` must not be reinterpreted as a
+  // managed-projects file.
+  if (isDaemonServedPath(href)) return null;
+  const withoutHash = href.split('#')[0] ?? href;
+  const withoutQuery = withoutHash.split('?')[0] ?? withoutHash;
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(withoutQuery);
+  } catch {
+    return null;
+  }
+  const match = /\/projects\/([^/]+)\/(.+)$/.exec(decoded);
+  if (!match?.[1] || !match[2]) return null;
+  const projectId = match[1];
+  const filePath = match[2];
+  // Same traversal guard as normalizeProjectFilePath: never hand the file
+  // router a path that climbs out of the project root.
+  if (projectId === '..' || filePath.split('/').some((segment) => segment === '..')) return null;
+  return { projectId, filePath };
 }
 
 function matchKnownProjectFilePath(
