@@ -260,6 +260,12 @@ export function RecentProjectsStrip({
     return () => document.removeEventListener('pointerdown', handlePointerDown);
   }, [menuOpenId]);
 
+  // Cover fetching must key off the *set of project ids*, not the
+  // `visibleProjects` array reference. That reference changes on every render
+  // (upstream props/derived lists are recreated, and a 2s poll re-renders the
+  // shell), and depending on it re-ran this effect — and re-fetched every
+  // project's files — on every render (observed ~23× per project in a trace).
+  const coverFetchKey = visibleProjects.map(({ project }) => project.id).join('|');
   useEffect(() => {
     let cancelled = false;
     if (visibleProjects.length === 0) {
@@ -326,7 +332,10 @@ export function RecentProjectsStrip({
     return () => {
       cancelled = true;
     };
-  }, [visibleProjects]);
+    // Intentionally keyed on the id set (coverFetchKey), not visibleProjects,
+    // so re-renders that don't change which projects are shown don't re-fetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coverFetchKey]);
 
   // First-run home shouldn't reserve space for an empty "Recent
   // projects" rail — the dashed empty box just adds visual noise
