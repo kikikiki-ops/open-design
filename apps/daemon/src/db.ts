@@ -1692,6 +1692,11 @@ export function setRunTelemetryAcceptedAnchor(
  *
  * Prefer the accepted body id over raw finalization when resolving the score
  * target — finalization alone does not mean a final_message body was accepted.
+ *
+ * An explicit `assistantMessageId` is only trusted when it is the terminal
+ * assistant row for the URL `runId`. Stale or foreign ids (user messages,
+ * other runs, non-terminal placeholders) fall through to the run lookup so
+ * their null/foreign `run_status` cannot steer `resolveFeedbackTraceId`.
  */
 export function getRunFeedbackTelemetryAnchor(
   db: SqliteDb,
@@ -1703,6 +1708,9 @@ export function getRunFeedbackTelemetryAnchor(
   acceptedTraceBodyId: string | null;
   acceptedReportTrigger: TelemetryAcceptedReportTrigger | null;
 } | null {
+  const normalizedRunId = typeof runId === 'string' ? runId.trim() : '';
+  if (!normalizedRunId) return null;
+
   if (typeof assistantMessageId === 'string' && assistantMessageId.trim()) {
     const byId = db
       .prepare(
@@ -1711,9 +1719,11 @@ export function getRunFeedbackTelemetryAnchor(
                 telemetry_accepted_body_id AS acceptedTraceBodyId,
                 telemetry_accepted_report_trigger AS acceptedReportTrigger
            FROM messages
-          WHERE id = ?`,
+          WHERE id = ?
+            AND run_id = ?
+            AND run_status IN ('succeeded', 'failed', 'canceled')`,
       )
-      .get(assistantMessageId.trim()) as DbRow | undefined;
+      .get(assistantMessageId.trim(), normalizedRunId) as DbRow | undefined;
     if (byId) {
       return rowToFeedbackTelemetryAnchor(byId);
     }
@@ -1729,7 +1739,7 @@ export function getRunFeedbackTelemetryAnchor(
         ORDER BY position DESC
         LIMIT 1`,
     )
-    .get(runId) as DbRow | undefined;
+    .get(normalizedRunId) as DbRow | undefined;
   if (!byRun) return null;
   return rowToFeedbackTelemetryAnchor(byRun);
 }

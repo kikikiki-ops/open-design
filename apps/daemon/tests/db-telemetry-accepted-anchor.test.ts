@@ -126,4 +126,85 @@ describe('persisted telemetry accepted anchor', () => {
     expect(anchor?.acceptedTraceBodyId).toBe(runId);
     expect(anchor?.acceptedReportTrigger).toBe('final_message');
   });
+
+  it('ignores a stale or foreign assistantMessageId and falls back to the run row', () => {
+    const runId = 'run-target';
+    const otherRunId = 'run-other';
+    const expectedBodyId = scopedTelemetryBodyId(runId, 'final', 'terminal_fallback');
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+    const now = Date.now();
+    insertProject(db, {
+      id: 'proj-1',
+      name: 'Telemetry project',
+      createdAt: now,
+      updatedAt: now,
+    });
+    insertConversation(db, {
+      id: 'conv-1',
+      projectId: 'proj-1',
+      title: 'Telemetry run',
+      createdAt: now,
+      updatedAt: now,
+    });
+    // Foreign terminal assistant (different run) — must not steer the URL run.
+    upsertMessage(db, 'conv-1', {
+      id: 'assistant-foreign',
+      role: 'assistant',
+      content: 'other run',
+      runId: otherRunId,
+      runStatus: 'succeeded',
+      telemetryFinalized: true,
+      endedAt: now,
+    });
+    // User message id (no terminal run_status) — same trap as a stale client id.
+    upsertMessage(db, 'conv-1', {
+      id: 'user-1',
+      role: 'user',
+      content: 'prompt',
+    });
+    // Canonical terminal assistant for the feedback URL run.
+    upsertMessage(db, 'conv-1', {
+      id: 'assistant-target',
+      role: 'assistant',
+      content: 'partial',
+      runId,
+      runStatus: 'failed',
+      telemetryFinalized: false,
+      endedAt: now,
+    });
+    expect(
+      setRunTelemetryAcceptedAnchor(db, {
+        runId,
+        assistantMessageId: 'assistant-target',
+        bodyId: expectedBodyId,
+        reportTrigger: 'terminal_fallback',
+      }),
+    ).toBe(true);
+
+    for (const staleId of ['assistant-foreign', 'user-1', 'missing-id'] as const) {
+      const anchor = getRunFeedbackTelemetryAnchor(db, runId, staleId);
+      expect(anchor).toEqual({
+        runStatus: 'failed',
+        telemetryFinalized: false,
+        acceptedTraceBodyId: expectedBodyId,
+        acceptedReportTrigger: 'terminal_fallback',
+      });
+      expect(
+        resolveFeedbackTraceId({
+          runId,
+          runStatus: anchor!.runStatus,
+          telemetryFinalized: anchor!.telemetryFinalized,
+          acceptedTraceBodyId: anchor!.acceptedTraceBodyId,
+        }),
+      ).toBe(expectedBodyId);
+    }
+
+    // Matching id + run_id + terminal status still wins.
+    expect(getRunFeedbackTelemetryAnchor(db, runId, 'assistant-target')).toEqual({
+      runStatus: 'failed',
+      telemetryFinalized: false,
+      acceptedTraceBodyId: expectedBodyId,
+      acceptedReportTrigger: 'terminal_fallback',
+    });
+  });
 });
