@@ -24,6 +24,7 @@ import {
   shouldDeferRunFeedback,
   stableIngestionEventId,
   toVelaTelemetryEnvelope,
+  velaSinkIdentityFingerprint,
   type FeedbackReportContext,
   type LangfuseConfig,
   type ReportContext,
@@ -344,6 +345,71 @@ describe('canDeliverRunFeedback', () => {
     expect(
       canDeliverRunFeedback(velaSink, 'install-1', {}, { requireChannel: 'vela' }),
     ).toBe(true);
+  });
+
+  it('requires exact channel match for every accepted delivery channel', () => {
+    const langfuseSink: TelemetrySinkConfig = {
+      kind: 'langfuse',
+      authHeader: 'Basic dGVzdA==',
+      baseUrl: 'https://langfuse.example',
+      timeoutMs: 1_000,
+      retries: 0,
+    };
+    // Accepted relay must not post through Vela or direct Langfuse.
+    expect(
+      canDeliverRunFeedback(velaSink, 'install-1', {}, { requireChannel: 'relay' }),
+    ).toBe(false);
+    expect(
+      canDeliverRunFeedback(langfuseSink, 'install-1', {}, { requireChannel: 'relay' }),
+    ).toBe(false);
+    expect(
+      canDeliverRunFeedback(relaySink, null, {}, { requireChannel: 'relay' }),
+    ).toBe(true);
+    // Accepted langfuse must not post through relay/vela.
+    expect(
+      canDeliverRunFeedback(relaySink, null, {}, { requireChannel: 'langfuse' }),
+    ).toBe(false);
+    expect(
+      canDeliverRunFeedback(velaSink, 'install-1', {}, { requireChannel: 'langfuse' }),
+    ).toBe(false);
+    expect(
+      canDeliverRunFeedback(langfuseSink, null, {}, { requireChannel: 'langfuse' }),
+    ).toBe(true);
+    // Accepted vela must not post through relay/langfuse.
+    expect(
+      canDeliverRunFeedback(relaySink, 'install-1', {}, { requireChannel: 'vela' }),
+    ).toBe(false);
+    expect(
+      canDeliverRunFeedback(langfuseSink, 'install-1', {}, { requireChannel: 'vela' }),
+    ).toBe(false);
+  });
+
+  it('rejects Vela feedback when the accepting account fingerprint mismatches', () => {
+    const identity = velaSinkIdentityFingerprint('prod', 'ck_test_key');
+    expect(identity).toBeTruthy();
+    expect(
+      canDeliverRunFeedback(velaSink, 'install-1', {}, {
+        requireChannel: 'vela',
+        requireVelaIdentity: identity,
+      }),
+    ).toBe(true);
+    expect(
+      canDeliverRunFeedback(velaSink, 'install-1', {}, {
+        requireChannel: 'vela',
+        requireVelaIdentity: 'prod:deadbeefdeadbeef',
+      }),
+    ).toBe(false);
+    const otherKeySink: TelemetrySinkConfig = {
+      ...velaSink,
+      controlKey: 'ck_other_account',
+      profile: 'prod',
+    };
+    expect(
+      canDeliverRunFeedback(otherKeySink, 'install-1', {}, {
+        requireChannel: 'vela',
+        requireVelaIdentity: identity,
+      }),
+    ).toBe(false);
   });
 });
 
@@ -2580,6 +2646,10 @@ describe('reportRunCompleted', () => {
       langfuse_expected: true,
       langfuse_delivery_status: 'accepted',
       langfuse_delivery_channel: 'vela',
+      langfuse_vela_identity: velaSinkIdentityFingerprint(
+        velaConfig.profile,
+        velaConfig.controlKey,
+      ),
     });
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, init] = fetchSpy.mock.calls[0]!;
@@ -3612,6 +3682,54 @@ describe('reportRunFeedback', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it('does not post feedback through Vela when the accepted channel is relay', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(new Response('', { status: 202 }));
+    const velaConfig: TelemetrySinkConfig = {
+      kind: 'vela',
+      apiUrl: 'https://amr-api.example.com',
+      controlKey: 'ck_test_key',
+      timeoutMs: 20_000,
+      retries: 0,
+      profile: 'prod',
+      authSource: 'env',
+      clearLoginOnAuthFailure: false,
+    };
+    await reportRunFeedback(
+      makeFeedbackCtx({
+        runId: 'run-relay-scoped',
+        acceptedDeliveryChannel: 'relay',
+        reasonCodes: [],
+      }),
+      { config: velaConfig, fetchImpl: fetchSpy as any },
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not post feedback through a different Vela account than the accepting one', async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(new Response('', { status: 202 }));
+    const acceptingIdentity = velaSinkIdentityFingerprint('prod', 'ck_accepted');
+    const liveConfig: TelemetrySinkConfig = {
+      kind: 'vela',
+      apiUrl: 'https://amr-api.example.com',
+      controlKey: 'ck_switched_account',
+      timeoutMs: 20_000,
+      retries: 0,
+      profile: 'prod',
+      authSource: 'env',
+      clearLoginOnAuthFailure: false,
+    };
+    await reportRunFeedback(
+      makeFeedbackCtx({
+        runId: 'run-vela-account-switch',
+        acceptedDeliveryChannel: 'vela',
+        acceptedVelaIdentity: acceptingIdentity,
+        reasonCodes: [],
+      }),
+      { config: liveConfig, fetchImpl: fetchSpy as any },
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it('posts feedback through Vela when the accepted channel is Vela', async () => {
     const fetchSpy = vi.fn().mockResolvedValue(new Response('', { status: 202 }));
     const velaConfig: TelemetrySinkConfig = {
@@ -3628,6 +3746,7 @@ describe('reportRunFeedback', () => {
       makeFeedbackCtx({
         runId: 'run-vela-scoped',
         acceptedDeliveryChannel: 'vela',
+        acceptedVelaIdentity: velaSinkIdentityFingerprint('prod', 'ck_test_key'),
         reasonCodes: [],
       }),
       { config: velaConfig, fetchImpl: fetchSpy as any },

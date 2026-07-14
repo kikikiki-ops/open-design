@@ -321,6 +321,20 @@ function migrate(db: SqliteDb): void {
   if (!messageCols.some((c: DbRow) => c.name === 'telemetry_accepted_delivery_channel')) {
     db.exec(`ALTER TABLE messages ADD COLUMN telemetry_accepted_delivery_channel TEXT`);
   }
+  // Run-keyed accepted telemetry anchors survive assistant-row reuse. Message
+  // columns alone are insufficient: when failed run A schedules
+  // terminal_fallback and upsert rebinds the only assistant row to run B, the
+  // delayed accepted write for A would find no run_id=A row.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS run_telemetry_accepted_anchors (
+      run_id TEXT PRIMARY KEY,
+      accepted_body_id TEXT NOT NULL,
+      report_trigger TEXT NOT NULL,
+      delivery_channel TEXT,
+      vela_identity TEXT,
+      updated_at INTEGER NOT NULL
+    );
+  `);
   const routineRunCols = db.prepare(`PRAGMA table_info(routine_runs)`).all() as DbRow[];
   if (!routineRunCols.some((c: DbRow) => c.name === 'error_code')) {
     db.exec(`ALTER TABLE routine_runs ADD COLUMN error_code TEXT`);
@@ -1654,12 +1668,19 @@ function normalizeTelemetryAcceptedDeliveryChannel(
     : null;
 }
 
+function normalizeTelemetryAcceptedVelaIdentity(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
 function rowToFeedbackTelemetryAnchor(row: DbRow): {
   runStatus: string | null;
   telemetryFinalized: boolean;
   acceptedTraceBodyId: string | null;
   acceptedReportTrigger: TelemetryAcceptedReportTrigger | null;
   acceptedDeliveryChannel: TelemetryAcceptedDeliveryChannel | null;
+  acceptedVelaIdentity: string | null;
 } {
   const acceptedTraceBodyId =
     typeof row.acceptedTraceBodyId === 'string' && row.acceptedTraceBodyId.trim()
@@ -1675,22 +1696,103 @@ function rowToFeedbackTelemetryAnchor(row: DbRow): {
     acceptedDeliveryChannel: normalizeTelemetryAcceptedDeliveryChannel(
       row.acceptedDeliveryChannel,
     ),
+    acceptedVelaIdentity: normalizeTelemetryAcceptedVelaIdentity(
+      row.acceptedVelaIdentity,
+    ),
+  };
+}
+
+type RunKeyedAcceptedAnchor = {
+  acceptedTraceBodyId: string;
+  acceptedReportTrigger: TelemetryAcceptedReportTrigger;
+  acceptedDeliveryChannel: TelemetryAcceptedDeliveryChannel | null;
+  acceptedVelaIdentity: string | null;
+};
+
+function readRunKeyedAcceptedAnchor(
+  db: SqliteDb,
+  runId: string,
+): RunKeyedAcceptedAnchor | null {
+  const row = db
+    .prepare(
+      `SELECT accepted_body_id AS acceptedTraceBodyId,
+              report_trigger AS acceptedReportTrigger,
+              delivery_channel AS acceptedDeliveryChannel,
+              vela_identity AS acceptedVelaIdentity
+         FROM run_telemetry_accepted_anchors
+        WHERE run_id = ?`,
+    )
+    .get(runId) as DbRow | undefined;
+  if (!row) return null;
+  const acceptedTraceBodyId =
+    typeof row.acceptedTraceBodyId === 'string' && row.acceptedTraceBodyId.trim()
+      ? row.acceptedTraceBodyId.trim()
+      : '';
+  const acceptedReportTrigger = normalizeTelemetryAcceptedReportTrigger(
+    row.acceptedReportTrigger,
+  );
+  if (!acceptedTraceBodyId || !acceptedReportTrigger) return null;
+  return {
+    acceptedTraceBodyId,
+    acceptedReportTrigger,
+    acceptedDeliveryChannel: normalizeTelemetryAcceptedDeliveryChannel(
+      row.acceptedDeliveryChannel,
+    ),
+    acceptedVelaIdentity: normalizeTelemetryAcceptedVelaIdentity(
+      row.acceptedVelaIdentity,
+    ),
+  };
+}
+
+function mergeFeedbackTelemetryAnchor(
+  messageRow: DbRow | null,
+  runKeyed: RunKeyedAcceptedAnchor | null,
+): {
+  runStatus: string | null;
+  telemetryFinalized: boolean;
+  acceptedTraceBodyId: string | null;
+  acceptedReportTrigger: TelemetryAcceptedReportTrigger | null;
+  acceptedDeliveryChannel: TelemetryAcceptedDeliveryChannel | null;
+  acceptedVelaIdentity: string | null;
+} | null {
+  if (!messageRow && !runKeyed) return null;
+  const fromMessage = messageRow ? rowToFeedbackTelemetryAnchor(messageRow) : null;
+  // Run-keyed storage is authoritative for accepted fields: it survives
+  // assistant-row reuse. Message columns remain a legacy fallback.
+  return {
+    runStatus: fromMessage?.runStatus ?? null,
+    telemetryFinalized: fromMessage?.telemetryFinalized ?? false,
+    acceptedTraceBodyId:
+      runKeyed?.acceptedTraceBodyId ?? fromMessage?.acceptedTraceBodyId ?? null,
+    acceptedReportTrigger:
+      runKeyed?.acceptedReportTrigger ??
+      fromMessage?.acceptedReportTrigger ??
+      null,
+    acceptedDeliveryChannel:
+      runKeyed?.acceptedDeliveryChannel ??
+      fromMessage?.acceptedDeliveryChannel ??
+      null,
+    acceptedVelaIdentity:
+      runKeyed?.acceptedVelaIdentity ??
+      fromMessage?.acceptedVelaIdentity ??
+      null,
   };
 }
 
 /**
  * Persist the accepted final-purpose Langfuse body id for feedback attachment.
  *
- * Survives daemon restart so scores still target the body that Langfuse/Vela
- * actually accepted (e.g. `runId:tf` after terminal_fallback) even when a later
- * final_message delivery fails and process-local memory is cold.
+ * Primary storage is the run-keyed `run_telemetry_accepted_anchors` table so
+ * anchors survive assistant-row reuse (failed run A → row rebound to B → A's
+ * delayed terminal_fallback acceptance still has a restart-safe home). Message
+ * columns are dual-written when a matching assistant row still exists.
  *
  * Preference matches process-local memory: an accepted final_message is never
  * demoted by a later terminal_fallback write.
  *
- * `deliveryChannel` records the transport that accepted the body (especially
- * `vela`, which scopes/hashes ids) so feedback cannot later attach via an
- * anonymous relay to a raw body id that never received the run.
+ * `deliveryChannel` records the transport that accepted the body so feedback
+ * cannot later attach via a different backend. `velaIdentity` fingerprints the
+ * accepting Vela profile/key so scores cannot follow a later account switch.
  */
 export function setRunTelemetryAcceptedAnchor(
   db: SqliteDb,
@@ -1700,6 +1802,7 @@ export function setRunTelemetryAcceptedAnchor(
     bodyId: string;
     reportTrigger: TelemetryAcceptedReportTrigger;
     deliveryChannel?: TelemetryAcceptedDeliveryChannel | null;
+    velaIdentity?: string | null;
   },
 ): boolean {
   const runId = typeof opts.runId === 'string' ? opts.runId.trim() : '';
@@ -1708,10 +1811,39 @@ export function setRunTelemetryAcceptedAnchor(
   const deliveryChannel = normalizeTelemetryAcceptedDeliveryChannel(
     opts.deliveryChannel,
   );
+  const velaIdentity =
+    deliveryChannel === 'vela'
+      ? normalizeTelemetryAcceptedVelaIdentity(opts.velaIdentity)
+      : null;
   if (!runId || !bodyId || !reportTrigger) return false;
 
+  const existingRunKeyed = readRunKeyedAcceptedAnchor(db, runId);
+  if (
+    existingRunKeyed?.acceptedReportTrigger === 'final_message' &&
+    reportTrigger === 'terminal_fallback'
+  ) {
+    return false;
+  }
+
+  const now = Date.now();
+  db.prepare(
+    `INSERT INTO run_telemetry_accepted_anchors (
+        run_id, accepted_body_id, report_trigger, delivery_channel,
+        vela_identity, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(run_id) DO UPDATE SET
+        accepted_body_id = excluded.accepted_body_id,
+        report_trigger = excluded.report_trigger,
+        delivery_channel = excluded.delivery_channel,
+        vela_identity = excluded.vela_identity,
+        updated_at = excluded.updated_at`,
+  ).run(runId, bodyId, reportTrigger, deliveryChannel, velaIdentity, now);
+
+  // Best-effort dual-write onto the current assistant row when it still belongs
+  // to this run. Failure to find a row is not an error — run-keyed storage is
+  // the restart-safe source of truth.
   let messageId: string | null = null;
-  let existingTrigger: TelemetryAcceptedReportTrigger | null = null;
+  let existingMessageTrigger: TelemetryAcceptedReportTrigger | null = null;
   const assistantMessageId =
     typeof opts.assistantMessageId === 'string'
       ? opts.assistantMessageId.trim()
@@ -1731,7 +1863,7 @@ export function setRunTelemetryAcceptedAnchor(
       .get(assistantMessageId, runId) as DbRow | undefined;
     if (byId && typeof byId.id === 'string') {
       messageId = byId.id;
-      existingTrigger = normalizeTelemetryAcceptedReportTrigger(
+      existingMessageTrigger = normalizeTelemetryAcceptedReportTrigger(
         byId.acceptedReportTrigger,
       );
     }
@@ -1750,29 +1882,27 @@ export function setRunTelemetryAcceptedAnchor(
       .get(runId) as DbRow | undefined;
     if (byRun && typeof byRun.id === 'string') {
       messageId = byRun.id;
-      existingTrigger = normalizeTelemetryAcceptedReportTrigger(
+      existingMessageTrigger = normalizeTelemetryAcceptedReportTrigger(
         byRun.acceptedReportTrigger,
       );
     }
   }
-  if (!messageId) return false;
   if (
-    existingTrigger === 'final_message' &&
-    reportTrigger === 'terminal_fallback'
+    messageId &&
+    !(
+      existingMessageTrigger === 'final_message' &&
+      reportTrigger === 'terminal_fallback'
+    )
   ) {
-    return false;
-  }
-
-  const result = db
-    .prepare(
+    db.prepare(
       `UPDATE messages
           SET telemetry_accepted_body_id = ?,
               telemetry_accepted_report_trigger = ?,
               telemetry_accepted_delivery_channel = ?
         WHERE id = ?`,
-    )
-    .run(bodyId, reportTrigger, deliveryChannel, messageId);
-  return Number(result.changes ?? 0) > 0;
+    ).run(bodyId, reportTrigger, deliveryChannel, messageId);
+  }
+  return true;
 }
 
 /**
@@ -1782,6 +1912,10 @@ export function setRunTelemetryAcceptedAnchor(
  *
  * Prefer the accepted body id over raw finalization when resolving the score
  * target — finalization alone does not mean a final_message body was accepted.
+ *
+ * Accepted body / channel / Vela identity prefer the run-keyed table so a
+ * delayed terminal_fallback acceptance for run A still resolves after the
+ * assistant row was rebound to run B.
  *
  * An explicit `assistantMessageId` is only trusted when it is the terminal
  * assistant row for the URL `runId`. Stale or foreign ids (user messages,
@@ -1798,9 +1932,12 @@ export function getRunFeedbackTelemetryAnchor(
   acceptedTraceBodyId: string | null;
   acceptedReportTrigger: TelemetryAcceptedReportTrigger | null;
   acceptedDeliveryChannel: TelemetryAcceptedDeliveryChannel | null;
+  acceptedVelaIdentity: string | null;
 } | null {
   const normalizedRunId = typeof runId === 'string' ? runId.trim() : '';
   if (!normalizedRunId) return null;
+
+  const runKeyed = readRunKeyedAcceptedAnchor(db, normalizedRunId);
 
   if (typeof assistantMessageId === 'string' && assistantMessageId.trim()) {
     const byId = db
@@ -1818,7 +1955,7 @@ export function getRunFeedbackTelemetryAnchor(
       )
       .get(assistantMessageId.trim(), normalizedRunId) as DbRow | undefined;
     if (byId) {
-      return rowToFeedbackTelemetryAnchor(byId);
+      return mergeFeedbackTelemetryAnchor(byId, runKeyed);
     }
   }
   const byRun = db
@@ -1835,8 +1972,7 @@ export function getRunFeedbackTelemetryAnchor(
         LIMIT 1`,
     )
     .get(normalizedRunId) as DbRow | undefined;
-  if (!byRun) return null;
-  return rowToFeedbackTelemetryAnchor(byRun);
+  return mergeFeedbackTelemetryAnchor(byRun ?? null, runKeyed);
 }
 
 export function appendMessageStatusEvent(db: SqliteDb, messageId: string, event: DbRow) {

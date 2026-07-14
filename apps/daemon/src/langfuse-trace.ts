@@ -110,6 +110,12 @@ export interface LangfuseDeliveryState {
   langfuse_drop_reason?: LangfuseDropReason;
   /** Set on accepted deliveries so feedback can pin the same transport. */
   langfuse_delivery_channel?: TelemetryDeliveryChannel;
+  /**
+   * Fingerprint of the Vela profile + Control Key that accepted the body.
+   * Feedback must match this identity so scores are not written under a
+   * different account after an AMR profile/key switch.
+   */
+  langfuse_vela_identity?: string;
 }
 
 export type AnonymousTelemetrySinkConfig =
@@ -173,8 +179,26 @@ const acceptedFinalTraceBodyIds = new Map<
     bodyId: string;
     reportTrigger: TelemetryReportTrigger;
     deliveryChannel?: TelemetryDeliveryChannel;
+    /** Vela profile+key fingerprint when deliveryChannel is `vela`. */
+    velaIdentity?: string;
   }
 >();
+
+/**
+ * Stable fingerprint for the Vela account that accepted a final-purpose body.
+ * Profile name + truncated Control Key hash (never the raw key).
+ */
+export function velaSinkIdentityFingerprint(
+  profile: string | null | undefined,
+  controlKey: string | null | undefined,
+): string | null {
+  const key = typeof controlKey === 'string' ? controlKey.trim() : '';
+  if (!key) return null;
+  const profileName =
+    typeof profile === 'string' && profile.trim() ? profile.trim() : 'default';
+  const keyHash = createHash('sha256').update(key, 'utf8').digest('hex').slice(0, 16);
+  return `${profileName}:${keyHash}`;
+}
 
 /**
  * Remember the body id of an accepted final-purpose delivery so feedback
@@ -185,6 +209,7 @@ export function rememberAcceptedFinalTraceBodyId(
   bodyId: string,
   reportTrigger: TelemetryReportTrigger,
   deliveryChannel?: TelemetryDeliveryChannel | null,
+  velaIdentity?: string | null,
 ): void {
   const key = runId.trim();
   if (!key || !bodyId.trim()) return;
@@ -199,21 +224,26 @@ export function rememberAcceptedFinalTraceBodyId(
     deliveryChannel === 'langfuse'
       ? deliveryChannel
       : undefined;
+  const identity =
+    channel === 'vela' && typeof velaIdentity === 'string' && velaIdentity.trim()
+      ? velaIdentity.trim()
+      : undefined;
   acceptedFinalTraceBodyIds.set(key, {
     bodyId: acceptedBodyId,
     reportTrigger,
     ...(channel ? { deliveryChannel: channel } : {}),
+    ...(identity ? { velaIdentity: identity } : {}),
   });
   // Replay any feedback that arrived during the terminal_fallback delay (or
   // before final_message acceptance) onto the body that was actually accepted.
   // Keep the queue after terminal_fallback so a later final_message can re-
   // attach the same score to the canonical body when it wins the anchor.
-  flushPendingRunFeedback(key, acceptedBodyId, reportTrigger, channel);
+  flushPendingRunFeedback(key, acceptedBodyId, reportTrigger, channel, identity);
 }
 
 /**
  * Process-local accepted delivery channel for a run, if any.
- * Used to keep feedback on the same transport after Vela acceptance.
+ * Used to keep feedback on the same transport after any channel acceptance.
  */
 export function getAcceptedFinalDeliveryChannel(
   runId: string,
@@ -221,6 +251,15 @@ export function getAcceptedFinalDeliveryChannel(
   const key = typeof runId === 'string' ? runId.trim() : '';
   if (!key) return null;
   return acceptedFinalTraceBodyIds.get(key)?.deliveryChannel ?? null;
+}
+
+/**
+ * Process-local Vela identity fingerprint for a run accepted on Vela, if any.
+ */
+export function getAcceptedFinalVelaIdentity(runId: string): string | null {
+  const key = typeof runId === 'string' ? runId.trim() : '';
+  if (!key) return null;
+  return acceptedFinalTraceBodyIds.get(key)?.velaIdentity ?? null;
 }
 
 /** Test-only: clear the accepted-final-trace registry between cases. */
@@ -284,6 +323,7 @@ function flushPendingRunFeedback(
   acceptedBodyId: string,
   reportTrigger: TelemetryReportTrigger,
   deliveryChannel?: TelemetryDeliveryChannel,
+  velaIdentity?: string,
 ): void {
   const key = runId.trim();
   const bodyId = acceptedBodyId.trim();
@@ -304,6 +344,7 @@ function flushPendingRunFeedback(
       ...(deliveryChannel
         ? { acceptedDeliveryChannel: deliveryChannel }
         : {}),
+      ...(velaIdentity ? { acceptedVelaIdentity: velaIdentity } : {}),
     },
     pending.opts,
   ).catch((err) => {
@@ -683,10 +724,16 @@ export interface FeedbackReportContext {
   telemetryFinalized?: boolean;
   /**
    * Transport that accepted the final-purpose body this score attaches to.
-   * When `vela`, feedback must not fall back to anonymous relay/Langfuse —
-   * Vela scopes body ids, so raw-id anonymous scores would misattach.
+   * Feedback must use the same channel — cross-channel writes do not attach
+   * to the same Langfuse/Vela trace (Vela scopes/hashes body ids).
    */
   acceptedDeliveryChannel?: TelemetryDeliveryChannel | null;
+  /**
+   * Fingerprint of the accepting Vela profile/key when
+   * `acceptedDeliveryChannel` is `vela`. Mismatch suppresses delivery so
+   * scores cannot follow an AMR account switch.
+   */
+  acceptedVelaIdentity?: string | null;
   /**
    * Report trigger that owns the accepted final-purpose body (from process
    * memory or the persisted DB anchor). When still `terminal_fallback`, live
@@ -824,19 +871,36 @@ export function readTelemetrySinkConfig(
  * delivery falls back to the anonymous sink (or is undeliverable when that
  * is also missing).
  *
- * When `requireChannel` is `vela`, anonymous fallback is suppressed: the
- * accepted final body lives under Vela-scoped ids and must not receive
- * raw-id scores on the anonymous relay.
+ * When `requireChannel` is set, the live sink must be exactly that channel.
+ * Cross-channel writes do not attach to the same Langfuse/Vela trace.
+ * For `vela`, also require installationId and (when provided) a matching
+ * accepting-account fingerprint so profile/key switches cannot misattribute.
  */
 export function canDeliverRunFeedback(
   sink: TelemetrySinkConfig | null,
   installationId: string | null | undefined,
   env: NodeJS.ProcessEnv = process.env,
-  opts: { requireChannel?: TelemetryDeliveryChannel | null } = {},
+  opts: {
+    requireChannel?: TelemetryDeliveryChannel | null;
+    requireVelaIdentity?: string | null;
+  } = {},
 ): sink is TelemetrySinkConfig {
   if (!sink) return false;
-  if (opts.requireChannel === 'vela') {
-    return sink.kind === 'vela' && Boolean(installationId?.trim());
+  const requireChannel = opts.requireChannel ?? null;
+  if (requireChannel) {
+    if (sink.kind !== requireChannel) return false;
+    if (requireChannel === 'vela') {
+      if (!installationId?.trim()) return false;
+      const requiredIdentity =
+        typeof opts.requireVelaIdentity === 'string'
+          ? opts.requireVelaIdentity.trim()
+          : '';
+      if (requiredIdentity) {
+        const current = velaSinkIdentityFingerprint(sink.profile, sink.controlKey);
+        if (!current || current !== requiredIdentity) return false;
+      }
+    }
+    return true;
   }
   if (sink.kind === 'vela') {
     const id = installationId?.trim() ?? '';
@@ -2463,10 +2527,15 @@ async function postVelaBatch(
 
       // Vela contract is 202 Accepted. Do not treat other 2xx as success.
       if (response.status === 202) {
+        const identity = velaSinkIdentityFingerprint(
+          config.profile,
+          config.controlKey,
+        );
         return {
           langfuse_expected: true,
           langfuse_delivery_status: 'accepted',
           langfuse_delivery_channel: 'vela',
+          ...(identity ? { langfuse_vela_identity: identity } : {}),
         };
       }
 
@@ -2889,6 +2958,7 @@ export async function reportRunCompleted(
         scopedTelemetryBodyId(ctx.run.runId, deliveryPurpose, reportTrigger),
         reportTrigger,
         state.langfuse_delivery_channel,
+        state.langfuse_vela_identity,
       );
     }
     return state;
@@ -3053,17 +3123,27 @@ export async function reportRunFeedback(
   if (ctx.prefs.content !== true) return;
 
   const config = resolveReportConfig(opts);
-  const requireChannel =
-    ctx.acceptedDeliveryChannel === 'vela'
-      ? 'vela'
-      : getAcceptedFinalDeliveryChannel(ctx.runId) === 'vela'
-        ? 'vela'
-        : null;
-  // Same eligibility as reportRunFeedbackFromDaemon preflight: Vela without
-  // installationId only ships when an anonymous sink is available — unless
-  // the accepted final body was Vela-scoped, in which case anonymous is off.
+  // Sticky exact channel: once a final body was accepted on relay/langfuse/vela,
+  // feedback must stay on that same transport (body id namespaces diverge).
+  const requireChannel: TelemetryDeliveryChannel | null =
+    ctx.acceptedDeliveryChannel === 'vela' ||
+    ctx.acceptedDeliveryChannel === 'relay' ||
+    ctx.acceptedDeliveryChannel === 'langfuse'
+      ? ctx.acceptedDeliveryChannel
+      : getAcceptedFinalDeliveryChannel(ctx.runId);
+  const requireVelaIdentity =
+    requireChannel === 'vela'
+      ? (typeof ctx.acceptedVelaIdentity === 'string' &&
+        ctx.acceptedVelaIdentity.trim()
+          ? ctx.acceptedVelaIdentity.trim()
+          : getAcceptedFinalVelaIdentity(ctx.runId))
+      : null;
+  // Same eligibility as reportRunFeedbackFromDaemon preflight: exact channel
+  // match when an accepted anchor exists; Vela also needs installationId +
+  // matching accepting-account fingerprint when known.
   if (!canDeliverRunFeedback(config, ctx.installationId, process.env, {
     requireChannel,
+    requireVelaIdentity,
   })) {
     return;
   }
@@ -3125,11 +3205,13 @@ export async function reportRunFeedback(
 
   const fetchImpl = opts.fetchImpl ?? globalThis.fetch;
   const configuredEnv = opts.configuredEnv ?? {};
+  // When an accepted channel is sticky, never fall back to a different sink.
+  const stickyChannel = requireChannel != null;
   if (config.kind === 'vela') {
     const installationId = ctx.installationId?.trim() ?? '';
     if (!installationId) {
-      // Vela-scoped anchors never fall back; canDeliver already gated this.
-      if (requireChannel === 'vela') return;
+      // Sticky anchors never fall back; canDeliver already gated this.
+      if (stickyChannel) return;
       // canDeliverRunFeedback already verified anonymous fallback exists.
       const fallback = readAnonymousTelemetrySinkConfig();
       if (!fallback) return;
@@ -3139,13 +3221,13 @@ export async function reportRunFeedback(
     await postVelaBatch(config, batch, installationId, fetchImpl, {
       configuredEnv,
       deliveryPurpose: opts.deliveryPurpose ?? 'final',
-      // Keep scores on the Vela-scoped body when that is what was accepted.
-      allowAnonymousFallback: requireChannel !== 'vela',
+      // Keep scores on the accepted channel; never anonymous-overwrite sticky.
+      allowAnonymousFallback: !stickyChannel,
     });
     return;
   }
-  // Non-Vela sink cannot attach to a Vela-scoped body (ids diverge).
-  if (requireChannel === 'vela') return;
+  // Sticky channel already enforced by canDeliver; safety for divergent sinks.
+  if (stickyChannel && config.kind !== requireChannel) return;
   if (config.kind === 'relay') {
     await postRelayBatch(config, serialized, fetchImpl);
     return;

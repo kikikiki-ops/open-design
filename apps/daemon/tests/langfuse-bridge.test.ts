@@ -13,6 +13,7 @@ import {
   resetAcceptedFinalTraceBodyIdsForTests,
   resetPendingRunFeedbackForTests,
   scopedTelemetryBodyId,
+  velaSinkIdentityFingerprint,
 } from '../src/langfuse-trace.js';
 import { buildPromptStackTelemetry } from '../src/prompt-telemetry.js';
 
@@ -2087,7 +2088,10 @@ describe('langfuse-bridge.reportRunFeedbackFromDaemon', () => {
     const fetchSpy = vi.fn().mockResolvedValue(new Response('{}', { status: 207 }));
     const db = {
       prepare: (sql: string) => {
-        if (sql.includes('telemetry_accepted_body_id')) {
+        if (
+          sql.includes('telemetry_accepted_body_id') ||
+          sql.includes('run_telemetry_accepted_anchors')
+        ) {
           return {
             get: () => ({
               runStatus: 'succeeded',
@@ -2095,6 +2099,7 @@ describe('langfuse-bridge.reportRunFeedbackFromDaemon', () => {
               acceptedTraceBodyId: 'run-vela-anchor',
               acceptedReportTrigger: 'final_message',
               acceptedDeliveryChannel: 'vela',
+              acceptedVelaIdentity: velaSinkIdentityFingerprint('prod', 'ck_old'),
             }),
           };
         }
@@ -2104,6 +2109,90 @@ describe('langfuse-bridge.reportRunFeedbackFromDaemon', () => {
     const outcome = await reportRunFeedbackFromDaemon({
       dataDir,
       runId: 'run-vela-anchor',
+      rating: 'positive',
+      reasonCodes: [],
+      hasCustomReason: false,
+      customReason: '',
+      db,
+      fetchImpl: fetchSpy as any,
+    });
+    expect(outcome).toEqual({ status: 'skipped_no_sink' });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('returns skipped_no_sink when the live Vela account differs from the accepting one', async () => {
+    await writeAppCfg({
+      installationId: 'install-uuid-1',
+      telemetry: { metrics: true, content: true },
+    });
+    process.env.VELA_CONTROL_KEY = 'ck_switched_account';
+    process.env.VELA_API_URL = 'https://amr-api.example.com';
+    const fetchSpy = vi.fn();
+    const acceptingIdentity = velaSinkIdentityFingerprint('prod', 'ck_accepted');
+    const db = {
+      prepare: (sql: string) => {
+        if (
+          sql.includes('telemetry_accepted_body_id') ||
+          sql.includes('run_telemetry_accepted_anchors')
+        ) {
+          return {
+            get: () => ({
+              runStatus: 'succeeded',
+              telemetryFinalizedAt: Date.now(),
+              acceptedTraceBodyId: 'run-vela-account',
+              acceptedReportTrigger: 'final_message',
+              acceptedDeliveryChannel: 'vela',
+              acceptedVelaIdentity: acceptingIdentity,
+            }),
+          };
+        }
+        return { get: () => undefined, run: () => ({ changes: 0 }), all: () => [] };
+      },
+    };
+    const outcome = await reportRunFeedbackFromDaemon({
+      dataDir,
+      runId: 'run-vela-account',
+      rating: 'positive',
+      reasonCodes: [],
+      hasCustomReason: false,
+      customReason: '',
+      db,
+      fetchImpl: fetchSpy as any,
+    });
+    expect(outcome).toEqual({ status: 'skipped_no_sink' });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('returns skipped_no_sink when relay-accepted feedback would ship through Vela', async () => {
+    await writeAppCfg({
+      installationId: 'install-uuid-1',
+      telemetry: { metrics: true, content: true },
+    });
+    process.env.VELA_CONTROL_KEY = 'ck_test_key';
+    process.env.VELA_API_URL = 'https://amr-api.example.com';
+    const fetchSpy = vi.fn();
+    const db = {
+      prepare: (sql: string) => {
+        if (
+          sql.includes('telemetry_accepted_body_id') ||
+          sql.includes('run_telemetry_accepted_anchors')
+        ) {
+          return {
+            get: () => ({
+              runStatus: 'succeeded',
+              telemetryFinalizedAt: Date.now(),
+              acceptedTraceBodyId: 'run-relay-anchor',
+              acceptedReportTrigger: 'final_message',
+              acceptedDeliveryChannel: 'relay',
+            }),
+          };
+        }
+        return { get: () => undefined, run: () => ({ changes: 0 }), all: () => [] };
+      },
+    };
+    const outcome = await reportRunFeedbackFromDaemon({
+      dataDir,
+      runId: 'run-relay-anchor',
       rating: 'positive',
       reasonCodes: [],
       hasCustomReason: false,

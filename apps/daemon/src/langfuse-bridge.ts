@@ -1172,6 +1172,7 @@ export async function reportRunCompletedFromDaemon(
           bodyId: scopedTelemetryBodyId(run.id, 'final', reportTrigger),
           reportTrigger,
           deliveryChannel: delivery.langfuse_delivery_channel ?? null,
+          velaIdentity: delivery.langfuse_vela_identity ?? null,
         });
       } catch (err) {
         console.warn(
@@ -1257,6 +1258,7 @@ export async function reportRunFeedbackFromDaemon(
     | 'langfuse'
     | null
     | undefined;
+  let acceptedVelaIdentity: string | null | undefined;
   if (opts.db) {
     try {
       const anchor = getRunFeedbackTelemetryAnchor(
@@ -1270,6 +1272,7 @@ export async function reportRunFeedbackFromDaemon(
         acceptedTraceBodyId = anchor.acceptedTraceBodyId;
         acceptedReportTrigger = anchor.acceptedReportTrigger;
         acceptedDeliveryChannel = anchor.acceptedDeliveryChannel;
+        acceptedVelaIdentity = anchor.acceptedVelaIdentity;
       }
     } catch (err) {
       console.warn(
@@ -1278,10 +1281,19 @@ export async function reportRunFeedbackFromDaemon(
       );
     }
   }
+  // Exact channel stickiness for every accepted transport, not only Vela —
+  // relay/langfuse/vela body-id namespaces are not interchangeable.
+  const requireChannel =
+    acceptedDeliveryChannel === 'vela' ||
+    acceptedDeliveryChannel === 'relay' ||
+    acceptedDeliveryChannel === 'langfuse'
+      ? acceptedDeliveryChannel
+      : null;
   if (
     !canDeliverRunFeedback(sink, installationId, process.env, {
-      requireChannel:
-        acceptedDeliveryChannel === 'vela' ? 'vela' : null,
+      requireChannel,
+      requireVelaIdentity:
+        requireChannel === 'vela' ? (acceptedVelaIdentity ?? null) : null,
     })
   ) {
     return { status: 'skipped_no_sink' };
@@ -1313,6 +1325,9 @@ export async function reportRunFeedbackFromDaemon(
       : {}),
     ...(acceptedDeliveryChannel !== undefined
       ? { acceptedDeliveryChannel }
+      : {}),
+    ...(acceptedVelaIdentity !== undefined
+      ? { acceptedVelaIdentity }
       : {}),
     installationId,
     prefs,
