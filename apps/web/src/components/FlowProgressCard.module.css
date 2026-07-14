@@ -1,6 +1,6 @@
 /* Staged-flow progress card (specs/current/staged-flow-north-star.zh-CN.md
-   §5.3). Lives in the chat timeline after the latest message and updates in
-   place as the daemon advances the flow. */
+   §5.3). Lives inside the latest assistant message as a form-like card and
+   updates in place as the daemon advances the flow. */
 
 .root {
   display: flex;

@@ -2095,6 +2095,34 @@ describe('FileWorkspace Questions tab', () => {
     expect(screen.getByText('Quick brief')).toBeTruthy();
     expect(screen.getByText('Mobile')).toBeTruthy();
   });
+
+  it('focuses a past answered form on the first reopen request', async () => {
+    const baseProps: React.ComponentProps<typeof FileWorkspace> = {
+      projectId: 'project-1',
+      projectKind: 'prototype',
+      files: [],
+      liveArtifacts: [],
+      onRefreshFiles: vi.fn(),
+      isDeck: false,
+      tabsState: { tabs: [], active: null },
+      onTabsStateChange: vi.fn(),
+    };
+    const { rerender } = render(<FileWorkspace {...baseProps} />);
+
+    rerender(
+      <FileWorkspace
+        {...baseProps}
+        questionForm={discoveryForm}
+        questionFormSubmittedAnswers={{ platform: 'Mobile' }}
+        focusQuestionsRequest={{ nonce: 1 }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Quick brief')).toBeTruthy();
+    });
+    expect(screen.getByText('Mobile')).toBeTruthy();
+  });
 });
 
 describe('FileWorkspace staged-flow tab', () => {

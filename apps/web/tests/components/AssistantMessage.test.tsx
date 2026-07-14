@@ -8,8 +8,12 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createFlowSnapshot } from '@open-design/contracts';
 
-import { AssistantMessage } from '../../src/components/AssistantMessage';
+import {
+  AssistantMessage,
+  type FlowQuestionFormRequests,
+} from '../../src/components/AssistantMessage';
 import type { ChatMessage, ProjectFile } from '../../src/types';
 
 beforeAll(() => {
@@ -59,6 +63,35 @@ function producedFile(name: string): ProjectFile {
 }
 
 describe('AssistantMessage feedback gate', () => {
+  it('renders the staged flow as an inline form card and reopens its brief form', () => {
+    const onOpenQuestions = vi.fn();
+    const clarifyRequest: NonNullable<FlowQuestionFormRequests['clarify']> = {
+      form: {
+        id: 'discovery',
+        title: 'Quick brief',
+        questions: [],
+      },
+      messageId: 'msg-1',
+    };
+
+    render(
+      <AssistantMessage
+        message={baseMessage()}
+        streaming={false}
+        isLast
+        flowSnapshot={createFlowSnapshot('deck', { now: 1 })}
+        flowQuestionFormRequests={{ clarify: clarifyRequest }}
+        onOpenQuestions={onOpenQuestions}
+      />,
+    );
+
+    const status = screen.getByTestId('assistant-flow-status');
+    expect(status.closest('.msg.assistant')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm the brief' }));
+    expect(onOpenQuestions).toHaveBeenCalledWith(clarifyRequest);
+  });
+
   it('copies the raw assistant markdown from the completion footer', async () => {
     const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
     const writeText = vi.fn().mockResolvedValue(undefined);

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyFlowMarker, createFlowSnapshot } from '@open-design/contracts';
 
 import { ChatPane, buildRunErrorDiagnosticText, retryableAssistantMessage } from '../../src/components/ChatPane';
+import type { FlowQuestionFormRequests } from '../../src/components/AssistantMessage';
 import { DESIGN_SYSTEM_WORKSPACE_PROMPT_PREFIX } from '../../src/design-system-auto-prompt';
 import { readExpandedIndexCss } from '../helpers/read-expanded-css';
 import type { ChatMessage, Conversation, ProjectMetadata } from '../../src/types';
@@ -55,6 +56,9 @@ vi.mock('../../src/components/AssistantMessage', () => ({
     shareToOpenDesignBusy,
     showConversationTodoCard,
     conversationTodoInput,
+    flowSnapshot,
+    flowQuestionFormRequests,
+    onOpenQuestions,
   }: {
     streaming: boolean;
     message: ChatMessage;
@@ -66,6 +70,9 @@ vi.mock('../../src/components/AssistantMessage', () => ({
       todos?: Array<{ content: string; status?: string }>;
       plan?: Array<{ content?: string; step?: string; status?: string }>;
     } | null;
+    flowSnapshot?: ReturnType<typeof createFlowSnapshot> | null;
+    flowQuestionFormRequests?: FlowQuestionFormRequests;
+    onOpenQuestions?: (request?: FlowQuestionFormRequests['clarify']) => void;
   }) => (
     <>
       <output data-testid={`assistant-streaming-${message.id}`}>{streaming ? 'streaming' : 'idle'}</output>
@@ -80,6 +87,21 @@ vi.mock('../../src/components/AssistantMessage', () => ({
               </div>
             );
           })}
+        </div>
+      ) : null}
+      {flowSnapshot ? (
+        <div data-testid="assistant-flow-status">
+          <output data-testid="flow-progress-card">
+            {flowSnapshot.stages.find((stage) => stage.id === flowSnapshot.activeStage)?.detail}
+          </output>
+          {flowQuestionFormRequests?.clarify ? (
+            <button
+              type="button"
+              onClick={() => onOpenQuestions?.(flowQuestionFormRequests.clarify)}
+            >
+              Open brief form
+            </button>
+          ) : null}
         </div>
       ) : null}
       {onShareToOpenDesign ? (
@@ -285,7 +307,7 @@ describe('ChatPane streaming state', () => {
     expect(container.querySelector('.chat-log')?.className).not.toContain('is-balanced-transcript');
   });
 
-  it('keeps the updating flow card in the message timeline', () => {
+  it('keeps the updating flow card inside the latest assistant message', () => {
     const messages: ChatMessage[] = [
       { id: 'user-1', role: 'user', content: 'Make the landing page', createdAt: 1 },
       { id: 'assistant-1', role: 'assistant', content: 'Starting now', createdAt: 2 },
@@ -320,6 +342,7 @@ describe('ChatPane streaming state', () => {
     const card = screen.getByTestId('flow-progress-card');
     const lastMessage = screen.getByTestId('assistant-streaming-assistant-1');
     expect(log?.contains(card)).toBe(true);
+    expect(screen.getByTestId('assistant-flow-status').contains(card)).toBe(true);
     expect(
       lastMessage.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
@@ -333,6 +356,73 @@ describe('ChatPane streaming state', () => {
 
     expect(screen.getByTestId('flow-progress-card')).toBe(card);
     expect(card.textContent).toContain('Researching sources');
+  });
+
+  it('reopens the clarification form from the latest flow card', () => {
+    const discoveryForm = [
+      '<question-form id="discovery" title="Quick brief">',
+      JSON.stringify({
+        questions: [
+          {
+            id: 'audience',
+            label: 'Who is this for?',
+            type: 'text',
+          },
+        ],
+      }),
+      '</question-form>',
+    ].join('\n');
+    const onOpenQuestions = vi.fn();
+
+    render(
+      <ChatPane
+        projectKindForTracking="prototype"
+        messages={[
+          { id: 'user-1', role: 'user', content: 'Make the landing page', createdAt: 1 },
+          {
+            id: 'assistant-form',
+            role: 'assistant',
+            content: discoveryForm,
+            createdAt: 2,
+          },
+          {
+            id: 'user-answers',
+            role: 'user',
+            content: '[form answers — discovery]\naudience: Founders',
+            createdAt: 3,
+          },
+          {
+            id: 'assistant-latest',
+            role: 'assistant',
+            content: 'Building now',
+            createdAt: 4,
+          },
+        ]}
+        streaming={false}
+        error={null}
+        projectId="project-1"
+        projectFiles={[]}
+        onEnsureProject={async () => 'project-1'}
+        onSend={vi.fn()}
+        onStop={vi.fn()}
+        conversations={conversations}
+        activeConversationId="conv-1"
+        onSelectConversation={vi.fn()}
+        onDeleteConversation={vi.fn()}
+        projectMetadata={projectMetadata}
+        flowSnapshot={createFlowSnapshot('landing', { now: 1 })}
+        onOpenQuestions={onOpenQuestions}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open brief form' }));
+
+    expect(onOpenQuestions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageId: 'assistant-form',
+        form: expect.objectContaining({ id: 'discovery' }),
+      }),
+    );
   });
 
   it('keeps composer popovers above the chat jump button', () => {

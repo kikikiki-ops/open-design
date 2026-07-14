@@ -93,4 +93,22 @@ describe('FlowProgressCard', () => {
 
     expect(onOpenArtifact).toHaveBeenCalledWith('generated/brief.md');
   });
+
+  it('opens the stage form instead of its generated brief artifact', () => {
+    const onOpenForm = vi.fn();
+    const onOpenArtifact = vi.fn();
+    render(
+      <FlowProgressCard
+        flow={createFlowSnapshot('deck', { now: 1 })}
+        stageArtifactPaths={{ clarify: ['generated/brief.md'] }}
+        stageActions={{ clarify: onOpenForm }}
+        onOpenArtifact={onOpenArtifact}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm the brief' }));
+
+    expect(onOpenForm).toHaveBeenCalledOnce();
+    expect(onOpenArtifact).not.toHaveBeenCalled();
+  });
 });

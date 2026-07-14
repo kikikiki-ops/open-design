@@ -98,7 +98,7 @@ draft → rendering → ready,可断点续渲);research 是 toggle 默认关 +
    composer 的 ＋ 菜单里有「Deep research」开关(默认关)。
 2. **需求确认**(阶段 1/5):右侧 Questions 面板出现 4–6 题,**每题都已
    预选推荐值**(★ 标记),顶部主按钮「按推荐直接开始」,次按钮「逐项
-   调整」。同时聊天流上方出现**流程进度卡**:五步全览,第 1 步 active,
+   调整」。同时最新 assistant 消息内出现**表单式流程进度卡**:五步全览,第 1 步 active,
    后四步 pending 各带一行「什么时候开始」的预告。
 3. **搜索**(阶段 2/5,条件步):开了 Deep research → 多轮搜索,右侧
    Research workspace 显示「N searches · M sources + 流式 Markdown 报告」;
@@ -245,12 +245,11 @@ OD 的架构是「daemon 孵化外部 agent CLI」,不能像 codex-slides 那样
   渲染 `FlowSnapshot`:标题「任务进度 · 第 X / N 步」,每步一行
   (✓ / ◔ / ○ / ⊘ / ✕ + label + detail),完全对应参考截图 1 的
   「Presentation progress · Step 5 of 5」。
-- 位置:钉在 `.chat-log` 上方、与 PinnedTodoSlot 同一容器策略
-  (**沿用 `ChatPane.tsx` 现有的 ResizeObserver + MutationObserver
-  自动滚动契约**,AGENTS.md「Chat UI conventions」)。
-- 与 TodoWrite 钉卡的关系:flow 会话里 FlowProgressCard 替代 TodoCard
-  成为唯一钉卡(TodoWrite 快照仍收进各消息的工具组);非 flow 会话
-  (纯 chat、tune-collab)不渲染,保持现状。
+- 位置:作为表单式状态块渲染在**最新 assistant 消息内部**,随聊天内容滚动;
+  新 assistant 消息到达后进度卡跟随到最新消息,`FlowSnapshot` 更新时原位刷新,
+  不钉在 `.chat-log` 顶部。
+- 与 TodoWrite 的关系:FlowProgressCard 和 TodoWrite 各自沿用消息时间线,
+  不互相替代;非 flow 会话(纯 chat、tune-collab)不渲染进度卡,保持现状。
 - pending 步必须带「何时开始」预告文案(「大纲确认后开始」),这是
   P1「预期体感未知」的直接解药。
 - 展开/收起沿用 `.accordion-collapsible` 契约;动效遵守 UI animation

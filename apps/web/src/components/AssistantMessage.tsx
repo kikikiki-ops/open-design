@@ -38,6 +38,7 @@ import {
   stripOdFlowMarkers,
   stripTrailingOpenOdCard,
   type ChatSessionMode,
+  type FlowSnapshot,
   type OdCard,
   type OdCardBrandBrowserAssist,
 } from "@open-design/contracts";
@@ -66,6 +67,10 @@ import type { Dict } from "../i18n/types";
 import { agentDisplayName, agentIconId, exactAgentDisplayName } from "../utils/agentLabels";
 import { AgentIcon } from "./AgentIcon";
 import { filterImplicitProducedFiles } from "../produced-files";
+import type { FlowStageArtifactPaths } from '../runtime/flow-artifacts';
+import { FlowDeliveryActions } from './FlowDeliveryActions';
+import { FlowProgressCard } from './FlowProgressCard';
+import styles from './AssistantMessage.module.css';
 import type {
   AgentEvent,
   ChatMessage,
@@ -87,6 +92,10 @@ export type QuestionFormOpenRequest = {
   messageId: string;
   submittedAnswers?: Record<string, string | string[]>;
 };
+
+export type FlowQuestionFormRequests = Partial<
+  Record<'clarify' | 'plan', QuestionFormOpenRequest>
+>;
 
 const DISCORD_INVITE_URL = "https://discord.gg/mHAjSMV6gz";
 
@@ -384,6 +393,10 @@ interface Props {
   nextStepCreateDesignSystemBusy?: boolean;
   onPickSkill?: (skillId: string) => void;
   onArtifactDownload?: (fileName: string) => void;
+  flowSnapshot?: FlowSnapshot | null;
+  flowStageArtifactPaths?: FlowStageArtifactPaths;
+  flowDeliveryArtifactName?: string | null;
+  flowQuestionFormRequests?: FlowQuestionFormRequests;
   nextStepSkills?: SkillSummary[];
   toolboxSkillNames?: Partial<Record<DesignToolboxActionId, string | null>>;
   nextStepVariant?: NextStepActionsVariant;
@@ -426,6 +439,10 @@ const ASSISTANT_MESSAGE_COMPARED_PROPS: Array<keyof Props> = [
   'nextStepContinueAiExtractionBusy',
   'nextStepCreateDesignBusy',
   'nextStepCreateDesignSystemBusy',
+  'flowSnapshot',
+  'flowStageArtifactPaths',
+  'flowDeliveryArtifactName',
+  'flowQuestionFormRequests',
   // Memoized + stable from ChatPane; compared so a late skill-list load
   // refreshes the featured next-step rows' `@skill` hover detail and the
   // More → Design toolbox global resources.
@@ -506,6 +523,10 @@ function AssistantMessageImpl({
   nextStepCreateDesignSystemBusy,
   onPickSkill,
   onArtifactDownload,
+  flowSnapshot = null,
+  flowStageArtifactPaths,
+  flowDeliveryArtifactName = null,
+  flowQuestionFormRequests,
   nextStepSkills,
   toolboxSkillNames,
   nextStepVariant = 'default',
@@ -776,6 +797,21 @@ function AssistantMessageImpl({
       break;
     }
   }
+  const flowStageActions = useMemo(() => {
+    if (!onOpenQuestions || !flowQuestionFormRequests) return undefined;
+    const actions: Partial<Record<'clarify' | 'plan', () => void>> = {};
+    if (flowQuestionFormRequests.clarify) {
+      actions.clarify = () => {
+        onOpenQuestions(flowQuestionFormRequests.clarify);
+      };
+    }
+    if (flowQuestionFormRequests.plan) {
+      actions.plan = () => {
+        onOpenQuestions(flowQuestionFormRequests.plan);
+      };
+    }
+    return Object.keys(actions).length > 0 ? actions : undefined;
+  }, [flowQuestionFormRequests, onOpenQuestions]);
 
   return (
     <div className="msg assistant">
@@ -856,6 +892,22 @@ function AssistantMessageImpl({
           }
           return null;
         })}
+        {flowSnapshot ? (
+          <div className={styles.flowStatus} data-testid="assistant-flow-status">
+            <FlowProgressCard
+              flow={flowSnapshot}
+              stageArtifactPaths={flowStageArtifactPaths}
+              stageActions={flowStageActions}
+              onOpenArtifact={onRequestOpenFile}
+            />
+            <FlowDeliveryActions
+              flow={flowSnapshot}
+              fileName={flowDeliveryArtifactName}
+              onDownload={onArtifactDownload}
+              onShare={onArtifactShare}
+            />
+          </div>
+        ) : null}
         {brandBrowserAssistFallbackCard ? (
           <OdCardView
             card={brandBrowserAssistFallbackCard}

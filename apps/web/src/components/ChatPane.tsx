@@ -34,11 +34,12 @@ import { projectRawUrl } from '../providers/registry';
 import { takeComposerSeedFor } from '../state/libraryHandoff';
 import { splitOnQuestionForms } from '../artifacts/question-form';
 import { stripArtifact } from '../artifacts/strip';
-import { flowStageArtifactPaths } from '../runtime/flow-artifacts';
+import {
+  flowStageArtifactPaths,
+  type FlowStageArtifactPaths,
+} from '../runtime/flow-artifacts';
 import type { TodoItem } from '../runtime/todos';
 import type { AppliedPluginSnapshot, ChatSessionMode, FlowSnapshot, WorkspaceContextItem } from '@open-design/contracts';
-import { FlowDeliveryActions } from './FlowDeliveryActions';
-import { FlowProgressCard } from './FlowProgressCard';
 import type { TrackingProjectKind } from '@open-design/contracts/analytics';
 import {
   DESIGN_SYSTEM_WORKSPACE_DISPLAY_DESCRIPTION,
@@ -49,7 +50,11 @@ import { isTodoWriteToolName, latestTodoWriteInputForPinnedCard } from '../runti
 import type { AppConfig, ChatAttachment, ChatCommentAttachment, ChatMessage, ChatMessageFeedbackChange, Conversation, DesignSystemSummary, PreviewComment, Project, ProjectFile, ProjectMetadata, SkillSummary } from '../types';
 import { agentDisplayName } from '../utils/agentLabels';
 import { commentTargetDisplayName, commentsToAttachments, simplePositionLabel } from '../comments';
-import { AssistantMessage, type QuestionFormOpenRequest } from './AssistantMessage';
+import {
+  AssistantMessage,
+  type FlowQuestionFormRequests,
+  type QuestionFormOpenRequest,
+} from './AssistantMessage';
 import type { BrandBrowserAssistConfirm } from './OdCard';
 import {
   DESIGN_SYSTEM_NEXT_STEP_ACTIONS,
@@ -472,9 +477,8 @@ interface Props {
   activeDesignSystem?: DesignSystemSummary | null;
   sendDisabled?: boolean;
   // Staged-flow snapshot for this conversation
-  // (specs/current/staged-flow-north-star.zh-CN.md §5.3). When present, the
-  // FlowProgressCard is pinned above the chat log; null/undefined keeps the
-  // current UX for non-flow conversations (chat, tune, migrations).
+  // (specs/current/staged-flow-north-star.zh-CN.md §5.3). The latest assistant
+  // message renders it as an inline form card that updates in place.
   flowSnapshot?: FlowSnapshot | null;
   deepResearchEnabled?: boolean;
   onDeepResearchChange?: (enabled: boolean) => void;
@@ -745,6 +749,37 @@ function brandAssistantTextHasVisibleContent(content: string): boolean {
   });
 }
 
+const FLOW_CLARIFY_FORM_IDS = new Set([
+  'clarify',
+  'discovery',
+  'quick-brief',
+  'staged-flow-clarify',
+  'task-type',
+]);
+
+function flowQuestionFormRequestsFromMessages(
+  messages: readonly ChatMessage[],
+): FlowQuestionFormRequests {
+  const requests: FlowQuestionFormRequests = {};
+  for (const message of messages) {
+    if (message.role !== 'assistant') continue;
+    for (const segment of splitOnQuestionForms(message.content)) {
+      if (segment.kind !== 'form') continue;
+      const request = {
+        form: segment.form,
+        messageId: message.id,
+      };
+      const formId = segment.form.id.trim().toLowerCase();
+      if (formId === 'plan-confirm') {
+        requests.plan = request;
+      } else if (FLOW_CLARIFY_FORM_IDS.has(formId)) {
+        requests.clarify = request;
+      }
+    }
+  }
+  return requests;
+}
+
 const HIDDEN_BRAND_ASSISTANT_STATUS_LABELS = new Set([
   'streaming',
   'starting',
@@ -932,6 +967,13 @@ export function ChatPane({
     [flowSnapshot, projectFiles],
   );
   const flowDeliveryArtifactName = stageArtifactPaths.generate?.[0] ?? null;
+  const flowQuestionFormRequests = useMemo(
+    () =>
+      flowSnapshot
+        ? flowQuestionFormRequestsFromMessages(displayMessages)
+        : {},
+    [displayMessages, flowSnapshot],
+  );
   const didInitialScrollRef = useRef(false);
   const runFailedToastSurfaceKeysRef = useRef<Set<string>>(new Set());
   // Tracks whether the user is glued close enough to the bottom that
@@ -2397,6 +2439,10 @@ export function ChatPane({
                 nextStepCreateDesignSystemBusy={createDesignSystemFromProjectBusy}
                 onPickSkill={handlePickSkill}
                 onArtifactDownload={onArtifactDownload}
+                flowSnapshot={flowSnapshot}
+                flowStageArtifactPaths={stageArtifactPaths}
+                flowDeliveryArtifactName={flowDeliveryArtifactName}
+                flowQuestionFormRequests={flowQuestionFormRequests}
                 nextStepSkills={skills}
                 toolboxSkillNames={featuredToolboxSkillNames}
                 nextStepVariant={nextStepVariant}
@@ -2407,21 +2453,6 @@ export function ChatPane({
                 onOpenQuestions={onOpenQuestions}
                 scrollContainerRef={logRef}
               />
-              {flowSnapshot ? (
-                <div data-testid="chat-flow-status">
-                  <FlowProgressCard
-                    flow={flowSnapshot}
-                    stageArtifactPaths={stageArtifactPaths}
-                    onOpenArtifact={onRequestOpenFile}
-                  />
-                  <FlowDeliveryActions
-                    flow={flowSnapshot}
-                    fileName={flowDeliveryArtifactName}
-                    onDownload={onArtifactDownload}
-                    onShare={onArtifactShare}
-                  />
-                </div>
-              ) : null}
               {displayError ? (
                 <div className="run-error" data-tone={runErrorTone}>
                   {/* ① type title + ② detail */}
@@ -2856,6 +2887,10 @@ function ChatRows({
   nextStepCreateDesignSystemBusy,
   onPickSkill,
   onArtifactDownload,
+  flowSnapshot,
+  flowStageArtifactPaths,
+  flowDeliveryArtifactName,
+  flowQuestionFormRequests,
   nextStepSkills,
   toolboxSkillNames,
   nextStepVariant,
@@ -2913,6 +2948,10 @@ function ChatRows({
   nextStepCreateDesignSystemBusy?: boolean;
   onPickSkill?: (skillId: string) => void;
   onArtifactDownload?: (fileName: string) => void;
+  flowSnapshot?: FlowSnapshot | null;
+  flowStageArtifactPaths?: FlowStageArtifactPaths;
+  flowDeliveryArtifactName?: string | null;
+  flowQuestionFormRequests?: FlowQuestionFormRequests;
   nextStepSkills?: SkillSummary[];
   toolboxSkillNames?: Partial<Record<DesignToolboxActionId, string | null>>;
   nextStepVariant?: NextStepActionsVariant;
@@ -3072,6 +3111,16 @@ function ChatRows({
         nextStepCreateDesignSystemBusy={nextStepCreateDesignSystemBusy}
         onPickSkill={onPickSkill}
         onArtifactDownload={onArtifactDownload}
+        flowSnapshot={m.id === lastAssistantId ? flowSnapshot : null}
+        flowStageArtifactPaths={
+          m.id === lastAssistantId ? flowStageArtifactPaths : undefined
+        }
+        flowDeliveryArtifactName={
+          m.id === lastAssistantId ? flowDeliveryArtifactName : null
+        }
+        flowQuestionFormRequests={
+          m.id === lastAssistantId ? flowQuestionFormRequests : undefined
+        }
         nextStepSkills={nextStepSkills}
         toolboxSkillNames={toolboxSkillNames}
         nextStepVariant={nextStepVariant}

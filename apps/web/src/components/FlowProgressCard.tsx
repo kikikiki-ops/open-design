@@ -62,10 +62,12 @@ function localizedCanonicalDetail(
 export function FlowProgressCard({
   flow,
   stageArtifactPaths,
+  stageActions,
   onOpenArtifact,
 }: {
   flow: FlowSnapshot;
   stageArtifactPaths?: FlowStageArtifactPaths;
+  stageActions?: Partial<Record<FlowStageId, () => void>>;
   onOpenArtifact?: (path: string) => void;
 }) {
   const t = useT();
@@ -99,7 +101,9 @@ export function FlowProgressCard({
               ? t(STAGE_HINT_KEY[stage.id])
               : t(STATE_KEY[stage.state]));
           const label = t(STAGE_LABEL_KEY[stage.id]);
+          const stageAction = stageActions?.[stage.id];
           const artifactPath = stageArtifactPaths?.[stage.id]?.[0];
+          const actionable = Boolean(stageAction || (artifactPath && onOpenArtifact));
           const content = (
             <>
               <span className={styles.icon} aria-hidden>
@@ -116,7 +120,7 @@ export function FlowProgressCard({
                 </div>
                 <div className={styles.detail}>{detail}</div>
               </div>
-              {artifactPath && onOpenArtifact ? (
+              {actionable ? (
                 <span className={styles.openIcon} aria-hidden>
                   ↗
                 </span>
@@ -125,13 +129,19 @@ export function FlowProgressCard({
           );
           return (
             <li key={stage.id} className={`${styles.step} ${styles[stage.state]}`}>
-              {artifactPath && onOpenArtifact ? (
+              {actionable ? (
                 <button
                   type="button"
                   className={styles.stepAction}
-                  title={artifactPath}
-                  aria-label={`${label}: ${artifactPath}`}
-                  onClick={() => onOpenArtifact(artifactPath)}
+                  title={stageAction ? label : artifactPath}
+                  aria-label={stageAction ? label : `${label}: ${artifactPath}`}
+                  onClick={() => {
+                    if (stageAction) {
+                      stageAction();
+                      return;
+                    }
+                    if (artifactPath) onOpenArtifact?.(artifactPath);
+                  }}
                 >
                   {content}
                 </button>
