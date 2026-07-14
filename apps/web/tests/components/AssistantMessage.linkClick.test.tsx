@@ -218,6 +218,31 @@ describe('AssistantMessage — chat file-link routing (#1239)', () => {
     expect(window.location.pathname).toBe('/');
   });
 
+  it('suppresses extensionless unresolvable file links too (Dockerfile-style names)', () => {
+    // #5611 review round 5: extensionless file names (Dockerfile, Makefile,
+    // README) must get the same inert treatment — the SPA router has no
+    // route for them, so their default open is the detached home window.
+    const onRequestOpenFile = vi.fn();
+    const { container } = render(
+      <AssistantMessage
+        message={messageWithText('构建配置见 [Dockerfile](/Users/mac/code/foo/Dockerfile)。')}
+        streaming={false}
+        projectId="project-1"
+        onRequestOpenFile={onRequestOpenFile}
+      />,
+    );
+
+    const anchor = container.querySelector('a.md-link');
+    expect(anchor).not.toBeNull();
+
+    const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true });
+    anchor!.dispatchEvent(clickEvent);
+
+    expect(onRequestOpenFile).not.toHaveBeenCalled();
+    expect(clickEvent.defaultPrevented).toBe(true);
+    expect(window.location.pathname).toBe('/');
+  });
+
   it('routes same-origin absolute project raw URLs through onRequestOpenFile', () => {
     const onRequestOpenFile = vi.fn();
     const href = `${window.location.origin}/api/projects/project-1/raw/Web%20Prototype%20mutuals-v2.html`;

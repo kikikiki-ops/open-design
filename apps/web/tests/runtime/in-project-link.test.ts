@@ -508,8 +508,17 @@ describe('isPathLikeChatHref (suppresses the detached home-window fallback)', ()
     expect(isPathLikeChatHref('//example.com/file.pdf')).toBe(false);
   });
 
-  it('false for extensionless absolute filesystem paths (narrowed to confirmed file-like hrefs)', () => {
-    expect(isPathLikeChatHref('/usr/local/bin/node')).toBe(false);
+  it('true for extensionless filesystem-style paths — the router would land them on home', () => {
+    // Extensionless file names are common (Dockerfile, Makefile, README,
+    // bare binaries); their default `_blank` open is exactly the detached
+    // home window this module suppresses (#5611 review round 5).
+    expect(isPathLikeChatHref('/Users/mac/code/foo/Dockerfile')).toBe(true);
+    expect(isPathLikeChatHref('/tmp/README')).toBe(true);
+    expect(isPathLikeChatHref('/usr/local/bin/node')).toBe(true);
+  });
+
+  it('true for extensionless traversal-relative paths', () => {
+    expect(isPathLikeChatHref('../Makefile')).toBe(true);
   });
 
   it('false for external http(s) URLs', () => {

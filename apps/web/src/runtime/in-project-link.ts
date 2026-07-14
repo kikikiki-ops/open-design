@@ -1,3 +1,5 @@
+import { parseRoute } from '../router';
+
 /**
  * Decide whether a markdown link href in chat output should resolve to
  * an in-project file (opened in the right-pane workspace) or fall
@@ -161,19 +163,24 @@ function resolveAgainstResolvedDir(
 }
 
 /**
- * Whether an unresolvable chat href is confirmed FILE-like — schemeless
- * (after same-origin normalization), not a fragment, not a protocol-relative
- * network URL, and its final path segment carries a file extension. For
- * these, the default `target="_blank"` fallback can never do anything useful
- * inside the app: Electron resolves the path against the app origin and
- * opens a detached window whose SPA router lands on HOME. Callers should
+ * Whether an unresolvable chat href is path-like with no useful default —
+ * schemeless (after same-origin normalization), not a fragment, not a
+ * protocol-relative network URL, and NOT a route the SPA router recognizes.
+ * For these, the default `target="_blank"` fallback can never do anything
+ * useful inside the app: Electron resolves the path against the app origin
+ * and opens a detached window whose SPA router lands on HOME. Callers should
  * `preventDefault()` and treat the link as inert instead (0.14.1 acceptance
  * bug: chatpane file links opened a home-page window).
  *
- * Deliberately NOT matched: extensionless schemeless hrefs. Those may be
- * valid SPA routes (`/automations`, `/projects/<id>`, `/design-systems/<id>`)
- * whose default open still renders real content — swallowing them would turn
- * legitimate in-app links into dead links.
+ * Routability is decided by `parseRoute` itself, not a heuristic: its
+ * catch-all home fallback IS the detached-home-window symptom, so exactly
+ * the hrefs that would trigger it are swallowed. Recognized SPA routes
+ * (`/automations`, `/projects/<id>`, `/design-systems/<id>`, …) keep their
+ * default behavior, while filesystem-style paths — with or without a file
+ * extension (`/Users/…/bar.ts`, `/tmp/README`, `../Makefile`) — are inert.
+ * Relative hrefs can only reach this check when they are unresolvable as
+ * project files (traversals, malformed encodings), so they are always
+ * treated as file-like.
  */
 export function isPathLikeChatHref(href: string | null | undefined): boolean {
   if (typeof href !== 'string') return false;
@@ -189,8 +196,9 @@ export function isPathLikeChatHref(href: string | null | undefined): boolean {
   if (isDaemonServedPath(normalizedHref)) return false;
   const withoutHash = normalizedHref.split('#')[0] ?? normalizedHref;
   const withoutQuery = withoutHash.split('?')[0] ?? withoutHash;
-  const lastSegment = withoutQuery.split('/').pop() ?? '';
-  return /\.[a-z0-9]+$/i.test(lastSegment);
+  if (!withoutQuery.startsWith('/')) return true;
+  const route = parseRoute(withoutQuery);
+  return route.kind === 'home' && route.view === 'home';
 }
 
 // Same-origin prefixes the daemon serves directly (see `apps/web/next.config.ts`
