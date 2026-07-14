@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { execFile } from "node:child_process";
+import { chmodSync, existsSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { mkdir, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { basename, join, relative } from "node:path";
+import { promisify } from "node:util";
 
 import { describe, expect, it, vi } from "vitest";
 
@@ -37,6 +39,8 @@ type FixtureServer = {
   metadataRequests: () => number;
   metadataUrl: string;
 };
+
+const execFileAsync = promisify(execFile);
 
 type FixturePlatform = "mac" | "win";
 type FixtureChannel = ReleaseChannel;
@@ -228,6 +232,84 @@ function makeRoot(): string {
   return mkdtempSync(join(tmpdir(), "od-updater-test-"));
 }
 
+async function writeExecutable(path: string, contents: string): Promise<void> {
+  await writeFile(path, contents, "utf8");
+  chmodSync(path, 0o755);
+}
+
+async function writeMinimalMacAppBundle(path: string, markerName?: string): Promise<void> {
+  await mkdir(join(path, "Contents"), { recursive: true });
+  await writeFile(join(path, "Contents", "Info.plist"), `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key>
+  <string>ai.open-design.app</string>
+  <key>CFBundleName</key>
+  <string>Open Design</string>
+</dict>
+</plist>
+`, "utf8");
+  if (markerName != null) {
+    await writeFile(join(path, markerName), `${markerName}\n`, "utf8");
+  }
+}
+
+async function writeMacDmgHelperCommandStubs(binDir: string, options: { failReplacementRollback?: boolean } = {}): Promise<void> {
+  await mkdir(binDir, { recursive: true });
+  await writeExecutable(join(binDir, "hdiutil"), `#!/bin/sh
+if [ "$1" = "detach" ]; then
+  rm -rf "$2"
+  exit 0
+fi
+mountpoint=""
+previous=""
+for argument in "$@"; do
+  if [ "$previous" = "-mountpoint" ]; then
+    mountpoint="$argument"
+  fi
+  previous="$argument"
+done
+if [ -z "$mountpoint" ]; then
+  exit 1
+fi
+mkdir -p "$mountpoint/Open Design.app"
+mkdir -p "$mountpoint/Open Design.app/Contents"
+cat > "$mountpoint/Open Design.app/Contents/Info.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key>
+  <string>ai.open-design.app</string>
+  <key>CFBundleName</key>
+  <string>Open Design</string>
+</dict>
+</plist>
+PLIST
+printf 'from-dmg\\n' > "$mountpoint/Open Design.app/source.txt"
+exit 0
+`);
+  await writeExecutable(join(binDir, "ditto"), `#!/bin/sh
+mkdir -p "$2"
+cp -R "$1"/. "$2"/
+`);
+  await writeExecutable(join(binDir, "open"), `#!/bin/sh
+printf '%s\\n' "$*" >> "$OD_TEST_OPEN_LOG"
+`);
+  await writeExecutable(join(binDir, "xattr"), `#!/bin/sh
+exit 0
+`);
+  if (options.failReplacementRollback === true) {
+    await writeExecutable(join(binDir, "mv"), `#!/bin/sh
+case "$1:$2" in
+  */tmp/*.app:*.app|*/backup/*.app:*.app) exit 1 ;;
+esac
+/bin/mv "$@"
+`);
+  }
+}
+
 function updaterEnv(metadataUrl: string, platform = "darwin"): NodeJS.ProcessEnv {
   return {
     [DESKTOP_UPDATE_ENV.AUTO_DOWNLOAD]: "1",
@@ -253,6 +335,14 @@ async function waitForRequestCount(requests: readonly unknown[], count: number):
     await new Promise<void>((resolveWait) => setTimeout(resolveWait, 5));
   }
   throw new Error(`expected ${count} update requests, saw ${requests.length}`);
+}
+
+async function waitForPath(path: string): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (existsSync(path)) return;
+    await new Promise<void>((resolveWait) => setTimeout(resolveWait, 5));
+  }
+  throw new Error(`expected path to exist: ${path}`);
 }
 
 function metadataResponse(version: string): Response {
@@ -1689,6 +1779,177 @@ describe("desktop updater", () => {
       expect(script).toContain('target_bundle_path="$4"');
       expect(script).toContain('expected_app_name="$5"');
       expect(script).not.toContain(targetBundlePath);
+    } finally {
+      await fixture.close();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it.skipIf(process.platform === "win32")("executes the mac DMG replacement helper transaction against stubbed macOS commands", async () => {
+    const root = makeRoot();
+    const fixture = await createUpdaterFixture();
+    const targetBundlePath = join(root, "installed", "Open Design.app");
+    const binDir = join(root, "bin");
+    const openLog = join(root, "open.log");
+    const spawned: Array<{ args: string[]; command: string }> = [];
+    try {
+      await writeMinimalMacAppBundle(targetBundlePath, "old.txt");
+      await writeMacDmgHelperCommandStubs(binDir);
+      const updater = createDesktopUpdater(
+        {
+          arch: "arm64",
+          downloadRoot: join(root, "updates"),
+          env: {
+            ...updaterEnv(fixture.metadataUrl),
+            [DESKTOP_UPDATE_ENV.OPEN_DRY_RUN]: "0",
+          },
+          launcherLaunchPath: targetBundlePath,
+          source: SIDECAR_SOURCES.TOOLS_PACK,
+        },
+        {
+          processPid: 4242,
+          spawnDetached: (command, args) => {
+            spawned.push({ args, command });
+            return { unref: vi.fn() };
+          },
+        },
+      );
+
+      const checked = await updater.checkForUpdates();
+      await updater.installUpdate();
+      const [scriptPath] = spawned[0]?.args ?? [];
+
+      await execFileAsync("/bin/sh", [
+        scriptPath ?? "",
+        "999999",
+        checked.downloadPath ?? "",
+        "1",
+        targetBundlePath,
+        "Open Design",
+      ], {
+        env: {
+          ...process.env,
+          OD_TEST_OPEN_LOG: openLog,
+          PATH: `${binDir}:${process.env.PATH ?? ""}`,
+        },
+      });
+
+      expect(await readFile(join(targetBundlePath, "source.txt"), "utf8")).toBe("from-dmg\n");
+      expect(existsSync(join(targetBundlePath, "old.txt"))).toBe(false);
+      expect((await readdir(join(root, "installed"))).filter((name) => name.startsWith(".od-update."))).toEqual([]);
+      await waitForPath(openLog);
+      expect(await readFile(openLog, "utf8")).toBe(`-n ${targetBundlePath}\n`);
+      expect(existsSync(scriptPath ?? "")).toBe(false);
+    } finally {
+      await fixture.close();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it.skipIf(process.platform === "win32")("preserves the mac DMG helper backup when replacement rollback fails", async () => {
+    const root = makeRoot();
+    const fixture = await createUpdaterFixture();
+    const targetParent = join(root, "installed");
+    const targetBundlePath = join(targetParent, "Open Design.app");
+    const binDir = join(root, "bin");
+    const openLog = join(root, "open.log");
+    const spawned: Array<{ args: string[]; command: string }> = [];
+    try {
+      await writeMinimalMacAppBundle(targetBundlePath, "old.txt");
+      await writeMacDmgHelperCommandStubs(binDir, { failReplacementRollback: true });
+      const updater = createDesktopUpdater(
+        {
+          arch: "arm64",
+          downloadRoot: join(root, "updates"),
+          env: {
+            ...updaterEnv(fixture.metadataUrl),
+            [DESKTOP_UPDATE_ENV.OPEN_DRY_RUN]: "0",
+          },
+          launcherLaunchPath: targetBundlePath,
+          source: SIDECAR_SOURCES.TOOLS_PACK,
+        },
+        {
+          processPid: 4242,
+          spawnDetached: (command, args) => {
+            spawned.push({ args, command });
+            return { unref: vi.fn() };
+          },
+        },
+      );
+
+      const checked = await updater.checkForUpdates();
+      await updater.installUpdate();
+      const [scriptPath] = spawned[0]?.args ?? [];
+
+      await expect(execFileAsync("/bin/sh", [
+        scriptPath ?? "",
+        "999999",
+        checked.downloadPath ?? "",
+        "1",
+        targetBundlePath,
+        "Open Design",
+      ], {
+        env: {
+          ...process.env,
+          OD_TEST_OPEN_LOG: openLog,
+          PATH: `${binDir}:${process.env.PATH ?? ""}`,
+        },
+      })).rejects.toMatchObject({ code: 1 });
+
+      const scratchRoots = (await readdir(targetParent)).filter((name) => name.startsWith(".od-update."));
+      expect(scratchRoots).toHaveLength(1);
+      expect(existsSync(targetBundlePath)).toBe(false);
+      expect(await readFile(join(targetParent, scratchRoots[0] ?? "", "backup", "Open Design.app", "old.txt"), "utf8")).toBe("old.txt\n");
+      expect(existsSync(openLog)).toBe(false);
+      expect(existsSync(scriptPath ?? "")).toBe(false);
+    } finally {
+      await fixture.close();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it("falls back to the mac DMG manual installer helper when the bundle disappears after update check", async () => {
+    const root = makeRoot();
+    const fixture = await createUpdaterFixture();
+    const targetBundlePath = join(root, "installed", "Open Design.app");
+    const spawned: Array<{ args: string[]; command: string }> = [];
+    try {
+      await mkdir(targetBundlePath, { recursive: true });
+      const updater = createDesktopUpdater(
+        {
+          arch: "arm64",
+          downloadRoot: join(root, "updates"),
+          env: {
+            ...updaterEnv(fixture.metadataUrl),
+            [DESKTOP_UPDATE_ENV.OPEN_DRY_RUN]: "0",
+          },
+          launcherLaunchPath: targetBundlePath,
+          source: SIDECAR_SOURCES.TOOLS_PACK,
+        },
+        {
+          processPid: 4242,
+          spawnDetached: (command, args) => {
+            spawned.push({ args, command });
+            return { unref: vi.fn() };
+          },
+        },
+      );
+
+      const checked = await updater.checkForUpdates();
+      await rm(targetBundlePath, { force: true, recursive: true });
+      const installed = await updater.installUpdate();
+
+      expect(checked.artifact?.type).toBe("dmg");
+      expect(checked.capabilities.canApplyInPlace).toBe(true);
+      expect(installed.installResult?.path).toBe(checked.downloadPath);
+      expect(spawned).toHaveLength(1);
+      const [scriptPath, pidArg, installerArg, timeoutArg, targetArg] = spawned[0]?.args ?? [];
+      expect(scriptPath).toEqual(expect.stringContaining(join(root, "updates", "helpers", "open-installer-after-quit-")));
+      expect(pidArg).toBe("4242");
+      expect(installerArg).toBe(checked.downloadPath);
+      expect(timeoutArg).toBe("600");
+      expect(targetArg).toBeUndefined();
+      expect(await readFile(scriptPath ?? "", "utf8")).not.toContain("ditto");
     } finally {
       await fixture.close();
       rmSync(root, { force: true, recursive: true });
