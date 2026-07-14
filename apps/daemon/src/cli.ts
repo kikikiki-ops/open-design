@@ -7859,6 +7859,15 @@ async function libraryDaemonUrl(flags) {
   return cliDaemonUrl(flags);
 }
 
+function writeStdoutAndDrain(value) {
+  return new Promise((resolve, reject) => {
+    process.stdout.write(value, (error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+}
+
 async function runAtoms(args) {
   if (args.length === 0 || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
     console.log(`Usage:
@@ -8203,7 +8212,7 @@ async function runLibraryList(name, args) {
       const resp = await fetch(`${base}${apiPath}`);
       if (!resp.ok) return structuredHttpFailure(resp);
       const data = await resp.json();
-      if (flags.json) return process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+      if (flags.json) return writeStdoutAndDrain(JSON.stringify(data, null, 2) + '\n');
       const rows = data?.[name === 'design-systems' ? 'designSystems' : name] ?? [];
       for (const row of rows) {
         const label = row.title ?? row.name ?? row.id ?? row.label;
@@ -8220,7 +8229,7 @@ async function runLibraryList(name, args) {
       const resp = await fetch(`${base}${apiPath}/${encodeURIComponent(id)}`);
       if (!resp.ok) return structuredHttpFailure(resp);
       const data = await resp.json();
-      process.stdout.write(JSON.stringify(data, null, 2) + '\n');
+      await writeStdoutAndDrain(JSON.stringify(data, null, 2) + '\n');
       return;
     }
     default:

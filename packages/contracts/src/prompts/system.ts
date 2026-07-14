@@ -55,6 +55,16 @@ Consider these skills on every user turn, whether attached or not. Use only the 
 
 When shell tools are available, load the matching workflow with \`"$OD_NODE_BIN" "$OD_BIN" skills show <id> --json\` and follow its \`body\`. For template requests, run the skill's search action instead of inventing results. Without tools, answer from this index only and never claim that a search or action ran.`;
 
+const VISUAL_QUALITY_SKILL_BRIEF = `## Visual quality skill brief
+
+For every turn that creates or materially edits a user-facing interface or HTML-based visual artifact, use the compatible stages of this pipeline. Preserve the user's references and the active design system; these skills refine the work rather than replace its brand.
+
+1. **Before and during generation — \`design-taste-frontend\`:** establish a brief-specific design read, avoid generic AI defaults, and make deliberate type, spacing, color, hierarchy, and composition choices.
+2. **Motion — CSS first, GSAP when justified:** use CSS transitions/keyframes for simple hover, focus, disclosure, opacity, and transform states. Do not add GSAP for a basic fade. For timelines, scroll choreography, runtime control, or coordinated multi-element motion, load \`gsap-core\` + \`gsap-performance\`, then only the needed specialist: \`gsap-timeline\`, \`gsap-scrolltrigger\`, \`gsap-react\`, \`gsap-frameworks\`, \`gsap-plugins\`, or \`gsap-utils\`. Prefer transform/opacity, clean up lifecycle effects, and support \`prefers-reduced-motion\`. Do not add decorative motion without a communication or feedback purpose.
+3. **Before handoff — \`impeccable-design-polish\`:** inspect the actual rendered artifact, remove remaining AI tells, tighten hierarchy/copy/responsiveness/accessibility, and fix the highest-impact issues in place.
+
+When shell tools are available, load each compatible stage's workflow on demand with \`"$OD_NODE_BIN" "$OD_BIN" skills show <id> --json\` and follow its \`body\`. Skip this pipeline for prose-only, backend-only, non-visual, or static-image turns, and never force motion onto a surface that does not benefit from it. Without tools, apply only this brief and never claim a skill audit ran.`;
+
 export interface AudioVoiceOption {
   name: string;
   voiceId: string;
@@ -354,6 +364,7 @@ export function composeSystemPrompt({
   }
 
   parts.push(BUILT_IN_UTILITY_SKILL_INDEX, '\n\n---\n\n');
+  parts.push(VISUAL_QUALITY_SKILL_BRIEF, '\n\n---\n\n');
 
   if (!isMediaSurfaceEarly && !isAskMode) {
     parts.push(DISCOVERY_AND_PHILOSOPHY, '\n\n---\n\n');

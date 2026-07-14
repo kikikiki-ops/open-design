@@ -123,7 +123,10 @@ export function FlowProgressCard({
   const unit = t(FLOW_SHAPES[flow.shape].progressUnitKey as keyof Dict);
 
   return (
-    <div className={styles.root} data-testid="flow-progress-card">
+    <div
+      className={hideHead ? `${styles.root} ${styles.bare}` : styles.root}
+      data-testid="flow-progress-card"
+    >
       {hideHead ? null : (
         <div className={styles.head}>
           <span className={styles.title}>{t('flow.title')}</span>

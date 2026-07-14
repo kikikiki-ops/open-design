@@ -226,6 +226,29 @@ describe('listSkills', () => {
     }
   });
 
+  it('resolves every skill referenced by the visual quality system-prompt index', async () => {
+    const skills = await listSkills(skillsRoot);
+    const byId = new Map(skills.map((skill) => [skill.id, skill]));
+    const expectedIds = [
+      'design-taste-frontend',
+      'impeccable-design-polish',
+      'gsap-core',
+      'gsap-performance',
+      'gsap-timeline',
+      'gsap-scrolltrigger',
+      'gsap-react',
+      'gsap-frameworks',
+      'gsap-plugins',
+      'gsap-utils',
+    ];
+
+    for (const id of expectedIds) {
+      expect(byId.get(id), `${id} should be available through /api/skills`).toMatchObject({
+        id,
+      });
+    }
+  });
+
   it('surfaces optional localized display metadata from SKILL.md frontmatter', async () => {
     const root = fresh();
     try {

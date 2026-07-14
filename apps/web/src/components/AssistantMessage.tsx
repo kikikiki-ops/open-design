@@ -397,6 +397,10 @@ interface Props {
   flowStageArtifactPaths?: FlowStageArtifactPaths;
   flowDeliveryArtifactName?: string | null;
   flowQuestionFormRequests?: FlowQuestionFormRequests;
+  /** The staged-flow progress card now lives in the pinned card above the
+   * composer (PinnedTaskProgress). Kept as a flag so history/tests can still
+   * render it inline; the live chat passes false. */
+  showInlineFlowProgress?: boolean;
   nextStepSkills?: SkillSummary[];
   toolboxSkillNames?: Partial<Record<DesignToolboxActionId, string | null>>;
   nextStepVariant?: NextStepActionsVariant;
@@ -527,6 +531,7 @@ function AssistantMessageImpl({
   flowStageArtifactPaths,
   flowDeliveryArtifactName = null,
   flowQuestionFormRequests,
+  showInlineFlowProgress = true,
   nextStepSkills,
   toolboxSkillNames,
   nextStepVariant = 'default',
@@ -895,12 +900,14 @@ function AssistantMessageImpl({
         })}
         {flowSnapshot ? (
           <div className={styles.flowStatus} data-testid="assistant-flow-status">
-            <FlowProgressCard
-              flow={flowSnapshot}
-              stageArtifactPaths={flowStageArtifactPaths}
-              stageActions={flowStageActions}
-              onOpenArtifact={onRequestOpenFile}
-            />
+            {showInlineFlowProgress ? (
+              <FlowProgressCard
+                flow={flowSnapshot}
+                stageArtifactPaths={flowStageArtifactPaths}
+                stageActions={flowStageActions}
+                onOpenArtifact={onRequestOpenFile}
+              />
+            ) : null}
             <FlowDeliveryActions
               flow={flowSnapshot}
               fileName={flowDeliveryArtifactName}

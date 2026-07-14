@@ -111,6 +111,45 @@ describe('composeSystemPrompt — built-in utility skill index', () => {
   });
 });
 
+describe('composeSystemPrompt — visual quality skill brief', () => {
+  it('indexes anti-slop, CSS-first motion, GSAP specialists, and post-generation polish in every mode', () => {
+    for (const sessionMode of [undefined, 'chat', 'plan'] as const) {
+      const prompt = composeSystemPrompt({ sessionMode });
+
+      expect(prompt).toContain('## Visual quality skill brief');
+      expect(prompt).toContain('`design-taste-frontend`');
+      expect(prompt).toContain('Motion — CSS first, GSAP when justified');
+      expect(prompt).toContain('Do not add GSAP for a basic fade');
+      for (const skillId of [
+        'gsap-core',
+        'gsap-performance',
+        'gsap-timeline',
+        'gsap-scrolltrigger',
+        'gsap-react',
+        'gsap-frameworks',
+        'gsap-plugins',
+        'gsap-utils',
+        'impeccable-design-polish',
+      ]) {
+        expect(prompt).toContain(`\`${skillId}\``);
+      }
+      expect(prompt).toContain('support `prefers-reduced-motion`');
+      expect(prompt).toContain('inspect the actual rendered artifact');
+      expect(prompt.indexOf('`design-taste-frontend`')).toBeLessThan(
+        prompt.indexOf('`impeccable-design-polish`'),
+      );
+    }
+  });
+
+  it('keeps the visual pipeline scoped and honest when tools are unavailable', () => {
+    const prompt = composeSystemPrompt({ streamFormat: 'plain', sessionMode: 'chat' });
+
+    expect(prompt).toContain('Skip this pipeline for prose-only, backend-only, non-visual, or static-image turns');
+    expect(prompt).toContain('never force motion onto a surface that does not benefit from it');
+    expect(prompt).toContain('never claim a skill audit ran');
+  });
+});
+
 describe('composeSystemPrompt', () => {
   it('injects Chinese quick brief guidance when the UI locale is zh-CN', () => {
     const prompt = composeSystemPrompt({ locale: 'zh-CN' });

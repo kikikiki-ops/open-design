@@ -85,6 +85,7 @@ import type { PlaceholderScenario } from './home-hero/placeholderScenarios';
 import { listDesignArtifactCandidates } from './design-files/designArtifacts';
 import type { PluginFolderAgentAction } from './design-files/pluginFolderActions';
 import { Icon, type IconName } from './Icon';
+import { PinnedTaskProgress, type PinnedTaskRunStatus } from './PinnedTaskProgress';
 import { repoConnectCopy } from './design-system-github-evidence';
 import { isRenderableSketchJson, SketchPreview } from './SketchPreview';
 import type { SettingsSection } from './SettingsDialog';
@@ -974,6 +975,18 @@ export function ChatPane({
         : {},
     [displayMessages, flowSnapshot],
   );
+  // Stage clicks in the pinned card open the clarify / plan question forms —
+  // the same bindings the inline FlowProgressCard used before it moved up here.
+  const pinnedFlowStageActions = useMemo<
+    Partial<Record<'clarify' | 'plan', () => void>> | undefined
+  >(() => {
+    if (!onOpenQuestions) return undefined;
+    const reqs: FlowQuestionFormRequests = flowQuestionFormRequests;
+    const actions: Partial<Record<'clarify' | 'plan', () => void>> = {};
+    if (reqs.clarify) actions.clarify = () => onOpenQuestions(reqs.clarify);
+    if (reqs.plan) actions.plan = () => onOpenQuestions(reqs.plan);
+    return Object.keys(actions).length > 0 ? actions : undefined;
+  }, [flowQuestionFormRequests, onOpenQuestions]);
   const didInitialScrollRef = useRef(false);
   const runFailedToastSurfaceKeysRef = useRef<Set<string>>(new Set());
   // Tracks whether the user is glued close enough to the bottom that
@@ -1210,6 +1223,17 @@ export function ChatPane({
   const hasActiveRunMessage = displayMessages.some(
     (m) => m.role === 'assistant' && isActiveRunStatus(m.runStatus),
   );
+  // Terminal status of the latest round's run — drives the pinned card's
+  // ended-state badge (spec §3.3). Falls back to succeeded when a finished
+  // message carries no explicit runStatus.
+  const lastAssistantRunStatus = useMemo<PinnedTaskRunStatus>(() => {
+    for (let i = displayMessages.length - 1; i >= 0; i--) {
+      const m = displayMessages[i]!;
+      if (m.role !== 'assistant') continue;
+      return m.runStatus ?? (m.endedAt != null ? 'succeeded' : null);
+    }
+    return null;
+  }, [displayMessages]);
   const retryAssistant = retryableAssistantMessage(displayMessages, lastAssistantId, streaming);
   // The failed run's error event lives on the (persisted) assistant message, so
   // the error card + AMR card survive a reload — unlike the ephemeral global
@@ -2770,6 +2794,16 @@ export function ChatPane({
                 }
               : undefined}
           />
+          {flowSnapshot ? (
+            <PinnedTaskProgress
+              flow={flowSnapshot}
+              live={streaming || hasActiveRunMessage}
+              status={lastAssistantRunStatus}
+              stageArtifactPaths={stageArtifactPaths}
+              stageActions={pinnedFlowStageActions}
+              onOpenArtifact={onRequestOpenFile}
+            />
+          ) : null}
           <div
             className="chat-composer-slot"
             ref={composerSlotRef}
@@ -3112,6 +3146,9 @@ function ChatRows({
         onPickSkill={onPickSkill}
         onArtifactDownload={onArtifactDownload}
         flowSnapshot={m.id === lastAssistantId ? flowSnapshot : null}
+        // The staged-flow progress card now lives in the pinned card above the
+        // composer (PinnedTaskProgress); suppress the inline copy in live chat.
+        showInlineFlowProgress={false}
         flowStageArtifactPaths={
           m.id === lastAssistantId ? flowStageArtifactPaths : undefined
         }

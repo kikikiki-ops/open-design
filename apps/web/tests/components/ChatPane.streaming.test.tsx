@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { forwardRef, useImperativeHandle } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { applyFlowMarker, createFlowSnapshot } from '@open-design/contracts';
@@ -59,6 +59,7 @@ vi.mock('../../src/components/AssistantMessage', () => ({
     flowSnapshot,
     flowQuestionFormRequests,
     onOpenQuestions,
+    showInlineFlowProgress,
   }: {
     streaming: boolean;
     message: ChatMessage;
@@ -73,6 +74,7 @@ vi.mock('../../src/components/AssistantMessage', () => ({
     flowSnapshot?: ReturnType<typeof createFlowSnapshot> | null;
     flowQuestionFormRequests?: FlowQuestionFormRequests;
     onOpenQuestions?: (request?: FlowQuestionFormRequests['clarify']) => void;
+    showInlineFlowProgress?: boolean;
   }) => (
     <>
       <output data-testid={`assistant-streaming-${message.id}`}>{streaming ? 'streaming' : 'idle'}</output>
@@ -89,7 +91,7 @@ vi.mock('../../src/components/AssistantMessage', () => ({
           })}
         </div>
       ) : null}
-      {flowSnapshot ? (
+      {flowSnapshot && showInlineFlowProgress !== false ? (
         <div data-testid="assistant-flow-status">
           <output data-testid="flow-progress-card">
             {flowSnapshot.stages.find((stage) => stage.id === flowSnapshot.activeStage)?.detail}
@@ -307,7 +309,7 @@ describe('ChatPane streaming state', () => {
     expect(container.querySelector('.chat-log')?.className).not.toContain('is-balanced-transcript');
   });
 
-  it('keeps the updating flow card inside the latest assistant message', () => {
+  it('shows the updating flow card in the pinned task-progress card above the composer', () => {
     const messages: ChatMessage[] = [
       { id: 'user-1', role: 'user', content: 'Make the landing page', createdAt: 1 },
       { id: 'assistant-1', role: 'assistant', content: 'Starting now', createdAt: 2 },
@@ -339,10 +341,13 @@ describe('ChatPane streaming state', () => {
     );
 
     const log = container.querySelector('.chat-log');
+    const pinned = screen.getByTestId('pinned-task-progress');
     const card = screen.getByTestId('flow-progress-card');
     const lastMessage = screen.getByTestId('assistant-streaming-assistant-1');
-    expect(log?.contains(card)).toBe(true);
-    expect(screen.getByTestId('assistant-flow-status').contains(card)).toBe(true);
+    // The flow card now lives in the pinned card above the composer, not inline
+    // in the chat log.
+    expect(pinned.contains(card)).toBe(true);
+    expect(log?.contains(card)).toBe(false);
     expect(
       lastMessage.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
@@ -354,6 +359,7 @@ describe('ChatPane streaming state', () => {
     );
     rerender(<ChatPane {...baseProps} flowSnapshot={updatedFlow} />);
 
+    // Updates in place (same node), driven by the new snapshot.
     expect(screen.getByTestId('flow-progress-card')).toBe(card);
     expect(card.textContent).toContain('Researching sources');
   });
@@ -415,7 +421,9 @@ describe('ChatPane streaming state', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open brief form' }));
+    // The clarify checkpoint is now a clickable stage in the pinned flow card.
+    const pinned = screen.getByTestId('pinned-task-progress');
+    fireEvent.click(within(pinned).getByRole('button', { name: 'flow.stage.clarify' }));
 
     expect(onOpenQuestions).toHaveBeenCalledWith(
       expect.objectContaining({

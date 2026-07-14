@@ -132,6 +132,26 @@ describe('composeSystemPrompt', () => {
     }
   });
 
+  it('indexes the stage-matched visual quality pipeline in every conversation mode', () => {
+    for (const sessionMode of [undefined, 'chat', 'plan'] as const) {
+      const prompt = composeSystemPrompt({ sessionMode });
+
+      expect(prompt).toContain('## Visual quality skill brief');
+      expect(prompt).toContain('`design-taste-frontend`');
+      expect(prompt).toContain('Motion — CSS first, GSAP when justified');
+      expect(prompt).toContain('Do not add GSAP for a basic fade');
+      expect(prompt).toContain('`gsap-core` + `gsap-performance`');
+      expect(prompt).toContain('`gsap-scrolltrigger`');
+      expect(prompt).toContain('`gsap-react`');
+      expect(prompt).toContain('support `prefers-reduced-motion`');
+      expect(prompt).toContain('`impeccable-design-polish`');
+      expect(prompt).toContain('inspect the actual rendered artifact');
+      expect(prompt.indexOf('`design-taste-frontend`')).toBeLessThan(
+        prompt.indexOf('`impeccable-design-polish`'),
+      );
+    }
+  });
+
   it('injects Chinese quick brief guidance when the UI locale is zh-CN', () => {
     const prompt = composeSystemPrompt({ locale: 'zh-CN' });
 

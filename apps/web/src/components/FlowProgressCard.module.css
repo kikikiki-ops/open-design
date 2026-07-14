@@ -15,6 +15,15 @@
   line-height: 1.45;
 }
 
+/* Headless variant: the pinned task-progress wrapper owns the card chrome
+   (border/background/padding + header), so the embedded body drops its own. */
+.bare {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+}
+
 .head {
   display: flex;
   align-items: baseline;
