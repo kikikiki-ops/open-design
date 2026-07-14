@@ -283,4 +283,104 @@ describe('persisted telemetry accepted anchor', () => {
         ?.acceptedTraceBodyId,
     ).toBe(foreignBodyId);
   });
+
+  it('accepted write with stale assistantMessageId still lands on the run row after restart', () => {
+    const runId = 'run-stale-write';
+    const otherRunId = 'run-other-stale-write';
+    const expectedBodyId = scopedTelemetryBodyId(runId, 'final', 'terminal_fallback');
+    const now = Date.now();
+
+    const db1 = openDatabase(tempDir, { dataDir: tempDir });
+    insertProject(db1, {
+      id: 'proj-1',
+      name: 'Telemetry project',
+      createdAt: now,
+      updatedAt: now,
+    });
+    insertConversation(db1, {
+      id: 'conv-1',
+      projectId: 'proj-1',
+      title: 'Telemetry run',
+      createdAt: now,
+      updatedAt: now,
+    });
+    // Foreign assistant (other run) and a user message act as stale client ids.
+    upsertMessage(db1, 'conv-1', {
+      id: 'assistant-foreign',
+      role: 'assistant',
+      content: 'other run',
+      runId: otherRunId,
+      runStatus: 'succeeded',
+      telemetryFinalized: true,
+      endedAt: now,
+    });
+    upsertMessage(db1, 'conv-1', {
+      id: 'user-1',
+      role: 'user',
+      content: 'prompt',
+    });
+    // Real terminal assistant for the run that accepted terminal_fallback.
+    upsertMessage(db1, 'conv-1', {
+      id: 'assistant-target',
+      role: 'assistant',
+      content: 'partial',
+      runId,
+      runStatus: 'failed',
+      telemetryFinalized: true,
+      endedAt: now,
+    });
+
+    for (const staleId of ['assistant-foreign', 'user-1', 'missing-id'] as const) {
+      // Clear any prior anchor so each stale id is exercised independently.
+      db1
+        .prepare(
+          `UPDATE messages
+              SET telemetry_accepted_body_id = NULL,
+                  telemetry_accepted_report_trigger = NULL
+            WHERE run_id = ?`,
+        )
+        .run(runId);
+      expect(
+        setRunTelemetryAcceptedAnchor(db1, {
+          runId,
+          assistantMessageId: staleId,
+          bodyId: expectedBodyId,
+          reportTrigger: 'terminal_fallback',
+        }),
+      ).toBe(true);
+      // Anchor must land on the run-owned assistant row, not the stale id.
+      expect(getRunFeedbackTelemetryAnchor(db1, runId, 'assistant-target')).toEqual({
+        runStatus: 'failed',
+        telemetryFinalized: true,
+        acceptedTraceBodyId: expectedBodyId,
+        acceptedReportTrigger: 'terminal_fallback',
+      });
+      expect(
+        getRunFeedbackTelemetryAnchor(db1, otherRunId, 'assistant-foreign')
+          ?.acceptedTraceBodyId,
+      ).toBeNull();
+    }
+
+    closeDatabase();
+    resetAcceptedFinalTraceBodyIdsForTests();
+
+    // After restart, feedback still targets :tf even though the accepted write
+    // was invoked with a stale/foreign assistantMessageId.
+    const db2 = openDatabase(tempDir, { dataDir: tempDir });
+    const anchor = getRunFeedbackTelemetryAnchor(db2, runId, 'assistant-foreign');
+    expect(anchor).toEqual({
+      runStatus: 'failed',
+      telemetryFinalized: true,
+      acceptedTraceBodyId: expectedBodyId,
+      acceptedReportTrigger: 'terminal_fallback',
+    });
+    expect(
+      resolveFeedbackTraceId({
+        runId,
+        runStatus: anchor!.runStatus,
+        telemetryFinalized: anchor!.telemetryFinalized,
+        acceptedTraceBodyId: anchor!.acceptedTraceBodyId,
+      }),
+    ).toBe(expectedBodyId);
+  });
 });
