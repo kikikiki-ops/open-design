@@ -1349,7 +1349,11 @@ export async function reportRunFeedbackFromDaemon(
   // telemetry, not a client-facing signal. Deferred feedback is still
   // `accepted` from the caller's perspective — it ships when the run's
   // final-purpose body is accepted.
+  // Pass the preflight-resolved sink so reportRunFeedback does not re-run
+  // global priority selection and potentially diverge from the sticky channel
+  // that just passed canDeliverRunFeedback.
   void reportRunFeedback(ctx, {
+    config: sink,
     configuredEnv,
     ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}),
   }).catch((err) => {
