@@ -81,6 +81,142 @@ export interface RegisterProjectRoutesDeps extends RouteDeps<'db' | 'design' | '
   onCommentDeleted?: (comment: PreviewComment) => void;
 }
 
+type WorkspaceProjectContext = {
+  workspaceId: string;
+  workspaceType: 'personal' | 'team';
+  appUserId: string;
+  workspaceMemberId: string;
+  role: 'owner' | 'admin' | 'member';
+  memberStatus: 'active' | 'removed';
+  lifecycleState: 'active' | 'billing_past_due' | 'locked' | 'deleting' | 'deleted';
+  canShareProjects: boolean;
+  canWriteSyncedFiles: boolean;
+};
+
+type WorkspaceProjectMutationCapability = 'rename' | 'delete' | 'duplicate' | 'writeFiles';
+
+type WorkspaceProjectAccessInput = {
+  visibility?: string | null;
+  resourceState?: string | null;
+  createdByWorkspaceMemberId?: string | null;
+};
+
+function headerValue(req: any, name: string): string | null {
+  const value = req.get(name);
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function headerBool(req: any, name: string, fallback: boolean): boolean {
+  const value = headerValue(req, name);
+  if (value === null) return fallback;
+  if (value === 'false') return false;
+  if (value === 'true') return true;
+  return fallback;
+}
+
+// Temporary adapter until the B-owned CurrentWorkspaceContext is wired into
+// the daemon. Keep D's project CRUD behind this seam so the header fallback
+// can be replaced without changing visibility and permission logic.
+function workspaceProjectContext(req: any, workspaceId: string): WorkspaceProjectContext | null {
+  const workspaceMemberId = headerValue(req, 'x-od-workspace-member-id');
+  if (!workspaceMemberId) return null;
+  const workspaceTypeHeader = headerValue(req, 'x-od-workspace-type');
+  const lifecycleState = headerValue(req, 'x-od-workspace-lifecycle-state') ?? 'active';
+  const role = headerValue(req, 'x-od-workspace-role') ?? 'member';
+  const legacyWriteEnabled = headerBool(req, 'x-od-workspace-write-enabled', true);
+  const canWriteSyncedFiles = headerBool(req, 'x-od-workspace-can-write-synced-files', legacyWriteEnabled);
+  return {
+    workspaceId,
+    workspaceType: workspaceTypeHeader === 'team' ? 'team' : 'personal',
+    appUserId: headerValue(req, 'x-od-app-user-id') ?? 'local-user',
+    workspaceMemberId,
+    role: role === 'owner' || role === 'admin' ? role : 'member',
+    memberStatus: headerValue(req, 'x-od-workspace-member-status') === 'removed' ? 'removed' : 'active',
+    lifecycleState: lifecycleState === 'billing_past_due' || lifecycleState === 'locked' || lifecycleState === 'deleting' || lifecycleState === 'deleted'
+      ? lifecycleState
+      : 'active',
+    canShareProjects: headerBool(req, 'x-od-workspace-can-share-projects', canWriteSyncedFiles),
+    canWriteSyncedFiles,
+  };
+}
+
+function workspaceProjectContextFromRequest(req: any): WorkspaceProjectContext | 'missing' | null {
+  const workspaceId = headerValue(req, 'x-od-workspace-id');
+  const workspaceMemberId = headerValue(req, 'x-od-workspace-member-id');
+  if (!workspaceId && !workspaceMemberId) return null;
+  if (!workspaceId || !workspaceMemberId) return 'missing';
+  return workspaceProjectContext(req, workspaceId) ?? 'missing';
+}
+
+function isWorkspaceLocked(ctx: WorkspaceProjectContext): boolean {
+  return ctx.lifecycleState === 'locked' || ctx.lifecycleState === 'deleted';
+}
+
+function projectAccess(wp: WorkspaceProjectAccessInput, ctx: WorkspaceProjectContext) {
+  const frozen = wp.resourceState === 'frozen' || wp.resourceState === 'deleted' || isWorkspaceLocked(ctx);
+  const selfCreated = wp.createdByWorkspaceMemberId != null && wp.createdByWorkspaceMemberId === ctx.workspaceMemberId;
+  const privileged = ctx.role === 'owner' || ctx.role === 'admin';
+  const canMutate = !frozen && ctx.canWriteSyncedFiles && ctx.memberStatus === 'active' && (privileged || selfCreated);
+  const disabledReason = frozen
+    ? ctx.lifecycleState === 'deleted' || wp.resourceState === 'deleted'
+      ? 'workspace_deleted'
+      : 'workspace_locked'
+    : canMutate
+      ? undefined
+      : 'permission_denied';
+  return {
+    canOpen: !frozen && ctx.memberStatus === 'active',
+    canRename: canMutate,
+    canDelete: canMutate,
+    canDuplicate: canMutate,
+    canMoveToTeam: canMutate && ctx.canShareProjects && wp.visibility === 'personal',
+    canMoveToPersonal: canMutate && ctx.canShareProjects && wp.visibility === 'team',
+    canExport: !frozen && ctx.memberStatus === 'active',
+    canSendTo: !frozen && ctx.memberStatus === 'active',
+    canRestoreVersion: canMutate,
+    ...(disabledReason ? { disabledReason } : {}),
+  };
+}
+
+function workspaceProjectMutationAllowed(
+  row: WorkspaceProjectAccessInput | null | undefined,
+  ctx: WorkspaceProjectContext,
+  capability: WorkspaceProjectMutationCapability,
+): boolean {
+  if (!row) return false;
+  const access = projectAccess(row, ctx);
+  if (capability === 'duplicate') return access.canDuplicate;
+  if (capability === 'delete') return access.canDelete;
+  if (capability === 'rename') return access.canRename;
+  return access.canRestoreVersion;
+}
+
+function enforceWorkspaceProjectMutation(
+  req: any,
+  res: Response,
+  sendApiError: (res: Response, status: number, code: string, message: string) => unknown,
+  getWorkspaceProject: (db: unknown, workspaceId: string, projectId: string) => WorkspaceProjectAccessInput | null | undefined,
+  db: unknown,
+  projectId: string,
+  capability: WorkspaceProjectMutationCapability,
+): boolean {
+  const ctx = workspaceProjectContextFromRequest(req);
+  if (ctx === null) return true;
+  if (ctx === 'missing') {
+    sendApiError(res, 401, 'WORKSPACE_CONTEXT_REQUIRED', 'workspace context is required');
+    return false;
+  }
+  const row = getWorkspaceProject(db, ctx.workspaceId, projectId);
+  if (!workspaceProjectMutationAllowed(row, ctx, capability)) {
+    const code = row && isWorkspaceLocked(ctx)
+      ? 'WORKSPACE_LOCKED'
+      : 'WORKSPACE_PROJECT_PERMISSION_DENIED';
+    sendApiError(res, 403, code, 'workspace project mutation is not allowed');
+    return false;
+  }
+  return true;
+}
+
 function projectDetailResolvedDir(
   projectsRoot: string,
   project: any,
@@ -1176,59 +1312,8 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
   const { randomId } = ctx.ids;
   const { validateProjectDesignSystemId, validateProjectSkillId } = ctx.validation;
   const { collabSync, teamProjectCatalog } = ctx;
-  type WorkspaceProjectContext = {
-    workspaceId: string;
-    workspaceType: 'personal' | 'team';
-    appUserId: string;
-    workspaceMemberId: string;
-    role: 'owner' | 'admin' | 'member';
-    memberStatus: 'active' | 'removed';
-    lifecycleState: 'active' | 'billing_past_due' | 'locked' | 'deleting' | 'deleted';
-    canShareProjects: boolean;
-    canWriteSyncedFiles: boolean;
-  };
-
-  // Temporary adapter until the B-owned CurrentWorkspaceContext is wired into
-  // the daemon. Keep D's project CRUD behind this seam so the header fallback
-  // can be replaced without changing visibility and permission logic.
-  function headerValue(req: any, name: string): string | null {
-    const value = req.get(name);
-    return typeof value === 'string' && value.trim() ? value.trim() : null;
-  }
-  function headerBool(req: any, name: string, fallback: boolean): boolean {
-    const value = headerValue(req, name);
-    if (value === null) return fallback;
-    if (value === 'false') return false;
-    if (value === 'true') return true;
-    return fallback;
-  }
-  function workspaceProjectContext(req: any, workspaceId: string): WorkspaceProjectContext | null {
-    const workspaceMemberId = headerValue(req, 'x-od-workspace-member-id');
-    if (!workspaceMemberId) return null;
-    const workspaceTypeHeader = headerValue(req, 'x-od-workspace-type');
-    const lifecycleState = headerValue(req, 'x-od-workspace-lifecycle-state') ?? 'active';
-    const role = headerValue(req, 'x-od-workspace-role') ?? 'member';
-    const legacyWriteEnabled = headerBool(req, 'x-od-workspace-write-enabled', true);
-    const canWriteSyncedFiles = headerBool(req, 'x-od-workspace-can-write-synced-files', legacyWriteEnabled);
-    return {
-      workspaceId,
-      workspaceType: workspaceTypeHeader === 'team' ? 'team' : 'personal',
-      appUserId: headerValue(req, 'x-od-app-user-id') ?? 'local-user',
-      workspaceMemberId,
-      role: role === 'owner' || role === 'admin' ? role : 'member',
-      memberStatus: headerValue(req, 'x-od-workspace-member-status') === 'removed' ? 'removed' : 'active',
-      lifecycleState: lifecycleState === 'billing_past_due' || lifecycleState === 'locked' || lifecycleState === 'deleting' || lifecycleState === 'deleted'
-        ? lifecycleState
-        : 'active',
-      canShareProjects: headerBool(req, 'x-od-workspace-can-share-projects', canWriteSyncedFiles),
-      canWriteSyncedFiles,
-    };
-  }
   function sendMissingWorkspaceContext(res: Response) {
     return sendApiError(res, 401, 'WORKSPACE_CONTEXT_REQUIRED', 'workspace context is required');
-  }
-  function isWorkspaceLocked(ctx: WorkspaceProjectContext): boolean {
-    return ctx.lifecycleState === 'locked' || ctx.lifecycleState === 'deleted';
   }
   function pendingSyncIntent(projectId: string, workspaceId: string, visibility: 'personal' | 'team') {
     return {
@@ -1242,31 +1327,6 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       super('team project catalog list failed');
       this.name = 'TeamProjectCatalogListError';
     }
-  }
-  function projectAccess(wp: any, ctx: WorkspaceProjectContext) {
-    const frozen = wp.resourceState === 'frozen' || wp.resourceState === 'deleted' || isWorkspaceLocked(ctx);
-    const selfCreated = wp.createdByWorkspaceMemberId != null && wp.createdByWorkspaceMemberId === ctx.workspaceMemberId;
-    const privileged = ctx.role === 'owner' || ctx.role === 'admin';
-    const canMutate = !frozen && ctx.canWriteSyncedFiles && ctx.memberStatus === 'active' && (privileged || selfCreated);
-    const disabledReason = frozen
-      ? ctx.lifecycleState === 'deleted' || wp.resourceState === 'deleted'
-        ? 'workspace_deleted'
-        : 'workspace_locked'
-      : canMutate
-        ? undefined
-        : 'permission_denied';
-    return {
-      canOpen: !frozen && ctx.memberStatus === 'active',
-      canRename: canMutate,
-      canDelete: canMutate,
-      canDuplicate: canMutate,
-      canMoveToTeam: canMutate && ctx.canShareProjects && wp.visibility === 'personal',
-      canMoveToPersonal: canMutate && ctx.canShareProjects && wp.visibility === 'team',
-      canExport: !frozen && ctx.memberStatus === 'active',
-      canSendTo: !frozen && ctx.memberStatus === 'active',
-      canRestoreVersion: canMutate,
-      ...(disabledReason ? { disabledReason } : {}),
-    };
   }
   function normalizeWorkspaceProjectRow(row: any, ctx: WorkspaceProjectContext) {
     let metadata: unknown;
@@ -2316,6 +2376,15 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       if (!sourceProject || !projectVisibleForLocations(sourceProject, locations)) {
         return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'not found');
       }
+      if (!enforceWorkspaceProjectMutation(
+        req,
+        res,
+        sendApiError,
+        getWorkspaceProject,
+        db,
+        sourceProject.id,
+        'duplicate',
+      )) return;
       if (isDesignSystemLikeProject(sourceProject)) {
         return sendApiError(
           res,
@@ -2410,6 +2479,15 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
       if (!sourceProject || !projectVisibleForLocations(sourceProject, locations)) {
         return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'not found');
       }
+      if (!enforceWorkspaceProjectMutation(
+        req,
+        res,
+        sendApiError,
+        getWorkspaceProject,
+        db,
+        sourceProject.id,
+        'duplicate',
+      )) return;
       if (isDesignSystemLikeProject(sourceProject)) {
         return sendApiError(
           res,
@@ -2575,6 +2653,19 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
   app.patch('/api/projects/:id', async (req, res) => {
     try {
       const patch = req.body || {};
+      const patchProject = getProject(db, req.params.id);
+      if (!patchProject) {
+        return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'not found');
+      }
+      if (!enforceWorkspaceProjectMutation(
+        req,
+        res,
+        sendApiError,
+        getWorkspaceProject,
+        db,
+        patchProject.id,
+        'rename',
+      )) return;
       // baseDir / folder-import state is privileged: it's set only by the
       // import endpoint and otherwise immutable. Two failure modes to
       // guard against here:
@@ -2727,6 +2818,19 @@ export function registerProjectRoutes(app: Express, ctx: RegisterProjectRoutesDe
 
   app.delete('/api/projects/:id', async (req, res) => {
     try {
+      const project = getProject(db, req.params.id);
+      if (!project) {
+        return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'not found');
+      }
+      if (!enforceWorkspaceProjectMutation(
+        req,
+        res,
+        sendApiError,
+        getWorkspaceProject,
+        db,
+        project.id,
+        'delete',
+      )) return;
       dbDeleteProject(db, req.params.id);
       await removeProjectDir(PROJECTS_DIR, req.params.id).catch(() => {});
       /** @type {import('@open-design/contracts').OkResponse} */
@@ -2978,7 +3082,7 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
   const { PROJECTS_DIR } = ctx.paths;
   const { upload } = ctx.uploads;
   const { fs } = ctx.node;
-  const { getProject } = ctx.projectStore;
+  const { getProject, getWorkspaceProject } = ctx.projectStore;
   const { listFiles, listProjectFolders, createProjectFolder, deleteProjectFolder, searchProjectFiles, readProjectFile, resolveProjectDir, resolveProjectFilePath, parseByteRange, renameProjectFile, deleteProjectFile, writeProjectFile, sanitizeName, sanitizePath, ensureProject } = ctx.projectFiles;
   const { buildDocumentPreview } = ctx.documents;
   const { validateArtifactManifestInput } = ctx.artifacts;
@@ -3437,6 +3541,15 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
       if (!project) {
         return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
       }
+      if (!enforceWorkspaceProjectMutation(
+        req,
+        res,
+        sendApiError,
+        getWorkspaceProject,
+        db,
+        project.id,
+        'writeFiles',
+      )) return;
       const folder = await createProjectFolder(
         PROJECTS_DIR,
         req.params.id,
@@ -3461,6 +3574,15 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
       if (!project) {
         return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
       }
+      if (!enforceWorkspaceProjectMutation(
+        req,
+        res,
+        sendApiError,
+        getWorkspaceProject,
+        db,
+        project.id,
+        'writeFiles',
+      )) return;
       await deleteProjectFolder(
         PROJECTS_DIR,
         req.params.id,
@@ -3666,6 +3788,18 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
       const rawSplat = String(params[1] ?? '');
       if (rejectInternalVersionPath(res, rawSplat)) return;
       const project = getProject(db, projectId);
+      if (!project) {
+        return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
+      }
+      if (!enforceWorkspaceProjectMutation(
+        req,
+        res,
+        sendApiError,
+        getWorkspaceProject,
+        db,
+        project.id,
+        'writeFiles',
+      )) return;
       await deleteProjectFile(PROJECTS_DIR, projectId, rawSplat, project?.metadata);
       await markProjectFileVersionStoreDeleted(PROJECTS_DIR, projectId, rawSplat, project?.metadata);
       /** @type {import('@open-design/contracts').DeleteProjectFileResponse} */
@@ -3764,6 +3898,15 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
       if (!project) {
         return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
       }
+      if (!enforceWorkspaceProjectMutation(
+        req,
+        res,
+        sendApiError,
+        getWorkspaceProject,
+        db,
+        project.id,
+        'writeFiles',
+      )) return;
       const file = await readProjectFile(PROJECTS_DIR, project.id, fileName, project.metadata);
       if (!/\.html?$/i.test(file.name)) {
         return sendApiError(res, 400, 'BAD_REQUEST', 'versions are only available for HTML files');
@@ -3828,6 +3971,15 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
       if (!project) {
         return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
       }
+      if (!enforceWorkspaceProjectMutation(
+        req,
+        res,
+        sendApiError,
+        getWorkspaceProject,
+        db,
+        project.id,
+        'writeFiles',
+      )) return;
       const restored = await readProjectFileVersion(
         PROJECTS_DIR,
         project.id,
@@ -3956,6 +4108,25 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
     async (req, res) => {
       try {
         const uploadProject = getProject(db, req.params.id);
+        const cleanupRejectedUpload = () => {
+          if (req.file?.path) fs.promises.unlink(req.file.path).catch(() => {});
+        };
+        if (!uploadProject && workspaceProjectContextFromRequest(req) !== null) {
+          cleanupRejectedUpload();
+          return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
+        }
+        if (!enforceWorkspaceProjectMutation(
+          req,
+          res,
+          sendApiError,
+          getWorkspaceProject,
+          db,
+          req.params.id,
+          'writeFiles',
+        )) {
+          cleanupRejectedUpload();
+          return;
+        }
         await ensureProject(PROJECTS_DIR, req.params.id, uploadProject?.metadata);
         if (req.file) {
           try {
@@ -4165,6 +4336,18 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
       }
       if (rejectInternalVersionPath(res, from) || rejectInternalVersionPath(res, to)) return;
       const project = getProject(db, req.params.id);
+      if (!project) {
+        return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
+      }
+      if (!enforceWorkspaceProjectMutation(
+        req,
+        res,
+        sendApiError,
+        getWorkspaceProject,
+        db,
+        project.id,
+        'writeFiles',
+      )) return;
       const result = await renameProjectFile(
         PROJECTS_DIR,
         req.params.id,
@@ -4198,6 +4381,18 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
     try {
       if (rejectInternalVersionPath(res, req.params.name)) return;
       const delProject = getProject(db, req.params.id);
+      if (!delProject) {
+        return sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
+      }
+      if (!enforceWorkspaceProjectMutation(
+        req,
+        res,
+        sendApiError,
+        getWorkspaceProject,
+        db,
+        delProject.id,
+        'writeFiles',
+      )) return;
       await deleteProjectFile(PROJECTS_DIR, req.params.id, req.params.name, delProject?.metadata);
       await markProjectFileVersionStoreDeleted(PROJECTS_DIR, req.params.id, req.params.name, delProject?.metadata);
       /** @type {import('@open-design/contracts').DeleteProjectFileResponse} */

@@ -369,6 +369,153 @@ describe('workspace project routes', () => {
     expect(othersTeam.projects.map((item) => item.id)).not.toContain(projectId);
   });
 
+  it('enforces workspace project permissions on direct project and file write routes', async () => {
+    const projectId = `workspace-direct-write-${Date.now()}`;
+    await createProject(projectId, 'Direct write project');
+
+    const ownerHeaders = headers('member-write-owner', { 'x-od-workspace-role': 'admin' });
+    const moveResp = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/projects/${projectId}/move`, {
+      method: 'POST',
+      headers: ownerHeaders,
+      body: JSON.stringify({ visibility: 'team' }),
+    });
+    expect(moveResp.status).toBe(200);
+
+    const seedResp = await fetch(`${baseUrl}/api/projects/${projectId}/files`, {
+      method: 'POST',
+      headers: ownerHeaders,
+      body: JSON.stringify({ name: 'index.html', content: '<h1>original</h1>' }),
+    });
+    expect(seedResp.status).toBe(200);
+
+    const versionResp = await fetch(`${baseUrl}/api/projects/${projectId}/files/index.html/versions`, {
+      method: 'POST',
+      headers: ownerHeaders,
+      body: JSON.stringify({ source: 'manual', label: 'seed' }),
+    });
+    expect(versionResp.status).toBe(200);
+    const versionBody = await versionResp.json() as { version: { id: string } };
+
+    const readOnlyHeaders = headers('member-write-viewer');
+    const patchResp = await fetch(`${baseUrl}/api/projects/${projectId}`, {
+      method: 'PATCH',
+      headers: readOnlyHeaders,
+      body: JSON.stringify({ name: 'Illicit rename' }),
+    });
+    expect(patchResp.status).toBe(403);
+
+    const duplicateResp = await fetch(`${baseUrl}/api/projects/${projectId}/duplicate`, {
+      method: 'POST',
+      headers: readOnlyHeaders,
+      body: JSON.stringify({ name: 'Illicit duplicate' }),
+    });
+    expect(duplicateResp.status).toBe(403);
+
+    const designSystemCopyResp = await fetch(`${baseUrl}/api/projects/${projectId}/design-system-copy`, {
+      method: 'POST',
+      headers: readOnlyHeaders,
+      body: JSON.stringify({ name: 'Illicit design-system copy' }),
+    });
+    expect(designSystemCopyResp.status).toBe(403);
+
+    const writeResp = await fetch(`${baseUrl}/api/projects/${projectId}/files`, {
+      method: 'POST',
+      headers: readOnlyHeaders,
+      body: JSON.stringify({ name: 'blocked.txt', content: 'blocked' }),
+    });
+    expect(writeResp.status).toBe(403);
+
+    const folderCreateResp = await fetch(`${baseUrl}/api/projects/${projectId}/folders`, {
+      method: 'POST',
+      headers: readOnlyHeaders,
+      body: JSON.stringify({ name: 'blocked-folder' }),
+    });
+    expect(folderCreateResp.status).toBe(403);
+
+    const renameResp = await fetch(`${baseUrl}/api/projects/${projectId}/files/rename`, {
+      method: 'POST',
+      headers: readOnlyHeaders,
+      body: JSON.stringify({ from: 'index.html', to: 'renamed.html' }),
+    });
+    expect(renameResp.status).toBe(403);
+
+    const restoreResp = await fetch(`${baseUrl}/api/projects/${projectId}/files/index.html/versions/${versionBody.version.id}/restore`, {
+      method: 'POST',
+      headers: readOnlyHeaders,
+      body: JSON.stringify({}),
+    });
+    expect(restoreResp.status).toBe(403);
+
+    const deleteResp = await fetch(`${baseUrl}/api/projects/${projectId}/files/index.html`, {
+      method: 'DELETE',
+      headers: readOnlyHeaders,
+    });
+    expect(deleteResp.status).toBe(403);
+
+    const rawDeleteResp = await fetch(`${baseUrl}/api/projects/${projectId}/raw/index.html`, {
+      method: 'DELETE',
+      headers: readOnlyHeaders,
+    });
+    expect(rawDeleteResp.status).toBe(403);
+
+    const folderDeleteResp = await fetch(`${baseUrl}/api/projects/${projectId}/folders`, {
+      method: 'DELETE',
+      headers: readOnlyHeaders,
+      body: JSON.stringify({ path: 'blocked-folder' }),
+    });
+    expect(folderDeleteResp.status).toBe(403);
+
+    const projectDeleteResp = await fetch(`${baseUrl}/api/projects/${projectId}`, {
+      method: 'DELETE',
+      headers: readOnlyHeaders,
+    });
+    expect(projectDeleteResp.status).toBe(403);
+
+    const blockedFile = await fetch(`${baseUrl}/api/projects/${projectId}/raw/blocked.txt`);
+    expect(blockedFile.status).toBe(404);
+    const projectResp = await fetch(`${baseUrl}/api/projects/${projectId}`);
+    const projectBody = await projectResp.json() as { project: { name: string } };
+    expect(projectBody.project.name).toBe('Direct write project');
+  });
+
+  it('blocks direct project and file writes when the workspace is locked', async () => {
+    const projectId = `workspace-direct-locked-${Date.now()}`;
+    await createProject(projectId, 'Locked direct write project');
+
+    const ownerHeaders = headers('member-locked-owner', { 'x-od-workspace-role': 'admin' });
+    const moveResp = await fetch(`${baseUrl}/api/workspaces/${workspaceId}/projects/${projectId}/move`, {
+      method: 'POST',
+      headers: ownerHeaders,
+      body: JSON.stringify({ visibility: 'team' }),
+    });
+    expect(moveResp.status).toBe(200);
+
+    const lockedHeaders = headers('member-locked-owner', {
+      'x-od-workspace-role': 'admin',
+      'x-od-workspace-lifecycle-state': 'locked',
+    });
+    const patchResp = await fetch(`${baseUrl}/api/projects/${projectId}`, {
+      method: 'PATCH',
+      headers: lockedHeaders,
+      body: JSON.stringify({ name: 'Locked rename' }),
+    });
+    expect(patchResp.status).toBe(403);
+
+    const duplicateResp = await fetch(`${baseUrl}/api/projects/${projectId}/duplicate`, {
+      method: 'POST',
+      headers: lockedHeaders,
+      body: JSON.stringify({ name: 'Locked duplicate' }),
+    });
+    expect(duplicateResp.status).toBe(403);
+
+    const writeResp = await fetch(`${baseUrl}/api/projects/${projectId}/files`, {
+      method: 'POST',
+      headers: lockedHeaders,
+      body: JSON.stringify({ name: 'locked.txt', content: 'locked' }),
+    });
+    expect(writeResp.status).toBe(403);
+  });
+
   it('rejects member batch-delete for unknown legacy ownership and allows privileged delete', async () => {
     const suffix = Date.now();
     const memberProjectId = `workspace-delete-member-${suffix}`;
