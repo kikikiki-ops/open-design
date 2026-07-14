@@ -841,6 +841,39 @@ export function readAnonymousTelemetrySinkConfig(
   return config == null ? null : { kind: 'langfuse', ...config };
 }
 
+/**
+ * Sink selection for pre-migration accepted anchors that lack
+ * `acceptedDeliveryChannel` (null channel).
+ *
+ * Relay and direct Langfuse are non-interchangeable body-id namespaces. The
+ * normal anonymous resolver is relay-first, which would re-route a run that
+ * originally accepted on direct Langfuse onto the relay once a relay URL is
+ * added later. When both anonymous backends are viable we treat the legacy
+ * channel as ambiguous and return null so feedback is skipped rather than
+ * detached from the accepted trace. When only one is configured, use it.
+ */
+export function readLegacyAnonymousAcceptedSinkConfig(
+  env: NodeJS.ProcessEnv = process.env,
+): AnonymousTelemetrySinkConfig | null {
+  const relayUrl = env.OPEN_DESIGN_TELEMETRY_RELAY_URL?.trim();
+  const hasRelay = Boolean(relayUrl);
+  const langfuse = readLangfuseConfig(env);
+  const hasLangfuse = langfuse != null;
+  if (hasRelay && hasLangfuse) return null;
+  if (hasRelay && relayUrl) {
+    return {
+      kind: 'relay',
+      relayUrl: relayUrl.replace(/\/+$/, ''),
+      timeoutMs: readTelemetryTimeoutMs(env),
+      retries: readTelemetryRetries(env),
+    };
+  }
+  if (hasLangfuse && langfuse) {
+    return { kind: 'langfuse', ...langfuse };
+  }
+  return null;
+}
+
 function readVelaTelemetrySinkConfig(
   env: NodeJS.ProcessEnv = process.env,
   configuredEnv: Record<string, string> = {},

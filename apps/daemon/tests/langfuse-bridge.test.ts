@@ -2260,6 +2260,7 @@ describe('langfuse-bridge.reportRunFeedbackFromDaemon', () => {
   it('keeps legacy null-channel accepted anchors on anonymous relay when Vela is configured', async () => {
     // Pre-migration rows: finalized/accepted body with no delivery_channel.
     // Later Vela login must not re-route feedback onto a different namespace.
+    // Only relay is configured among anonymous backends → unambiguous.
     await writeAppCfg({
       installationId: 'install-uuid-1',
       telemetry: { metrics: true, content: true },
@@ -2308,6 +2309,115 @@ describe('langfuse-bridge.reportRunFeedbackFromDaemon', () => {
     expect(String(fetchSpy.mock.calls[0]![0])).not.toContain(
       '/api/v1/open-design/telemetry',
     );
+  });
+
+  it('keeps legacy null-channel accepted anchors on direct Langfuse when only Langfuse is configured', async () => {
+    // Mirror of the relay-only legacy case: null channel + only direct
+    // Langfuse among anonymous backends must not fall forward onto Vela.
+    await writeAppCfg({
+      installationId: 'install-uuid-1',
+      telemetry: { metrics: true, content: true },
+    });
+    process.env.VELA_CONTROL_KEY = 'ck_test_key';
+    process.env.VELA_API_URL = 'https://amr-api.example.com';
+    process.env.LANGFUSE_PUBLIC_KEY = 'pk';
+    process.env.LANGFUSE_SECRET_KEY = 'sk';
+    process.env.LANGFUSE_BASE_URL = 'https://langfuse.example';
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ successes: [], errors: [] }), { status: 207 }),
+      );
+    const db = {
+      prepare: (sql: string) => {
+        if (
+          sql.includes('telemetry_accepted_body_id') ||
+          sql.includes('run_telemetry_accepted_anchors')
+        ) {
+          return {
+            get: () => ({
+              runStatus: 'succeeded',
+              telemetryFinalizedAt: Date.now(),
+              acceptedTraceBodyId: 'run-legacy-null-langfuse',
+              acceptedReportTrigger: 'final_message',
+              acceptedDeliveryChannel: null,
+            }),
+          };
+        }
+        return { get: () => undefined, run: () => ({ changes: 0 }), all: () => [] };
+      },
+    };
+    try {
+      const outcome = await reportRunFeedbackFromDaemon({
+        dataDir,
+        runId: 'run-legacy-null-langfuse',
+        rating: 'positive',
+        reasonCodes: [],
+        hasCustomReason: false,
+        customReason: '',
+        db,
+        fetchImpl: fetchSpy as any,
+      });
+      expect(outcome).toEqual({ status: 'accepted' });
+      await vi.waitFor(() => {
+        expect(fetchSpy).toHaveBeenCalled();
+      });
+      expect(String(fetchSpy.mock.calls[0]![0])).toBe(
+        'https://langfuse.example/api/public/ingestion',
+      );
+      expect(String(fetchSpy.mock.calls[0]![0])).not.toContain(
+        '/api/v1/open-design/telemetry',
+      );
+    } finally {
+      delete process.env.LANGFUSE_BASE_URL;
+    }
+  });
+
+  it('skips legacy null-channel feedback when both relay and direct Langfuse are viable', async () => {
+    // Ambiguous migration path: original accept channel unknown; do not
+    // relay-first and detach scores from a direct-Langfuse accepted trace.
+    await writeAppCfg({
+      installationId: 'install-uuid-1',
+      telemetry: { metrics: true, content: true },
+    });
+    process.env.VELA_CONTROL_KEY = 'ck_test_key';
+    process.env.VELA_API_URL = 'https://amr-api.example.com';
+    process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL =
+      'https://telemetry.open-design.ai/api/langfuse';
+    process.env.LANGFUSE_PUBLIC_KEY = 'pk';
+    process.env.LANGFUSE_SECRET_KEY = 'sk';
+    const fetchSpy = vi.fn();
+    const db = {
+      prepare: (sql: string) => {
+        if (
+          sql.includes('telemetry_accepted_body_id') ||
+          sql.includes('run_telemetry_accepted_anchors')
+        ) {
+          return {
+            get: () => ({
+              runStatus: 'succeeded',
+              telemetryFinalizedAt: Date.now(),
+              acceptedTraceBodyId: 'run-legacy-ambiguous',
+              acceptedReportTrigger: 'final_message',
+              acceptedDeliveryChannel: null,
+            }),
+          };
+        }
+        return { get: () => undefined, run: () => ({ changes: 0 }), all: () => [] };
+      },
+    };
+    const outcome = await reportRunFeedbackFromDaemon({
+      dataDir,
+      runId: 'run-legacy-ambiguous',
+      rating: 'positive',
+      reasonCodes: [],
+      hasCustomReason: false,
+      customReason: '',
+      db,
+      fetchImpl: fetchSpy as any,
+    });
+    expect(outcome).toEqual({ status: 'skipped_no_sink' });
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('replays the latest mid-window re-rating onto final_message after terminal_fallback', async () => {

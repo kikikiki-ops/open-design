@@ -24,7 +24,7 @@ import {
 import {
   canDeliverRunFeedback,
   deriveLangfuseDeliveryState,
-  readAnonymousTelemetrySinkConfig,
+  readLegacyAnonymousAcceptedSinkConfig,
   readTelemetrySinkConfigForChannel,
   reportRunCompleted,
   reportRunFeedback,
@@ -1296,13 +1296,17 @@ export async function reportRunFeedbackFromDaemon(
   // completed on the anonymous relay/Langfuse path; falling forward to the
   // global Vela-first preference after a later login would score a different
   // namespace than the already-accepted anonymous trace.
+  //
+  // When both relay and direct Langfuse are viable, the original backend is
+  // ambiguous — skip rather than relay-first guess (see
+  // readLegacyAnonymousAcceptedSinkConfig).
   const legacyAnonymousAccepted =
     requireChannel == null &&
     (telemetryFinalized === true ||
       (typeof acceptedTraceBodyId === 'string' &&
         acceptedTraceBodyId.trim().length > 0));
   const sink = legacyAnonymousAccepted
-    ? readAnonymousTelemetrySinkConfig(process.env)
+    ? readLegacyAnonymousAcceptedSinkConfig(process.env)
     : readTelemetrySinkConfigForChannel(
         requireChannel,
         process.env,

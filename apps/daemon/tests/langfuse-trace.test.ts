@@ -13,6 +13,7 @@ import {
   deriveLangfuseDeliveryState,
   readAnonymousTelemetrySinkConfig,
   readLangfuseConfig,
+  readLegacyAnonymousAcceptedSinkConfig,
   readTelemetrySinkConfig,
   readTelemetrySinkConfigForChannel,
   rememberAcceptedFinalTraceBodyId,
@@ -282,6 +283,54 @@ describe('readTelemetrySinkConfig', () => {
       OPEN_DESIGN_TELEMETRY_RELAY_URL: 'https://telemetry.open-design.ai/api/langfuse',
     });
     expect(cfg).toMatchObject({ kind: 'relay' });
+  });
+});
+
+describe('readLegacyAnonymousAcceptedSinkConfig', () => {
+  it('returns null when both relay and direct Langfuse are viable', () => {
+    // Ambiguous pre-migration channel: cannot know which backend accepted.
+    expect(
+      readLegacyAnonymousAcceptedSinkConfig({
+        OPEN_DESIGN_TELEMETRY_RELAY_URL:
+          'https://telemetry.open-design.ai/api/langfuse',
+        LANGFUSE_PUBLIC_KEY: 'pk',
+        LANGFUSE_SECRET_KEY: 'sk',
+      }),
+    ).toBeNull();
+  });
+
+  it('selects relay when only the relay is configured', () => {
+    expect(
+      readLegacyAnonymousAcceptedSinkConfig({
+        OPEN_DESIGN_TELEMETRY_RELAY_URL:
+          'https://telemetry.open-design.ai/api/langfuse',
+        VELA_CONTROL_KEY: 'ck_test_key',
+      }),
+    ).toMatchObject({
+      kind: 'relay',
+      relayUrl: 'https://telemetry.open-design.ai/api/langfuse',
+    });
+  });
+
+  it('selects direct Langfuse when only Langfuse credentials are configured', () => {
+    expect(
+      readLegacyAnonymousAcceptedSinkConfig({
+        LANGFUSE_PUBLIC_KEY: 'pk',
+        LANGFUSE_SECRET_KEY: 'sk',
+        VELA_CONTROL_KEY: 'ck_test_key',
+      }),
+    ).toMatchObject({
+      kind: 'langfuse',
+      baseUrl: 'https://us.cloud.langfuse.com',
+    });
+  });
+
+  it('returns null when neither anonymous backend is configured', () => {
+    expect(
+      readLegacyAnonymousAcceptedSinkConfig({
+        VELA_CONTROL_KEY: 'ck_test_key',
+      }),
+    ).toBeNull();
   });
 });
 
