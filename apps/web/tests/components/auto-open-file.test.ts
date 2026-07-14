@@ -365,4 +365,95 @@ describe('selectAutoOpenTurnArtifact', () => {
 
     expect(result).toBe('index.html');
   });
+
+  describe('agentTouchedFileNames (write-event protocols)', () => {
+    it('does not steal focus toward a user-autosaved plan on a text-only turn', () => {
+      // Plan mode: the user edits plan.md in the split editor (autosave on)
+      // while the agent answers a clarification in text only. plan.md's mtime
+      // lands inside the turn window from the user's own keystrokes — with
+      // the agent's touched set known and empty of plan.md, it must not win.
+      const result = selectAutoOpenTurnArtifact(
+        [],
+        [{ name: 'plan.md', path: 'plan.md', kind: 'text', mtime: TURN_START + 5_000 }],
+        { turnStartedAt: TURN_START, agentTouchedFileNames: new Set(['notes.md']) },
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it('keeps the rewritten HTML the agent actually touched and drops the user edit', () => {
+      const result = selectAutoOpenTurnArtifact(
+        [],
+        [
+          { name: 'plan.md', path: 'plan.md', kind: 'text', mtime: TURN_START + 9_000 },
+          { name: 'index.html', path: 'index.html', kind: 'html', mtime: TURN_START + 5_000 },
+        ],
+        { turnStartedAt: TURN_START, agentTouchedFileNames: new Set(['index.html']) },
+      );
+
+      expect(result).toBe('index.html');
+    });
+
+    it('falls back to the pure time window when the touched set is empty (no-event protocols)', () => {
+      // codex/gemini/opencode/ACP agents emit no Write tool events, so the
+      // touched set is empty — the mtime window is the only signal and must
+      // keep attributing the in-place rewrite.
+      const result = selectAutoOpenTurnArtifact(
+        [],
+        [{ name: 'index.html', path: 'index.html', kind: 'html', mtime: TURN_START + 5_000 }],
+        { turnStartedAt: TURN_START, agentTouchedFileNames: new Set() },
+      );
+
+      expect(result).toBe('index.html');
+    });
+
+    it('does not restrict newly produced files by the touched set', () => {
+      // The produced list is a file-NAME diff — those files are new this
+      // turn and already attributed; the touched restriction only applies to
+      // pre-existing files entering via the mtime window.
+      const result = selectAutoOpenTurnArtifact(
+        [{ name: 'report.md', path: 'report.md', kind: 'text', mtime: TURN_START + 5_000 }],
+        [{ name: 'report.md', path: 'report.md', kind: 'text', mtime: TURN_START + 5_000 }],
+        { turnStartedAt: TURN_START, agentTouchedFileNames: new Set(['index.html']) },
+      );
+
+      expect(result).toBe('report.md');
+    });
+  });
+
+  describe('turnEndedAt (window upper bound)', () => {
+    const TURN_END = TURN_START + 30_000;
+
+    it('ignores a file the user edited after the turn ended', () => {
+      // Reload/reattach recovery runs long after the turn: the user's
+      // post-turn plan.md edit must not be attributed to the agent.
+      const result = selectAutoOpenTurnArtifact(
+        [],
+        [{ name: 'plan.md', path: 'plan.md', kind: 'text', mtime: TURN_END + 120_000 }],
+        { turnStartedAt: TURN_START, turnEndedAt: TURN_END },
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it('keeps a write that settles just after the terminal status (grace)', () => {
+      const result = selectAutoOpenTurnArtifact(
+        [],
+        [{ name: 'index.html', path: 'index.html', kind: 'html', mtime: TURN_END + 30_000 }],
+        { turnStartedAt: TURN_START, turnEndedAt: TURN_END },
+      );
+
+      expect(result).toBe('index.html');
+    });
+
+    it('keeps the window open-ended when no end stamp is available', () => {
+      const result = selectAutoOpenTurnArtifact(
+        [],
+        [{ name: 'index.html', path: 'index.html', kind: 'html', mtime: TURN_START + 900_000 }],
+        { turnStartedAt: TURN_START },
+      );
+
+      expect(result).toBe('index.html');
+    });
+  });
 });
