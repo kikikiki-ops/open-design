@@ -1501,7 +1501,12 @@ export function createFinalizedMessageTelemetryReporter({
     });
   };
   return (saved, body = {}, options = {}) => {
-    if (!shouldReportRunCompletedFromMessage(saved, body)) return;
+    if (!shouldReportRunCompletedFromMessage(saved, body)) {
+      // terminal_fallback may have marked at timer schedule; release if this
+      // path never starts a report that would clear in finally.
+      if (saved?.runId) clearRunAwaitingFinalAcceptance(saved.runId);
+      return;
+    }
     const runId = saved.runId;
     const run = design.runs.get(runId);
     if (!run) {
@@ -1520,6 +1525,8 @@ export function createFinalizedMessageTelemetryReporter({
         skipReason: 'run_not_found',
         status: saved.runStatus,
       });
+      // Schedule-only awaiting mark must not outlive a skipped report.
+      clearRunAwaitingFinalAcceptance(runId);
       return;
     }
     const reportTrigger = options.reportTrigger ?? 'final_message';
@@ -1540,6 +1547,7 @@ export function createFinalizedMessageTelemetryReporter({
         skipReason: 'duplicate_run',
         status: saved.runStatus,
       });
+      // In-flight final_message owns the mark; do not clear here.
       return;
     }
     if (reportTrigger !== 'terminal_fallback') {
@@ -2535,8 +2543,15 @@ export async function startServer({
     status: string;
   }) => {
     if (!shouldReportRunCompletionTelemetryFallbackStatus(status)) return;
+    // Cover the whole terminal_fallback delay + report flight so mid-window
+    // feedback defers onto `:tf` (or flushes on clear). Cold restarts have no
+    // mark, so failed/canceled feedback must not queue forever on status alone.
+    markRunAwaitingFinalAcceptance(run.id);
     const timer = setTimeout(() => {
-      if (reportedRuns.has(run.id)) return;
+      if (reportedRuns.has(run.id)) {
+        // final_message claimed the run and owns the awaiting-mark lifecycle.
+        return;
+      }
       if (run.assistantMessageId) {
         // Run-scoped: a later run may reuse this assistant row and finalize
         // before our delayed fallback fires. Message-id-only lookup would see
@@ -2546,7 +2561,12 @@ export async function startServer({
           run.assistantMessageId,
           run.id,
         );
-        if (messageTelemetry.finalizedAt !== null) return;
+        if (messageTelemetry.finalizedAt !== null) {
+          // Finalized without claiming reportedRuns (e.g. run already gone) —
+          // release the schedule-only mark so scores are not stranded.
+          clearRunAwaitingFinalAcceptance(run.id);
+          return;
+        }
       }
       reportFinalizedMessage(
         {

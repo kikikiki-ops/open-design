@@ -337,19 +337,20 @@ const pendingRunFeedbackByRunId = new Map<string, PendingRunFeedbackEntry>();
 /**
  * True when feedback should wait for an accepted final-purpose body id.
  *
- * Defer when no accepted body is known yet (process-local or persisted) and
- * either:
- * - the run failed/canceled (terminal_fallback delay window), or
- * - the message is telemetry-finalized *and* this process still has a final-
- *   purpose delivery in flight (`markRunAwaitingFinalAcceptance`): the live
- *   race where createFinalizedMessageTelemetryReporter marks finalized before
- *   reportRunCompleted / rememberAcceptedFinalTraceBodyId records the anchor.
+ * Defer only while this process still has a live final-purpose completer
+ * (`markRunAwaitingFinalAcceptance`): the terminal_fallback delay window
+ * (marked when the fallback timer is scheduled), the in-flight
+ * reportRunCompleted after that timer, or the live finalization race where
+ * createFinalizedMessageTelemetryReporter marks finalized before
+ * rememberAcceptedFinalTraceBodyId records the anchor.
  *
- * Cold finalized rows with no accepted body (pre-migration, never-persisted
- * anchors, or delivery already finished without accept) are NOT deferred —
- * there is no completer to flush a queue, so scores ship on the canonical
- * runId (or skip via sink eligibility) instead of sitting in
- * pendingRunFeedbackByRunId until process exit.
+ * Cold rows with no accepted body (daemon restart, pre-migration, never-
+ * persisted anchors, or delivery already finished/cleared without accept)
+ * are NOT deferred — there is no completer to flush a queue, so scores ship
+ * on the canonical runId (or skip via sink eligibility) instead of sitting
+ * in pendingRunFeedbackByRunId until process exit. Status-only or
+ * finalized-only signals are not enough; without the process-local awaiting
+ * marker a failed/canceled row would queue forever after restart.
  *
  * Once any body has been accepted — or the caller already pinned an explicit
  * `traceId` — send now so scores attach to the known body/channel.
@@ -371,13 +372,10 @@ export function shouldDeferRunFeedback(input: {
       ? input.acceptedTraceBodyId.trim()
       : '';
   if (accepted) return false;
-  // Finalized-without-accepted is only the live finalization race while a
-  // completer is still in flight. Cold/legacy finalized rows have no pending
-  // rememberAcceptedFinalTraceBodyId — do not queue them forever.
-  if (input.telemetryFinalized === true) {
-    return runsAwaitingFinalAcceptance.has(runId);
-  }
-  return input.runStatus === 'failed' || input.runStatus === 'canceled';
+  // Live completer only. Cold failed/canceled/finalized rows have no pending
+  // rememberAcceptedFinalTraceBodyId / clearRunAwaitingFinalAcceptance — do
+  // not queue them forever on status or finalized flags alone.
+  return runsAwaitingFinalAcceptance.has(runId);
 }
 
 export function queuePendingRunFeedback(

@@ -1301,10 +1301,11 @@ export async function reportRunFeedbackFromDaemon(
   // anonymous for sink selection. `telemetryFinalized` alone is not enough to
   // choose legacy-anonymous sinks: createFinalizedMessageTelemetryReporter
   // marks the assistant message finalized before async reportRunCompleted
-  // records an accepted anchor. The live race is gated by
-  // markRunAwaitingFinalAcceptance + shouldDeferRunFeedback; cold finalized
-  // rows with no accepted body (and no in-flight mark) ship on the canonical
-  // body via the global sink preflight instead of queueing forever.
+  // records an accepted anchor. The live race (and terminal_fallback delay)
+  // is gated by markRunAwaitingFinalAcceptance + shouldDeferRunFeedback; cold
+  // finalized/failed rows with no accepted body (and no in-flight mark) ship
+  // on the canonical body via the global sink preflight instead of queueing
+  // forever.
   //
   // When both relay and direct Langfuse are viable, the original backend is
   // ambiguous — skip rather than relay-first guess (see

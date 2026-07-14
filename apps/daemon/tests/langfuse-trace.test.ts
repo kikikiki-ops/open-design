@@ -3860,6 +3860,21 @@ describe('reportRunFeedback', () => {
         telemetryFinalized: true,
       }),
     ).toBe(false);
+    // Cold failed/canceled after restart (or after fallback cleared) with no
+    // awaiting mark must not queue forever on status alone.
+    expect(
+      shouldDeferRunFeedback({
+        runId: 'run-cold-failed-no-anchor',
+        runStatus: 'failed',
+        telemetryFinalized: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldDeferRunFeedback({
+        runId: 'run-cold-canceled-no-anchor',
+        runStatus: 'canceled',
+      }),
+    ).toBe(false);
     // Unscoped feedback (no status / finalized signal) still ships immediately.
     expect(
       shouldDeferRunFeedback({
@@ -3877,6 +3892,9 @@ describe('reportRunFeedback', () => {
       new Response(JSON.stringify({ successes: [], errors: [] }), { status: 207 }),
     );
 
+    // Live terminal_fallback delay/report window: awaiting mark is set when the
+    // fallback timer is scheduled (or when report starts).
+    markRunAwaitingFinalAcceptance(runId);
     // User rates during the fallback delay: no accepted body yet.
     expect(
       shouldDeferRunFeedback({
@@ -3949,6 +3967,7 @@ describe('reportRunFeedback', () => {
       new Response(JSON.stringify({ successes: [], errors: [] }), { status: 207 }),
     );
 
+    markRunAwaitingFinalAcceptance(runId);
     expect(
       shouldDeferRunFeedback({
         runId,
@@ -4063,6 +4082,7 @@ describe('reportRunFeedback', () => {
     const fetchSpy = vi.fn().mockResolvedValue(new Response('{}', { status: 207 }));
 
     try {
+      markRunAwaitingFinalAcceptance(runId);
       expect(
         shouldDeferRunFeedback({
           runId,
@@ -4148,6 +4168,7 @@ describe('reportRunFeedback', () => {
     const fetchSpy = vi.fn().mockResolvedValue(new Response('', { status: 202 }));
 
     try {
+      markRunAwaitingFinalAcceptance(runId);
       expect(
         shouldDeferRunFeedback({
           runId,

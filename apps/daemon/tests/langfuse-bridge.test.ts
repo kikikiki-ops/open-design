@@ -2536,6 +2536,58 @@ describe('langfuse-bridge.reportRunFeedbackFromDaemon', () => {
     expect(body.batch[0].body.traceId).toBe(runId);
   });
 
+  it('ships cold failed/no-anchor feedback on the canonical body (no indefinite defer)', async () => {
+    // Daemon restart / fallback already cleared: failed run, no accepted body,
+    // no markRunAwaitingFinalAcceptance. Status alone must not queue forever.
+    await writeAppCfg({
+      installationId: 'install-uuid-1',
+      telemetry: { metrics: true, content: true },
+    });
+    process.env.LANGFUSE_PUBLIC_KEY = 'pk';
+    process.env.LANGFUSE_SECRET_KEY = 'sk';
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ successes: [], errors: [] }), { status: 207 }),
+      );
+    const runId = 'run-cold-failed-no-anchor';
+    const db = {
+      prepare: (sql: string) => {
+        if (
+          sql.includes('telemetry_accepted_body_id') ||
+          sql.includes('run_telemetry_accepted_anchors')
+        ) {
+          return {
+            get: () => ({
+              runStatus: 'failed',
+              telemetryFinalizedAt: null,
+              acceptedTraceBodyId: null,
+              acceptedReportTrigger: null,
+              acceptedDeliveryChannel: null,
+            }),
+          };
+        }
+        return { get: () => undefined, run: () => ({ changes: 0 }), all: () => [] };
+      },
+    };
+    const outcome = await reportRunFeedbackFromDaemon({
+      dataDir,
+      runId,
+      rating: 'negative',
+      reasonCodes: [],
+      hasCustomReason: false,
+      customReason: '',
+      db,
+      fetchImpl: fetchSpy as any,
+    });
+    expect(outcome).toEqual({ status: 'accepted' });
+    await vi.waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalled();
+    });
+    const body = JSON.parse(fetchSpy.mock.calls[0]![1].body as string);
+    expect(body.batch[0].body.traceId).toBe(runId);
+  });
+
   it('replays the latest mid-window re-rating onto final_message after terminal_fallback', async () => {
     // terminal_fallback accepted → bridge pins :tf → user flips rating →
     // final_message wins. Canonical replay must use the edited rating, not a
