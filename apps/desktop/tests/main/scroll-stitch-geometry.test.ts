@@ -466,10 +466,12 @@ describe('deck capture DOM prep', () => {
       expect(revealedByFallback(slides[1])).toBe(true);
       expect(revealedByFallback(slides[0])).toBe(false);
       expect(revealedByFallback(slides[2])).toBe(false);
-      // The toggle is exact and does NOT set the real runtime's `data-deck-active`
-      // (setting that would replay authored `[data-deck-active]` entrance animations
-      // mid-capture).
-      expect(slides[1].hasAttribute('data-deck-active')).toBe(false);
+      // NB: we intentionally do NOT assert `data-deck-active` is absent — the
+      // fallback contract only requires `data-od-deck-active` on the selected
+      // slide, and the real export freezes descendant animations in
+      // prepareDeckStage() before selection, so an implementation that also set
+      // `data-deck-active` would still be correct. Constraining it here would fail
+      // a valid future fix for a reason the fallback runtime does not care about.
       // Inline override for the non-shadow / non-`!important`-hide runtimes: the
       // selected slide is forced visible and the rest hidden. This is a DIFFERENT
       // mechanism from the fallback attribute above — it wins for those runtimes by

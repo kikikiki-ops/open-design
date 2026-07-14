@@ -1327,12 +1327,12 @@ export function showSlide(slideSelector: string, index: number): Promise<{ x: nu
   const activeClasses = ["active", "visible", "is-active", "current"];
   // The injected <deck-stage> fallback (packages/contracts/src/runtime/
   // deck-stage-fallback.ts) hides slotted slides with an `!important` shadow rule
-  // and reveals ONLY the one carrying `data-od-deck-active`. We toggle exactly
-  // that attribute — and deliberately NOT the real deck-stage.js runtime's
-  // `data-deck-active`: that attribute is unnecessary for reveal (see below) and
-  // setting it would replay authored `[data-deck-active]` entrance animations on
-  // the slide's descendants mid-capture, so slide 2..N could be caught in a
-  // transitional frame instead of their settled state.
+  // and reveals ONLY the one carrying `data-od-deck-active`. We toggle exactly that
+  // attribute. We do NOT also set the real deck-stage.js runtime's
+  // `data-deck-active`: it is unnecessary for reveal (mechanism 1 below already
+  // reveals that runtime's slides), and skipping it keeps the export from depending
+  // on the prepareDeckStage() animation freeze to neutralize any authored
+  // `[data-deck-active]`-keyed entrance motion.
   const activeAttributes = ["data-od-deck-active"];
   slides.forEach((node, k) => {
     const el = node as HTMLElement;
