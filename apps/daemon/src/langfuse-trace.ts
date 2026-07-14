@@ -1655,10 +1655,17 @@ export function buildTracePayload(
   // Build phase spans with canonical run-scoped ids, then remap body ids into
   // the delivery namespace so terminal_fallback gets `…:tf` suffixes (not
   // `run:tf-phase-…` mid-string infixes).
-  const timingSpanBodies = buildTimingSpanBodies(ctx, operationSpanId, {
-    modelCallName: createGeneration ? 'agent-call' : 'runtime-call',
-    ...(promptStack ? { promptStack } : {}),
-  }).map((span) => ({
+  // Explicit Record return type: spreading Record<string, unknown> into an
+  // object literal would otherwise infer only { id, traceId } and lose
+  // indexed access to span.name below.
+  const timingSpanBodies: Record<string, unknown>[] = buildTimingSpanBodies(
+    ctx,
+    operationSpanId,
+    {
+      modelCallName: createGeneration ? 'agent-call' : 'runtime-call',
+      ...(promptStack ? { promptStack } : {}),
+    },
+  ).map((span) => ({
     ...span,
     id: scopeBodyId(String(span.id)),
     traceId,
