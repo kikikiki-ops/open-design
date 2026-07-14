@@ -11,6 +11,7 @@ import {
 import {
   DesignSystemCreationFlow,
   DesignSystemDetailView,
+  resolveDemoArtifactDesignSystemId,
   resolveDemoComposerDesignSystemId,
 } from '../../src/components/DesignSystemFlow';
 import { CONNECTORS_CHANGED_EVENT } from '../../src/components/connectors-events';
@@ -322,17 +323,16 @@ describe('DesignSystemCreationFlow', () => {
   // background.
   // Source-material specs below exercise the current handoff by staging files
   // into the backing brand project after kickoff and before navigation.
-  it('re-reads the backing project before using a delayed extracted design system', async () => {
-    const loadProject = vi.fn().mockResolvedValue({
-      id: 'brand-acme-com',
-      designSystemId: 'user:acme-com-ready',
-    });
-
-    await expect(resolveDemoComposerDesignSystemId({
-      projectId: 'brand-acme-com',
+  it('opens the demo composer with a stable mock design system while extraction is pending', () => {
+    expect(resolveDemoComposerDesignSystemId({
+      brandId: 'acme-com',
       designSystemId: null,
-    }, loadProject)).resolves.toBe('user:acme-com-ready');
-    expect(loadProject).toHaveBeenCalledWith('brand-acme-com');
+    })).toBe('demo:acme-com');
+    expect(resolveDemoArtifactDesignSystemId({
+      requestedId: 'demo:acme-com',
+      composerId: 'demo:acme-com',
+      projectDesignSystemId: null,
+    })).toBeNull();
   });
 
   it('renders the new create surface copy with the active non-English locale', () => {
