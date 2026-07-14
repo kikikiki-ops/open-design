@@ -114,6 +114,17 @@ export type AnonymousTelemetrySinkConfig =
 
 export type TelemetryDeliveryPurpose = 'object-registration' | 'final';
 
+/**
+ * Logical final-delivery trigger for a completed run.
+ *
+ * Failed/canceled runs may emit a synthetic `terminal_fallback` report first,
+ * then a later `final_message` once the assistant message is telemetry-finalized.
+ * Those two deliveries must not share ingestion event ids / Vela idempotency
+ * keys, or the complete report is treated as a retry of the partial fallback.
+ * True transport retries for the same trigger stay stable.
+ */
+export type TelemetryReportTrigger = 'final_message' | 'terminal_fallback';
+
 export type TelemetrySinkConfig =
   | {
       kind: 'vela';
@@ -389,6 +400,12 @@ export interface ReportRunOpts {
    * deduped.
    */
   deliveryPurpose?: TelemetryDeliveryPurpose;
+  /**
+   * Distinguishes terminal-fallback vs finalized-message final deliveries for
+   * the same run so late-complete reports are not Vela-deduped against an
+   * earlier partial/empty fallback. Ignored for object-registration.
+   */
+  reportTrigger?: TelemetryReportTrigger;
   /**
    * App-config AMR env (`agentCliEnv.amr`), e.g. OPEN_DESIGN_AMR_PROFILE /
    * VELA_API_URL. Merged into Vela Control Key resolution.
@@ -1425,6 +1442,7 @@ function shouldCreateGenerationObservation(ctx: ReportContext): boolean {
 export function buildTracePayload(
   ctx: ReportContext,
   deliveryPurpose: TelemetryDeliveryPurpose = 'final',
+  reportTrigger: TelemetryReportTrigger = 'final_message',
 ): unknown[] {
   // Object-registration needs manifests for upload authority but must not
   // double-write turn text when the final delivery goes through Vela.
@@ -1434,6 +1452,10 @@ export function buildTracePayload(
     ctx.prefs.metrics === true && ctx.prefs.content === true;
   const wantsTextContent = deliveryPurpose === 'final' && consentOn;
   const wantsArtifacts = consentOn;
+  // Object-registration is its own logical delivery; only final deliveries
+  // further split by report trigger (terminal fallback vs finalized message).
+  const idReportTrigger =
+    deliveryPurpose === 'object-registration' ? 'final_message' : reportTrigger;
 
   const sessionId =
     ctx.conversationId.length <= SESSION_ID_MAX ? ctx.conversationId : undefined;
@@ -1611,7 +1633,7 @@ export function buildTracePayload(
 
   const batch: LangfuseIngestionEvent[] = [
     {
-      id: stableIngestionEventId(traceId, deliveryPurpose),
+      id: stableIngestionEventId(traceId, deliveryPurpose, idReportTrigger),
       type: 'trace-create',
       timestamp: nowIso,
       body: {
@@ -1627,12 +1649,15 @@ export function buildTracePayload(
         metadata: {
           ...traceMetadata,
           telemetry_delivery_purpose: deliveryPurpose,
+          ...(deliveryPurpose === 'final'
+            ? { telemetry_report_trigger: idReportTrigger }
+            : {}),
         },
         timestamp: startTimeIso,
       },
     },
     {
-      id: stableIngestionEventId(agentSpanId, deliveryPurpose),
+      id: stableIngestionEventId(agentSpanId, deliveryPurpose, idReportTrigger),
       type: 'span-create',
       timestamp: nowIso,
       body: {
@@ -1661,7 +1686,7 @@ export function buildTracePayload(
 
   if (createGeneration) {
     batch.push({
-      id: stableIngestionEventId(generationId, deliveryPurpose),
+      id: stableIngestionEventId(generationId, deliveryPurpose, idReportTrigger),
       type: 'generation-create',
       timestamp: nowIso,
       body: {
@@ -1696,7 +1721,7 @@ export function buildTracePayload(
     });
   } else {
     batch.push({
-      id: stableIngestionEventId(operationSpanId, deliveryPurpose),
+      id: stableIngestionEventId(operationSpanId, deliveryPurpose, idReportTrigger),
       type: 'span-create',
       timestamp: nowIso,
       body: {
@@ -1729,7 +1754,7 @@ export function buildTracePayload(
   for (const span of timingSpanBodies) {
     const spanId = typeof span.id === 'string' ? span.id : `${traceId}-phase`;
     batch.push({
-      id: stableIngestionEventId(spanId, deliveryPurpose),
+      id: stableIngestionEventId(spanId, deliveryPurpose, idReportTrigger),
       type: 'span-create',
       timestamp: nowIso,
       body: span,
@@ -1740,7 +1765,7 @@ export function buildTracePayload(
     for (const event of ctx.agentEvents) {
       const eventBodyId = `${ctx.run.runId}-agent-event-${event.id}`;
       batch.push({
-        id: stableIngestionEventId(eventBodyId, deliveryPurpose),
+        id: stableIngestionEventId(eventBodyId, deliveryPurpose, idReportTrigger),
         type: 'event-create',
         timestamp: nowIso,
         body: {
@@ -1778,7 +1803,7 @@ export function buildTracePayload(
           )
         : undefined;
       batch.push({
-        id: stableIngestionEventId(toolSpanId, deliveryPurpose),
+        id: stableIngestionEventId(toolSpanId, deliveryPurpose, idReportTrigger),
         type: 'span-create',
         timestamp: nowIso,
         body: {
@@ -1810,7 +1835,7 @@ export function buildTracePayload(
   if (artifactsList && (artifactsList.length > 0 || artifactsTruncated)) {
     const artifactsEventId = `${ctx.run.runId}-artifacts`;
     batch.push({
-      id: stableIngestionEventId(artifactsEventId, deliveryPurpose),
+      id: stableIngestionEventId(artifactsEventId, deliveryPurpose, idReportTrigger),
       type: 'event-create',
       timestamp: nowIso,
       body: {
@@ -1843,7 +1868,7 @@ export function buildTracePayload(
   if (!success || ctx.eventsSummary.errors > 0) {
     const errorEventId = `${ctx.run.runId}-error`;
     batch.push({
-      id: stableIngestionEventId(errorEventId, deliveryPurpose),
+      id: stableIngestionEventId(errorEventId, deliveryPurpose, idReportTrigger),
       type: 'event-create',
       timestamp: nowIso,
       body: {
@@ -1867,15 +1892,22 @@ export function buildTracePayload(
 
 /**
  * Stable ingestion event id so retries reuse the same Langfuse/Vela event ids.
- * Object-registration and final deliveries use distinct suffixes so the
- * two-stage object-upload flow is not deduped.
+ * Distinct suffixes keep object-registration, terminal-fallback, and finalized
+ * final deliveries from being treated as retries of each other.
  */
 export function stableIngestionEventId(
   bodyId: string,
   deliveryPurpose: TelemetryDeliveryPurpose = 'final',
+  reportTrigger: TelemetryReportTrigger = 'final_message',
 ): string {
   const trimmed = bodyId.trim() || 'ingest-unknown';
-  const suffix = deliveryPurpose === 'object-registration' ? ':reg' : '';
+  let suffix = '';
+  if (deliveryPurpose === 'object-registration') {
+    suffix = ':reg';
+  } else if (reportTrigger === 'terminal_fallback') {
+    // Late final_message for the same run must not reuse fallback event ids.
+    suffix = ':tf';
+  }
   const candidate = `${trimmed}${suffix}`;
   if (candidate.length <= 200) return candidate;
   // Preserve uniqueness when truncating long body ids.
@@ -1886,19 +1918,24 @@ export function stableIngestionEventId(
 
 /**
  * Stable idempotency key for one complete events envelope.
- * sha256(purpose + traceId + sorted ingestion event ids), prefixed for the Vela key pattern.
+ * sha256(purpose + trigger + traceId + sorted ingestion event ids), prefixed for the Vela key pattern.
  */
 export function buildTelemetryIdempotencyKey(
   batch: Array<{ id: string }>,
   traceId: string,
   deliveryPurpose: TelemetryDeliveryPurpose = 'final',
+  reportTrigger: TelemetryReportTrigger = 'final_message',
 ): string {
   const sortedIds = batch
     .map((event) => event.id)
     .filter((id) => typeof id === 'string' && id.length > 0)
     .sort();
+  const idReportTrigger =
+    deliveryPurpose === 'object-registration' ? 'final_message' : reportTrigger;
   const digest = createHash('sha256')
-    .update(`${deliveryPurpose}\0${traceId}\0${sortedIds.join('\0')}`)
+    .update(
+      `${deliveryPurpose}\0${idReportTrigger}\0${traceId}\0${sortedIds.join('\0')}`,
+    )
     .digest('hex');
   return `od-telemetry-${digest}`;
 }
@@ -2012,11 +2049,13 @@ async function postVelaBatch(
     env?: NodeJS.ProcessEnv;
     configuredEnv?: Record<string, string>;
     deliveryPurpose?: TelemetryDeliveryPurpose;
+    reportTrigger?: TelemetryReportTrigger;
   } = {},
 ): Promise<LangfuseDeliveryState> {
   const env = opts.env ?? process.env;
   const configuredEnv = opts.configuredEnv ?? {};
   const deliveryPurpose = opts.deliveryPurpose ?? 'final';
+  const reportTrigger = opts.reportTrigger ?? 'final_message';
   const typedBatch = asLangfuseIngestionBatch(batch);
   const envelope = toVelaTelemetryEnvelope(typedBatch, installationId);
   const traceId =
@@ -2030,6 +2069,7 @@ async function postVelaBatch(
     typedBatch,
     traceId,
     deliveryPurpose,
+    reportTrigger,
   );
   const body = JSON.stringify(envelope);
   const bodyBytes = Buffer.byteLength(body, 'utf8');
@@ -2423,9 +2463,14 @@ export async function reportRunCompleted(
   }
 
   const deliveryPurpose = opts.deliveryPurpose ?? 'final';
+  const reportTrigger = opts.reportTrigger ?? 'final_message';
   let batch: unknown[];
   try {
-    batch = buildTracePayload({ ...ctx, langfuse: langfuseDelivery }, deliveryPurpose);
+    batch = buildTracePayload(
+      { ...ctx, langfuse: langfuseDelivery },
+      deliveryPurpose,
+      reportTrigger,
+    );
   } catch (error) {
     console.warn(`[langfuse-trace] Payload build error: ${String(error)}`);
     return {
@@ -2484,6 +2529,7 @@ export async function reportRunCompleted(
     return postVelaBatch(config, batch, installationId, fetchImpl, {
       configuredEnv,
       deliveryPurpose,
+      reportTrigger,
     });
   }
   if (config.kind === 'relay') {

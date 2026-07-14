@@ -35,6 +35,7 @@ import {
   type MessageSummary,
   type ReportContext,
   type RuntimeInfo,
+  type TelemetryReportTrigger,
   type TelemetrySinkConfig,
   type TraceObjectSummary,
   type ToolCallSummary,
@@ -121,6 +122,11 @@ export interface ReportRunCompletedFromDaemonOpts {
   persistedEndedAt?: number;
   /** App version info — collected once at daemon startup and reused. */
   appVersion?: AppVersionInfo | null;
+  /**
+   * Logical final-delivery trigger. Terminal fallback vs finalized message
+   * must produce distinct stable telemetry ids for the same run.
+   */
+  reportTrigger?: TelemetryReportTrigger;
   fetchImpl?: typeof fetch;
 }
 
@@ -1135,6 +1141,7 @@ export async function reportRunCompletedFromDaemon(
       })),
       {
         deliveryPurpose: 'final',
+        reportTrigger: opts.reportTrigger ?? 'final_message',
         configuredEnv,
         ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}),
       },

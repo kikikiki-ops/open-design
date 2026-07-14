@@ -1730,6 +1730,69 @@ describe('buildTracePayload', () => {
     );
     expect(finalBatch[0]!.body.input).toBe('Make a landing page for a coffee shop.');
   });
+
+  it('uses distinct stable ids for terminal_fallback vs final_message late finalization', () => {
+    const ctx = makeCtx({
+      prefs: { metrics: true, content: true, artifactManifest: false },
+    });
+    const fallbackBatch = buildTracePayload(
+      ctx,
+      'final',
+      'terminal_fallback',
+    ) as Array<{ id: string; body: Record<string, any> }>;
+    const finalizedBatch = buildTracePayload(
+      ctx,
+      'final',
+      'final_message',
+    ) as Array<{ id: string; body: Record<string, any> }>;
+    const fallbackRetry = buildTracePayload(
+      ctx,
+      'final',
+      'terminal_fallback',
+    ) as Array<{ id: string }>;
+
+    // Body ids stay run-scoped so Langfuse can overwrite the same observations.
+    expect(fallbackBatch[0]!.body.id).toBe(finalizedBatch[0]!.body.id);
+    // Ingestion event ids must differ so Vela does not dedupe the late final.
+    expect(fallbackBatch[0]!.id).toBe(
+      stableIngestionEventId(fallbackBatch[0]!.body.id, 'final', 'terminal_fallback'),
+    );
+    expect(fallbackBatch[0]!.id).toBe(`${finalizedBatch[0]!.id}:tf`);
+    expect(fallbackBatch.map((event) => event.id)).not.toEqual(
+      finalizedBatch.map((event) => event.id),
+    );
+    // True transport retries of the same logical delivery stay stable.
+    expect(fallbackRetry.map((event) => event.id)).toEqual(
+      fallbackBatch.map((event) => event.id),
+    );
+    expect(fallbackBatch[0]!.body.metadata.telemetry_report_trigger).toBe(
+      'terminal_fallback',
+    );
+    expect(finalizedBatch[0]!.body.metadata.telemetry_report_trigger).toBe(
+      'final_message',
+    );
+
+    const fallbackKey = buildTelemetryIdempotencyKey(
+      fallbackBatch,
+      String(fallbackBatch[0]!.body.id),
+      'final',
+      'terminal_fallback',
+    );
+    const finalizedKey = buildTelemetryIdempotencyKey(
+      finalizedBatch,
+      String(finalizedBatch[0]!.body.id),
+      'final',
+      'final_message',
+    );
+    const fallbackRetryKey = buildTelemetryIdempotencyKey(
+      fallbackRetry,
+      String(fallbackBatch[0]!.body.id),
+      'final',
+      'terminal_fallback',
+    );
+    expect(fallbackKey).not.toBe(finalizedKey);
+    expect(fallbackKey).toBe(fallbackRetryKey);
+  });
 });
 
 describe('vela telemetry envelope helpers', () => {
@@ -1749,6 +1812,29 @@ describe('vela telemetry envelope helpers', () => {
     expect(keyA).toBe(keyB);
     expect(keyA).toMatch(/^od-telemetry-[a-f0-9]{64}$/);
     expect(keyA).not.toBe(keyC);
+  });
+
+  it('includes report trigger so terminal_fallback and final_message keys differ', () => {
+    const keyFallback = buildTelemetryIdempotencyKey(
+      [{ id: 'run-1:tf' }],
+      'run-1',
+      'final',
+      'terminal_fallback',
+    );
+    const keyFinal = buildTelemetryIdempotencyKey(
+      [{ id: 'run-1' }],
+      'run-1',
+      'final',
+      'final_message',
+    );
+    const keyFallbackRetry = buildTelemetryIdempotencyKey(
+      [{ id: 'run-1:tf' }],
+      'run-1',
+      'final',
+      'terminal_fallback',
+    );
+    expect(keyFallback).not.toBe(keyFinal);
+    expect(keyFallback).toBe(keyFallbackRetry);
   });
 
   it('converts Langfuse batch events into the vendor-neutral Vela envelope', () => {
@@ -2158,6 +2244,61 @@ describe('reportRunCompleted', () => {
     const key1 = (fetchSpy.mock.calls[0]![1] as RequestInit).headers as Record<string, string>;
     const key2 = (fetchSpy.mock.calls[1]![1] as RequestInit).headers as Record<string, string>;
     expect(key1['Idempotency-Key']).toBe(key2['Idempotency-Key']);
+  });
+
+  it('uses distinct Vela event ids and idempotency keys for terminal_fallback vs final_message', async () => {
+    const velaConfig = velaSink();
+    const ctx = makeCtx({
+      prefs: { metrics: true, content: true, artifactManifest: false },
+    });
+    const fetchSpy = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), { status: 202 }),
+    );
+
+    const fallbackResult = await reportRunCompleted(ctx, {
+      config: velaConfig,
+      fetchImpl: fetchSpy as any,
+      deliveryPurpose: 'final',
+      reportTrigger: 'terminal_fallback',
+    });
+    const finalizedResult = await reportRunCompleted(ctx, {
+      config: velaConfig,
+      fetchImpl: fetchSpy as any,
+      deliveryPurpose: 'final',
+      reportTrigger: 'final_message',
+    });
+    // Same logical delivery re-posted (transport retry) keeps the final key.
+    const finalizedRetry = await reportRunCompleted(ctx, {
+      config: velaConfig,
+      fetchImpl: fetchSpy as any,
+      deliveryPurpose: 'final',
+      reportTrigger: 'final_message',
+    });
+
+    expect(fallbackResult.langfuse_delivery_status).toBe('accepted');
+    expect(finalizedResult.langfuse_delivery_status).toBe('accepted');
+    expect(finalizedRetry.langfuse_delivery_status).toBe('accepted');
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+
+    const fallbackInit = fetchSpy.mock.calls[0]![1] as RequestInit;
+    const finalizedInit = fetchSpy.mock.calls[1]![1] as RequestInit;
+    const retryInit = fetchSpy.mock.calls[2]![1] as RequestInit;
+    const fallbackHeaders = fallbackInit.headers as Record<string, string>;
+    const finalizedHeaders = finalizedInit.headers as Record<string, string>;
+    const retryHeaders = retryInit.headers as Record<string, string>;
+
+    expect(fallbackHeaders['Idempotency-Key']).not.toBe(
+      finalizedHeaders['Idempotency-Key'],
+    );
+    expect(finalizedHeaders['Idempotency-Key']).toBe(retryHeaders['Idempotency-Key']);
+
+    const fallbackBody = JSON.parse(String(fallbackInit.body));
+    const finalizedBody = JSON.parse(String(finalizedInit.body));
+    expect(fallbackBody.events[0].id).toMatch(/:tf$/);
+    expect(finalizedBody.events[0].id).not.toMatch(/:tf$/);
+    expect(fallbackBody.events[0].id).not.toBe(finalizedBody.events[0].id);
+    // Observation body ids remain stable for Langfuse overwrite semantics.
+    expect(fallbackBody.events[0].data.id).toBe(finalizedBody.events[0].data.id);
   });
 
   it('does not anonymous-fallback on Vela 429/5xx or network errors', async () => {

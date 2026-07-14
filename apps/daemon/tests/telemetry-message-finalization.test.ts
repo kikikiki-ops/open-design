@@ -269,6 +269,7 @@ describe('Langfuse message finalization gate', () => {
       persistedRunStatus: 'succeeded',
       persistedEndedAt: 1234,
       appVersion: { version: '0.7.0', channel: 'beta', packaged: true },
+      reportTrigger: 'final_message',
     });
   });
 
@@ -348,6 +349,12 @@ describe('Langfuse message finalization gate', () => {
     expect(report.mock.calls.map(([call]) => call.persistedEndedAt)).toEqual([
       1234,
       1235,
+    ]);
+    // Late-finalization path must thread distinct report triggers so Vela
+    // ingestion ids / Idempotency-Key do not collide between fallback and final.
+    expect(report.mock.calls.map(([call]) => call.reportTrigger)).toEqual([
+      'terminal_fallback',
+      'final_message',
     ]);
     expect(capture).toHaveBeenCalledTimes(3);
     expect(capture.mock.calls.map(([call]) => call.insertId)).toEqual(expect.arrayContaining([

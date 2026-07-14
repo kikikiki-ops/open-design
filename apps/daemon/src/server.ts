@@ -1547,6 +1547,7 @@ export function createFinalizedMessageTelemetryReporter({
         persistedRunStatus: saved.runStatus,
         persistedEndedAt: saved.endedAt,
         appVersion: getAppVersion(),
+        reportTrigger,
       });
       const state = delivery ?? {
         langfuse_expected: true,
