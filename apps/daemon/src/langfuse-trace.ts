@@ -324,22 +324,47 @@ export function queuePendingRunFeedback(
  * Feedback queued at submit time may carry `opts.config` from the live sink
  * then (`reportRunFeedbackFromDaemon` passes `config: sink`). The body that
  * is later accepted can land on a different channel (Vela 401/403 → relay, or
- * login/logout during the delay). `resolveReportConfig` prefers explicit
- * `opts.config` over sticky `acceptedDeliveryChannel`, so a stale sink would
- * fail `canDeliverRunFeedback` and drop the score. Keep a matching explicit
- * config; strip mismatch so sticky channel re-resolves from env.
+ * login/logout during the delay), or stay on `vela` but with a different
+ * Control Key / profile after an AMR switch. `resolveReportConfig` prefers
+ * explicit `opts.config` over sticky `acceptedDeliveryChannel`, so a stale
+ * sink would fail `canDeliverRunFeedback` and drop the score. Keep a matching
+ * explicit config (same channel, and for Vela the same accepting-account
+ * fingerprint); strip mismatch so sticky channel re-resolves from env.
  */
 function flushReportOpts(
   opts: ReportRunOpts,
   deliveryChannel?: TelemetryDeliveryChannel,
+  acceptedVelaIdentity?: string,
 ): ReportRunOpts {
   if (!deliveryChannel) return opts;
   if (opts.config === undefined || opts.config == null) return opts;
   const pendingKind =
     'kind' in opts.config ? opts.config.kind : ('langfuse' as const);
-  if (pendingKind === deliveryChannel) return opts;
-  const { config: _staleConfig, ...rest } = opts;
-  return rest;
+  if (pendingKind !== deliveryChannel) {
+    const { config: _staleConfig, ...rest } = opts;
+    return rest;
+  }
+  // Same channel, but Vela account may have changed during the delay window.
+  // Kind-only equality would keep the submit-time Control Key; the flush then
+  // passes the new acceptedVelaIdentity and canDeliverRunFeedback rejects it.
+  if (deliveryChannel === 'vela' && pendingKind === 'vela') {
+    const required =
+      typeof acceptedVelaIdentity === 'string' ? acceptedVelaIdentity.trim() : '';
+    if (required) {
+      const config = opts.config;
+      if (config && 'kind' in config && config.kind === 'vela') {
+        const current = velaSinkIdentityFingerprint(
+          config.profile,
+          config.controlKey,
+        );
+        if (!current || current !== required) {
+          const { config: _staleConfig, ...rest } = opts;
+          return rest;
+        }
+      }
+    }
+  }
+  return opts;
 }
 
 function flushPendingRunFeedback(
@@ -370,7 +395,7 @@ function flushPendingRunFeedback(
         : {}),
       ...(velaIdentity ? { acceptedVelaIdentity: velaIdentity } : {}),
     },
-    flushReportOpts(pending.opts, deliveryChannel),
+    flushReportOpts(pending.opts, deliveryChannel, velaIdentity),
   ).catch((err) => {
     console.warn(
       '[langfuse-trace] deferred feedback flush failed:',

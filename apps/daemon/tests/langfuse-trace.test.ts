@@ -4202,4 +4202,104 @@ describe('reportRunFeedback', () => {
       }
     }
   });
+
+  it('re-resolves a stale submit-time Vela key when deferred feedback flushes on the same channel', async () => {
+    // Queued under Control Key A; user switches AMR profile before the final
+    // body is accepted. Acceptance is still `vela` but with key B. Kind-only
+    // flush opts would keep key A, fail canDeliverRunFeedback on the accepted
+    // identity, and drop the score even though the live Vela sink matches.
+    resetAcceptedFinalTraceBodyIdsForTests();
+    resetPendingRunFeedbackForTests();
+    const runId = 'run-deferred-vela-identity-switch';
+    const previous = {
+      VELA_CONTROL_KEY: process.env.VELA_CONTROL_KEY,
+      VELA_API_URL: process.env.VELA_API_URL,
+      OPEN_DESIGN_TELEMETRY_RELAY_URL: process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL,
+      LANGFUSE_PUBLIC_KEY: process.env.LANGFUSE_PUBLIC_KEY,
+      LANGFUSE_SECRET_KEY: process.env.LANGFUSE_SECRET_KEY,
+    };
+    process.env.VELA_CONTROL_KEY = 'ck_accepted_after_switch';
+    process.env.VELA_API_URL = 'https://amr-api.example.com';
+    delete process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL;
+    delete process.env.LANGFUSE_PUBLIC_KEY;
+    delete process.env.LANGFUSE_SECRET_KEY;
+
+    const velaAtSubmit: TelemetrySinkConfig = {
+      kind: 'vela',
+      apiUrl: 'https://amr-api.example.com',
+      controlKey: 'ck_stale_submit',
+      timeoutMs: 20_000,
+      retries: 0,
+      profile: 'prod',
+      authSource: 'env',
+      clearLoginOnAuthFailure: false,
+    };
+    const acceptingIdentity = velaSinkIdentityFingerprint(
+      'prod',
+      'ck_accepted_after_switch',
+    );
+    const fetchSpy = vi.fn().mockResolvedValue(new Response('', { status: 202 }));
+
+    try {
+      expect(
+        shouldDeferRunFeedback({
+          runId,
+          runStatus: 'failed',
+          telemetryFinalized: false,
+        }),
+      ).toBe(true);
+      await reportRunFeedback(
+        makeFeedbackCtx({
+          runId,
+          runStatus: 'failed',
+          telemetryFinalized: false,
+          reasonCodes: [],
+        }),
+        { config: velaAtSubmit, fetchImpl: fetchSpy as any },
+      );
+      expect(fetchSpy).not.toHaveBeenCalled();
+
+      rememberAcceptedFinalTraceBodyId(
+        runId,
+        scopedTelemetryBodyId(runId, 'final', 'terminal_fallback'),
+        'terminal_fallback',
+        'vela',
+        acceptingIdentity,
+      );
+
+      await vi.waitFor(() => {
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+      });
+      expect(String(fetchSpy.mock.calls[0]![0])).toContain(
+        '/api/v1/open-design/telemetry',
+      );
+      // Live env key B — not the stale submit-time key A.
+      expect(String(fetchSpy.mock.calls[0]![1].headers?.Authorization ?? '')).toBe(
+        'Bearer ck_accepted_after_switch',
+      );
+      const envelope = JSON.parse(fetchSpy.mock.calls[0]![1].body as string);
+      expect(envelope.version).toBe(1);
+      expect(envelope.installationId).toBe('install-uuid-1');
+      expect(envelope.events).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'score',
+            data: expect.objectContaining({
+              name: 'user_rating',
+              traceId: scopedTelemetryBodyId(
+                runId,
+                'final',
+                'terminal_fallback',
+              ),
+            }),
+          }),
+        ]),
+      );
+    } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
 });
