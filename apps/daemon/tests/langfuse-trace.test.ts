@@ -1570,6 +1570,8 @@ describe('buildTracePayload', () => {
   it('nests agent status and usage events under agent-call', () => {
     const batch = buildTracePayload(
       makeCtx({
+        // Content consent required for agent-event free-text `output`.
+        prefs: { metrics: true, content: true, artifactManifest: false },
         run: {
           runId: 'run-agent-events',
           status: 'succeeded',
@@ -1648,6 +1650,8 @@ describe('buildTracePayload', () => {
   it('nests agent diagnostics under agent-call without requiring message content', () => {
     const batch = buildTracePayload(
       makeCtx({
+        // Content consent required for diagnostic free-text `output` payloads.
+        prefs: { metrics: true, content: true, artifactManifest: false },
         run: {
           runId: 'run-agent-diagnostics',
           status: 'succeeded',

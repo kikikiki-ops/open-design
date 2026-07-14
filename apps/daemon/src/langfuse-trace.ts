@@ -889,7 +889,9 @@ export function canDeliverRunFeedback(
   const requireChannel = opts.requireChannel ?? null;
   if (requireChannel) {
     if (sink.kind !== requireChannel) return false;
-    if (requireChannel === 'vela') {
+    // Narrow on sink.kind (not requireChannel): TS does not refine a union
+    // through equality with a separate variable of the same string-literal union.
+    if (sink.kind === 'vela') {
       if (!installationId?.trim()) return false;
       const requiredIdentity =
         typeof opts.requireVelaIdentity === 'string'
