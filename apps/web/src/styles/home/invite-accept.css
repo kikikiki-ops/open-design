@@ -94,7 +94,7 @@
   border-radius: 50%;
   border: 1px solid var(--border-strong);
   background: var(--bg-panel);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-muted);
 }
@@ -189,13 +189,13 @@
   border-radius: 50%;
   background: var(--bg-muted);
   border: 1px solid var(--border);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-body);
 }
 .invite-accept__ws-name {
   margin: 2px 0 0;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--text-strong);
 }
@@ -213,14 +213,14 @@
 .invite-accept__role-badge strong { color: var(--accent); }
 .invite-accept__role-perm {
   margin: 0;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 .invite-accept__ws-meta {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 .invite-accept__ws-meta span {
@@ -279,7 +279,7 @@
   display: flex;
   flex-direction: column;
   gap: 5px;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 .invite-accept__field input {
@@ -294,7 +294,6 @@
 .invite-accept__field input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 .invite-accept__field input[readonly] {
   color: var(--text-muted);
@@ -313,18 +312,18 @@
   text-align: left;
 }
 .invite-accept__confirm-ws {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--text-strong);
 }
 .invite-accept__confirm-role {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 .invite-accept__confirm-role strong { color: var(--accent); }
 .invite-accept__confirm-perm {
   margin: 0;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--text-muted);
 }
 .invite-accept__seat-note {

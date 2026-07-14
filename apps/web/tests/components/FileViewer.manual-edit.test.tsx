@@ -380,6 +380,61 @@ describe('FileViewer manual edit regressions', () => {
     expect(document.querySelector('.manual-edit-workspace')).not.toBeNull();
   });
 
+  it('saves panel content edits even when the click-to-select inline text session is still open', async () => {
+    const source = '<!doctype html><html><body><main data-od-id="hero">Hero</main></body></html>';
+    const writes: string[] = [];
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
+      if (url.includes('/api/projects/project-1/files') && init?.method === 'POST') {
+        writes.push(String(init?.body ?? ''));
+        return new Response(JSON.stringify({ file: htmlPreviewFile() }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(source, { status: 200, headers: { 'Content-Type': 'text/html' } });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <FileViewer projectId="project-1" projectKind="prototype" file={htmlPreviewFile()}
+        liveHtml={source}
+      />,
+    );
+
+    clickManualTool('manual-edit-mode-toggle');
+    await selectManualEditTarget();
+    const frame = await previewFrame();
+    // Clicking a text element in the canvas opens an inline text session in
+    // the bridge alongside the panel — simulate that live session.
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: { type: 'od-edit-text-session', id: 'session-1', active: true },
+        source: frame.contentWindow,
+      }));
+    });
+
+    const textArea = await waitFor(() => {
+      const node = document.querySelector('.manual-edit-right textarea') as HTMLTextAreaElement | null;
+      if (!node) throw new Error('Panel text area not found');
+      return node;
+    });
+    fireEvent.change(textArea, { target: { value: 'Hero updated' } });
+    fireEvent.click(screen.getByText('Save'));
+    // The bridge acks the od-edit-text-finish by ending the session with the
+    // unchanged canvas text; the panel edit must still persist.
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: { type: 'od-edit-text-session', id: 'session-1', active: false, committed: true, changed: false },
+        source: frame.contentWindow,
+      }));
+    });
+
+    await waitFor(() => {
+      expect(writes.some((body) => body.includes('Hero updated'))).toBe(true);
+    });
+  });
+
   it('keeps the preview mounted and does not save when deleting the only rendered root', async () => {
     const source = '<!doctype html><html><body><main data-od-id="app-root">App</main><script>window.bootApp && window.bootApp();</script></body></html>';
     const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {

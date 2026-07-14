@@ -24,8 +24,6 @@ import { takeDesignSystemFocus } from '../runtime/brands';
 import {
   deleteDesignSystemDraft,
   fetchDesignSystem,
-  fetchProjectFileText,
-  projectRawUrl,
   updateDesignSystemDraft,
 } from '../providers/registry';
 import { downloadDesignSystemArchive, downloadProjectArchive } from '../runtime/exports';
@@ -110,7 +108,7 @@ const DEMO_DESIGN_SYSTEMS: DesignSystemSummary[] = [
     title: 'SaaS Console',
     category: 'Productivity & SaaS',
     summary: 'Dense dashboards, settings panels, table systems, and admin workflows.',
-    swatches: ['#0f172a', '#2563eb', '#94a3b8', '#f8fafc'],
+    swatches: ['#202020', '#87ea5c', '#848484', '#fafafa'],
     source: 'user',
     status: 'draft',
     isEditable: true,
@@ -130,7 +128,7 @@ const DEMO_DESIGN_SYSTEMS: DesignSystemSummary[] = [
     title: 'AI Product Preset',
     category: 'AI & LLM',
     summary: 'Prompt surfaces, model controls, generation states, and AI disclosure patterns.',
-    swatches: ['#111827', '#7c3aed', '#a5b4fc', '#f5f3ff'],
+    swatches: ['#353535', '#0d5400', '#adf788', '#f5ffee'],
     source: 'built-in',
     status: 'published',
     surface: 'web',
@@ -340,7 +338,9 @@ export function DesignSystemsTab({
   }, [analytics.track, systems.length, loading]);
   const searchTrackedRef = useRef(false);
   const categoryTrackedRef = useRef(false);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [filter, setFilter] = useState('');
+  const [searchExpanded, setSearchExpanded] = useState(false);
   const [busyAction, setBusyAction] = useState<{ systemId: string; action: DesignSystemActionKind } | null>(null);
   const busyId = busyAction?.systemId ?? null;
   const [actionToast, setActionToast] = useState<{ message: string; tone: DesignKitActionFeedbackTone } | null>(null);
@@ -377,6 +377,8 @@ export function DesignSystemsTab({
   const [teamSystemIds, setTeamSystemIds] = useState<Set<string>>(() => new Set(DEMO_TEAM_SYSTEM_IDS));
   const [surfaceFilter, setSurfaceFilter] = useState<SurfaceFilter>('all');
   const [category, setCategory] = useState<string>('All');
+  const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
+  const categoryMenuRef = useRef<HTMLDivElement | null>(null);
   // The master-detail selection — which row renders in the right preview pane.
   // Distinct from `selectedId`, which is the global *default* design system.
   const [previewId, setPreviewId] = useState<string | null>(null);
@@ -458,6 +460,23 @@ export function DesignSystemsTab({
       setCategory('All');
     }
   }, [allSystems, surfaceFilter, surfaceTotals, category, categories]);
+
+  useEffect(() => {
+    if (!categoryMenuOpen) return undefined;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (categoryMenuRef.current?.contains(event.target as Node)) return;
+      setCategoryMenuOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setCategoryMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [categoryMenuOpen]);
 
   // Systems matching the active style category and search text, before the
   // surface filter is applied. Both the surface pill counts and the visible
@@ -741,7 +760,6 @@ export function DesignSystemsTab({
         <header className={styles.pageHeader} data-testid="design-systems-page-header">
           <div className={styles.pageTitleBlock}>
             <h1 className={styles.pageTitle}>{t('entry.navDesignSystems')}</h1>
-            <p className={styles.pageDescription}>团队可复用的品牌规范、组件规则和视觉资产。</p>
           </div>
           <div className={styles.headerTools} data-testid="design-systems-header-tools" aria-hidden>
             <div className={`${styles.searchWrap} ${styles.headerSearch}`} data-testid="design-systems-header-search">
@@ -772,9 +790,6 @@ export function DesignSystemsTab({
                   className={`${styles.item} ${index === 0 ? styles.skeletonRowActive : styles.skeletonRow}`}
                   data-testid={`design-systems-loading-row-${index}`}
                 >
-                  <span className={styles.itemThumb}>
-                    <SkeletonBlock className={styles.skeletonThumb} />
-                  </span>
                   <span className={styles.itemMeta}>
                     <SkeletonBlock className={`${styles.skeletonLine} ${styles.skeletonLineTitle}`} />
                     <SkeletonBlock className={`${styles.skeletonLine} ${index % 3 === 0 ? styles.skeletonLineShort : styles.skeletonLineMedium}`} />
@@ -810,29 +825,8 @@ export function DesignSystemsTab({
       <header className={styles.pageHeader} data-testid="design-systems-page-header">
         <div className={styles.pageTitleBlock}>
           <h1 className={styles.pageTitle}>{t('entry.navDesignSystems')}</h1>
-          <p className={styles.pageDescription}>团队可复用的品牌规范、组件规则和视觉资产。</p>
         </div>
         <div className={styles.headerTools} data-testid="design-systems-header-tools">
-          <div className={`${styles.searchWrap} ${styles.headerSearch}`} data-testid="design-systems-header-search">
-            <SearchGlyph className={styles.searchIcon} />
-            <input
-              type="search"
-              data-testid="design-systems-search"
-              className={styles.search}
-              placeholder={t('ds.searchPlaceholder')}
-              value={filter}
-              onFocus={() => {
-                if (searchTrackedRef.current) return;
-                searchTrackedRef.current = true;
-                trackDesignSystemsTopClick(analytics.track, {
-                  page_name: 'design_systems',
-                  area: 'design_systems',
-                  element: 'search_input',
-                });
-              }}
-              onChange={(e) => setFilter(e.target.value)}
-            />
-          </div>
           {onCreate ? (
             <Button
               variant="primary"
@@ -860,6 +854,46 @@ export function DesignSystemsTab({
             <span className="ds-top-scope-count" aria-hidden>{tab.count}</span>
           </button>
         ))}
+        <div
+          className={`${styles.searchWrap} ${styles.headerSearch}${searchExpanded || filter ? ` ${styles.headerSearchOpen}` : ''} ds-top-scopes__search`}
+          data-testid="design-systems-header-search"
+          onBlur={(event) => {
+            if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
+            if (!filter) setSearchExpanded(false);
+          }}
+        >
+          <button
+            type="button"
+            className={styles.searchToggle}
+            aria-label="展开搜索"
+            onClick={() => {
+              setSearchExpanded(true);
+              requestAnimationFrame(() => searchInputRef.current?.focus());
+            }}
+          >
+            <SearchGlyph />
+          </button>
+          <input
+            ref={searchInputRef}
+            type="search"
+            data-testid="design-systems-search"
+            className={styles.search}
+            tabIndex={searchExpanded || filter ? 0 : -1}
+            placeholder={t('ds.searchPlaceholder')}
+            value={filter}
+            onFocus={() => {
+              setSearchExpanded(true);
+              if (searchTrackedRef.current) return;
+              searchTrackedRef.current = true;
+              trackDesignSystemsTopClick(analytics.track, {
+                page_name: 'design_systems',
+                area: 'design_systems',
+                element: 'search_input',
+              });
+            }}
+            onChange={(e) => setFilter(e.target.value)}
+          />
+        </div>
       </div>
       <div className={styles.root} data-testid="design-systems-tab">
         <aside className={styles.sidebar}>
@@ -895,27 +929,55 @@ export function DesignSystemsTab({
                 </button>
               ))}
             </div>
-            <select
-              data-testid="design-systems-category-select"
-              className={styles.categorySelect}
-              value={category}
-              onFocus={() => {
-                if (categoryTrackedRef.current) return;
-                categoryTrackedRef.current = true;
-                trackDesignSystemsTopClick(analytics.track, {
-                  page_name: 'design_systems',
-                  area: 'design_systems',
-                  element: 'search_dropdown',
-                });
-              }}
-              onChange={(e) => setCategory(e.target.value)}
-            >
-              {categories.map((c) => (
-                <option key={c} value={c}>
-                  {renderCategory(c)}
-                </option>
-              ))}
-            </select>
+            <div className={styles.categoryMenuWrap} ref={categoryMenuRef}>
+              <button
+                type="button"
+                data-testid="design-systems-category-select"
+                className={styles.categorySelect}
+                aria-haspopup="listbox"
+                aria-expanded={categoryMenuOpen}
+                onFocus={() => {
+                  if (categoryTrackedRef.current) return;
+                  categoryTrackedRef.current = true;
+                  trackDesignSystemsTopClick(analytics.track, {
+                    page_name: 'design_systems',
+                    area: 'design_systems',
+                    element: 'search_dropdown',
+                  });
+                }}
+                onClick={() => setCategoryMenuOpen((open) => !open)}
+              >
+                <span>{renderCategory(category)}</span>
+                <Icon name="chevron-down" size={14} className={styles.categoryChevron} aria-hidden />
+              </button>
+              {categoryMenuOpen ? (
+                <div
+                  className={styles.categoryMenu}
+                  role="listbox"
+                  aria-label={t('connectors.categoryLabel')}
+                  data-testid="design-systems-category-menu"
+                >
+                  {categories.map((c) => {
+                    const active = c === category;
+                    return (
+                      <button
+                        key={c}
+                        type="button"
+                        role="option"
+                        aria-selected={active}
+                        className={`${styles.categoryOption} ${active ? styles.categoryOptionActive : ''}`}
+                        onClick={() => {
+                          setCategory(c);
+                          setCategoryMenuOpen(false);
+                        }}
+                      >
+                        {renderCategory(c)}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
           </div>
         ) : null}
 
@@ -1041,102 +1103,18 @@ interface SystemRowProps {
   onSelect: () => void;
 }
 
-function fallbackSwatches(seed: string): string[] {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  const base = h % 360;
-  return [
-    `hsl(${base}, 24%, 94%)`,
-    `hsl(${(base + 90) % 360}, 34%, 74%)`,
-    `hsl(${(base + 180) % 360}, 42%, 34%)`,
-    `hsl(${(base + 28) % 360}, 76%, 54%)`,
-  ];
-}
-
-function SystemRowPaletteLogo({ system }: { system: DesignSystemSummary }) {
-  const swatches = system.swatches && system.swatches.length > 0
-    ? system.swatches.slice(0, 4)
-    : fallbackSwatches(system.title || system.id);
-  return (
-    <span className={styles.itemSwatches} aria-hidden>
-      {swatches.map((color, index) => (
-        <span key={`${color}-${index}`} style={{ background: color }} />
-      ))}
-    </span>
-  );
-}
-
-// Resolve a system's own logo from its backing project's brand.json
-// (`logo.primary`), exactly mirroring how the detail kit loads it via
-// `useDesignKit`. The list row can't use `/api/brands/:id/logo` because the row
-// only knows the *design-system* id, which differs from the brand id the brands
-// route expects. Returns `undefined` while the fetch is in flight, `null` when
-// the project has no logo, or the raw URL string.
-function useProjectLogoSrc(projectId: string | undefined): string | null | undefined {
-  const [src, setSrc] = useState<string | null | undefined>(projectId ? undefined : null);
-  useEffect(() => {
-    if (!projectId) {
-      setSrc(null);
-      return;
-    }
-    let cancelled = false;
-    setSrc(undefined);
-    void fetchProjectFileText(projectId, 'brand.json', { cache: 'no-store' }).then((raw) => {
-      if (cancelled) return;
-      let primary: string | null = null;
-      if (raw) {
-        try {
-          const data = JSON.parse(raw) as { logo?: { primary?: unknown } };
-          const candidate = data?.logo?.primary;
-          if (typeof candidate === 'string' && candidate.trim()) primary = candidate.trim();
-        } catch {
-          // Not a valid brand.json (e.g. a non-brand "Create"d system) — no logo.
-        }
-      }
-      setSrc(primary ? projectRawUrl(projectId, primary) : null);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId]);
-  return src;
-}
-
-// Row thumbnail. Prefer the system's real logo (resolved from the backing
-// project's brand.json), then a site favicon (captured source URL, reference
-// brand, or curated official-preset domain), falling back to the palette stripe
-// when neither resolves. The palette also holds the slot while a user system's
-// logo is still loading, so the thumbnail never flashes a broken image first.
 function SystemRowLogo({ system }: { system: DesignSystemSummary }) {
-  const host = designSystemLogoHost(system);
-  const projectLogo = useProjectLogoSrc(isUserSystem(system) ? system.projectId : undefined);
-
-  // Candidate srcs in priority order, skipping empties; `onError` advances to
-  // the next, and exhausting them collapses to the palette stripe.
-  const candidates = useMemo(() => {
-    const list: string[] = [];
-    if (typeof projectLogo === 'string') list.push(projectLogo);
-    if (host) list.push(`https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`);
-    return list;
-  }, [projectLogo, host]);
-
-  const [failedCount, setFailedCount] = useState(0);
-  useEffect(() => setFailedCount(0), [candidates]);
-
-  const resolving = projectLogo === undefined;
-  const src = !resolving && failedCount < candidates.length ? candidates[failedCount] : null;
-
-  if (!src) return <SystemRowPaletteLogo system={system} />;
-  return (
-    <img
-      className={styles.itemLogo}
-      src={src}
-      alt=""
-      loading="lazy"
-      referrerPolicy="no-referrer"
-      onError={() => setFailedCount((n) => n + 1)}
-    />
-  );
+  const swatches = Array.isArray(system.swatches) ? system.swatches.filter(Boolean).slice(0, 4) : [];
+  if (swatches.length > 0) {
+    return (
+      <span className={styles.itemSwatches} aria-hidden>
+        {swatches.map((color, index) => (
+          <span key={`${color}-${index}`} style={{ background: color }} />
+        ))}
+      </span>
+    );
+  }
+  return <span className={styles.itemThumbFallback}>{system.title.trim().charAt(0).toUpperCase() || 'D'}</span>;
 }
 
 function SystemRow({
@@ -1151,7 +1129,7 @@ function SystemRow({
   const status = system.status ?? 'draft';
   const isUser = isUserSystem(system);
   return (
-    <div className={styles.itemRow}>
+    <div className={`${styles.itemRow} ${active ? styles.itemRowActive : ''}`}>
       <button
         type="button"
         data-testid={`design-system-card-${system.id}`}

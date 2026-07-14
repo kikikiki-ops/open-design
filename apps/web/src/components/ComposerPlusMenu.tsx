@@ -30,8 +30,11 @@ const PLUS_MENU_FLYOUT_WIDTH = 360;
 // here makes medium-width panes wrongly fall back to the contained layout and
 // silently drop the preview column.
 const PLUS_MENU_PLUGIN_FLYOUT_WIDTH = 466;
-const PLUS_MENU_PREFERRED_MIN_HEIGHT = 180;
 const PLUS_MENU_FLYOUT_MAX_HEIGHT = 320;
+// Below this much room under the trigger the menu prefers to flip above it
+// (when there is more space up there) instead of spilling off the viewport
+// bottom — the popup uses overflow:visible so its items can't scroll back in.
+const PLUS_MENU_MIN_HEIGHT = 260;
 type PlusMenuFlyoutPlacement = 'right' | 'left' | 'contained';
 type PlusMenuFlyoutVerticalPlacement = 'down' | 'up';
 type PlusMenuPopupStyle = CSSProperties & Record<'--plus-menu-flyout-max-height', string>;
@@ -62,10 +65,13 @@ function getPlusMenuStyle(anchor: HTMLElement): CSSProperties {
     Math.max(PLUS_MENU_MARGIN, rect.left),
     Math.max(PLUS_MENU_MARGIN, viewportWidth - PLUS_MENU_MARGIN - width),
   );
-  const spaceAbove = rect.top - PLUS_MENU_MARGIN - PLUS_MENU_GAP;
   const spaceBelow = viewportHeight - rect.bottom - PLUS_MENU_MARGIN - PLUS_MENU_GAP;
+  const spaceAbove = rect.top - PLUS_MENU_MARGIN - PLUS_MENU_GAP;
 
-  if (spaceAbove >= PLUS_MENU_PREFERRED_MIN_HEIGHT || spaceAbove >= spaceBelow) {
+  // Flip above the trigger when the room below is too tight to hold the menu
+  // and there is more room above. Otherwise a "+" button low in the viewport
+  // drops a menu whose items spill off the bottom of the screen.
+  if (spaceBelow < PLUS_MENU_MIN_HEIGHT && spaceAbove > spaceBelow) {
     return {
       left,
       top: 'auto',

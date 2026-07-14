@@ -157,6 +157,9 @@ export interface LexicalComposerInputProps {
   onEnterSend(): void;
   // Pasted files/images — host uploads them (mirrors the old textarea paste).
   onPasteFiles?: (files: File[]) => void;
+  // User has focused/clicked the editable surface and intends to type. Hosts can
+  // use this to dismiss decorative affordances before the first real edit.
+  onInputIntent?: () => void;
   // Whether a popover is open; gates the arrow/tab/enter/escape routing.
   popoverOpen: boolean;
   // Routes a popover key to the host; returns true when the host consumed it.
@@ -662,6 +665,7 @@ export const LexicalComposerInput = forwardRef<
     onTrigger,
     onEnterSend,
     onPasteFiles,
+    onInputIntent,
     popoverOpen,
     onPopoverKey,
     comboboxAria,
@@ -784,6 +788,8 @@ export const LexicalComposerInput = forwardRef<
               data-testid={testId}
               className="ph-no-capture composer-editable"
               aria-readonly={readOnly ? 'true' : undefined}
+              onFocusCapture={onInputIntent}
+              onPointerDownCapture={onInputIntent}
               aria-placeholder={placeholder}
               title={title ?? placeholder}
               role="combobox"

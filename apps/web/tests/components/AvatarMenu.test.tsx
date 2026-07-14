@@ -197,18 +197,16 @@ describe('AvatarMenu', () => {
     });
 
     openMenu();
-    // The model picker is a SearchableModelSelect: a combobox button whose
-    // label shows the active selection, backed by a popover listbox. A custom
-    // saved model that isn't in the agent's declared list is injected as an
-    // additional option so it stays selectable instead of silently dropping.
-    const modelCombobox = screen.getAllByRole('combobox')[0] as HTMLButtonElement;
-    expect(modelCombobox.textContent).toContain('custom-codex-model');
-
-    fireEvent.click(modelCombobox);
-    const popover = screen.getByTestId('avatar-model-popover');
-    expect(
-      within(popover).getByRole('option', { name: /custom-codex-model/i }),
-    ).toBeTruthy();
+    // The model picker is an always-expanded, left-aligned radio list: every
+    // option is laid out directly (no click-to-open dropdown). A custom saved
+    // model that isn't in the agent's declared list is appended so it stays
+    // selectable, shown as the checked row instead of silently dropping.
+    const list = screen.getByTestId('avatar-model-list');
+    const customOption = within(list).getByRole('radio', {
+      name: /custom-codex-model/i,
+    });
+    expect(customOption).toBeTruthy();
+    expect(customOption.getAttribute('aria-checked')).toBe('true');
   });
 
   it('routes the AMR account shortcut through the active AMR profile', () => {

@@ -869,7 +869,7 @@ describe('ChatComposer context pickers', () => {
         custom: {
           name: 'Buddy',
           glyph: '🐾',
-          accent: '#7c3aed',
+          accent: '#353535',
           greeting: 'hi',
         },
       },

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { Button, Input, Textarea } from '@open-design/components';
 import { useT } from '../i18n';
@@ -21,9 +22,13 @@ export function PasteTextDialog({ onSave, onClose }: Props) {
     onSave(ensureExtension(finalName, '.txt'), content);
   }
 
-  return (
+  if (typeof document === 'undefined') {
+    return null;
+  }
+
+  return createPortal(
     <motion.div
-      className="modal-backdrop"
+      className="modal-backdrop modal-backdrop--app-modal"
       onClick={onClose}
       variants={modalOverlay}
       initial="hidden"
@@ -66,7 +71,8 @@ export function PasteTextDialog({ onSave, onClose }: Props) {
           </Button>
         </div>
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.body,
   );
 }
 

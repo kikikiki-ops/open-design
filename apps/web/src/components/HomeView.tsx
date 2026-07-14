@@ -8,6 +8,7 @@
 // textarea can live centered in the hero.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { AppWashKineticGrid } from './AppWashKineticGrid';
 import { Dialog, DialogFooter, DialogTitle } from '@open-design/components';
 import type {
   ApplyResult,
@@ -312,7 +313,7 @@ function demoElectricStudioHtml(): string {
   <title>Electric Studio 2</title>
   <style>
     :root { color-scheme: light; --blue:#4864f4; --ink:#111; --muted:#6d6d6d; }
-    body { margin:0; min-height:100vh; display:grid; place-items:center; background:#090909; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; background:#090909; font-family:"Albert Sans", "PingFang SC", "Microsoft YaHei", sans-serif; }
     .slide { width:min(1120px,90vw); aspect-ratio:16/9; background:#fff; position:relative; overflow:hidden; box-shadow:0 24px 80px rgba(0,0,0,.34); }
     .top { padding:80px 72px 0; color:var(--blue); font-size:12px; font-weight:800; letter-spacing:.42em; text-transform:uppercase; }
     h1 { margin:34px 0 0; padding-left:72px; max-width:520px; color:var(--ink); font-size:86px; line-height:.92; letter-spacing:-.07em; }
@@ -344,7 +345,7 @@ function demoDesignSystemHtml(): string {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>百度一下，你就知道 Design System</title>
   <style>
-    body { margin:0; background:#f7f8fb; color:#161616; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    body { margin:0; background:#f7f8fb; color:#161616; font-family:"Albert Sans", "PingFang SC", "Microsoft YaHei", sans-serif; }
     .wrap { max-width:960px; margin:42px auto; display:grid; gap:18px; padding:0 24px; }
     .hero,.card { border:1px solid #dfe3eb; border-radius:18px; background:#fff; }
     .hero { min-height:210px; display:grid; place-items:center; }
@@ -386,7 +387,7 @@ function demoElectricStudioSimpleHtml(): string {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Electric Studio</title>
   <style>
-    body { margin:0; min-height:100vh; display:grid; place-items:center; background:#f7f3df; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; background:#f7f3df; font-family:"Albert Sans", "PingFang SC", "Microsoft YaHei", sans-serif; }
     .card { width:min(760px,86vw); aspect-ratio:16/10; border-radius:24px; background:linear-gradient(135deg,#fff8ce,#d7f0ff); display:grid; place-items:center; box-shadow:0 20px 60px rgba(0,0,0,.12); }
     h1 { margin:0; color:#d06532; font-size:96px; font-family:Georgia,serif; }
     p { margin:0; color:#8c7f68; font-size:18px; }
@@ -1985,8 +1986,17 @@ export function HomeView({
     }
   }
 
+  // Empty workspace: with no recent projects to show, the hero (logo +
+  // heading + composer) centers vertically instead of hugging the top.
+  const recentProjectsEmpty = !projectsLoading && projects.length === 0;
+
   return (
-    <div className="home-view" data-testid="home-view" ref={homeViewRef}>
+    <div
+      className={`home-view${recentProjectsEmpty ? ' home-view--centered' : ''}`}
+      data-testid="home-view"
+      ref={homeViewRef}
+    >
+      {isActive ? <AppWashKineticGrid clipBottomTo=".home-hero" /> : null}
       <HomeHero
         ref={inputRef}
         active={isActive}
@@ -2080,7 +2090,7 @@ export function HomeView({
         demoScenario={demoScenario}
       />
 
-      {demoScenario === 'onboarding-new' ? null : <RecentProjectsStrip
+      {demoScenario === 'onboarding-new' || recentProjectsEmpty ? null : <RecentProjectsStrip
         projects={demoPresetProjects}
         designSystems={designSystems}
         promptTemplates={promptTemplates}

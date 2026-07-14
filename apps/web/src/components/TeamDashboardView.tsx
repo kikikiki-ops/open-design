@@ -3,27 +3,26 @@
 // UC-10: owner/admin-visible workspace data overview. Demo-only data for
 // product review; no backend calls yet.
 
-import type { CSSProperties } from 'react';
 import { Icon } from './Icon';
 
 const DASHBOARD_STATS = [
-  { label: '创建的设计数', value: '128', delta: '+18 本周', deltaKind: 'change', icon: 'grid' },
-  { label: '创建的 Design System 数', value: '12', delta: '+3 本月', deltaKind: 'change', icon: 'palette' },
-  { label: '活跃成员', value: '5', delta: '过去 7 天', deltaKind: 'period', icon: 'users' },
+  { label: '创建的设计数', value: '128', delta: '+18 本周', icon: 'grid' },
+  { label: '创建的 Design System 数', value: '12', delta: '+3 本月', icon: 'palette' },
+  { label: '活跃成员', value: '5', delta: '过去 7 天', icon: 'share' },
 ] as const;
 
 const TOKEN_RANKING = [
-  { name: '琼羽（你）', role: 'Owner', tokens: '1.42M', share: 100, color: '#c65b3a' },
-  { name: '张伟', role: 'Admin', tokens: '980K', share: 69, color: '#f97316' },
-  { name: '李娜', role: 'Member', tokens: '640K', share: 45, color: '#6366f1' },
-  { name: '王芳', role: 'Member', tokens: '420K', share: 30, color: '#10b981' },
+  { name: '琼羽（你）', role: 'Owner', tokens: '1.42M' },
+  { name: '张伟', role: 'Manager', tokens: '980K' },
+  { name: '李娜', role: 'Editor', tokens: '640K' },
+  { name: '王芳', role: 'Reviewer', tokens: '420K' },
 ] as const;
 
 const MEMBER_CREDITS = [
   { name: '琼羽（你）', role: 'Owner', remaining: '18,400', used: '41,600', status: '充足' },
-  { name: '张伟', role: 'Admin', remaining: '9,800', used: '24,200', status: '正常' },
-  { name: '李娜', role: 'Member', remaining: '1,200', used: '18,900', status: '偏低' },
-  { name: '王芳', role: 'Member', remaining: '320', used: '6,700', status: '需续额' },
+  { name: '张伟', role: 'Manager', remaining: '9,800', used: '24,200', status: '正常' },
+  { name: '李娜', role: 'Editor', remaining: '1,200', used: '18,900', status: '偏低' },
+  { name: '王芳', role: 'Viewer', remaining: '320', used: '6,700', status: '需续额' },
 ] as const;
 
 export type TeamDashboardAutoRechargeTarget =
@@ -37,14 +36,17 @@ type TeamDashboardViewProps = {
 };
 
 export function TeamDashboardView({ isAdmin = true, isTeamPlan = false, onAutoRecharge }: TeamDashboardViewProps) {
+  function creditStatusClass(status: string) {
+    if (status === '需续额') return 'is-critical';
+    if (status === '偏低') return 'is-muted';
+    return 'is-brand';
+  }
+
   return (
     <div className="entry-section team-dashboard">
       <header className="entry-section__head team-dashboard__head">
         <div>
           <h1 className="entry-section__title">数据大盘</h1>
-          <p className="team-dashboard__subtitle">
-            {isAdmin ? 'Owner / Admin 可见 · Nexu 团队最近 30 天' : 'Member 视角 · 仅查看自己的额度状态'}
-          </p>
         </div>
       </header>
 
@@ -67,7 +69,7 @@ export function TeamDashboardView({ isAdmin = true, isTeamPlan = false, onAutoRe
           <p>汇总团队产出、Design System 沉淀、活跃协作和 token 消耗结构。</p>
         </div>
         <div className="team-dashboard__hero-meta" aria-label="数据范围">
-          <span>Owner / Admin</span>
+          <span>Owner / Manager</span>
           <span>最近 30 天</span>
           <span>Demo data</span>
         </div>
@@ -77,11 +79,6 @@ export function TeamDashboardView({ isAdmin = true, isTeamPlan = false, onAutoRe
         <div className="team-dashboard__token-head">
           <div>
             <h2>{isAdmin ? '团队成员额度' : '我的额度'}</h2>
-            <p>
-              {isAdmin
-                ? '额度用尽会中断成员的协作与 Agent 任务，请及时为额度偏低的成员续额。'
-                : '当前额度不足时，请联系 Owner 或 Admin 帮你提升额度。'}
-            </p>
           </div>
           <span>{isAdmin ? 'Admin' : 'Member'}</span>
         </div>
@@ -101,10 +98,9 @@ export function TeamDashboardView({ isAdmin = true, isTeamPlan = false, onAutoRe
                   <span>本周期已用</span>
                   <strong>{member.used}</strong>
                 </div>
-                <em className={member.status === '需续额' ? 'is-low' : undefined}>{member.status}</em>
+                <em className={creditStatusClass(member.status)}>{member.status}</em>
                 <button
                   type="button"
-                  className={member.status === '需续额' ? 'is-urgent' : undefined}
                   onClick={() => onAutoRecharge?.({ kind: 'member', name: member.name, role: member.role })}
                 >
                   续额度
@@ -129,7 +125,7 @@ export function TeamDashboardView({ isAdmin = true, isTeamPlan = false, onAutoRe
             </span>
             <span className="team-dashboard__metric-label">{stat.label}</span>
             <strong className="team-dashboard__metric-value">{stat.value}</strong>
-            <span className={`team-dashboard__metric-delta${stat.deltaKind === 'period' ? ' is-period' : ''}`}>{stat.delta}</span>
+            <span className="team-dashboard__metric-delta">{stat.delta}</span>
           </article>
         ))}
       </div>
@@ -138,30 +134,19 @@ export function TeamDashboardView({ isAdmin = true, isTeamPlan = false, onAutoRe
         <div className="team-dashboard__token-head">
           <div>
             <h2>Token 消耗排名</h2>
-            <p>按最近 30 天团队协作与 Agent 任务消耗统计。</p>
           </div>
           <span>Top 4</span>
         </div>
 
         <div className="team-dashboard__token-list">
           {TOKEN_RANKING.map((person, index) => (
-            <div
-              className="team-dashboard__token-row"
-              key={person.name}
-              // Only #1 gets its member colour; the rest share one neutral so the
-              // list doesn't read as a rainbow. Must be a token that exists in
-              // tokens.css — an undefined var() kills the bar fill and rank tint.
-              style={{ '--member-rank-color': index === 0 ? person.color : 'var(--text-soft)' } as CSSProperties}
-            >
+            <div className="team-dashboard__token-row" key={person.name}>
               <span className="team-dashboard__token-rank">{index + 1}</span>
               <div className="team-dashboard__token-person">
                 <strong>{person.name}</strong>
                 <span>{person.role}</span>
               </div>
               <span className="team-dashboard__token-value">{person.tokens}</span>
-              <span className="team-dashboard__token-bar" aria-hidden>
-                <span style={{ width: `${person.share}%` }} />
-              </span>
             </div>
           ))}
         </div>

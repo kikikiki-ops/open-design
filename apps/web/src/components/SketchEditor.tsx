@@ -402,7 +402,7 @@ function drawItem(ctx: CanvasRenderingContext2D, it: SketchItem) {
     ctx.lineTo(it.x2 - len * Math.cos(ang + Math.PI / 6), it.y2 - len * Math.sin(ang + Math.PI / 6));
     ctx.stroke();
   } else if (it.kind === 'text') {
-    ctx.font = `${it.size}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    ctx.font = `${it.size}px Albert Sans, PingFang SC, Microsoft YaHei, sans-serif`;
     ctx.fillText(it.text, it.x, it.y);
   }
   ctx.restore();

@@ -180,7 +180,6 @@ export function MembersView({ solo = false }: { solo?: boolean }) {
       <header className="entry-section__head members__head">
         <div className="members__head-text">
           <h1 className="entry-section__title">成员</h1>
-          <p className="members__subtitle">管理 Nexu 团队的成员与角色</p>
         </div>
         <button
           type="button"

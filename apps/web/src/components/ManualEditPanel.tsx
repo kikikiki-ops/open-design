@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import type { ProjectDesignTokenSuggestion, ProjectDesignTokenSuggestionProp } from '../providers/registry';
 import { useT } from '../i18n';
 import { emptyManualEditStyles, type ManualEditHistoryEntry, type ManualEditPatch, type ManualEditStyles, type ManualEditTarget } from '../edit-mode/types';
 import { Icon } from './Icon';
@@ -12,6 +13,12 @@ export interface ManualEditDraft {
   attributesText: string;
   outerHtml: string;
   fullSource: string;
+}
+
+export interface ManualEditSearchResult {
+  file: string;
+  line: number;
+  snippet: string;
 }
 
 export function emptyManualEditDraft(source = ''): ManualEditDraft {
@@ -38,6 +45,16 @@ export function ManualEditPanel({
   onExit,
   onApplyPatch,
   onPickImage,
+  tokenSuggestions = [],
+  tokenSuggestionsLoading = false,
+  onApplyTokenSuggestion,
+  onInspectValueSelect,
+  searchQuery = '',
+  searchResults = [],
+  searchLoading = false,
+  onSearchQueryChange,
+  onRunSearch,
+  onOpenSearchResult,
   pageStylesEnabled = true,
   floatingStyle,
   floatingClassName,
@@ -59,6 +76,16 @@ export function ManualEditPanel({
   onInvalidStyle?: (id: string, keys: Array<keyof ManualEditStyles>) => void;
   onApplyPatch: (patch: ManualEditPatch, label: string) => void;
   onPickImage?: (file: File) => Promise<string | null>;
+  tokenSuggestions?: ProjectDesignTokenSuggestion[];
+  tokenSuggestionsLoading?: boolean;
+  onApplyTokenSuggestion?: (prop: keyof ManualEditStyles, value: string) => void;
+  onInspectValueSelect?: (prop: ProjectDesignTokenSuggestionProp, value: string) => void;
+  searchQuery?: string;
+  searchResults?: ManualEditSearchResult[];
+  searchLoading?: boolean;
+  onSearchQueryChange?: (query: string) => void;
+  onRunSearch?: () => void;
+  onOpenSearchResult?: (result: ManualEditSearchResult) => void;
   floatingStyle?: CSSProperties;
   floatingClassName?: string;
   onFloatingPositionChange?: (position: { left: number; top: number }) => void;
@@ -95,6 +122,21 @@ export function ManualEditPanel({
     }
     onError('');
     onStyleChange?.(targetForInspector.id, normalized.styles, `Style: ${targetForInspector.label}`);
+  };
+
+  const applyTargetStyles = (styles: Partial<ManualEditStyles>, label: string) => {
+    if (!targetForInspector) return;
+    const normalized = normalizeManualEditStyles(styles, {
+      layoutEnabled: targetForInspector.isLayoutContainer,
+    });
+    if (!normalized.ok) {
+      onError('error' in normalized ? normalized.error : 'Invalid style value.');
+      onInvalidStyle?.(targetForInspector.id, Object.keys(styles) as Array<keyof ManualEditStyles>);
+      return;
+    }
+    onError('');
+    onDraftChange({ ...draft, styles: { ...draft.styles, ...normalized.styles } });
+    onStyleChange?.(targetForInspector.id, normalized.styles, label);
   };
 
   const startPanelDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -170,10 +212,31 @@ export function ManualEditPanel({
                 onDraftChange={onDraftChange}
               />
               <StyleInspector
-                targetKind={targetForInspector.kind}
+                target={targetForInspector}
                 styles={draft.styles}
-                layoutEnabled={targetForInspector.isLayoutContainer}
                 onChange={changeTargetStyle}
+                onApply={(styles) => applyTargetStyles(styles, `Style: ${targetForInspector.label}`)}
+              />
+              <InspectInspector
+                target={targetForInspector}
+                onValueSelect={onInspectValueSelect}
+              />
+              <TokenSuggestions
+                suggestions={tokenSuggestions}
+                loading={tokenSuggestionsLoading}
+                onApply={(suggestion) => {
+                  const key = suggestionPropToManualStyle(suggestion.prop);
+                  if (!key) return;
+                  onApplyTokenSuggestion?.(key, suggestion.value);
+                }}
+              />
+              <ProjectSearch
+                query={searchQuery}
+                results={searchResults}
+                loading={searchLoading}
+                onQueryChange={onSearchQueryChange}
+                onRun={onRunSearch}
+                onOpen={onOpenSearchResult}
               />
             </>
           ) : !targetForInspector ? (
@@ -400,6 +463,239 @@ function readableManualEditTargetName(target: ManualEditTarget): string {
   return 'Text';
 }
 
+function InspectInspector({
+  target,
+  onValueSelect,
+}: {
+  target: ManualEditTarget;
+  onValueSelect?: (prop: ProjectDesignTokenSuggestionProp, value: string) => void;
+}) {
+  const summary = target.computedSummary;
+  const rect = target.rect;
+  const valueRows = inspectValueRows(target);
+  return (
+    <div className="cc-inspector manual-edit-inspect-inspector">
+      <Section title="INSPECT">
+        <div className="manual-edit-kv-grid">
+          <span>Tag</span><strong>{target.tagName}</strong>
+          <span>Size</span><strong>{Math.round(rect.width)} x {Math.round(rect.height)}</strong>
+          <span>Display</span><strong>{summary?.display || 'n/a'}</strong>
+          <span>Position</span><strong>{summary?.position || 'n/a'}</strong>
+        </div>
+        {valueRows.length > 0 ? (
+          <div className="manual-edit-param-list">
+            {valueRows.map((item) => (
+              <button
+                key={item.prop}
+                type="button"
+                className="manual-edit-param-row"
+                onClick={() => onValueSelect?.(item.prop, item.value)}
+                title={`Find similar ${item.prop}: ${item.value}`}
+              >
+                <span>{item.label}</span>
+                <code>{item.value}</code>
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </Section>
+    </div>
+  );
+}
+
+function inspectValueRows(target: ManualEditTarget): Array<{ prop: ProjectDesignTokenSuggestionProp; label: string; value: string }> {
+  const summary = target.computedSummary;
+  const styles = target.styles;
+  const rows: Array<{ prop: ProjectDesignTokenSuggestionProp; label: string; value: string | undefined }> = [
+    { prop: 'color', label: 'Text', value: styles.color || summary?.color },
+    { prop: 'backgroundColor', label: 'Background', value: styles.backgroundColor || summary?.backgroundColor },
+    { prop: 'borderColor', label: 'Border', value: styles.borderColor || summary?.borderColor },
+    { prop: 'fontFamily', label: 'Font', value: styles.fontFamily || summary?.fontFamily },
+    { prop: 'fontSize', label: 'Size', value: styles.fontSize || summary?.fontSize },
+    { prop: 'fontWeight', label: 'Weight', value: styles.fontWeight || summary?.fontWeight },
+    { prop: 'lineHeight', label: 'Line', value: styles.lineHeight || summary?.lineHeight },
+    { prop: 'letterSpacing', label: 'Tracking', value: styles.letterSpacing || summary?.letterSpacing },
+    { prop: 'width', label: 'Width', value: styles.width || String(Math.round(target.rect.width)) + 'px' },
+    { prop: 'height', label: 'Height', value: styles.height || String(Math.round(target.rect.height)) + 'px' },
+    { prop: 'gap', label: 'Gap', value: styles.gap },
+    { prop: 'padding', label: 'Padding', value: styles.padding || summary?.padding || styles.paddingTop },
+    { prop: 'margin', label: 'Margin', value: styles.margin || summary?.margin || styles.marginTop },
+    { prop: 'borderRadius', label: 'Radius', value: styles.borderRadius || summary?.borderRadius },
+    { prop: 'borderWidth', label: 'Stroke', value: styles.borderTopWidth || styles.borderRightWidth || styles.borderBottomWidth || styles.borderLeftWidth },
+  ];
+  return rows
+    .map((item) => ({ ...item, value: (item.value ?? '').trim() }))
+    .filter((item) => item.value.length > 0 && item.value !== 'rgba(0, 0, 0, 0)' && item.value !== 'transparent');
+}
+
+function LayoutActions({
+  target,
+  onApply,
+}: {
+  target: ManualEditTarget;
+  onApply: (styles: Partial<ManualEditStyles>, label: string) => void;
+}) {
+  const isTextLike = target.kind === 'text' || target.kind === 'link' || target.kind === 'token';
+  return (
+    <div className="cc-inspector manual-edit-layout-actions">
+      <Section title="LAYOUT">
+        {isTextLike ? (
+          <IconButtonGroup label="Text align">
+            {(['left', 'center', 'right', 'justify'] as const).map((align) => (
+              <button key={align} type="button" className="cc-chip-btn" onClick={() => onApply({ textAlign: align }, `Align text ${align}`)}>
+                {align}
+              </button>
+            ))}
+          </IconButtonGroup>
+        ) : null}
+        {target.isLayoutContainer ? (
+          <>
+            <IconButtonGroup label="Justify">
+              {(['flex-start', 'center', 'flex-end', 'space-between'] as const).map((value) => (
+                <button key={value} type="button" className="cc-chip-btn" onClick={() => onApply({ justifyContent: value }, `Justify ${value}`)}>
+                  {shortFlexLabel(value)}
+                </button>
+              ))}
+            </IconButtonGroup>
+            <IconButtonGroup label="Items">
+              {(['stretch', 'flex-start', 'center', 'flex-end', 'baseline'] as const).map((value) => (
+                <button key={value} type="button" className="cc-chip-btn" onClick={() => onApply({ alignItems: value }, `Align items ${value}`)}>
+                  {shortFlexLabel(value)}
+                </button>
+              ))}
+            </IconButtonGroup>
+          </>
+        ) : null}
+        <IconButtonGroup label="Self">
+          <button type="button" className="cc-chip-btn" onClick={() => onApply({ marginLeft: 'auto', marginRight: 'auto' }, 'Center element')}>
+            center
+          </button>
+          <button type="button" className="cc-chip-btn" onClick={() => onApply({ width: '100%' }, 'Fill width')}>
+            fill
+          </button>
+        </IconButtonGroup>
+      </Section>
+    </div>
+  );
+}
+
+function TokenSuggestions({
+  suggestions,
+  loading,
+  onApply,
+}: {
+  suggestions: ProjectDesignTokenSuggestion[];
+  loading: boolean;
+  onApply: (suggestion: ProjectDesignTokenSuggestion) => void;
+}) {
+  return (
+    <div className="cc-inspector manual-edit-token-suggestions">
+      <Section title="TOKENS">
+        {loading ? <p className="cc-section-hint">Scanning project tokens...</p> : null}
+        {!loading && suggestions.length === 0 ? <p className="cc-section-hint">No similar token values found.</p> : null}
+        {suggestions.slice(0, 8).map((suggestion) => (
+          <button
+            key={`${suggestion.prop}-${suggestion.token}-${suggestion.sourceFile}-${suggestion.line}`}
+            type="button"
+            className="manual-edit-token-row"
+            onClick={() => onApply(suggestion)}
+            title={`${suggestion.sourceFile}:${suggestion.line}`}
+          >
+            <span>
+              <strong>{suggestion.token}</strong>
+              <em>{suggestion.prop} · {suggestion.matchReason}</em>
+            </span>
+            <code>{suggestion.value}</code>
+          </button>
+        ))}
+      </Section>
+    </div>
+  );
+}
+
+function ProjectSearch({
+  query,
+  results,
+  loading,
+  onQueryChange,
+  onRun,
+  onOpen,
+}: {
+  query: string;
+  results: ManualEditSearchResult[];
+  loading: boolean;
+  onQueryChange?: (query: string) => void;
+  onRun?: () => void;
+  onOpen?: (result: ManualEditSearchResult) => void;
+}) {
+  return (
+    <div className="cc-inspector manual-edit-project-search">
+      <Section title="SEARCH">
+        <div className="manual-edit-search-row">
+          <input
+            value={query}
+            placeholder="Search project"
+            onChange={(event) => onQueryChange?.(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') onRun?.();
+            }}
+          />
+          <button type="button" className="cc-action-btn compact" disabled={loading || !query.trim()} onClick={onRun}>
+            {loading ? '...' : 'Go'}
+          </button>
+        </div>
+        {results.slice(0, 8).map((result) => (
+          <button
+            key={`${result.file}-${result.line}-${result.snippet}`}
+            type="button"
+            className="manual-edit-search-result"
+            onClick={() => onOpen?.(result)}
+            title={`${result.file}:${result.line}`}
+          >
+            <strong>{result.file}:{result.line}</strong>
+            <span>{result.snippet}</span>
+          </button>
+        ))}
+      </Section>
+    </div>
+  );
+}
+
+function IconButtonGroup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="manual-edit-button-group">
+      <span>{label}</span>
+      <div>{children}</div>
+    </div>
+  );
+}
+
+function shortFlexLabel(value: string): string {
+  if (value === 'flex-start') return 'start';
+  if (value === 'flex-end') return 'end';
+  if (value === 'space-between') return 'between';
+  return value;
+}
+
+function suggestionPropToManualStyle(prop: ProjectDesignTokenSuggestion['prop']): keyof ManualEditStyles | null {
+  const map: Partial<Record<ProjectDesignTokenSuggestion['prop'], keyof ManualEditStyles>> = {
+    color: 'color',
+    backgroundColor: 'backgroundColor',
+    borderColor: 'borderColor',
+    fontFamily: 'fontFamily',
+    fontSize: 'fontSize',
+    fontWeight: 'fontWeight',
+    lineHeight: 'lineHeight',
+    letterSpacing: 'letterSpacing',
+    gap: 'gap',
+    padding: 'padding',
+    margin: 'margin',
+    borderRadius: 'borderRadius',
+    borderWidth: 'borderTopWidth',
+  };
+  return map[prop] ?? null;
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
@@ -462,6 +758,7 @@ function PageInspector({
   enabled: boolean;
   onStyleChange: (styles: Partial<ManualEditStyles>) => void;
 }) {
+  const t = useT();
   const [bg, setBg] = useState('');
   const [font, setFont] = useState('');
   const [size, setSize] = useState('');
@@ -489,7 +786,7 @@ function PageInspector({
         {enabled ? (
           <>
             <ColorRow label="Background" value={bg} onChange={(value) => update({ bg: value })} />
-            <FontRow value={font} onChange={(value) => update({ font: value })} />
+            <FontRow label={t('manualEdit.fontFamily')} value={font} onChange={(value) => update({ font: value })} />
             <UnitRow label="Base size" value={size} onChange={(value) => update({ size: value })} unit="px" autoUnit />
           </>
         ) : (
@@ -514,7 +811,7 @@ const FONT_OPTS = [
 const WEIGHT_OPTS = ['', '100', '200', '300', '400', '500', '600', '700', '800', '900'];
 const ALIGN_OPTS = ['', 'left', 'center', 'right', 'justify', 'start', 'end'];
 const DIRECTION_OPTS = ['', 'row', 'column', 'row-reverse', 'column-reverse'];
-const JUSTIFY_OPTS = ['', 'flex-start', 'center', 'flex-end', 'space-between', 'space-around'];
+const JUSTIFY_OPTS = ['', 'flex-start', 'center', 'flex-end', 'space-between', 'space-around', 'space-evenly'];
 const ITEMS_OPTS = ['', 'stretch', 'flex-start', 'center', 'flex-end', 'baseline'];
 const BORDER_STYLE_OPTS = ['', 'solid', 'dashed', 'dotted', 'double', 'none'];
 const EDITOR_SWATCH_COLORS = [
@@ -568,8 +865,8 @@ export function normalizeManualEditStyles(
       continue;
     }
     if (PX_STYLE_PROPS.has(rawKey)) {
-      const px = normalizePxValue(value);
-      if (!px) return { ok: false, error: `${styleLabel(rawKey)} must be a number or px value.` };
+      const px = normalizeLengthValue(value, rawKey);
+      if (!px) return { ok: false, error: `${styleLabel(rawKey)} must be a number, px, %, or supported auto value.` };
       normalized[rawKey] = px;
       continue;
     }
@@ -602,9 +899,11 @@ export function normalizeManualEditStyles(
   return { ok: true, styles: normalized };
 }
 
-function normalizePxValue(value: string): string | null {
+function normalizeLengthValue(value: string, key: keyof ManualEditStyles): string | null {
   if (/^-?\d+(\.\d+)?$/.test(value)) return `${value}px`;
   if (/^-?\d+(\.\d+)?px$/i.test(value)) return value.toLowerCase();
+  if (/^-?\d+(\.\d+)?%$/i.test(value) && ['width', 'height', 'minHeight'].includes(key)) return value.toLowerCase();
+  if (value.toLowerCase() === 'auto' && ['marginLeft', 'marginRight', 'marginTop', 'marginBottom', 'margin'].includes(key)) return 'auto';
   return null;
 }
 
@@ -634,93 +933,124 @@ function styleLabel(key: keyof ManualEditStyles): string {
   return key.replace(/[A-Z]/g, (match) => ` ${match.toLowerCase()}`);
 }
 
-function StyleInspector({
-  targetKind, styles, layoutEnabled, onChange,
-}: {
-  targetKind: ManualEditTarget['kind'];
+function StyleInspector({ target, styles, onChange, onApply }: {
+  target: ManualEditTarget;
   styles: ManualEditStyles;
-  layoutEnabled: boolean;
   onChange: (key: keyof ManualEditStyles, value: string) => void;
+  onApply: (styles: Partial<ManualEditStyles>) => void;
 }) {
+  const t = useT();
   const u = (key: keyof ManualEditStyles, value: string) => onChange(key, value);
-  const showTypography = targetKind === 'text' || targetKind === 'link' || targetKind === 'token';
-  const showSize = targetKind !== 'text' && targetKind !== 'link' && targetKind !== 'token';
-  const showLayout = layoutEnabled;
-  const showBox = targetKind === 'container' || targetKind === 'image' || targetKind === 'token';
+  const summary = target.computedSummary;
+  const layoutDisabled = !target.isLayoutContainer;
+  const widthPlaceholder = styles.width ? '' : `${Math.round(target.rect.width)}px`;
+  const heightPlaceholder = styles.height ? '' : `${Math.round(target.rect.height)}px`;
 
   return (
     <div className="cc-inspector">
-      {showTypography ? (
-        <Section title="TYPOGRAPHY">
-          <FontRow value={styles.fontFamily} onChange={(v) => u('fontFamily', v)} />
-          <PairRow>
-            <UnitRow label="Size" value={styles.fontSize} onChange={(v) => u('fontSize', v)} unit="px" autoUnit />
-            <DropdownRow label="Weight" value={styles.fontWeight} onChange={(v) => u('fontWeight', v)} options={WEIGHT_OPTS} />
-          </PairRow>
-          <PairRow>
-            <ColorRow label="Color" value={styles.color} onChange={(v) => u('color', v)} />
-            <DropdownRow label="Align" value={styles.textAlign} onChange={(v) => u('textAlign', v)} options={ALIGN_OPTS} />
-          </PairRow>
-          <PairRow>
-            <UnitRow label="Line" value={styles.lineHeight} onChange={(v) => u('lineHeight', v)} unit="" />
-            <UnitRow label="Tracking" value={styles.letterSpacing} onChange={(v) => u('letterSpacing', v)} unit="px" autoUnit />
-          </PairRow>
-        </Section>
-      ) : null}
-
-      {showSize ? (
-        <Section title="SIZE">
-          <PairRow>
-            <UnitRow label="Width" value={styles.width} onChange={(v) => u('width', v)} unit="px" autoUnit />
-            <UnitRow label="Height" value={styles.height} onChange={(v) => u('height', v)} unit="px" autoUnit />
-          </PairRow>
-        </Section>
-      ) : null}
-
-      {showLayout ? (
-        <Section title="LAYOUT">
-          <PairRow>
-            <UnitRow label="Gap" value={styles.gap} onChange={(v) => u('gap', v)} unit="px" autoUnit />
-            <DropdownRow label="Direction" value={styles.flexDirection} onChange={(v) => u('flexDirection', v)} options={DIRECTION_OPTS} />
-          </PairRow>
-          <PairRow>
-            <DropdownRow label="Justify" value={styles.justifyContent} onChange={(v) => u('justifyContent', v)} options={JUSTIFY_OPTS} />
-            <DropdownRow label="Align" value={styles.alignItems} onChange={(v) => u('alignItems', v)} options={ITEMS_OPTS} />
-          </PairRow>
-        </Section>
-      ) : null}
-
-      {showBox ? (
-      <Section title="BOX">
+      <Section title={t('manualEdit.parameters')}>
+        <ColorRow label={t('manualEdit.textColor')} value={styles.color} placeholder={summary?.color} onChange={(v) => u('color', v)} />
+        <ColorRow label={t('manualEdit.background')} value={styles.backgroundColor} placeholder={summary?.backgroundColor} onChange={(v) => u('backgroundColor', v)} />
+        <UnitRow label={t('manualEdit.opacity')} value={styles.opacity} placeholder="1" onChange={(v) => u('opacity', v)} unit="" />
+        <FontRow label={t('manualEdit.fontFamily')} value={styles.fontFamily} placeholder={summary?.fontFamily} onChange={(v) => u('fontFamily', v)} />
         <PairRow>
-          <ColorRow label="Fill" value={styles.backgroundColor} onChange={(v) => u('backgroundColor', v)} />
-          <UnitRow label="Opacity" value={styles.opacity} onChange={(v) => u('opacity', v)} unit="" />
+          <UnitRow label={t('manualEdit.fontSize')} value={styles.fontSize} placeholder={summary?.fontSize} onChange={(v) => u('fontSize', v)} unit="px" autoUnit />
+          <DropdownRow label={t('manualEdit.weight')} value={styles.fontWeight} onChange={(v) => u('fontWeight', v)} options={WEIGHT_OPTS} placeholder={summary?.fontWeight} />
+        </PairRow>
+        <UnitRow label={t('manualEdit.radius')} value={styles.borderRadius} placeholder={summary?.borderRadius} onChange={(v) => u('borderRadius', v)} unit="px" autoUnit />
+        <PairRow>
+          <ColorRow label={t('manualEdit.borderColor')} value={styles.borderColor} placeholder={summary?.borderColor} onChange={(v) => u('borderColor', v)} />
+          <UnitRow label={t('manualEdit.borderWidth')} value={styles.borderTopWidth} onChange={(v) => onApply({
+            borderTopWidth: v,
+            borderRightWidth: v,
+            borderBottomWidth: v,
+            borderLeftWidth: v,
+          })} unit="px" autoUnit />
+        </PairRow>
+        <PairRow>
+          <UnitRow label={t('manualEdit.width')} value={styles.width} placeholder={widthPlaceholder} onChange={(v) => u('width', v)} unit="px" autoUnit />
+          <UnitRow label={t('manualEdit.height')} value={styles.height} placeholder={heightPlaceholder} onChange={(v) => u('height', v)} unit="px" autoUnit />
         </PairRow>
 
-        <QuadRow label="Padding" values={{
+        <QuadRow label={t('manualEdit.padding')} axes={{
+          t: t('manualEdit.sideTop'), r: t('manualEdit.sideRight'), b: t('manualEdit.sideBottom'), l: t('manualEdit.sideLeft'),
+        }} values={{
           t: styles.paddingTop, r: styles.paddingRight, b: styles.paddingBottom, l: styles.paddingLeft,
         }} onChange={(side, value) => u(sideToProp('padding', side), value)} />
 
-        <QuadRow label="Margin" values={{
+        <QuadRow label={t('manualEdit.margin')} axes={{
+          t: t('manualEdit.sideTop'), r: t('manualEdit.sideRight'), b: t('manualEdit.sideBottom'), l: t('manualEdit.sideLeft'),
+        }} values={{
           t: styles.marginTop, r: styles.marginRight, b: styles.marginBottom, l: styles.marginLeft,
         }} onChange={(side, value) => u(sideToProp('margin', side), value)} />
 
-        <QuadRow label="Border" values={{
-          t: styles.borderTopWidth, r: styles.borderRightWidth, b: styles.borderBottomWidth, l: styles.borderLeftWidth,
-        }} onChange={(side, value) => u(`border${sideUpper(side)}Width` as keyof ManualEditStyles, value)} />
-
         <PairRow>
-          <DropdownRow label="Style" value={styles.borderStyle} onChange={(v) => u('borderStyle', v)} options={BORDER_STYLE_OPTS} />
-          <ColorRow label="Border" value={styles.borderColor} onChange={(v) => u('borderColor', v)} compact />
+          <DropdownRow label={t('manualEdit.layoutDirection')} value={styles.flexDirection} onChange={(v) => u('flexDirection', v)} options={layoutDirectionOptions(t)} disabled={layoutDisabled} />
+          <DropdownRow label={t('manualEdit.distribution')} value={styles.justifyContent} onChange={(v) => u('justifyContent', v)} options={justifyOptions(t)} disabled={layoutDisabled} />
         </PairRow>
-        <UnitRow label="Radius" value={styles.borderRadius} onChange={(v) => u('borderRadius', v)} unit="px" autoUnit />
+        <PairRow>
+          <UnitRow label={t('manualEdit.gap')} value={styles.gap} onChange={(v) => u('gap', v)} unit="px" autoUnit disabled={layoutDisabled} />
+          {layoutDisabled ? (
+            // Non-flex/grid targets still get a live alignment dropdown — it
+            // drives text-align (left / center / right) instead of the flex
+            // cross-axis, so the control is never a dead grey box.
+            <DropdownRow label={t('manualEdit.align')} value={styles.textAlign} onChange={(v) => u('textAlign', v)} options={textAlignOptions(t)} />
+          ) : (
+            <DropdownRow label={t('manualEdit.align')} value={styles.alignItems} onChange={(v) => u('alignItems', v)} options={itemAlignOptions(t)} />
+          )}
+        </PairRow>
+        {layoutDisabled ? <p className="cc-section-hint">{t('manualEdit.layoutUnavailable')}</p> : null}
       </Section>
-      ) : null}
     </div>
   );
 }
 
-function Section({ title, children, inactive }: { title: string; children: React.ReactNode; inactive?: boolean }) {
+type DropdownOption = string | { value: string; label: string };
+type ManualEditTranslator = ReturnType<typeof useT>;
+
+function layoutDirectionOptions(t: ManualEditTranslator): DropdownOption[] {
+  return [
+    { value: '', label: '–' },
+    { value: 'row', label: t('manualEdit.directionRow') },
+    { value: 'row-reverse', label: t('manualEdit.directionRowReverse') },
+    { value: 'column', label: t('manualEdit.directionColumn') },
+    { value: 'column-reverse', label: t('manualEdit.directionColumnReverse') },
+  ];
+}
+
+function justifyOptions(t: ManualEditTranslator): DropdownOption[] {
+  return [
+    { value: '', label: '–' },
+    { value: 'flex-start', label: t('manualEdit.justifyStart') },
+    { value: 'center', label: t('manualEdit.justifyCenter') },
+    { value: 'flex-end', label: t('manualEdit.justifyEnd') },
+    { value: 'space-between', label: t('manualEdit.justifyBetween') },
+    { value: 'space-around', label: t('manualEdit.justifyAround') },
+    { value: 'space-evenly', label: t('manualEdit.justifyEvenly') },
+  ];
+}
+
+function textAlignOptions(t: ManualEditTranslator): DropdownOption[] {
+  return [
+    { value: '', label: '–' },
+    { value: 'left', label: t('manualEdit.textAlignLeft') },
+    { value: 'center', label: t('manualEdit.textAlignCenter') },
+    { value: 'right', label: t('manualEdit.textAlignRight') },
+  ];
+}
+
+function itemAlignOptions(t: ManualEditTranslator): DropdownOption[] {
+  return [
+    { value: '', label: '–' },
+    { value: 'flex-start', label: t('manualEdit.alignStart') },
+    { value: 'center', label: t('manualEdit.alignCenter') },
+    { value: 'flex-end', label: t('manualEdit.alignEnd') },
+    { value: 'stretch', label: t('manualEdit.alignStretch') },
+    { value: 'baseline', label: t('manualEdit.alignBaseline') },
+  ];
+}
+
+function Section({ title, children, inactive }: { title: string; children: ReactNode; inactive?: boolean }) {
   return (
     <section className={`cc-section${inactive ? ' cc-section-inactive' : ''}`}>
       <header className="cc-section-head">{title}</header>
@@ -729,13 +1059,13 @@ function Section({ title, children, inactive }: { title: string; children: React
   );
 }
 
-function PairRow({ children }: { children: React.ReactNode }) {
+function PairRow({ children }: { children: ReactNode }) {
   return <div className="cc-pair">{children}</div>;
 }
 
-function UnitRow({ label, value, onChange, unit, autoUnit, disabled }: {
+function UnitRow({ label, value, onChange, unit, autoUnit, disabled, placeholder }: {
   label: string; value: string; onChange: (v: string) => void;
-  unit: string; autoUnit?: boolean; disabled?: boolean;
+  unit: string; autoUnit?: boolean; disabled?: boolean; placeholder?: string;
 }) {
   const display = unit === 'px' ? stripPxUnit(value) : value;
   const step = unit === 'px' ? 1 : 0.1;
@@ -760,7 +1090,7 @@ function UnitRow({ label, value, onChange, unit, autoUnit, disabled }: {
       <span className="cc-label">{label}</span>
       <span className="cc-value">
         <button type="button" className="cc-step" disabled={!canStep} aria-label={`${label} decrease`} onClick={() => stepBy(-1)}>−</button>
-        <input value={display} placeholder="" disabled={disabled} onChange={(e) => onChange(valueFromDisplay(e.currentTarget.value))} onBlur={(e) => handle(e.currentTarget.value)} />
+        <input value={display} placeholder={placeholder ? stripPxUnit(placeholder) : ''} disabled={disabled} onChange={(e) => onChange(valueFromDisplay(e.currentTarget.value))} onBlur={(e) => handle(e.currentTarget.value)} />
         <button type="button" className="cc-step" disabled={!canStep} aria-label={`${label} increase`} onClick={() => stepBy(1)}>+</button>
         {unit ? <em className="cc-unit">{unit}</em> : null}
       </span>
@@ -770,15 +1100,19 @@ function UnitRow({ label, value, onChange, unit, autoUnit, disabled }: {
 
 function DropdownRow({ label, value, onChange, options, placeholder, disabled }: {
   label: string; value: string; onChange: (v: string) => void;
-  options: ReadonlyArray<string>; placeholder?: string; disabled?: boolean;
+  options: ReadonlyArray<DropdownOption>; placeholder?: string; disabled?: boolean;
 }) {
+  const optionValues = options.map(dropdownOptionValue);
   return (
     <label className="cc-row">
       <span className="cc-label">{label}</span>
       <span className="cc-value cc-select">
         <select value={value} disabled={disabled} onChange={(e) => onChange(e.currentTarget.value)}>
-          {!options.includes(value) && value ? <option value={value}>{value}</option> : null}
-          {options.map((opt) => <option key={opt || '__'} value={opt}>{opt || (placeholder ?? '–')}</option>)}
+          {!optionValues.includes(value) && value ? <option value={value}>{value}</option> : null}
+          {options.map((opt) => {
+            const optionValue = dropdownOptionValue(opt);
+            return <option key={optionValue || '__'} value={optionValue}>{dropdownOptionLabel(opt, placeholder)}</option>;
+          })}
         </select>
         <em className="cc-chevron">▾</em>
       </span>
@@ -786,17 +1120,29 @@ function DropdownRow({ label, value, onChange, options, placeholder, disabled }:
   );
 }
 
-function FontRow({ value, onChange }: {
+function dropdownOptionValue(option: DropdownOption): string {
+  return typeof option === 'string' ? option : option.value;
+}
+
+function dropdownOptionLabel(option: DropdownOption, placeholder?: string): string {
+  if (typeof option === 'string') return option || (placeholder ?? '–');
+  return option.label;
+}
+
+function FontRow({ label, value, placeholder, onChange }: {
+  label: string;
   value: string;
+  placeholder?: string;
   onChange: (v: string) => void;
 }) {
   const normalizedValue = normalizeFontFamilyForSelect(value);
   const customValue = normalizedValue === value ? value : '';
   return (
     <label className="cc-row">
-      <span className="cc-label">Font</span>
+      <span className="cc-label">{label}</span>
       <span className="cc-value cc-select">
         <select value={normalizedValue} onChange={(event) => onChange(event.currentTarget.value)}>
+          {!normalizedValue && placeholder ? <option value="">{fontFamilyLabel(placeholder)}</option> : null}
           {customValue && !FONT_OPTS.some((option) => option.value === customValue) ? (
             <option value={customValue}>{fontFamilyLabel(customValue)}</option>
           ) : null}
@@ -836,8 +1182,8 @@ function parseFontFamilies(value: string): string[] {
     .filter(Boolean);
 }
 
-function ColorRow({ label, value, onChange, compact }: {
-  label: string; value: string; onChange: (v: string) => void; compact?: boolean;
+function ColorRow({ label, value, placeholder, onChange, compact }: {
+  label: string; value: string; placeholder?: string; onChange: (v: string) => void; compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLSpanElement | null>(null);
@@ -857,7 +1203,7 @@ function ColorRow({ label, value, onChange, compact }: {
       <span className={`cc-value cc-color ${compact ? 'cc-color-compact' : ''}`} ref={ref}>
         <button type="button" className="cc-swatch" style={{ background: value || 'transparent' }}
           onClick={() => setOpen((v) => !v)} aria-label={`Pick ${label}`} />
-        <input value={value} placeholder="#000000"
+        <input value={value} placeholder={placeholder || '#000000'}
           onChange={(e) => onChange(e.currentTarget.value)} onFocus={() => setOpen(true)} />
         {open ? (
           <div className="cc-color-popover">
@@ -876,8 +1222,9 @@ function ColorRow({ label, value, onChange, compact }: {
   );
 }
 
-function QuadRow({ label, values, onChange }: {
+function QuadRow({ label, axes, values, onChange }: {
   label: string; values: { t: string; r: string; b: string; l: string };
+  axes?: { t: string; r: string; b: string; l: string };
   onChange: (side: 't' | 'r' | 'b' | 'l', value: string) => void;
 }) {
   const [open, setOpen] = useState(true);
@@ -893,10 +1240,10 @@ function QuadRow({ label, values, onChange }: {
       </button>
       {open ? (
         <div className="cc-quad-grid">
-          <QuadCell axis="T" value={values.t} onChange={(v) => onChange('t', v)} />
-          <QuadCell axis="R" value={values.r} onChange={(v) => onChange('r', v)} />
-          <QuadCell axis="B" value={values.b} onChange={(v) => onChange('b', v)} />
-          <QuadCell axis="L" value={values.l} onChange={(v) => onChange('l', v)} />
+          <QuadCell axis={axes?.t ?? 'T'} value={values.t} onChange={(v) => onChange('t', v)} />
+          <QuadCell axis={axes?.r ?? 'R'} value={values.r} onChange={(v) => onChange('r', v)} />
+          <QuadCell axis={axes?.b ?? 'B'} value={values.b} onChange={(v) => onChange('b', v)} />
+          <QuadCell axis={axes?.l ?? 'L'} value={values.l} onChange={(v) => onChange('l', v)} />
         </div>
       ) : null}
     </div>

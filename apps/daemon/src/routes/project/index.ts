@@ -4,6 +4,8 @@ import type { Express, Response } from 'express';
 import {
   defaultScenarioPluginIdForProjectMetadata,
   type ChatSessionMode,
+  type ProjectDesignTokenSuggestionQuery,
+  type ProjectDesignTokenSuggestionProp,
   type PluginManifest,
 } from '@open-design/contracts';
 import { readMeta as readBrandMeta } from '../../brands/store.js';
@@ -32,6 +34,7 @@ import {
 } from '../../project-locations.js';
 import { auditDesignSystemPackage } from '../../tools-connectors-cli.js';
 import { parseOrchestratorWorkspace } from '../../workspace-contract.js';
+import { buildProjectDesignTokenSuggestions } from '../../project-design-token-suggestions.js';
 import { registerProjectConversationRoutes } from './conversations.js';
 
 export interface RegisterProjectRoutesDeps extends RouteDeps<'db' | 'design' | 'http' | 'paths' | 'projectStore' | 'projectFiles' | 'conversations' | 'templates' | 'status' | 'events' | 'ids' | 'telemetry' | 'appConfig' | 'agents' | 'validation'> {}
@@ -718,6 +721,102 @@ const URL_PREVIEW_SNAPSHOT_BRIDGE = `<script data-od-url-snapshot-bridge>
     if (!data || data.type !== 'od:snapshot' || !data.id) return;
     waitForImages().then(function(){ renderSnapshot(String(data.id)); });
   });
+  // --- Module capture (double-Command -> screenshot of the pointed module) ---
+  // Keep in sync with the srcDoc snapshot bridge in
+  // apps/web/src/runtime/srcdoc.ts (injectSnapshotBridge). The host asks
+  // od:module-rect for the pointed module's identity + geometry, captures a
+  // normal od:snapshot (viewport here), and crops on its side.
+  var MODULE_SECTIONAL = { SECTION: 1, ARTICLE: 1, HEADER: 1, FOOTER: 1, NAV: 1, ASIDE: 1 };
+  var modulePointer = null;
+  document.addEventListener('mousemove', function(ev){
+    modulePointer = { x: ev.clientX, y: ev.clientY };
+  }, { passive: true, capture: true });
+  document.documentElement.addEventListener('mouseleave', function(){ modulePointer = null; });
+  function moduleAnnotated(el){
+    return !!(el && el.nodeType === 1 && el.hasAttribute && (el.hasAttribute('data-od-id') || el.hasAttribute('data-screen-label')));
+  }
+  function moduleVisible(el){
+    try {
+      var cs = window.getComputedStyle(el);
+      if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+    } catch (_) {}
+    var rect = el.getBoundingClientRect();
+    return rect.width > 1 && rect.height > 1;
+  }
+  function moduleFromElement(start){
+    var annotated = [];
+    var node = start;
+    while (node && node !== document.documentElement && node !== document.body) {
+      if (moduleAnnotated(node) && moduleVisible(node)) {
+        if (MODULE_SECTIONAL[node.tagName]) return node;
+        annotated.push(node);
+      }
+      node = node.parentElement;
+    }
+    return annotated.length ? annotated[annotated.length - 1] : null;
+  }
+  function resolveModuleTarget(){
+    var w = Math.max(1, window.innerWidth || 0);
+    var h = Math.max(1, window.innerHeight || 0);
+    var points = [];
+    if (modulePointer) points.push(modulePointer);
+    points.push({ x: w / 2, y: h / 2 }, { x: w / 2, y: h / 3 }, { x: w / 2, y: (h * 2) / 3 });
+    for (var i = 0; i < points.length; i++) {
+      var hit = document.elementFromPoint(points[i].x, points[i].y);
+      var target = hit ? moduleFromElement(hit) : null;
+      if (target) return target;
+    }
+    return null;
+  }
+  window.addEventListener('message', function(ev){
+    var data = ev && ev.data;
+    if (!data || data.type !== 'od:module-rect' || !data.id) return;
+    var doc = document.documentElement;
+    var payload = {
+      type: 'od:module-rect:result',
+      id: String(data.id),
+      dpr: window.devicePixelRatio || 1,
+      viewport: {
+        w: Math.max(1, window.innerWidth || doc.clientWidth || 1),
+        h: Math.max(1, window.innerHeight || doc.clientHeight || 1)
+      },
+      doc: {
+        w: Math.max(doc.scrollWidth || 0, document.body ? document.body.scrollWidth : 0, window.innerWidth || 0),
+        h: Math.max(doc.scrollHeight || 0, document.body ? document.body.scrollHeight : 0, window.innerHeight || 0)
+      },
+      scroll: scrollOffset()
+    };
+    var el = resolveModuleTarget();
+    if (el) {
+      var rect = el.getBoundingClientRect();
+      var tag = el.tagName ? el.tagName.toLowerCase() : 'element';
+      var cls = typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\\s+/).slice(0, 2).join('.') : '';
+      payload.elementId = el.getAttribute('data-od-id') || el.getAttribute('data-screen-label') || '';
+      payload.label = tag + cls;
+      payload.rect = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    }
+    window.parent.postMessage(payload, '*');
+  });
+  // Double-Command detection must also live inside the frame: once the user
+  // clicks into the preview the iframe owns keyboard focus and the host's
+  // window-level listener never sees the Meta keys.
+  var moduleMeta = { left: false, right: false, handled: false };
+  function resetModuleMeta(){ moduleMeta.left = false; moduleMeta.right = false; moduleMeta.handled = false; }
+  window.addEventListener('keydown', function(ev){
+    if (ev.code !== 'MetaLeft' && ev.code !== 'MetaRight') return;
+    if (ev.code === 'MetaLeft') moduleMeta.left = true;
+    if (ev.code === 'MetaRight') moduleMeta.right = true;
+    if (!moduleMeta.left || !moduleMeta.right || moduleMeta.handled) return;
+    moduleMeta.handled = true;
+    ev.preventDefault();
+    try { window.parent.postMessage({ type: 'od:module-capture-hotkey' }, '*'); } catch (_) {}
+  }, true);
+  window.addEventListener('keyup', function(ev){
+    if (ev.code === 'MetaLeft') moduleMeta.left = false;
+    if (ev.code === 'MetaRight') moduleMeta.right = false;
+    if (!moduleMeta.left || !moduleMeta.right) moduleMeta.handled = false;
+  }, true);
+  window.addEventListener('blur', resetModuleMeta);
 })();
 </script>`;
 
@@ -1915,7 +2014,7 @@ export interface RegisterProjectFileRoutesDeps extends RouteDeps<'db' | 'http' |
 export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFileRoutesDeps) {
   const { db } = ctx;
   const { sendApiError, sendMulterError } = ctx.http;
-  const { PROJECTS_DIR } = ctx.paths;
+  const { DESIGN_SYSTEMS_DIR, PROJECTS_DIR, USER_DESIGN_SYSTEMS_DIR } = ctx.paths;
   const { upload } = ctx.uploads;
   const { fs } = ctx.node;
   const { getProject } = ctx.projectStore;
@@ -2100,6 +2199,63 @@ export function registerProjectFileRoutes(app: Express, ctx: RegisterProjectFile
       res.json({ query, matches });
     } catch (err: any) {
       sendApiError(res, 400, 'BAD_REQUEST', String(err));
+    }
+  });
+
+  app.get('/api/projects/:id/design-token-suggestions', async (req, res) => {
+    try {
+      const project = getProject(db, req.params.id);
+      if (!project) {
+        sendApiError(res, 404, 'PROJECT_NOT_FOUND', 'project not found');
+        return;
+      }
+      const allowedProps = new Set([
+        'color',
+        'backgroundColor',
+        'borderColor',
+        'fontFamily',
+        'fontSize',
+        'fontWeight',
+        'lineHeight',
+        'letterSpacing',
+        'width',
+        'height',
+        'gap',
+        'padding',
+        'margin',
+        'borderRadius',
+        'borderWidth',
+      ]);
+      const props = String(req.query.props ?? '')
+        .split(',')
+        .map((item) => item.trim())
+        .filter((item): item is ProjectDesignTokenSuggestionProp => allowedProps.has(item));
+      const values: Partial<Record<ProjectDesignTokenSuggestionProp, string>> = {};
+      for (const [key, raw] of Object.entries(req.query)) {
+        if (!key.startsWith('value_')) continue;
+        const prop = key.slice('value_'.length);
+        if (!allowedProps.has(prop)) continue;
+        const value = Array.isArray(raw) ? raw[0] : raw;
+        if (typeof value === 'string' && value.trim()) values[prop as ProjectDesignTokenSuggestionProp] = value.trim();
+      }
+      const query: ProjectDesignTokenSuggestionQuery = { values };
+      if (typeof req.query.file === 'string') query.file = req.query.file;
+      if (typeof req.query.targetId === 'string') query.targetId = req.query.targetId;
+      if (props.length > 0) query.props = props;
+      const body = await buildProjectDesignTokenSuggestions({
+        projectId: req.params.id,
+        project,
+        projectMetadata: project.metadata,
+        projectsRoot: PROJECTS_DIR,
+        designSystemsRoot: DESIGN_SYSTEMS_DIR,
+        userDesignSystemsRoot: USER_DESIGN_SYSTEMS_DIR,
+        listFiles,
+        resolveProjectDir,
+        query,
+      });
+      res.json(body);
+    } catch (err: any) {
+      sendApiError(res, 400, 'BAD_REQUEST', String(err?.message || err));
     }
   });
 

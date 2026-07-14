@@ -39,7 +39,7 @@
   letter-spacing: -0.01em;
 }
 .plugins-home__count {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -63,7 +63,6 @@
 }
 .plugins-home__search:focus-within {
   border-color: var(--border-strong);
-  box-shadow: 0 0 0 3px var(--accent-tint);
 }
 .plugins-home__search-icon {
   position: absolute;
@@ -182,7 +181,7 @@
   color: var(--text);
 }
 .plugins-home__chip-count {
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
@@ -207,7 +206,7 @@
   border: 0;
   padding: 0;
   margin: 0;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-muted);
   cursor: pointer;
   text-decoration: underline;
@@ -273,7 +272,7 @@
 }
 .plugins-home__facet-label {
   padding-top: 7px;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -313,7 +312,7 @@
   opacity: 0.8;
 }
 .plugins-home__pill-count {
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
@@ -480,7 +479,7 @@
   margin: 0;
   text-align: left;
   cursor: pointer;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-strong);
   white-space: nowrap;
@@ -517,14 +516,14 @@
   width: 1440px;
   height: 2200px;
   transform: scale(0.32);
-  transition: top 6s linear;
+  transition: transform 320ms cubic-bezier(0.23, 1, 0.32, 1);
 }
-/* Hover auto-pans the scaled preview down to reveal the rest of the
-   page. The iframe stays inert (pointer-events: none, inherited) so a
-   click anywhere on the tile — preview included — opens the detail
-   modal rather than being swallowed by the embedded page. */
+/* Hover zooms the scaled preview in place (0.32 × 1.04), matching the home
+   recent-projects cover zoom — replaces the old 6s scroll-pan reveal. The
+   iframe stays inert (pointer-events: none, inherited) so a click anywhere on
+   the tile opens the detail modal rather than being swallowed by the page. */
 .plugins-home__card--gallery:hover .plugins-home__html-iframe {
-  top: -404px;
+  transform: scale(0.3328);
 }
 /* Decks ship a fixed 16:9 stage that scales itself to its viewport. The tall
    scroll-preview viewport above would letterbox that stage, leaving a dark
@@ -570,6 +569,13 @@
   height: 100%;
   object-fit: cover;
   display: block;
+  transition: transform 320ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+/* Cover zoom on hover — same effect as the home recent-projects cards; the
+   preview box clips (overflow hidden), the media scales in place. */
+.plugins-home__card:hover .plugins-home__media-img,
+.plugins-home__card:hover .plugins-home__media-video {
+  transform: scale(1.04);
 }
 .plugins-home__media-video {
   position: absolute;
@@ -600,8 +606,8 @@
 .plugins-home__media-fallback-glyph {
   color: color-mix(in srgb, var(--accent) 74%, var(--text));
   font-family: var(--serif);
-  font-size: 56px;
-  font-weight: 650;
+  font-size: 52px;
+  font-weight: 600;
   line-height: 1;
   opacity: 0.86;
 }
@@ -660,7 +666,7 @@
   padding: 6px 10px;
   border-top: 1px solid var(--border-soft);
   background: var(--bg-subtle);
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 .plugins-home__html-dot {
@@ -697,7 +703,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 96px;
+  font-size: 64px;
   line-height: 1;
   letter-spacing: -0.04em;
   text-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
@@ -708,8 +714,8 @@
   background: rgba(0, 0, 0, 0.32);
   color: rgba(255, 255, 255, 0.78);
   border-top: 1px solid rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(var(--material-thin-blur));
+  backdrop-filter: blur(var(--material-thin-blur));
 }
 
 /* Design-system showcase tile */
@@ -777,7 +783,7 @@
   position: relative;
   display: flex;
   gap: 10px;
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.86);
   z-index: 1;
@@ -806,7 +812,7 @@
 }
 .plugins-home__text-glyph {
   font-family: var(--serif);
-  font-size: 56px;
+  font-size: 52px;
   font-weight: 600;
   color: var(--accent);
   letter-spacing: -0.02em;
@@ -854,8 +860,8 @@
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.18);
   color: white;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(var(--material-thin-blur));
+  backdrop-filter: blur(var(--material-thin-blur));
 }
 .plugins-home__card-overlay-body {
   display: flex;
@@ -888,13 +894,13 @@
   gap: 4px;
 }
 .plugins-home__overlay-tag {
-  font-size: 10.5px;
+  font-size: 12px;
   padding: 2px 7px;
   border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.18);
   color: white;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(var(--material-thin-blur));
+  backdrop-filter: blur(var(--material-thin-blur));
 }
 .plugins-home__overlay-actions {
   display: flex;
@@ -988,8 +994,8 @@
   border: 1px solid var(--border);
   background: var(--bg-subtle);
   color: var(--text-faint);
-  font-size: 10px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
   line-height: 1;
   letter-spacing: 0.01em;
   white-space: nowrap;
@@ -1017,8 +1023,8 @@
   border-radius: var(--radius-sm);
   background: var(--bg-panel);
   color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 560;
+  font-size: 12px;
+  font-weight: 500;
   font-family: inherit;
   cursor: pointer;
   white-space: nowrap;
@@ -1048,7 +1054,7 @@
   gap: 5px;
   padding: 6px 12px;
   border-radius: var(--radius-sm);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: background-color 120ms var(--ease-out), border-color 120ms var(--ease-out),
@@ -1136,8 +1142,8 @@ button.plugins-home__use-menu-item:focus-visible {
   background: rgba(255, 255, 255, 0.14);
   color: white;
   border: 1px solid rgba(255, 255, 255, 0.32);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(var(--material-thin-blur));
+  backdrop-filter: blur(var(--material-thin-blur));
 }
 .plugins-home__action--secondary:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.24);

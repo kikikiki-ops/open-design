@@ -64,7 +64,7 @@
   margin-bottom: 28px;
   color: var(--text-muted);
   font-size: 13px;
-  font-weight: 680;
+  font-weight: 600;
 }
 
 .workspace-invite-brand > span:first-child {
@@ -79,7 +79,7 @@
   width: 30px;
   height: 30px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-large, 8px);
   background: var(--bg-panel);
 }
 
@@ -90,8 +90,7 @@
   height: 18px;
   background-color: var(--text-strong);
   -webkit-mask: url(/brand-icon.svg) center / contain no-repeat;
-  mask: url(/brand-icon.svg) center / contain no-repeat;
-}
+  mask: url(/brand-icon.svg) center / contain no-repeat;}
 
 .workspace-invite-trustedPill {
   display: inline-flex;
@@ -104,7 +103,7 @@
   background: var(--bg-panel);
   color: var(--text-muted);
   font-size: 12px;
-  font-weight: 680;
+  font-weight: 600;
 }
 
 .workspace-invite-card {
@@ -187,13 +186,13 @@
   margin-bottom: 5px;
   color: var(--invite-muted);
   font-size: 12px;
-  font-weight: 680;
+  font-weight: 600;
 }
 
 .workspace-invite-workspaceCopy strong {
   display: block;
   color: var(--invite-ink);
-  font-size: 22px;
+  font-size: 20px;
   line-height: 1.2;
 }
 
@@ -214,7 +213,7 @@
   display: inline-block;
   margin-bottom: 9px;
   color: var(--text-soft);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.03em;
 }
@@ -223,7 +222,7 @@
 .workspace-invite-result h1 {
   margin: 0;
   color: var(--invite-ink);
-  font-size: 34px;
+  font-size: 36px;
   font-weight: 700;
   line-height: 1.14;
 }
@@ -269,7 +268,7 @@
   width: 32px;
   height: 32px;
   flex: 0 0 auto;
-  border-radius: 10px;
+  border-radius: var(--radius-large, 8px);
   background: #e8ecdf;
   color: var(--invite-moss);
 }
@@ -283,7 +282,7 @@
   display: block;
   margin-bottom: 3px;
   color: #898c85;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -302,7 +301,7 @@
   display: block;
   margin-top: 3px;
   color: var(--invite-muted);
-  font-size: 10px;
+  font-size: 12px;
   font-style: normal;
   line-height: 1.35;
 }
@@ -378,7 +377,7 @@
   gap: 12px;
   margin: 20px 40px;
   color: #989b94;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .workspace-invite-divider::before,
@@ -440,7 +439,7 @@
 .workspace-invite-pendingHint {
   margin: -10px 40px 34px;
   color: #898c85;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
   text-align: left;
 }
@@ -559,7 +558,7 @@
 .workspace-invite-downloadPrompt p {
   margin: 4px 0 12px;
   color: var(--invite-muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -577,7 +576,7 @@
   background: transparent;
   color: var(--invite-moss);
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
 }
@@ -632,7 +631,7 @@
   gap: 6px;
   margin: 16px 0 0;
   color: rgba(48, 52, 45, 0.58);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 @keyframes arrive {
@@ -686,7 +685,7 @@
   }
 
   .workspace-invite-workspaceCopy strong {
-    font-size: 19px;
+    font-size: 20px;
   }
 
   .workspace-invite-heading,
@@ -721,7 +720,7 @@
 
   .workspace-invite-heading h1,
   .workspace-invite-result h1 {
-    font-size: 29px;
+    font-size: 28px;
   }
 }
 

@@ -418,7 +418,7 @@ export function DesignSystemAssetDropzone({
             <div className={styles.lightboxFontScale}>
               <span style={{ fontSize: 13 }}>{FONT_PANGRAM}</span>
               <span style={{ fontSize: 18 }}>{FONT_PANGRAM}</span>
-              <span style={{ fontSize: 26 }}>{FONT_PANGRAM}</span>
+              <span style={{ fontSize: 28 }}>{FONT_PANGRAM}</span>
             </div>
           </div>
         );

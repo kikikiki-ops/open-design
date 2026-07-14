@@ -1473,7 +1473,7 @@ describe('FileViewer SVG artifacts', () => {
     workspaceShell.className = 'workspace-shell';
     const chrome = document.createElement('div');
     chrome.className = 'workspace-tabs-chrome app-chrome-header';
-    vi.spyOn(chrome, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 100, 34));
+    vi.spyOn(chrome, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 100, 40));
     const workspaceBody = document.createElement('div');
     workspaceBody.className = 'workspace-shell__body';
     workspaceShell.append(chrome, workspaceBody);
@@ -1495,7 +1495,7 @@ describe('FileViewer SVG artifacts', () => {
     expect(container.querySelector('.html-viewer.is-tab-present')).toBeTruthy();
     const overlay = document.body.querySelector<HTMLElement>('.present-overlay');
     expect(overlay?.parentElement).toBe(document.body);
-    expect(document.body.style.getPropertyValue('--workspace-tabs-chrome-height')).toBe('34px');
+    expect(document.body.style.getPropertyValue('--workspace-tabs-chrome-height')).toBe('40px');
     expect(overlay?.style.getPropertyValue('--workspace-tabs-chrome-height')).toBe('');
     const bodyChromeHeight = window
       .getComputedStyle(document.body)
@@ -1504,7 +1504,7 @@ describe('FileViewer SVG artifacts', () => {
     const resolvedTop = window
       .getComputedStyle(overlay!)
       .top.replace(/var\(--workspace-tabs-chrome-height,\s*38px\)/, bodyChromeHeight || '38px');
-    expect(resolvedTop).toBe('34px');
+    expect(resolvedTop).toBe('40px');
     style.remove();
     workspaceShell.remove();
   });

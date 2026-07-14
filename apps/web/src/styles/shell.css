@@ -9,7 +9,7 @@
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto 1fr;
   height: 100vh;
-  background: var(--bg-app);
+  background: var(--veil-shell);
   overflow: hidden;
 }
 .app > .split {
@@ -26,7 +26,15 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: 44px minmax(0, 1fr);
-  background: var(--bg-app);
+  /* Same ground as the home page: paint nothing, let the body app-wash
+     (browser) / wallpaper vibrancy + cream scrim (desktop) show through —
+     the project view and home share one identical frosted ground by
+     construction. --veil-shell restores the solid --bg-app under reduced
+     transparency / missing backdrop-filter (app-wash.css), so degradation
+     stays intact. */
+  background: var(--veil-shell);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   overflow: hidden;
 }
 .workspace-shell__body {
@@ -55,27 +63,14 @@
   height: 44px;
   padding: 0 10px 0 8px;
   gap: 0;
-  background: color-mix(in srgb, var(--bg-subtle) 82%, var(--bg-panel));
+  /* Flush with the content below: same surface, no bottom hairline. */
+  background: var(--bg);
   border-bottom: 0;
-  box-shadow: 0 1px 0 color-mix(in srgb, #ffffff 72%, transparent) inset;
   user-select: none;
   -webkit-app-region: drag;
   overflow: hidden;
   position: relative;
   z-index: 120;
-}
-.workspace-tabs-chrome.app-chrome-header::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 1px;
-  background: color-mix(in srgb, var(--border) 78%, transparent);
-  transform: scaleY(0.5);
-  transform-origin: center bottom;
-  pointer-events: none;
-  z-index: 0;
 }
 .workspace-tabs-chrome .workspace-tabs-traffic {
   margin-right: var(--app-chrome-traffic-margin);
@@ -83,7 +78,10 @@
 .workspace-tabs-new-btn {
   width: 30px;
   height: 30px;
-  margin-left: 7px;
+  /* Always pinned to the strip's right edge: auto margin absorbs the free
+     space when tabs don't fill the row; the sticky rule below takes over
+     once the strip overflows and scrolls. */
+  margin-left: auto;
   margin-right: 0;
   padding: 0;
   border: 0;
@@ -103,6 +101,52 @@
   z-index: 2;
   background: var(--bg-panel);
   box-shadow: -8px 0 10px -9px color-mix(in srgb, var(--text) 30%, transparent);
+}
+/* Corner-anchored radial fan menu for the "+" button. */
+.workspace-radial-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 1900;
+  /* Frosted scrim: the page around the fan blurs while the menu is open
+     (材质规范 --scrim-backdrop, flattens away in degraded modes). */
+  background: color-mix(in srgb, var(--bg-app) 22%, transparent);
+  -webkit-backdrop-filter: var(--scrim-backdrop);
+  backdrop-filter: var(--scrim-backdrop);
+  animation: workspace-radial-scrim 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+@keyframes workspace-radial-scrim {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.workspace-radial-menu {
+  position: fixed;
+  overflow: visible;
+  filter: drop-shadow(0 14px 34px rgba(0, 0, 0, 0.18));
+  animation: workspace-radial-pop 200ms cubic-bezier(0.23, 1, 0.32, 1);
+  transform-origin: calc(100% - 24px) 24px;
+}
+@keyframes workspace-radial-pop {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+.workspace-radial-sector { cursor: pointer; }
+.workspace-radial-sector path {
+  fill: var(--material-thick);
+  stroke: var(--material-separator, var(--border));
+  stroke-width: 1;
+  transition: fill 120ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.workspace-radial-sector text {
+  font-size: 12.5px;
+  font-weight: 500;
+  fill: var(--text);
+  pointer-events: none;
+  user-select: none;
+}
+.workspace-radial-sector:hover path { fill: #f9fff4; }
+.workspace-radial-sector:hover text { fill: #2f781d; font-weight: 600; }
+@media (prefers-reduced-motion: reduce) {
+  .workspace-radial-menu { animation: none; }
 }
 .workspace-tabs-new-btn:hover:not(:disabled) {
   background: color-mix(in srgb, var(--text) 6%, transparent);
@@ -134,13 +178,14 @@
   border-color: transparent;
 }
 .workspace-tabs-strip {
+  --workspace-tabs-edge-inset: 10px;
   align-self: stretch;
   min-width: 0;
   flex: 1 1 0;
   display: flex;
   align-items: end;
   gap: 2px;
-  padding-left: 0;
+  padding-left: var(--workspace-tabs-edge-inset);
   position: relative;
   z-index: 1;
   /* Horizontal scroll inside the strip — tabs keep their natural width
@@ -161,26 +206,64 @@
   height: 0;
   display: none;
 }
+/* Sliding liquid-glass active-tab indicator. Positioned in the strip's
+   CONTENT coordinates (absolute child of the scroll container) so it scrolls
+   together with the tabs. All paint lives on the inner __pill; this shell
+   only carries transform/width so the glass filter never re-attaches while
+   moving. Sits under every .workspace-tab (they are z-index: 1). The
+   overshoot bezier (y1 > 1) is the elastic "snap" on arrival. */
+.workspace-tabs-glide {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  /* Hidden until useGlideIndicator has measured once (prevents a flash of a
+     zero-width pill at x=0 on first paint). */
+  opacity: 0;
+  will-change: transform, width;
+  transition:
+    transform 300ms cubic-bezier(0.32, 1.28, 0.36, 1),
+    width 300ms cubic-bezier(0.32, 1.28, 0.36, 1);
+}
+.workspace-tabs-glide[data-ready] {
+  opacity: 1;
+}
+.workspace-tabs-glide__pill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-tabs-glide {
+    transition: none;
+  }
+  .workspace-tabs-glide__pill {
+    animation: none !important;
+  }
+}
 .workspace-tab {
   position: relative;
   height: 34px;
-  /* Auto-shrink: tabs sit at their natural 124px when there's room and
+  /* Auto-shrink: tabs sit at their compact natural width when there's room and
      shrink down toward --workspace-tab-min-width as more tabs open, so the
      whole row stays visible without scrolling for as long as possible. They
-     never grow past 124px (flex-grow 0) so a lone project tab doesn't balloon
+     never grow past this compact width (flex-grow 0) so a lone project tab doesn't balloon
      to fill the bar. Only once every tab has hit its min width does the strip
      fall back to horizontal scroll. */
-  width: 132px;
-  flex: 0 1 132px;
+  width: 96px;
+  flex: 0 1 96px;
   min-width: var(--workspace-tab-min-width, 56px);
-  max-width: 132px;
+  max-width: 96px;
   padding: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 22px;
   align-items: center;
   border: 1px solid transparent;
   border-bottom-color: transparent;
-  border-radius: 9px 9px 0 0;
+  border-radius: var(--radius-large, 8px) 9px 0 0;
   background: transparent;
   color: var(--text-muted);
   overflow: visible;
@@ -199,13 +282,16 @@
    visible even after the project tabs overflow into horizontal scroll. The
    opaque background keeps scrolled tabs from showing through it. */
 .workspace-tab.is-pinned {
-  width: 44px;
-  flex: 0 0 44px;
-  min-width: 44px;
-  max-width: 44px;
-  grid-template-columns: minmax(0, 1fr);
+  width: 52px;
+  flex: 0 0 52px;
+  min-width: 52px;
+  max-width: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  grid-template-columns: none;
   position: sticky;
-  left: 0;
+  left: var(--workspace-tabs-edge-inset);
   z-index: 2;
   background: transparent;
 }
@@ -217,6 +303,8 @@
   margin: 0 auto;
 }
 .workspace-tab.is-pinned .workspace-tab__main {
+  width: 100%;
+  min-width: 0;
   padding: 0;
   justify-content: center;
   gap: 0;
@@ -233,12 +321,11 @@
   background: color-mix(in srgb, var(--bg-panel) 84%, var(--bg-subtle));
   border-color: color-mix(in srgb, var(--border-strong) 42%, transparent);
   color: var(--text);
-}
-.workspace-tab.is-drag-over-before {
-  transform: translateX(6px);
-}
-.workspace-tab.is-drag-over-after {
-  transform: translateX(-6px);
+  /* No translateX nudge here: tabs live-reorder while dragging, so the row
+     itself already shows the result — and a transform on the hovered tab
+     used to shift the very rects the drop hit-testing read, making the
+     before/after edge flip-flop (visible jitter). Reorder motion comes from
+     the FLIP animation in WorkspaceTabsBar instead. */
 }
 .workspace-tab + .workspace-tab::before {
   display: none;
@@ -266,7 +353,7 @@
 .workspace-tab__main {
   min-width: 0;
   height: 100%;
-  padding: 0 6px 0 10px;
+  padding: 0 5px 0 8px;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -307,6 +394,37 @@
   font-size: 13px;
   font-weight: 500;
   letter-spacing: 0;
+}
+/* Hairline between the home icon and the sidebar toggle in the pinned pill. */
+.workspace-tab__divider {
+  width: 1px;
+  height: 16px;
+  align-self: center;
+  background: var(--material-separator, var(--border));
+  flex: 0 0 auto;
+}
+/* Sidebar toggle inside the pinned Home pill — expands/collapses the entry
+   rail (visible only while the Home tab is active, where the rail lives). */
+.workspace-tab__rail-toggle {
+  width: 20px;
+  height: 20px;
+  margin-right: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+.workspace-tab__rail-toggle:hover:not(:disabled) {
+  background: var(--bg-fill-secondary);
+  border-color: transparent;
+  color: var(--text);
+  box-shadow: none;
 }
 .workspace-tab__close {
   width: 18px;
@@ -402,8 +520,8 @@
   justify-content: space-between;
   padding: 4px 5px 0;
   color: var(--text-muted);
-  font-size: 11.5px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
   letter-spacing: 0;
 }
 .workspace-tabs-list {
@@ -476,12 +594,12 @@
 }
 .workspace-tabs-list__title {
   color: var(--text-strong);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
 }
 .workspace-tabs-list__meta {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 .workspace-tabs-list__close {
   width: 22px;
@@ -503,7 +621,7 @@
   padding: 18px 8px;
   text-align: center;
   color: var(--text-muted);
-  font-size: 12.5px;
+  font-size: 13px;
 }
 .workspace-tab-preview {
   position: fixed;
@@ -540,7 +658,7 @@
 }
 .workspace-tab-preview__title {
   color: var(--text-strong);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.25;
   overflow: hidden;
@@ -552,13 +670,13 @@
 }
 .workspace-tab-preview__meta {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.3;
 }
 .workspace-tab-preview__detail {
   margin-top: 3px;
   color: var(--text-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -693,7 +811,7 @@
   height: 30px;
   padding: 0 12px;
   border-radius: var(--radius);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
   line-height: 1;
   white-space: nowrap;
@@ -773,11 +891,17 @@
 .chrome-share-menu .share-menu-popover,
 .chrome-present-wrap .present-menu {
   top: calc(100% + 6px);
+}
+.chrome-share-menu .share-menu-popover {
   right: 0;
 }
+.chrome-present-wrap .present-menu {
+  left: 0;
+  right: auto;
+}
 .chrome-share-menu--unified .chrome-unified-popover {
-  width: min(460px, calc(100vw - 32px));
-  min-width: min(360px, calc(100vw - 32px));
+  width: min(360px, calc(100vw - 32px));
+  min-width: min(320px, calc(100vw - 32px));
   padding: 6px;
   border-radius: var(--radius);
   background: var(--bg-panel);
@@ -798,7 +922,7 @@
   background: transparent;
   color: var(--text-muted);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
 }
@@ -927,8 +1051,7 @@
 .chrome-publish-button--ghost {
   border-color: var(--border);
   background: var(--bg-panel);
-  color: var(--text-muted);
-}
+  color: var(--text-muted);}
 .chrome-cloud-guide {
   margin-top: 2px;
   border-radius: var(--radius-sm);
@@ -987,7 +1110,7 @@ body[data-artifact-share-access='private'] .ws-tabs-file-actions-before {
   max-width: 290px;
   overflow: hidden;
   color: var(--text-strong);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1053,7 +1176,7 @@ body[data-artifact-share-access='private'] .ws-tabs-file-actions-before {
 }
 .artifact-version-panel__preview-caption strong {
   color: var(--text-strong);
-  font-size: 15px;
+  font-size: 16px;
 }
 .artifact-version-panel__foot button {
   min-height: 34px;
@@ -1066,7 +1189,7 @@ body[data-artifact-share-access='private'] .ws-tabs-file-actions-before {
   background: var(--bg);
   color: var(--text);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
 }
@@ -1084,7 +1207,7 @@ body[data-artifact-share-access='private'] .ws-tabs-file-actions-before {
   border-radius: var(--radius);
   background: color-mix(in srgb, var(--accent) 7%, transparent);
   color: var(--text);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.45;
 }
 .artifact-version-list {
@@ -1098,6 +1221,11 @@ body[data-artifact-share-access='private'] .ws-tabs-file-actions-before {
   display: grid;
   grid-template-columns: 38px minmax(0, 1fr);
   gap: 10px;
+  /* Reset the global `button` rule (height: 36px; white-space: nowrap) — it
+     clamped the multi-line card to 36px so the rows overlapped, and stopped the
+     meta/summary from wrapping. */
+  height: auto;
+  white-space: normal;
   padding: 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1142,7 +1270,7 @@ body[data-artifact-share-access='private'] .ws-tabs-file-actions-before {
   background: color-mix(in srgb, var(--success) 12%, transparent);
   color: var(--success);
   font-style: normal;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 .artifact-version-card__meta,
@@ -1207,7 +1335,7 @@ body[data-artifact-share-access='private'] .ws-tabs-file-actions-before {
   border: none;
   border-radius: var(--radius-sm);
   color: var(--text);
-  font-size: 12.5px;
+  font-size: 13px;
   cursor: pointer;
   text-align: left;
 }
@@ -1281,7 +1409,7 @@ body[data-artifact-share-access='private'] .ws-tabs-file-actions-before {
 .project-target-platforms-label,
 .project-feature-chips-label {
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 18px;
   font-weight: 600;
   text-transform: uppercase;
@@ -1301,7 +1429,7 @@ body[data-artifact-share-access='private'] .ws-tabs-file-actions-before {
   border-radius: var(--radius-pill);
   color: var(--text-muted);
   background: color-mix(in srgb, var(--bg-subtle) 88%, transparent);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 18px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1359,7 +1487,7 @@ body[data-artifact-share-access='private'] .ws-tabs-file-actions-before {
 .topbar-left { display: flex; flex-direction: row; align-items: center; gap: 12px; min-width: 0; }
 .topbar-title { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .topbar .title { font-weight: 600; font-size: 14px; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.topbar .meta { color: var(--text-muted); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar .meta { color: var(--text-muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .topbar-right { display: flex; gap: 6px; align-items: center; flex-wrap: nowrap; }
 
 .topbar .brand-mark {
@@ -1419,6 +1547,12 @@ body[data-artifact-share-access='private'] .ws-tabs-file-actions-before {
 .avatar-agent-trigger > svg:last-child {
   color: var(--text-muted);
 }
+/* Selected-model readout inside the trigger. Hidden by default (the tabs-bar
+   trigger keeps its two-column mark+chevron grid); the composer-row context
+   in viewer/routines.css opts it in next to the Send button. */
+.avatar-agent-trigger__model {
+  display: none;
+}
 .avatar-btn {
   width: 32px;
   height: 32px;
@@ -1457,10 +1591,14 @@ body[data-artifact-share-access='private'] .ws-tabs-file-actions-before {
   top: calc(100% + 8px);
   right: 0;
   z-index: 80;
-  min-width: 280px;
+  /* Width comes from AvatarMenu's inline style (compact popover); the old
+     280px min-width kept forcing the menu wide. */
+  min-width: 0;
   padding: 6px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
+  background: var(--glass-regular);
+  -webkit-backdrop-filter: var(--glass-backdrop);
+  backdrop-filter: var(--glass-backdrop);
+  border: 1px solid var(--material-separator);
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
   display: flex;
@@ -1472,7 +1610,7 @@ body[data-artifact-share-access='private'] .ws-tabs-file-actions-before {
   left: 0;
 }
 .avatar-popover-head {
-  padding: 10px 10px 8px;
+  padding: 10px 10px 8px 38px;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -1480,7 +1618,7 @@ body[data-artifact-share-access='private'] .ws-tabs-file-actions-before {
   margin-bottom: 4px;
 }
 .avatar-popover-head .who { font-weight: 600; font-size: 13px; }
-.avatar-popover-head .where { font-size: 11.5px; color: var(--text-muted); }
+.avatar-popover-head .where { font-size: 12px; color: var(--text-muted); }
 .avatar-amr-account-link,
 .avatar-amr-account-link:visited {
   display: grid;
@@ -1514,8 +1652,8 @@ body[data-artifact-share-access='private'] .ws-tabs-file-actions-before {
 .avatar-amr-account-link__copy span:first-child {
   overflow: hidden;
   color: var(--text);
-  font-size: 12.5px;
-  font-weight: 650;
+  font-size: 13px;
+  font-weight: 600;
   line-height: 1.15;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1523,7 +1661,7 @@ body[data-artifact-share-access='private'] .ws-tabs-file-actions-before {
 .avatar-amr-account-link__copy span:last-child {
   overflow: hidden;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1534,7 +1672,7 @@ body[data-artifact-share-access='private'] .ws-tabs-file-actions-before {
   gap: 10px;
   width: 100%;
   padding: 8px 10px;
-  font-size: 12.5px;
+  font-size: 13px;
   text-align: left;
   background: transparent;
   border: none;
@@ -1564,39 +1702,53 @@ a.avatar-item:visited {
 }
 .avatar-item .avatar-item-meta {
   margin-left: auto;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .avatar-section-label {
-  font-size: 10.5px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-faint);
   font-weight: 600;
-  padding: 8px 10px 4px;
+  padding: 8px 10px 4px 38px;
 }
 .avatar-model-section {
-  padding: 2px 10px 6px;
+  padding: 4px 6px 6px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  border-top: 1px dashed var(--border-soft);
-  margin-top: 4px;
+  gap: 5px;
 }
 .avatar-select-row {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 6px;
+  gap: 4px;
   width: 100%;
   font-size: 12px;
   color: var(--text-muted);
+  text-align: left;
 }
 .avatar-select-label {
   flex-shrink: 0;
   min-width: 0;
+}
+.avatar-static-value {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .avatar-select {
   display: block;
@@ -1611,6 +1763,55 @@ a.avatar-item:visited {
   cursor: pointer;
 }
 .avatar-select:focus { outline: 2px solid var(--accent-soft, var(--border-strong)); }
+
+/* Model picker rendered inline as an always-expanded, left-aligned list (no
+   click-to-open dropdown): every option is laid out directly and clicking a row
+   selects it. The active row is highlighted with a trailing check. */
+.avatar-model-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+}
+.avatar-model-option {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 100ms var(--ease-out),
+    color 100ms var(--ease-out);
+}
+.avatar-model-option:hover {
+  background: var(--bg-subtle);
+}
+.avatar-model-option.is-active {
+  background: var(--accent-tint);
+  color: var(--accent);
+  font-weight: 600;
+}
+.avatar-model-option-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.avatar-model-option-check {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
 
 /* Environment pill — only used in entry view header now */
 .env-pill {
@@ -1655,7 +1856,9 @@ a.avatar-item:visited {
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
-  background: var(--bg);
+  /* Translucent: the app wash peeks through the resize gutter between the
+     chat pane and workspace, so panels read as floating on the wash. */
+  background: var(--veil-page);
 }
 .split.is-resizing-chat {
   cursor: col-resize;
@@ -1753,7 +1956,10 @@ a.avatar-item:visited {
   flex-direction: column;
   min-height: 0;
   min-width: 0;
-  background: var(--bg-panel);
+  /* Content-layer panel: Regular standard material (材质规范). */
+  background: var(--material-regular);
+  -webkit-backdrop-filter: var(--material-regular-backdrop);
+  backdrop-filter: var(--material-regular-backdrop);
   overflow: hidden;
 }
 .split-resize-handle {
@@ -1783,7 +1989,10 @@ a.avatar-item:visited {
   left: calc(50% - 0.5px);
   width: 1px;
   pointer-events: none;
-  background: color-mix(in srgb, var(--border) 92%, transparent);
+  /* No static divider line — the floating chat card's own border + inset gap
+     already separate it from the workspace. The bar only appears on hover /
+     while resizing (rules below, higher specificity via :hover). */
+  background: transparent;
   opacity: 0.9;
   transition:
     background-color 140ms cubic-bezier(0.23, 1, 0.32, 1),

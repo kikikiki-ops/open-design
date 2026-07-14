@@ -559,6 +559,13 @@ export function InlineModelSwitcher({
         : t('inlineSwitcher.modelDefault')
       : config.model.trim() || t('inlineSwitcher.modelDefault');
 
+  // Compact home chip is icon-only — it surfaces the active agent's brand mark
+  // and opens the agent picker; label/tooltip fall back to the agent name.
+  const chipAgentId = currentAgent?.id ?? config.agentId ?? 'claude';
+  const chipAgentLabel = currentAgent
+    ? displayAgentName(currentAgent)
+    : t('inlineSwitcher.chipTitle');
+
   const handleChipClick = useCallback(() => {
     const nextOpen = !open;
     if (nextOpen && showAmrReminder) {
@@ -587,14 +594,23 @@ export function InlineModelSwitcher({
         type="button"
         className={
           'inline-switcher__chip od-tooltip' +
+          (compact ? ' inline-switcher__chip--icon' : '') +
           (showAmrReminder ? ' has-amr-reminder' : '')
         }
         data-testid="inline-model-switcher-chip"
         onClick={handleChipClick}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`${chipMode} · ${chipPrimary} · ${chipModel}`}
-        data-tooltip={`${chipMode} · ${chipPrimary} · ${chipModel}`}
+        aria-label={
+          compact
+            ? chipAgentLabel
+            : `${chipMode} · ${chipPrimary} · ${chipModel}`
+        }
+        data-tooltip={
+          compact
+            ? chipAgentLabel
+            : `${chipMode} · ${chipPrimary} · ${chipModel}`
+        }
         data-tooltip-placement="bottom"
       >
         {showAmrReminder ? (
@@ -605,7 +621,9 @@ export function InlineModelSwitcher({
           />
         ) : null}
         <span className="inline-switcher__chip-icon" aria-hidden="true">
-          {config.mode === 'daemon' && currentAgent ? (
+          {compact ? (
+            <AgentIcon id={chipAgentId} size={20} />
+          ) : config.mode === 'daemon' && currentAgent ? (
             <AgentIcon id={currentAgent.id} size={18} />
           ) : (
             <span className="inline-switcher__byok-glyph">
@@ -613,22 +631,26 @@ export function InlineModelSwitcher({
             </span>
           )}
         </span>
-        <span className="inline-switcher__chip-text">
-          <span className="inline-switcher__chip-mode">{chipMode}</span>
-          <span className="inline-switcher__chip-sep" aria-hidden="true">
-            ·
-          </span>
-          <span className="inline-switcher__chip-primary">{chipPrimary}</span>
-          <span className="inline-switcher__chip-sep" aria-hidden="true">
-            ·
-          </span>
-          <span className="inline-switcher__chip-model">{chipModel}</span>
-        </span>
-        <Icon
-          name="chevron-down"
-          size={12}
-          className="inline-switcher__chip-chevron"
-        />
+        {compact ? null : (
+          <>
+            <span className="inline-switcher__chip-text">
+              <span className="inline-switcher__chip-mode">{chipMode}</span>
+              <span className="inline-switcher__chip-sep" aria-hidden="true">
+                ·
+              </span>
+              <span className="inline-switcher__chip-primary">{chipPrimary}</span>
+              <span className="inline-switcher__chip-sep" aria-hidden="true">
+                ·
+              </span>
+              <span className="inline-switcher__chip-model">{chipModel}</span>
+            </span>
+            <Icon
+              name="chevron-down"
+              size={12}
+              className="inline-switcher__chip-chevron"
+            />
+          </>
+        )}
       </button>
 
       {open ? (
@@ -637,70 +659,72 @@ export function InlineModelSwitcher({
           role="menu"
           data-testid="inline-model-switcher-popover"
         >
-          <div className="inline-switcher__row">
-            <span className="inline-switcher__label">
-              {t('inlineSwitcher.modeLabel')}
-            </span>
-            <div className="inline-switcher__seg" role="tablist">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={config.mode === 'daemon'}
-                className={
-                  'inline-switcher__seg-btn' +
-                  (config.mode === 'daemon' ? ' is-active' : '')
-                }
-                data-testid="inline-model-switcher-mode-daemon"
-                disabled={!daemonLive && config.mode !== 'daemon'}
-                onClick={() => {
-                  trackExecutionSettingsPopoverClick(analytics.track, {
-                    page_name: 'home',
-                    area: 'execution_settings_popover',
-                    element: 'mode_local_cli',
-                  });
-                  // Optional-call so a transient Fast Refresh state where a
-                  // parent has not yet re-rendered with the new prop signature
-                  // does not crash the entire entry view. The same defensive
-                  // pattern is applied to every callback below.
-                  onModeChange?.('daemon');
-                  if (!daemonLive) {
-                    setOpen(false);
-                    onOpenSettings?.('execution');
+          {compact ? null : (
+            <div className="inline-switcher__row">
+              <span className="inline-switcher__label">
+                {t('inlineSwitcher.modeLabel')}
+              </span>
+              <div className="inline-switcher__seg" role="tablist">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={config.mode === 'daemon'}
+                  className={
+                    'inline-switcher__seg-btn' +
+                    (config.mode === 'daemon' ? ' is-active' : '')
                   }
-                }}
-                title={
-                  !daemonLive
-                    ? t('inlineSwitcher.daemonOffline')
-                    : t('inlineSwitcher.useCli')
-                }
-              >
-                {t('inlineSwitcher.chipCli')}
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={config.mode === 'api'}
-                className={
-                  'inline-switcher__seg-btn' +
-                  (config.mode === 'api' ? ' is-active' : '')
-                }
-                data-testid="inline-model-switcher-mode-api"
-                onClick={() => {
-                  trackExecutionSettingsPopoverClick(analytics.track, {
-                    page_name: 'home',
-                    area: 'execution_settings_popover',
-                    element: 'mode_byok',
-                  });
-                  onModeChange?.('api');
-                }}
-                title={t('inlineSwitcher.useByok')}
-              >
-                {t('inlineSwitcher.chipByok')}
-              </button>
+                  data-testid="inline-model-switcher-mode-daemon"
+                  disabled={!daemonLive && config.mode !== 'daemon'}
+                  onClick={() => {
+                    trackExecutionSettingsPopoverClick(analytics.track, {
+                      page_name: 'home',
+                      area: 'execution_settings_popover',
+                      element: 'mode_local_cli',
+                    });
+                    // Optional-call so a transient Fast Refresh state where a
+                    // parent has not yet re-rendered with the new prop signature
+                    // does not crash the entire entry view. The same defensive
+                    // pattern is applied to every callback below.
+                    onModeChange?.('daemon');
+                    if (!daemonLive) {
+                      setOpen(false);
+                      onOpenSettings?.('execution');
+                    }
+                  }}
+                  title={
+                    !daemonLive
+                      ? t('inlineSwitcher.daemonOffline')
+                      : t('inlineSwitcher.useCli')
+                  }
+                >
+                  {t('inlineSwitcher.chipCli')}
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={config.mode === 'api'}
+                  className={
+                    'inline-switcher__seg-btn' +
+                    (config.mode === 'api' ? ' is-active' : '')
+                  }
+                  data-testid="inline-model-switcher-mode-api"
+                  onClick={() => {
+                    trackExecutionSettingsPopoverClick(analytics.track, {
+                      page_name: 'home',
+                      area: 'execution_settings_popover',
+                      element: 'mode_byok',
+                    });
+                    onModeChange?.('api');
+                  }}
+                  title={t('inlineSwitcher.useByok')}
+                >
+                  {t('inlineSwitcher.chipByok')}
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
-          {config.mode === 'daemon' ? (
+          {compact || config.mode === 'daemon' ? (
             <>
               <div className="inline-switcher__row">
                 <span className="inline-switcher__label">
@@ -804,7 +828,8 @@ export function InlineModelSwitcher({
                 )}
               </div>
 
-              {currentAgent &&
+              {!compact &&
+              currentAgent &&
               currentAgent.models &&
               currentAgent.models.length > 0 ? (
                 <div className="inline-switcher__row">

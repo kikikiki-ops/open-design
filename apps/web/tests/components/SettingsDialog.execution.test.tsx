@@ -3491,7 +3491,7 @@ describe('SettingsDialog appearance interactions', () => {
     );
 
     expect(screen.getByRole('radio', { name: 'Default accent color' }).getAttribute('aria-checked')).toBe('true');
-    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#c96442');
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#353535');
   });
 
   it('live previews explicit themes and removes the explicit document theme when switching back to System', () => {
@@ -3528,19 +3528,19 @@ describe('SettingsDialog appearance interactions', () => {
 
   it('persists System mode explicitly and preserves accent variables without an explicit document theme', async () => {
     const { onPersist } = renderSettingsDialog(
-      { mode: 'daemon', agentId: 'codex', theme: 'dark', accentColor: '#2563eb' },
+      { mode: 'daemon', agentId: 'codex', theme: 'dark', accentColor: '#1A74FF' },
       { initialSection: 'appearance' },
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'System' }));
     expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
-    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#2563eb');
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#1A74FF');
 
     await waitForPersist(
       onPersist,
       expect.objectContaining({
         theme: 'system',
-        accentColor: '#2563eb',
+        accentColor: '#1A74FF',
       }),
       {},
     );
@@ -3677,18 +3677,18 @@ describe('SettingsDialog appearance interactions', () => {
 
   it('switches back to the default accent color and persists it explicitly', async () => {
     const { onPersist } = renderSettingsDialog(
-      { mode: 'daemon', agentId: 'codex', theme: 'light', accentColor: '#2563eb' },
+      { mode: 'daemon', agentId: 'codex', theme: 'light', accentColor: '#1A74FF' },
       { initialSection: 'appearance' },
     );
 
     fireEvent.click(screen.getByRole('radio', { name: 'Default accent color' }));
 
-    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#c96442');
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#353535');
 
     await waitForPersist(
       onPersist,
       expect.objectContaining({
-        accentColor: '#c96442',
+        accentColor: '#353535',
       }),
       {},
     );
@@ -3696,7 +3696,7 @@ describe('SettingsDialog appearance interactions', () => {
 
   it('keeps an autosaved accent color applied after the dialog closes', async () => {
     const view = renderSettingsDialog(
-      { mode: 'daemon', agentId: 'codex', theme: 'light', accentColor: '#2563eb' },
+      { mode: 'daemon', agentId: 'codex', theme: 'light', accentColor: '#1A74FF' },
       { initialSection: 'appearance' },
     );
 
@@ -3866,7 +3866,7 @@ describe('SettingsDialog pets interactions', () => {
           custom: {
             name: 'Buddy',
             glyph: '🦄',
-            accent: '#c96442',
+            accent: '#353535',
             greeting: 'Hi! I am here whenever you need me.',
           },
         },

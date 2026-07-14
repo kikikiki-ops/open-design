@@ -3,14 +3,12 @@
 }
 
 .workspace-settings__head {
-  margin-bottom: 26px;
+  margin-bottom: var(--spacing-18, 18px);
 }
 
-.workspace-settings__subtitle {
-  margin: 6px 0 0;
-  color: var(--text-muted);
-  font-size: 14px;
-  line-height: 1.55;
+.workspace-settings .entry-section__title {
+  font-size: var(--font-size-20, 20px);
+  line-height: 1.25;
 }
 
 .workspace-settings__toast {
@@ -21,13 +19,13 @@
   background: color-mix(in srgb, var(--green-bg) 72%, var(--bg));
   color: var(--green);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .workspace-settings__panel,
 .workspace-settings__danger {
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-large, 8px);
   background: var(--bg-panel);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--text) 4%, transparent);
 }
@@ -76,7 +74,6 @@
 
 .workspace-settings__input:focus {
   border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 .workspace-settings__icon-editor {
@@ -94,7 +91,7 @@
   border-radius: 14px;
   background: #111;
   color: #fff;
-  font-size: 30px;
+  font-size: 32px;
   font-weight: 700;
   box-shadow: 0 1px 4px color-mix(in srgb, var(--text) 12%, transparent);
 }
@@ -106,7 +103,7 @@
   padding: 0 14px;
   font: inherit;
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -144,7 +141,7 @@
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  border-radius: 10px;
+  border-radius: var(--radius-large, 8px);
   background: var(--red-bg);
   color: var(--red);
 }
@@ -152,7 +149,7 @@
 .workspace-settings__danger h2 {
   margin: 0;
   color: var(--text);
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .workspace-settings__danger p {
@@ -187,7 +184,8 @@
   justify-content: center;
   padding: 24px;
   background: color-mix(in srgb, #000 26%, transparent);
-  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: var(--scrim-backdrop);
+  backdrop-filter: var(--scrim-backdrop);
 }
 
 .workspace-settings__modal {

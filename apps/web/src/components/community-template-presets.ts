@@ -24,7 +24,7 @@ const ELECTRIC_STUDIO_TEMPLATE_HTML = `<!doctype html>
   <title>Electric Studio 2</title>
   <style>
     :root { color-scheme: light; --blue:#4864f4; --ink:#111; --muted:#6d6d6d; }
-    body { margin:0; min-height:100vh; display:grid; place-items:center; background:#090909; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; background:#090909; font-family:"Albert Sans","PingFang SC","Microsoft YaHei",sans-serif; }
     .slide { width:min(1120px,90vw); aspect-ratio:16/9; background:#fff; position:relative; overflow:hidden; box-shadow:0 24px 80px rgba(0,0,0,.34); }
     .top { padding:80px 72px 0; color:var(--blue); font-size:12px; font-weight:800; letter-spacing:.42em; text-transform:uppercase; }
     h1 { margin:34px 0 0; padding-left:72px; max-width:520px; color:var(--ink); font-size:86px; line-height:.92; letter-spacing:-.07em; }
@@ -55,7 +55,7 @@ const LANDING_TEMPLATE_HTML = `<!doctype html>
   <title>Product Launch Landing</title>
   <style>
     :root { --ink:#15110f; --muted:#756d66; --line:#eadfd7; --accent:#d46342; --paper:#fffaf5; }
-    body { margin:0; background:var(--paper); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    body { margin:0; background:var(--paper); color:var(--ink); font-family:"Albert Sans","PingFang SC","Microsoft YaHei",sans-serif; }
     main { width:min(1080px,88vw); margin:0 auto; padding:76px 0; }
     nav { display:flex; justify-content:space-between; align-items:center; color:var(--muted); font-size:14px; }
     .brand { color:var(--ink); font-weight:800; letter-spacing:-.04em; }
@@ -102,13 +102,13 @@ const MEMO_TEMPLATE_HTML = `<!doctype html>
   <style>
     body { margin:0; background:#f7f3ec; color:#161616; font-family:Georgia,"Times New Roman",serif; }
     article { width:min(760px,84vw); margin:0 auto; padding:84px 0 110px; }
-    .eyebrow { color:#9a6a35; font:700 12px/1.2 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; letter-spacing:.18em; text-transform:uppercase; }
+    .eyebrow { color:#9a6a35; font:700 12px/1.2 "Albert Sans","PingFang SC","Microsoft YaHei",sans-serif; letter-spacing:.18em; text-transform:uppercase; }
     h1 { margin:18px 0 26px; font-size:64px; line-height:1; letter-spacing:-.045em; }
     .lead { color:#59524b; font-size:24px; line-height:1.45; }
     hr { margin:46px 0; border:0; border-top:1px solid #ded4c5; }
-    h2 { margin:34px 0 12px; font:700 22px/1.2 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    h2 { margin:34px 0 12px; font:700 22px/1.2 "Albert Sans","PingFang SC","Microsoft YaHei",sans-serif; }
     p { color:#403b36; font-size:19px; line-height:1.7; }
-    .note { padding:22px 24px; border-left:4px solid #111; background:#fffaf2; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    .note { padding:22px 24px; border-left:4px solid #111; background:#fffaf2; font-family:"Albert Sans","PingFang SC","Microsoft YaHei",sans-serif; }
   </style>
 </head>
 <body>
@@ -136,7 +136,7 @@ const DASHBOARD_TEMPLATE_HTML = `<!doctype html>
   <title>Growth Dashboard</title>
   <style>
     :root { --bg:#f5f7f4; --card:#fff; --ink:#15201a; --muted:#718075; --green:#0f9f6e; --line:#dfe7df; }
-    body { margin:0; min-height:100vh; background:var(--bg); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    body { margin:0; min-height:100vh; background:var(--bg); color:var(--ink); font-family:"Albert Sans","PingFang SC","Microsoft YaHei",sans-serif; }
     main { width:min(1120px,90vw); margin:0 auto; padding:56px 0; }
     header { display:flex; justify-content:space-between; align-items:end; margin-bottom:26px; }
     h1 { margin:0; font-size:42px; letter-spacing:-.05em; }

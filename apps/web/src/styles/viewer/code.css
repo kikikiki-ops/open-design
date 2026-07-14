@@ -129,7 +129,7 @@
   background: var(--bg-fill-secondary);
   color: var(--text-muted);
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1;
   padding: 7px 10px;
@@ -168,7 +168,7 @@
   border-radius: var(--radius-pill);
   background: color-mix(in oklab, var(--accent) 18%, var(--bg-panel));
   color: var(--text);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1;
   padding: 7px 10px;
@@ -288,7 +288,7 @@
   gap: 6px;
   max-width: 44ch;
 }
-.chat-empty-title { font-weight: 600; color: var(--text-strong); font-size: 15px; }
+.chat-empty-title { font-weight: 600; color: var(--text-strong); font-size: 16px; }
 .chat-empty-hint { line-height: 1.6; }
 
 .chat-examples {
@@ -375,11 +375,11 @@
 .chat-example-title {
   font-weight: 600;
   color: var(--text-strong);
-  font-size: 13.5px;
+  font-size: 13px;
 }
 .chat-example-tag {
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -392,7 +392,7 @@
 }
 .chat-example-prompt {
   color: var(--text-muted);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -457,11 +457,11 @@
 .chat-connect-repo-title {
   font-weight: 600;
   color: var(--text-strong);
-  font-size: 13.5px;
+  font-size: 13px;
 }
 .chat-connect-repo-text {
   color: var(--text-muted);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.5;
 }
 .chat-connect-repo button {
@@ -487,7 +487,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-muted);
   margin-bottom: 8px;
 }
@@ -501,7 +501,7 @@
   background: var(--green);
   animation: pulse 1.2s ease-in-out infinite;
 }
-.assistant-label { font-weight: 500; color: var(--text-muted); font-size: 11px; }
+.assistant-label { font-weight: 500; color: var(--text-muted); font-size: 12px; }
 .assistant-stats { font-variant-numeric: tabular-nums; margin-left: auto; }
 
 .assistant-flow {
@@ -541,15 +541,15 @@
 .prose-block .md-h {
   margin: 24px 0 10px;
   line-height: 1.3;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--text-strong, var(--text));
   letter-spacing: -0.02em;
 }
 .prose-block .md-h:first-child { margin-top: 2px; }
-.prose-block .md-h1 { font-size: 24px; }
-.prose-block .md-h2 { font-size: 19px; }
-.prose-block .md-h3 { font-size: 16px; }
-.prose-block .md-h4 { font-size: 14.5px; text-transform: none; }
+.prose-block .md-h1 { font-size: 16px; }
+.prose-block .md-h2 { font-size: 14px; }
+.prose-block .md-h3 { font-size: 14px; }
+.prose-block .md-h4 { font-size: 14px; text-transform: none; }
 .prose-block .md-ul, .prose-block .md-ol {
   margin: 12px 0;
   padding-left: 24px;
@@ -614,7 +614,7 @@
   font-family: var(--mono);
   font-size: 0.86em;
   color: var(--text);
-  font-weight: 450;
+  font-weight: 500;
 }
 .prose-block .md-code-block {
   position: relative;
@@ -636,7 +636,7 @@
 }
 .prose-block .md-code-lang {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--text-muted);
   text-transform: lowercase;
@@ -653,7 +653,7 @@
   background: transparent;
   color: var(--text-faint);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 12px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -775,7 +775,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
 }
 .prose-block .md-code-comment-icon {
@@ -791,7 +791,7 @@
   flex: 0 0 auto;
 }
 .prose-block .md-code-comment-priority {
-  font-size: 11px;
+  font-size: 12px;
   padding: 2px 7px;
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--accent) 10%, transparent);
@@ -800,13 +800,13 @@
 }
 .prose-block .md-code-comment-body {
   margin: 0;
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 1.6;
   color: var(--text-muted);
 }
 .prose-block .md-code-comment-file {
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-faint);
 }
 /* GFM pipe tables. Rules are intentionally unscoped so both the chat path
@@ -899,7 +899,7 @@
 }
 .thinking-chev {
   color: var(--text-faint);
-  font-size: 10px;
+  font-size: 12px;
   margin-left: auto;
   transition: transform 120ms var(--ease-out);
 }
@@ -992,7 +992,7 @@
   overflow-wrap: anywhere;
   white-space: normal;
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 /* Warning status — fabricated role markers (#3247), audit warnings, etc. */
 .status-pill.is-warning {
@@ -1079,7 +1079,7 @@
   flex: 1; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.action-card-toggle .chev { color: var(--text-faint); font-size: 10px; flex-shrink: 0; transition: transform 120ms var(--ease-out); }
+.action-card-toggle .chev { color: var(--text-faint); font-size: 12px; flex-shrink: 0; transition: transform 120ms var(--ease-out); }
 .action-card-body {
   padding: 8px 0 8px 32px;
   display: flex;
@@ -1155,7 +1155,7 @@
 }
 .op-card-detail .op-output {
   margin: 0;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
   color: var(--text-soft);
   font-family: var(--mono);
@@ -1166,7 +1166,7 @@
 }
 .op-expand-chev {
   color: var(--text-faint);
-  font-size: 10px;
+  font-size: 12px;
   flex-shrink: 0;
   margin-left: auto;
   transition: transform 120ms var(--ease-out);

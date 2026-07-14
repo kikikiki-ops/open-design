@@ -1,9 +1,12 @@
-import { type DragEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { type DragEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useT } from '../i18n';
 import { navigate, type EntryHomeView, type Route } from '../router';
 import type { Project } from '../types';
 import { Icon, type IconName } from './Icon';
+import { ENTRY_RAIL_TOGGLE_EVENT } from './EntryShell';
+import { useGlideIndicator } from '../hooks/useGlideIndicator';
+import { useLiquidGlass } from '../hooks/useLiquidGlass';
 
 type WorkspaceChromeTab =
   | {
@@ -270,9 +273,30 @@ function tabDragTargetKey(target: TabDragTarget): string {
   return `${target.tabId}:${target.edge}`;
 }
 
-function tabDropEdgeFromElement(event: DragEvent<HTMLElement>, element: HTMLElement): TabDropEdge {
-  const rect = element.getBoundingClientRect();
-  return event.clientX > rect.left + rect.width / 2 ? 'after' : 'before';
+/**
+ * A tab's horizontal span in viewport X, measured from layout geometry
+ * (offsetLeft/offsetWidth) instead of getBoundingClientRect. Layout geometry
+ * excludes transforms, so the FLIP slide animation and drag styling never
+ * shift the rects the drop hit-testing reads — a transformed hovered tab used
+ * to move its own midpoint, flip the before/after edge, transform back, and
+ * oscillate (visible jitter while dragging).
+ */
+function tabLayoutSpan(
+  strip: HTMLElement,
+  element: HTMLElement,
+): { left: number; right: number; mid: number } {
+  const stripLeft = strip.getBoundingClientRect().left - strip.scrollLeft;
+  const left = stripLeft + element.offsetLeft;
+  const width = element.offsetWidth;
+  return { left, right: left + width, mid: left + width / 2 };
+}
+
+function tabDropEdgeFromElement(
+  event: DragEvent<HTMLElement>,
+  strip: HTMLElement,
+  element: HTMLElement,
+): TabDropEdge {
+  return event.clientX > tabLayoutSpan(strip, element).mid ? 'after' : 'before';
 }
 
 function pulseTabDragHaptic(durationMs = TAB_DRAG_HAPTIC_MS) {
@@ -411,6 +435,15 @@ export function WorkspaceTabsBar({ route, projects, onboardingCompleted = false 
   const t = useT();
   const [state, setState] = useState<WorkspaceTabsState>(() => initialTabsState(route));
   const [tabsMenuOpen, setTabsMenuOpen] = useState(false);
+  const [radialMenu, setRadialMenu] = useState<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    if (!radialMenu) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setRadialMenu(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [radialMenu]);
   const [query, setQuery] = useState('');
   const [hoverPreview, setHoverPreview] = useState<HoverPreviewState | null>(null);
   const [tabsOverflowing, setTabsOverflowing] = useState(false);
@@ -426,6 +459,72 @@ export function WorkspaceTabsBar({ route, projects, onboardingCompleted = false 
   const dragHapticTargetRef = useRef<string | null>(null);
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
   const [dragOverTarget, setDragOverTarget] = useState<TabDragTarget | null>(null);
+
+  // Liquid-glass glide indicator: one persistent pill that slides to the
+  // active tab (see useGlideIndicator + .workspace-tabs-glide in routines.css).
+  const glideRef = useRef<HTMLDivElement | null>(null);
+  const glidePillRef = useRef<HTMLDivElement | null>(null);
+  const glideGlassRef = useLiquidGlass<HTMLDivElement>({ strength: 0.2 });
+  const setGlidePillRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      glidePillRef.current = node;
+      glideGlassRef(node);
+    },
+    [glideGlassRef],
+  );
+
+  // FLIP slide for live drag-reordering: when the tab order changes mid-drag,
+  // each displaced tab starts at its previous slot (inverted transform) and
+  // transitions to its new one instead of teleporting. Positions come from
+  // offsetLeft (layout space, transform-free), so the in-flight slides never
+  // feed back into the drop hit-testing in findTabDropTarget.
+  const tabFlipLeftsRef = useRef(new Map<string, number>());
+  useLayoutEffect(() => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const previousLefts = tabFlipLeftsRef.current;
+    const nextLefts = new Map<string, number>();
+    for (const element of strip.querySelectorAll<HTMLElement>('[data-workspace-tab-id]')) {
+      const id = element.dataset.workspaceTabId;
+      if (!id) continue;
+      nextLefts.set(id, element.offsetLeft);
+      const before = previousLefts.get(id);
+      if (before === undefined) continue;
+      const delta = before - element.offsetLeft;
+      if (!delta) continue;
+      // The dragged tab itself snaps — its native drag ghost is what tracks
+      // the pointer; animating the in-row placeholder would lag behind it.
+      if (id === draggingTabIdRef.current) continue;
+      element.style.transition = 'none';
+      element.style.transform = `translateX(${delta}px)`;
+      // Commit the inverted start position before re-enabling transitions.
+      void element.offsetWidth;
+      element.style.transition = '';
+      element.style.transform = '';
+    }
+    tabFlipLeftsRef.current = nextLefts;
+  });
+
+  // Layout epoch for the glide indicator: any change in tab identity/order or
+  // the overflow state can shift the active tab without changing which tab is
+  // active — those reposition instantly (no fake slide).
+  const tabsLayoutKey = useMemo(
+    () => `${state.tabs.map((tab) => tab.id).join('|')}:${tabsOverflowing ? 1 : 0}`,
+    [state.tabs, tabsOverflowing],
+  );
+  const activeChromeTab = state.tabs.find((tab) => tab.id === state.activeTabId);
+  useGlideIndicator({
+    containerRef: stripRef,
+    indicatorRef: glideRef,
+    pillRef: glidePillRef,
+    activeSelector: '.workspace-tab.is-active',
+    activeKey: state.activeTabId,
+    layoutKey: tabsLayoutKey,
+    frozen: draggingTabId !== null,
+    // The pinned entry tab is position: sticky — its visual position diverges
+    // from layout coords while the strip is scrolled, so chase it on scroll.
+    trackScroll: activeChromeTab?.kind === 'entry',
+  });
 
   // While the app is on the onboarding (Welcome) route, opening a new tab
   // would navigate away from onboarding and bypass the Connect gate. Key off
@@ -589,7 +688,11 @@ export function WorkspaceTabsBar({ route, projects, onboardingCompleted = false 
       typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(requestMeasure);
     if (resizeObserver) {
       resizeObserver.observe(stripElement);
-      Array.from(stripElement.children).forEach((child) => resizeObserver.observe(child));
+      // Skip the glide indicator: its width transitions with every tab
+      // switch and would feed a resize event into overflow measurement.
+      Array.from(stripElement.children)
+        .filter((child) => !child.classList.contains('workspace-tabs-glide'))
+        .forEach((child) => resizeObserver.observe(child));
     }
     window.addEventListener('resize', requestMeasure);
     return () => {
@@ -719,8 +822,10 @@ export function WorkspaceTabsBar({ route, projects, onboardingCompleted = false 
 
   function activateTab(tab: WorkspaceChromeTab) {
     setState((current) => ({
+      // Persist the caller's copy of the tab (openTab may have rewritten the
+      // entry tab's view back to 'home'), not just the activation timestamp.
       tabs: normalizeTabsState(current).tabs.map((item) =>
-        item.id === tab.id ? { ...item, lastActiveAt: Date.now() } : item,
+        item.id === tab.id ? { ...tab, lastActiveAt: Date.now() } : item,
       ),
       activeTabId: tab.id,
     }));
@@ -757,7 +862,52 @@ export function WorkspaceTabsBar({ route, projects, onboardingCompleted = false 
       dragSuppressClickRef.current = false;
       return;
     }
+    // Clicking the pinned Home tab always lands on the home page, whatever
+    // entry section (projects / design-systems / …) the tab last showed.
+    // Keyboard tab-cycling goes through activateTab directly and keeps the
+    // remembered section.
+    if (tab.kind === 'entry' && tab.view !== 'home') {
+      activateTab({ ...tab, view: 'home' });
+      return;
+    }
     activateTab(tab);
+  }
+
+  // Corner-anchored radial fan menu on the "+" button (structure borrowed
+  // from a quarter-pie corner menu): sectors sweep down-left from the
+  // button, each one an entry-view shortcut.
+  const RADIAL_SIZE = 264;
+  const RADIAL_PAD = 24;
+  const RADIAL_ACTIONS: Array<{ label: string; view: EntryHomeView }> = [
+    { label: '首页', view: 'home' },
+    { label: '全部项目', view: 'all-projects' },
+    { label: '设计体系', view: 'design-systems' },
+    { label: 'Community', view: 'community' },
+  ];
+
+  function radialSectorPath(cx: number, cy: number, a1: number, a2: number, r0: number, r1: number): string {
+    const rad = (a: number) => (a * Math.PI) / 180;
+    const px = (r: number, a: number) => `${(cx + r * Math.cos(rad(a))).toFixed(2)} ${(cy + r * Math.sin(rad(a))).toFixed(2)}`;
+    return `M ${px(r1, a1)} A ${r1} ${r1} 0 0 1 ${px(r1, a2)} L ${px(r0, a2)} A ${r0} ${r0} 0 0 0 ${px(r0, a1)} Z`;
+  }
+
+  function openEntryView(view: EntryHomeView) {
+    const normalized = normalizeTabsState(state);
+    const existingEntryTab = normalized.tabs.find((tab) => tab.kind === 'entry');
+    if (existingEntryTab) {
+      setState({ ...normalized, activeTabId: existingEntryTab.id });
+    } else {
+      const tab = createEntryTab(view);
+      setState({ tabs: [...normalized.tabs, tab], activeTabId: tab.id });
+    }
+    navigate({ kind: 'home', view });
+    setRadialMenu(null);
+  }
+
+  function openRadialMenu(event: React.MouseEvent<HTMLButtonElement>) {
+    if (onboardingActive) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    setRadialMenu((cur) => (cur ? null : { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }));
   }
 
   function createNewTab() {
@@ -843,7 +993,7 @@ export function WorkspaceTabsBar({ route, projects, onboardingCompleted = false 
       if (tabElement && strip.contains(tabElement)) {
         const tabId = tabElement.dataset.workspaceTabId;
         if (tabId && tabId !== sourceId) {
-          return resolveTarget({ tabId, edge: tabDropEdgeFromElement(event, tabElement) });
+          return resolveTarget({ tabId, edge: tabDropEdgeFromElement(event, strip, tabElement) });
         }
       }
     }
@@ -852,9 +1002,9 @@ export function WorkspaceTabsBar({ route, projects, onboardingCompleted = false 
     for (const tabElement of strip.querySelectorAll<HTMLElement>('[data-workspace-tab-id]')) {
       const tabId = tabElement.dataset.workspaceTabId;
       if (!tabId || tabId === sourceId) continue;
-      const rect = tabElement.getBoundingClientRect();
-      if (event.clientX <= rect.left + rect.width / 2) return resolveTarget({ tabId, edge: 'before' });
-      if (event.clientX <= rect.right) return resolveTarget({ tabId, edge: 'after' });
+      const span = tabLayoutSpan(strip, tabElement);
+      if (event.clientX <= span.mid) return resolveTarget({ tabId, edge: 'before' });
+      if (event.clientX <= span.right) return resolveTarget({ tabId, edge: 'after' });
       lastTarget = { tabId, edge: 'after' };
     }
     return lastTarget;
@@ -942,6 +1092,17 @@ export function WorkspaceTabsBar({ route, projects, onboardingCompleted = false 
         onDrop={handleStripDrop}
         onDragLeave={handleStripDragLeave}
       >
+        {/* Liquid-glass active-tab pill: positioned by useGlideIndicator in
+            the strip's content coordinates, painted by the __pill (frosted
+            everywhere, SDF refraction on Chromium via useLiquidGlass). First
+            child so `.workspace-tab + .workspace-tab` sibling selectors and
+            [data-workspace-tab-id] queries stay untouched. */}
+        <div className="workspace-tabs-glide" ref={glideRef} aria-hidden="true">
+          <div
+            className="workspace-tabs-glide__pill od-glass-refract"
+            ref={setGlidePillRef}
+          />
+        </div>
         {/* Render every open tab — the strip itself scrolls horizontally
             when the tabs exceed the available chrome width. Previous
             behaviour sliced to `visibleChromeTabs(...)` and squeezed
@@ -981,11 +1142,34 @@ export function WorkspaceTabsBar({ route, projects, onboardingCompleted = false 
                 onBlur={dismissHoverPreview}
               >
                 <span className="workspace-tab__icon" aria-hidden>
-                  <Icon name={display.icon} size={14} />
+                  {/* Icon matches the 13px label size (icons pair with the
+                      adjacent text size). */}
+                  <Icon name={display.icon} size={13} />
                 </span>
                 <span className="workspace-tab__label">{display.title}</span>
               </button>
-              {isPinned ? null : (
+              {isPinned ? (
+                active ? (
+                  <>
+                  <span className="workspace-tab__divider" aria-hidden />
+                  <button
+                    type="button"
+                    className="workspace-tab__rail-toggle od-tooltip"
+                    aria-label="展开/收起侧栏"
+                    title="展开/收起侧栏"
+                    data-tooltip="侧栏"
+                    data-tooltip-placement="bottom"
+                    data-testid="workspace-home-rail-toggle"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      window.dispatchEvent(new CustomEvent(ENTRY_RAIL_TOGGLE_EVENT));
+                    }}
+                  >
+                    <Icon name="panel-left" size={13} />
+                  </button>
+                  </>
+                ) : null
+              ) : (
                 <button
                   type="button"
                   className="workspace-tab__close od-tooltip"
@@ -1004,7 +1188,7 @@ export function WorkspaceTabsBar({ route, projects, onboardingCompleted = false 
         <button
           type="button"
           className="workspace-tabs-new-btn od-tooltip"
-          onClick={createNewTab}
+          onClick={openRadialMenu}
           title="New tab"
           data-tooltip="New tab"
           data-tooltip-placement="bottom"
@@ -1012,7 +1196,7 @@ export function WorkspaceTabsBar({ route, projects, onboardingCompleted = false 
           data-testid="workspace-tabs-new-tab"
           disabled={onboardingActive}
         >
-          <Icon name="plus" size={14} />
+          <Icon name="plus" size={13} />
         </button>
       </div>
       <div className="workspace-tabs-actions" ref={menuRef}>
@@ -1091,6 +1275,46 @@ export function WorkspaceTabsBar({ route, projects, onboardingCompleted = false 
             )
           : null}
       </div>
+      {radialMenu ? createPortal(
+        <div className="workspace-radial-layer" onMouseDown={() => setRadialMenu(null)}>
+          <svg
+            className="workspace-radial-menu"
+            style={{ left: radialMenu.x - (RADIAL_SIZE - RADIAL_PAD), top: radialMenu.y - RADIAL_PAD }}
+            width={RADIAL_SIZE}
+            height={RADIAL_SIZE}
+            viewBox={`0 0 ${RADIAL_SIZE} ${RADIAL_SIZE}`}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            {RADIAL_ACTIONS.map((action, index) => {
+              const cx = RADIAL_SIZE - RADIAL_PAD;
+              const cy = RADIAL_PAD;
+              const start = 98;
+              const span = 68 / RADIAL_ACTIONS.length;
+              const gap = 2.4;
+              const a1 = start + index * span + gap / 2;
+              const a2 = start + (index + 1) * span - gap / 2;
+              const mid = (a1 + a2) / 2;
+              const labelR = 158;
+              const lx = cx + labelR * Math.cos((mid * Math.PI) / 180);
+              const ly = cy + labelR * Math.sin((mid * Math.PI) / 180);
+              return (
+                <g
+                  key={action.view}
+                  className="workspace-radial-sector"
+                  role="menuitem"
+                  onClick={() => openEntryView(action.view)}
+                >
+                  <path d={radialSectorPath(cx, cy, a1, a2, 52, 224)} />
+                  <text x={lx} y={ly} textAnchor="middle" dominantBaseline="middle">
+                    {action.label}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+        </div>,
+        document.body,
+      ) : null}
       {hoverPreview && typeof document !== 'undefined' && !tabsMenuOpen
         ? createPortal(
             (() => {

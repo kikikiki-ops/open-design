@@ -31,7 +31,6 @@ export function WorkspaceSettingsView({ hasActiveSubscription = false }: Workspa
       <header className="entry-section__head workspace-settings__head">
         <div>
           <h1 className="entry-section__title">Workspace 设置</h1>
-          <p className="workspace-settings__subtitle">只有 Owner 可以管理 Workspace 基础信息和危险操作。</p>
         </div>
       </header>
 

@@ -4,15 +4,8 @@ import { getResolvedDeviceId } from '../analytics/client';
 import { amrHandoffDeviceId, attributedAmrUrl, recordAmrEntry } from '../analytics/amr-attribution';
 import { useAnalytics } from '../analytics/provider';
 import { useT } from '../i18n';
-import { AgentIcon } from './AgentIcon';
 import { RemixIcon } from './RemixIcon';
-import { SearchableModelSelect } from './modelOptions';
 import type { AgentInfo, AppConfig, ExecMode, ProviderModelOption } from '../types';
-import { SUGGESTED_MODELS_BY_PROTOCOL } from '../state/apiProtocols';
-import { KNOWN_PROVIDERS } from '../state/config';
-import { mergeProviderModelOptions, providerModelsCacheKey } from './SettingsDialog';
-import { apiProtocolLabel } from '../utils/apiProtocol';
-import { fetchProviderModels } from '../providers/provider-models';
 import { isMacPlatform } from '../utils/platform';
 import { amrConsoleUrlForProfile } from '../runtime/amr-guidance';
 
@@ -36,8 +29,21 @@ interface Props {
   onOpen?: () => void;
 }
 
-function displayAgentName(agent: Pick<AgentInfo, 'id' | 'name'>): string {
-  return agent.id === 'amr' ? 'Open Design AMR' : agent.name;
+function AvatarAgentMark({ size = 20 }: { size?: number }) {
+  return (
+    <svg
+      className="avatar-agent-mark"
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      width={size}
+      height={size}
+      aria-hidden
+      focusable="false"
+    >
+      <path d="M19.5 4.7832V7.6709L22 9.11426V14.8867L19.499 16.3311L19.5 19.2178L14.5 22.1045L12 20.6611L9.5 22.1045L4.5 19.2178V16.3311L2 14.8877L2.00098 9.11328L4.5 7.66992V4.78418L9.5 1.89746L11.999 3.34082L14.501 1.89648L19.5 4.7832ZM13 5.07227L12.999 8.42285L15.9639 10.1338L14.9639 11.8662L11 9.57715V5.07324L9.5 4.20703L6.49902 5.93848V8.8252L4 10.2676V13.7334L6.5 15.1768V18.0635L9.5 19.7959L11 18.9287L11.001 15.5771L8.03613 13.8652L9.03613 12.1338L13.001 14.4229V18.9297L14.5 19.7959L17.5 18.0625V15.1768L20 13.7324V10.2695L17.499 8.8252L17.5 5.9375L14.501 4.20605L13 5.07227Z" />
+    </svg>
+  );
 }
 
 /**
@@ -47,14 +53,7 @@ function displayAgentName(agent: Pick<AgentInfo, 'id' | 'name'>): string {
 export function AvatarMenu({
   config,
   agents,
-  daemonLive,
-  onModeChange,
-  onAgentChange,
   onAgentModelChange,
-  onApiModelChange,
-  providerModelsCache,
-  onOpenSettings,
-  onRefreshAgents,
   onBack,
   placement = 'down',
   onOpen,
@@ -70,7 +69,6 @@ export function AvatarMenu({
       return !v;
     });
   }
-  const [discoveredProviderModels, setDiscoveredProviderModels] = useState<Record<string, ProviderModelOption[]>>({});
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -108,14 +106,13 @@ export function AvatarMenu({
 
       const margin = 16;
       const gap = 8;
-      const width = Math.min(320, window.innerWidth - margin * 2);
+      const width = Math.min(208, window.innerWidth - margin * 2);
       const left = Math.min(
-        Math.max(rect.left + rect.width / 2 - width / 2, margin),
+        Math.max(rect.left, margin),
         window.innerWidth - width - margin,
       );
 
       if (placement === 'up') {
-        const available = Math.max(160, rect.top - margin - gap);
         setPopoverStyle({
           position: 'fixed',
           top: 'auto',
@@ -123,15 +120,12 @@ export function AvatarMenu({
           left,
           right: 'auto',
           width,
-          maxHeight: Math.min(520, available),
-          overflowY: 'auto',
           zIndex: 1000,
         });
         return;
       }
 
       const top = rect.bottom + gap;
-      const available = Math.max(160, window.innerHeight - top - margin);
       setPopoverStyle({
         position: 'fixed',
         top,
@@ -139,8 +133,6 @@ export function AvatarMenu({
         left,
         right: 'auto',
         width,
-        maxHeight: Math.min(520, available),
-        overflowY: 'auto',
         zIndex: 1000,
       });
     };
@@ -191,65 +183,17 @@ export function AvatarMenu({
     currentChoice.model ?? currentAgent?.models?.[0]?.id ?? null;
   const currentReasoningId =
     currentChoice.reasoning ?? currentAgent?.reasoningOptions?.[0]?.id ?? null;
-  const currentModelLabel = currentAgent?.models?.find(
-    (m) => m.id === currentModelId,
-  )?.label;
-
-  const apiProtocol = config.apiProtocol ?? 'openai';
-  const byokProvider =
-    KNOWN_PROVIDERS.find(
-      (provider) =>
-        provider.protocol === apiProtocol &&
-        (config.apiProviderBaseUrl
-          ? provider.baseUrl === config.apiProviderBaseUrl
-          : provider.baseUrl === config.baseUrl),
-    ) ?? KNOWN_PROVIDERS.find((provider) => provider.protocol === apiProtocol);
-  const byokProviderModelsKey = providerModelsCacheKey(
-    apiProtocol,
-    config.baseUrl ?? '',
-    config.apiKey ?? '',
-    config.apiVersion ?? '',
-  );
-  const fetchedByokModels = providerModelsCache?.[byokProviderModelsKey] ?? discoveredProviderModels[byokProviderModelsKey] ?? [];
-
-  useEffect(() => {
-    if (!open || config.mode !== 'api') return;
-    if (fetchedByokModels.length > 0) return;
-    if (apiProtocol === 'azure' || apiProtocol === 'ollama') return;
-    const baseUrl = config.baseUrl?.trim() ?? '';
-    const apiKey = config.apiKey?.trim() ?? '';
-    if (!baseUrl || !apiKey) return;
-    let cancelled = false;
-    void fetchProviderModels({
-      protocol: apiProtocol,
-      baseUrl,
-      apiKey,
-    }).then((result) => {
-      if (cancelled || !result.ok || !result.models?.length) return;
-      setDiscoveredProviderModels((current) => ({
-        ...current,
-        [byokProviderModelsKey]: result.models ?? [],
-      }));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    open,
-    config.mode,
-    apiProtocol,
-    config.baseUrl,
-    config.apiKey,
-    byokProviderModelsKey,
-    fetchedByokModels.length,
-  ]);
-
-  const byokModelOptions = mergeProviderModelOptions(
-    fetchedByokModels,
-    byokProvider?.models?.length
-      ? byokProvider.models
-      : SUGGESTED_MODELS_BY_PROTOCOL[apiProtocol] ?? [],
-  );
+  const currentModelLabel =
+    currentAgent?.models?.find((model) => model.id === currentModelId)?.label ??
+    currentModelId;
+  const currentReasoningLabel =
+    currentAgent?.reasoningOptions?.find((option) => option.id === currentReasoningId)?.label ??
+    currentReasoningId;
+  const apiModelLabel = config.model?.trim() || null;
+  // Selected-model readout shown inside the trigger (left of the Send button).
+  // Hidden by default in CSS; composer-row contexts opt it in.
+  const triggerModelLabel =
+    config.mode === 'api' ? apiModelLabel : config.mode === 'daemon' ? currentModelLabel : null;
 
   return (
     <div className={`avatar-menu avatar-menu--${placement}`} ref={wrapRef}>
@@ -264,11 +208,10 @@ export function AvatarMenu({
         title={t('avatar.title')}
         aria-label={t('avatar.title')}
       >
-        {currentAgent ? (
-          <AgentIcon id={currentAgent.id} size={20} />
-        ) : (
-          <RemixIcon name="link" size={20} />
-        )}
+        <AvatarAgentMark size={20} />
+        {triggerModelLabel ? (
+          <span className="avatar-agent-trigger__model">{triggerModelLabel}</span>
+        ) : null}
         <RemixIcon name="arrow-down-s-line" size={14} />
       </button>
       {open && popoverStyle ? createPortal(
@@ -279,28 +222,6 @@ export function AvatarMenu({
           aria-label={t('avatar.title')}
           style={popoverStyle}
         >
-          <div className="avatar-popover-head">
-            <span className="who">
-              {config.mode === 'daemon'
-                ? t('avatar.localCli')
-                : apiProtocolLabel(config.apiProtocol)}
-            </span>
-            <span className="where">
-              {config.mode === 'api'
-                ? safeHost(config.baseUrl)
-                : currentAgent
-                  ? `${displayAgentName(currentAgent)}${
-                      currentAgent.id !== 'amr' && currentAgent.version
-                        ? ` · ${currentAgent.version}`
-                        : ''
-                    }${
-                      currentModelLabel && currentModelId !== 'default'
-                        ? ` · ${currentModelLabel}`
-                        : ''
-                    }`
-                  : t('avatar.noAgentSelected')}
-            </span>
-          </div>
           {showAmrAccountShortcut ? (
             <a
               className="avatar-amr-account-link"
@@ -320,92 +241,8 @@ export function AvatarMenu({
             </a>
           ) : null}
 
-          <button
-            type="button"
-            className={`avatar-item${config.mode === 'daemon' ? ' active' : ''}`}
-            aria-current={config.mode === 'daemon' ? 'true' : undefined}
-            onClick={() => {
-              if (config.mode === 'daemon') {
-                setOpen(false);
-                if (!daemonLive) {
-                  onOpenSettings('execution');
-                }
-                return;
-              }
-              onModeChange('daemon');
-              if (!daemonLive) {
-                // No daemon — let user know via settings page rather than
-                // silently failing.
-                setOpen(false);
-                onOpenSettings('execution');
-              }
-            }}
-            disabled={!daemonLive && config.mode !== 'daemon'}
-          >
-            <span className="avatar-item-icon" aria-hidden>
-              <RemixIcon name="file-code-line" size={15} />
-            </span>
-            <span>{t('avatar.useLocal')}</span>
-            {config.mode === 'daemon' ? (
-              <span className="avatar-item-meta">{t('avatar.metaActive')}</span>
-            ) : !daemonLive ? (
-              <span className="avatar-item-meta">{t('avatar.metaOffline')}</span>
-            ) : null}
-            {config.mode === 'daemon' ? (
-              <RemixIcon name="check-line" size={14} className="avatar-item-check" />
-            ) : null}
-          </button>
-          <button
-            type="button"
-            className={`avatar-item${config.mode === 'api' ? ' active' : ''}`}
-            aria-current={config.mode === 'api' ? 'true' : undefined}
-            onClick={() => onModeChange('api')}
-          >
-            <span className="avatar-item-icon" aria-hidden>
-              <RemixIcon name="link" size={15} />
-            </span>
-            <span>{t('avatar.useApi')}</span>
-            {config.mode === 'api' ? (
-              <span className="avatar-item-meta">{t('avatar.metaActive')}</span>
-            ) : null}
-            {config.mode === 'api' ? (
-              <RemixIcon name="check-line" size={14} className="avatar-item-check" />
-            ) : null}
-          </button>
-
           {config.mode === 'daemon' && installedAgents.length > 0 ? (
             <>
-              <div className="avatar-section-label">{t('avatar.codeAgent')}</div>
-              {installedAgents.map((a) => {
-                const selected = config.agentId === a.id;
-                return (
-                  <button
-                    type="button"
-                    key={a.id}
-                    className={`avatar-item${selected ? ' active' : ''}`}
-                    data-testid={`avatar-agent-option-${a.id}`}
-                    aria-current={selected ? 'true' : undefined}
-                    onClick={() => {
-                      onAgentChange(a.id);
-                      // Keep the popover open so the user can immediately
-                      // pick a model for the agent they just chose.
-                    }}
-                  >
-                    <AgentIcon id={a.id} size={18} />
-                    <span>{displayAgentName(a)}</span>
-                    {selected ? (
-                      <span className="avatar-item-meta">
-                        {t('avatar.metaSelected')}
-                      </span>
-                    ) : a.id !== 'amr' && a.version ? (
-                      <span className="avatar-item-meta">{a.version}</span>
-                    ) : null}
-                    {selected ? (
-                      <RemixIcon name="check-line" size={14} className="avatar-item-check" />
-                    ) : null}
-                  </button>
-                );
-              })}
               {currentAgent &&
               currentAgent.available &&
               ((currentAgent.models && currentAgent.models.length > 0) ||
@@ -413,124 +250,82 @@ export function AvatarMenu({
                   currentAgent.reasoningOptions.length > 0)) ? (
                 <div className="avatar-model-section">
                   {currentAgent.models && currentAgent.models.length > 0 ? (
-                    <label className="avatar-select-row">
+                    <div className="avatar-select-row">
                       <span className="avatar-select-label">
                         {t('avatar.modelLabel')}
                       </span>
-                      <SearchableModelSelect
-                        className="inline-switcher__select avatar-select"
-                        value={currentModelId ?? ''}
-                        onChange={(value) =>
-                          onAgentModelChange(currentAgent.id, {
-                            model: value,
-                          })
-                        }
-                        models={currentAgent.models}
-                        additionalOptions={
-                          currentModelId &&
-                          !currentAgent.models.some((m) => m.id === currentModelId)
-                            ? [
-                                {
-                                  value: currentModelId,
-                                  label: `${currentModelId} ${t('avatar.customSuffix')}` ,
-                                },
-                              ]
-                            : undefined
-                        }
-                        searchPlaceholder={t('newproj.modelSearch')}
-                        searchInputTestId="avatar-model-search"
-                        popoverTestId="avatar-model-popover"
-                        minSearchableOptions={5}
-                      />
-                    </label>
+                      <div
+                        className="avatar-model-list"
+                        role="radiogroup"
+                        aria-label={t('avatar.modelLabel')}
+                        data-testid="avatar-model-list"
+                      >
+                        {(currentModelId &&
+                        !currentAgent.models.some((m) => m.id === currentModelId)
+                          ? [
+                              ...currentAgent.models,
+                              {
+                                id: currentModelId,
+                                label: `${currentModelId}${t('inlineSwitcher.customSuffix')}`,
+                              },
+                            ]
+                          : currentAgent.models
+                        ).map((model) => {
+                          const active = model.id === currentModelId;
+                          return (
+                            <button
+                              key={model.id}
+                              type="button"
+                              role="radio"
+                              aria-checked={active}
+                              className={`avatar-model-option${active ? ' is-active' : ''}`}
+                              onClick={() => {
+                                onAgentModelChange(currentAgent.id, { model: model.id });
+                                // Selection made — dismiss the popover right away.
+                                setOpen(false);
+                              }}
+                            >
+                              <span className="avatar-model-option-label">
+                                {model.label}
+                              </span>
+                              {active ? (
+                                <RemixIcon
+                                  name="check-line"
+                                  size={14}
+                                  className="avatar-model-option-check"
+                                />
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   ) : null}
                   {currentAgent.reasoningOptions &&
-                  currentAgent.reasoningOptions.length > 0 ? (
-                    <label className="avatar-select-row">
+                  currentAgent.reasoningOptions.length > 0 &&
+                  currentReasoningLabel ? (
+                    <div className="avatar-select-row">
                       <span className="avatar-select-label">
                         {t('avatar.reasoningLabel')}
                       </span>
-                      <select
-                        className="avatar-select"
-                        value={currentReasoningId ?? ''}
-                        onChange={(e) =>
-                          onAgentModelChange(currentAgent.id, {
-                            reasoning: e.target.value,
-                          })
-                        }
-                      >
-                        {currentAgent.reasoningOptions.map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                      <div className="avatar-static-value">{currentReasoningLabel}</div>
+                    </div>
                   ) : null}
                 </div>
               ) : null}
-              <button
-                type="button"
-                className="avatar-item"
-                onClick={() => {
-                  onRefreshAgents();
-                }}
-              >
-                <span className="avatar-item-icon" aria-hidden>
-                  <RemixIcon name="refresh-line" size={15} />
-                </span>
-                <span>{t('avatar.rescan')}</span>
-              </button>
             </>
           ) : null}
 
-          {config.mode === 'api' ? (
+          {config.mode === 'api' && apiModelLabel ? (
             <div className="avatar-model-section">
-              <label className="avatar-select-row">
+              <div className="avatar-select-row">
                 <span className="avatar-select-label">
                   {t('avatar.modelLabel')}
                 </span>
-                <SearchableModelSelect
-                  className="inline-switcher__select avatar-select"
-                  value={config.model ?? ''}
-                  onChange={(value) => onApiModelChange?.(value)}
-                  models={byokModelOptions.map((m) => ({ id: m.id, label: m.label }))}
-                  additionalOptions={
-                    config.model && !byokModelOptions.some((m) => m.id === config.model)
-                      ? [
-                          {
-                            value: config.model,
-                            label: byokProvider?.models?.includes(config.model)
-                              ? config.model
-                              : `${config.model} ${t('avatar.customSuffix')}`,
-                          },
-                        ]
-                      : undefined
-                  }
-                  searchPlaceholder={t('newproj.modelSearch')}
-                  searchInputTestId="avatar-byok-model-search"
-                  popoverTestId="avatar-byok-model-popover"
-                  minSearchableOptions={5}
-                />
-              </label>
+                <div className="avatar-static-value">{apiModelLabel}</div>
+              </div>
             </div>
           ) : null}
-
-          <div style={{ height: 1, background: 'var(--border-soft)', margin: '4px 6px' }} />
-
-          <button
-            type="button"
-            className="avatar-item avatar-item--execution-settings"
-            onClick={() => {
-              setOpen(false);
-              onOpenSettings('execution');
-            }}
-          >
-            <span className="avatar-item-icon" aria-hidden>
-              <RemixIcon name="settings-3-line" size={15} />
-            </span>
-            <span>{t('inlineSwitcher.openFullSettings')}</span>
-          </button>
 
           {onBack ? (
             <>
@@ -554,12 +349,4 @@ export function AvatarMenu({
       ) : null}
     </div>
   );
-}
-
-function safeHost(url: string): string {
-  try {
-    return new URL(url).host;
-  } catch {
-    return url;
-  }
 }

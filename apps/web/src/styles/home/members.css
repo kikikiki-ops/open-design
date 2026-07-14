@@ -13,15 +13,16 @@
 .members__head {
   align-items: center;
 }
+
+.members .entry-section__title {
+  font-size: var(--font-size-20, 20px);
+  line-height: 1.25;
+}
+
 .members__head-text {
   display: flex;
   flex-direction: column;
   gap: 4px;
-}
-.members__subtitle {
-  margin: 0;
-  font-size: 13px;
-  color: var(--text-muted);
 }
 
 /* Primary "邀请同事" action — accent pill, matches recent-projects invite. */
@@ -47,6 +48,7 @@
      repaints the background to --bg-subtle and hides the white label. */
   background: var(--accent);
   color: var(--accent-contrast, #fff);
+  border-color: transparent;
   filter: brightness(1.05);
 }
 
@@ -60,7 +62,7 @@
   border-radius: var(--radius);
   background: var(--bg-panel);
   color: var(--text-muted);
-  font-size: 12.5px;
+  font-size: 13px;
 }
 .members__seats-main {
   display: flex;
@@ -169,7 +171,7 @@
   place-items: center;
   width: 28px;
   height: 28px;
-  border-radius: 10px;
+  border-radius: var(--radius-large, 8px);
   background: var(--accent);
   color: var(--accent-contrast);
 }
@@ -189,12 +191,12 @@
   height: 32px;
   padding: 0 12px;
   border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
-  border-radius: 9px;
+  border-radius: var(--radius-large, 8px);
   background: var(--accent);
   color: var(--accent-contrast);
   font: inherit;
   font-size: 12px;
-  font-weight: 750;
+  font-weight: 700;
   white-space: nowrap;
   cursor: pointer;
   transition: filter 120ms var(--ease-out);
@@ -224,7 +226,7 @@
   padding: 10px 16px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-subtle);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--text-soft);
@@ -263,7 +265,7 @@
   flex: 0 0 112px;
   justify-content: flex-start;
   color: var(--text-muted);
-  font-size: 12.5px;
+  font-size: 13px;
 }
 .members__col--action {
   flex: 0 0 40px;
@@ -296,7 +298,7 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-strong);
   white-space: nowrap;
@@ -311,7 +313,7 @@
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   color: var(--accent);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 600;
 }
 .members__email {
@@ -370,7 +372,7 @@
   background: transparent;
   color: var(--text-muted);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: background 120ms var(--ease-out), color 120ms var(--ease-out), border-color 120ms var(--ease-out);
@@ -406,7 +408,7 @@
   border-radius: var(--radius-pill);
   background: color-mix(in srgb, #f5a623 16%, transparent);
   color: #b9770e;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -421,7 +423,7 @@
   background: var(--bg-panel);
   color: var(--text);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;

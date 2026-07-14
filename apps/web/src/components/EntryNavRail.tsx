@@ -12,14 +12,20 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { InviteDialog } from './InviteDialog';
 import { CreateTeamDialog } from './CreateTeamDialog';
 import { UpgradeTeamDialog } from './UpgradeTeamDialog';
-import { CreditsPanel, type CreditsInfo } from './CreditsPanel';
+import type { CreditsInfo } from './CreditsPanel';
+import { PlanBadge, planBadgeTierForLabel } from './PlanBadge';
 import { Icon } from './Icon';
 import { useT } from '../i18n';
 import { LIBRARY_UI_VISIBLE } from '../features/libraryUi';
+import { GITHUB_REPO_URL } from './useGithubStars';
 
 const REPO_URL = 'https://github.com/nexu-io/open-design';
 const GITHUB_HELP_URL = `${REPO_URL}/issues/new`;
 const GITHUB_FEATURE_URL = `${REPO_URL}/pulls`;
+const DISCORD_URL = 'https://discord.gg/mHAjSMV6gz';
+const X_URL = 'https://x.com/OpenDesignHQ';
+const CONTACT_EMAIL = 'contact@open.design';
+const CONTACT_EMAIL_URL = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent('Open Design 反馈')}&body=${encodeURIComponent('你好 Open Design 团队，\n\n我想反馈：\n\n')}`;
 const externalLinkProps = { target: '_blank', rel: 'noreferrer noopener' } as const;
 
 export type EntryView =
@@ -105,7 +111,44 @@ export function EntryNavRail({ view, onViewChange, onNewProject, open, onClose, 
     Array<{ name: string; logo: string | null; color: string }>
   >([]);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
-  const [creditsOpen, setCreditsOpen] = useState(false);
+
+  // Hover-open for the account menu. The popover floats 4px above the
+  // trigger, so closing is delayed just long enough for the pointer to cross
+  // that gap; entering the container (menu included — it's a DOM child even
+  // though it renders above) cancels the pending close.
+  const accountCloseTimer = useRef<number | null>(null);
+  const cancelAccountClose = () => {
+    if (accountCloseTimer.current !== null) {
+      window.clearTimeout(accountCloseTimer.current);
+      accountCloseTimer.current = null;
+    }
+  };
+  const openAccountMenu = () => {
+    cancelAccountClose();
+    setAccountOpen(true);
+  };
+  const scheduleAccountClose = () => {
+    cancelAccountClose();
+    accountCloseTimer.current = window.setTimeout(() => setAccountOpen(false), 220);
+  };
+  useEffect(() => cancelAccountClose, []);
+  // While open, track the pointer at the document level: anywhere outside the
+  // account container arms the close timer, back inside disarms it. This is
+  // deliberately NOT React onMouseLeave — leaving from inside the floating
+  // menu does not reliably produce a synthetic leave on the container.
+  const accountContainerRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!accountOpen) return;
+    const onDocPointerOver = (ev: PointerEvent) => {
+      const container = accountContainerRef.current;
+      if (!container) return;
+      if (container.contains(ev.target as Node)) cancelAccountClose();
+      else scheduleAccountClose();
+    };
+    document.addEventListener('pointerover', onDocPointerOver, true);
+    return () => document.removeEventListener('pointerover', onDocPointerOver, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountOpen]);
 
   // Once opened the rail stays docked (Manus-style); navigating between
   // destinations no longer collapses it.
@@ -130,6 +173,157 @@ export function EntryNavRail({ view, onViewChange, onNewProject, open, onClose, 
     }
   }, [open]);
 
+  const planTier = credits ? planBadgeTierForLabel(credits.tierLabel) : null;
+  const accountSwitcher = cloudWorkspace ? (
+    <div
+      ref={accountContainerRef}
+      className="entry-nav-rail__account"
+      onMouseEnter={cancelAccountClose}
+      onMouseLeave={scheduleAccountClose}
+    >
+      <button
+        type="button"
+        className="entry-nav-rail__account-trigger"
+        onClick={() => setAccountOpen((v) => !v)}
+        onMouseEnter={openAccountMenu}
+        aria-expanded={accountOpen}
+      >
+        <span className="entry-nav-rail__account-avatar" aria-hidden>琼</span>
+        <span className="entry-nav-rail__account-name">琼羽</span>
+        {planTier ? <PlanBadge tier={planTier} height={17} /> : <Icon name="chevron-down" size={14} />}
+      </button>
+      {accountOpen ? (
+        <>
+          <div className="entry-nav-rail__account-menu" role="menu">
+            <div className="entry-nav-rail__account-head">
+              <span className="entry-nav-rail__account-head-avatar" aria-hidden>琼</span>
+              <span className="entry-nav-rail__account-head-name">琼羽</span>
+              <span className="entry-nav-rail__account-head-email">qiongyu1999@gmail.com</span>
+            </div>
+            {credits ? (
+              <div className="entry-nav-rail__menu-credits">
+                <div className="entry-nav-rail__menu-credits-head">
+                  <span className="entry-nav-rail__menu-credits-plan">
+                    {credits.planName}
+                    {planTier ? <PlanBadge tier={planTier} height={11} /> : null}
+                  </span>
+                  {credits.showUpgrade ? (
+                    <button
+                      type="button"
+                      className="entry-nav-rail__menu-credits-upgrade"
+                      onClick={() => {
+                        setAccountOpen(false);
+                        onUpgrade?.();
+                      }}
+                    >
+                      升级
+                    </button>
+                  ) : null}
+                </div>
+                <div className="entry-nav-rail__menu-credits-row">
+                  <span className="entry-nav-rail__menu-credits-label">
+                    <Icon name="battery-charge" size={14} /> 积分
+                  </span>
+                  <span className="entry-nav-rail__menu-credits-value">
+                    {credits.balance.toLocaleString('en-US')}
+                    <Icon name="chevron-right" size={13} />
+                  </span>
+                </div>
+                <div className="entry-nav-rail__menu-credits-row">
+                  <span className="entry-nav-rail__menu-credits-label">
+                    <Icon name="battery-charge" size={14} /> 附加积分
+                  </span>
+                  <span className="entry-nav-rail__menu-credits-value">0</span>
+                </div>
+              </div>
+            ) : null}
+            <button
+              type="button"
+              className="entry-nav-rail__menu-item"
+              role="menuitem"
+              onClick={() => {
+                setAccountOpen(false);
+                onOpenSettings?.();
+              }}
+            >
+              <Icon name="settings" size={15} /> 设置
+            </button>
+            <a
+              className="entry-nav-rail__menu-item"
+              role="menuitem"
+              href={GITHUB_HELP_URL}
+              {...externalLinkProps}
+              onClick={() => setAccountOpen(false)}
+            >
+              <Icon name="comment" size={15} /> 在 GitHub 上获取帮助
+            </a>
+            <a
+              className="entry-nav-rail__menu-item"
+              role="menuitem"
+              href={GITHUB_FEATURE_URL}
+              {...externalLinkProps}
+              onClick={() => setAccountOpen(false)}
+            >
+              <Icon name="sparkles" size={15} /> 提交功能建议
+            </a>
+            <div className="entry-nav-rail__menu-social">
+              <a
+                className="entry-nav-rail__menu-social-btn"
+                role="menuitem"
+                href={GITHUB_REPO_URL}
+                {...externalLinkProps}
+                aria-label="GitHub"
+                title="GitHub"
+                onClick={() => setAccountOpen(false)}
+              >
+                <Icon name="github-filled" size={15} />
+              </a>
+              <a
+                className="entry-nav-rail__menu-social-btn"
+                role="menuitem"
+                href={DISCORD_URL}
+                {...externalLinkProps}
+                aria-label="加入 Discord"
+                title="加入 Discord"
+                onClick={() => setAccountOpen(false)}
+              >
+                <Icon name="discord" size={15} />
+              </a>
+              <a
+                className="entry-nav-rail__menu-social-btn"
+                role="menuitem"
+                href={X_URL}
+                {...externalLinkProps}
+                aria-label="@OpenDesignHQ"
+                title="@OpenDesignHQ"
+                onClick={() => setAccountOpen(false)}
+              >
+                <span className="entry-nav-rail__menu-x" aria-hidden>X</span>
+              </a>
+              <a
+                className="entry-nav-rail__menu-social-btn"
+                role="menuitem"
+                href={CONTACT_EMAIL_URL}
+                aria-label="给 Open Design 发邮件"
+                title="给 Open Design 发邮件"
+                onClick={() => setAccountOpen(false)}
+              >
+                <Icon name="mail" size={15} />
+              </a>
+            </div>
+            <div className="entry-nav-rail__menu-divider" />
+            <button type="button" className="entry-nav-rail__menu-item" role="menuitem">
+              <Icon name="plus" size={15} /> 添加账号
+            </button>
+            <button type="button" className="entry-nav-rail__menu-item" role="menuitem">
+              <Icon name="log-out" size={15} /> 退出登录
+            </button>
+          </div>
+        </>
+      ) : null}
+    </div>
+  ) : null;
+
   return (
     <nav
       ref={railRef}
@@ -137,117 +331,22 @@ export function EntryNavRail({ view, onViewChange, onNewProject, open, onClose, 
       aria-label="Primary"
       aria-hidden={open ? undefined : true}
     >
+      {/* Squircle (superellipse) clip for the account avatars, normalized to
+          the bounding box so one definition serves every avatar size. */}
+      <svg width="0" height="0" style={{ position: 'absolute' }} aria-hidden focusable="false">
+        <defs>
+          <clipPath id="od-avatar-squircle" clipPathUnits="objectBoundingBox">
+            <path d="M0.5,0 C0.93385,0 1,0.06615 1,0.5 C1,0.93385 0.93385,1 0.5,1 C0.06615,1 0,0.93385 0,0.5 C0,0.06615 0.06615,0 0.5,0 Z" />
+          </clipPath>
+        </defs>
+      </svg>
+      <div className="entry-nav-rail__panel">
       <div className="entry-nav-rail__group">
-        {cloudWorkspace ? (
-          <div className="entry-nav-rail__account">
-            <button
-              type="button"
-              className="entry-nav-rail__account-trigger"
-              onClick={() => setAccountOpen((v) => !v)}
-              aria-expanded={accountOpen}
-            >
-              <span className="entry-nav-rail__account-avatar" aria-hidden>琼</span>
-              <span className="entry-nav-rail__account-name">琼羽</span>
-              <Icon name="chevron-down" size={14} />
-            </button>
-            {credits ? (
-              <button
-                type="button"
-                className="entry-nav-rail__credits-chip"
-                onClick={() => setCreditsOpen((v) => !v)}
-                aria-expanded={creditsOpen}
-                aria-label={`${credits.tierLabel} · 剩余积分 ${credits.balance}`}
-              >
-                <span className="entry-nav-rail__credits-tier">{credits.tierLabel}</span>
-                <span className="entry-nav-rail__credits-sep" aria-hidden>·</span>
-                <Icon name="sparkles" size={12} />
-                {credits.balance.toLocaleString('en-US')}
-              </button>
-            ) : null}
-            {credits ? (
-              <CreditsPanel
-                open={creditsOpen}
-                onClose={() => setCreditsOpen(false)}
-                info={credits}
-                onUpgrade={() => {
-                  setCreditsOpen(false);
-                  onUpgrade?.();
-                }}
-                memberCreditNotice={cloudWorkspace && !canManageWorkspace}
-              />
-            ) : null}
-            {accountOpen ? (
-              <>
-                <div className="entry-nav-rail__menu-backdrop" onClick={() => setAccountOpen(false)} />
-                <div className="entry-nav-rail__account-menu" role="menu">
-                  <div className="entry-nav-rail__account-head">
-                    <span className="entry-nav-rail__account-head-avatar" aria-hidden>琼</span>
-                    <span className="entry-nav-rail__account-head-name">琼羽</span>
-                    <span className="entry-nav-rail__account-head-email">qiongyu1999@gmail.com</span>
-                  </div>
-                  <button type="button" className="entry-nav-rail__menu-item is-primary" role="menuitem">
-                    <Icon name="layout" size={15} /> 切换主题 <span className="entry-nav-rail__menu-chevron"><Icon name="chevron-right" size={13} /></span>
-                  </button>
-                  <button type="button" className="entry-nav-rail__menu-item" role="menuitem">
-                    <Icon name="languages" size={15} />
-                    切换语言
-                    <span className="entry-nav-rail__menu-meta">中文 / English</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="entry-nav-rail__menu-item"
-                    role="menuitem"
-                    onClick={() => {
-                      setAccountOpen(false);
-                      onOpenSettings?.();
-                    }}
-                  >
-                    <Icon name="settings" size={15} /> 设置
-                  </button>
-                  <div className="entry-nav-rail__menu-divider" />
-                  <a
-                    className="entry-nav-rail__menu-item"
-                    role="menuitem"
-                    href={GITHUB_HELP_URL}
-                    {...externalLinkProps}
-                    onClick={() => setAccountOpen(false)}
-                  >
-                    <Icon name="comment" size={15} /> 在 GitHub 上获取帮助
-                  </a>
-                  <a
-                    className="entry-nav-rail__menu-item"
-                    role="menuitem"
-                    href={GITHUB_FEATURE_URL}
-                    {...externalLinkProps}
-                    onClick={() => setAccountOpen(false)}
-                  >
-                    <Icon name="sparkles" size={15} /> 提交功能建议
-                  </a>
-                  <div className="entry-nav-rail__menu-divider" />
-                  <button type="button" className="entry-nav-rail__menu-item" role="menuitem">
-                    <Icon name="plus" size={15} /> 添加账号
-                  </button>
-                  <button type="button" className="entry-nav-rail__menu-item" role="menuitem">
-                    <Icon name="log-out" size={15} /> 退出登录
-                  </button>
-                </div>
-              </>
-            ) : null}
+        <div className="entry-nav-rail__search-row">
+          <div className="entry-nav-rail__search" aria-hidden>
+            <Icon name="search" size={14} />
+            <input type="text" placeholder={t('common.search')} readOnly tabIndex={-1} />
           </div>
-        ) : (
-          <button
-            type="button"
-            className="entry-nav-rail__local-logo"
-            onClick={() => selectView('home')}
-            aria-label={brandLabel}
-            data-testid="entry-local-logo"
-          >
-            <img src="/brand-icon.svg" alt="" aria-hidden />
-          </button>
-        )}
-        <div className="entry-nav-rail__search" aria-hidden>
-          <Icon name="search" size={14} />
-          <input type="text" placeholder={t('common.search')} readOnly tabIndex={-1} />
         </div>
         <NavButton
           active={isHome}
@@ -256,7 +355,7 @@ export function EntryNavRail({ view, onViewChange, onNewProject, open, onClose, 
           onClick={() => selectView('home')}
           testId="entry-nav-home"
         >
-          <Icon name="history" size={18} />
+          <Icon name="file-history-filled" size={18} />
         </NavButton>
         <NavButton
           active={view === 'community'}
@@ -265,11 +364,11 @@ export function EntryNavRail({ view, onViewChange, onNewProject, open, onClose, 
           onClick={() => selectView('community')}
           testId="entry-nav-community"
         >
-          <Icon name="globe" size={18} />
+          <Icon name="globe-filled" size={18} />
         </NavButton>
 
         {cloudWorkspace ? (
-          <>
+          <div className="entry-nav-rail__team-section">
             <div className="entry-nav-rail__team-wrap">
               <button
                 type="button"
@@ -355,7 +454,7 @@ export function EntryNavRail({ view, onViewChange, onNewProject, open, onClose, 
               onClick={() => selectView('drafts')}
               testId="entry-nav-drafts"
             >
-              <Icon name="file" size={18} />
+              <Icon name="file-filled" size={18} />
             </NavButton>
             <NavButton
               active={view === 'all-projects'}
@@ -364,7 +463,7 @@ export function EntryNavRail({ view, onViewChange, onNewProject, open, onClose, 
               onClick={() => selectView('all-projects')}
               testId="entry-nav-all-projects"
             >
-              <Icon name="grid" size={18} />
+              <Icon name="grid-filled" size={18} />
             </NavButton>
             <NavButton
               active={view === 'design-systems'}
@@ -373,7 +472,7 @@ export function EntryNavRail({ view, onViewChange, onNewProject, open, onClose, 
               onClick={() => selectView('design-systems')}
               testId="entry-nav-design-systems"
             >
-              <Icon name="palette" size={18} />
+              <Icon name="palette-filled" size={18} />
             </NavButton>
             <NavButton
               active={view === 'plugins'}
@@ -382,9 +481,9 @@ export function EntryNavRail({ view, onViewChange, onNewProject, open, onClose, 
               onClick={() => selectView('plugins')}
               testId="entry-nav-plugins"
             >
-              <Icon name="grid" size={18} />
+              <Icon name="puzzle-filled" size={18} />
             </NavButton>
-          </>
+          </div>
         ) : null}
 {null /* demo: hide content-plan nav item */}
         {cloudWorkspace && canManageWorkspace ? (
@@ -396,7 +495,7 @@ export function EntryNavRail({ view, onViewChange, onNewProject, open, onClose, 
               onClick={() => selectView('members')}
               testId="entry-nav-members"
             >
-              <Icon name="users" size={18} />
+              <Icon name="users-filled" size={18} />
             </NavButton>
             <NavButton
               active={view === 'dashboard'}
@@ -405,7 +504,7 @@ export function EntryNavRail({ view, onViewChange, onNewProject, open, onClose, 
               onClick={() => selectView('dashboard')}
               testId="entry-nav-dashboard"
             >
-              <Icon name="kanban" size={18} />
+              <Icon name="dashboard-filled" size={18} />
             </NavButton>
             {canOwnWorkspace ? (
               <NavButton
@@ -415,7 +514,7 @@ export function EntryNavRail({ view, onViewChange, onNewProject, open, onClose, 
                 onClick={() => selectView('workspace-settings')}
                 testId="entry-nav-workspace-settings"
               >
-                <Icon name="settings" size={18} />
+                <Icon name="settings-filled" size={18} />
               </NavButton>
             ) : null}
           </>
@@ -431,7 +530,7 @@ export function EntryNavRail({ view, onViewChange, onNewProject, open, onClose, 
               onClick={() => selectView('design-systems')}
               testId="entry-nav-design-systems"
             >
-              <Icon name="palette" size={18} />
+              <Icon name="palette-filled" size={18} />
             </NavButton>
             <NavButton
               active={view === 'plugins'}
@@ -440,7 +539,7 @@ export function EntryNavRail({ view, onViewChange, onNewProject, open, onClose, 
               onClick={() => selectView('plugins')}
               testId="entry-nav-plugins"
             >
-              <Icon name="grid" size={18} />
+              <Icon name="puzzle-filled" size={18} />
             </NavButton>
           </>
         ) : null}
@@ -450,6 +549,8 @@ export function EntryNavRail({ view, onViewChange, onNewProject, open, onClose, 
         <div className="entry-rail-actions">
           {footerExtra}
         </div>
+        {accountSwitcher}
+      </div>
       </div>
 
       <InviteDialog

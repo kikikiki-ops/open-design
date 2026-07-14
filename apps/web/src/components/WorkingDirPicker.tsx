@@ -103,7 +103,7 @@ export function WorkingDirPicker({
             })
           }
         >
-          <Icon name="folder" size={13} className={styles.triggerIcon} />
+          <Icon name="folder" size={14} className={styles.triggerIcon} />
           <span className={styles.triggerLabel}>
             {workingDir ? basename(workingDir) : (emptyLabel ?? t('homeWorkingDir.trigger'))}
           </span>

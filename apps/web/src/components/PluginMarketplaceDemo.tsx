@@ -69,7 +69,7 @@ const PLUGIN_DEMOS: PluginDemo[] = [
     id: 'figma',
     name: 'Figma',
     icon: 'Fi',
-    accent: '#7c3aed',
+    accent: '#353535',
     description: 'Read design files and sync visual context into Open Design projects.',
     source: 'Official',
     category: 'Featured',
@@ -158,7 +158,7 @@ const SKILL_DEMOS: SkillDemo[] = [
     id: 'prd-to-prototype',
     name: 'PRD to Prototype',
     icon: 'PP',
-    accent: '#7c3aed',
+    accent: '#353535',
     description: 'Convert a product requirement doc into a first-pass editable HTML project.',
     source: 'Workspace',
     category: 'Productivity',
@@ -178,8 +178,8 @@ const SKILL_DEMOS: SkillDemo[] = [
 
 const EXTRA_PLUGIN_DEMOS: PluginDemo[] = [
   ['brand-studio', 'Brand Studio', 'BS', '#ef4444', 'Generate brand systems, campaign rules, and launch assets from one brief.', 'Official', 'Design', 'connected', ['Connector', 'Skill'], ['Brand asset library', 'Typography tokens'], ['Brand rule synthesis', 'Campaign adaptation', 'Logo usage QA']],
-  ['site-builder', 'Site Builder', 'SB', '#2563eb', 'Turn product positioning into responsive marketing websites and landing pages.', 'Official', 'Website', 'connected', ['MCP', 'Skill'], undefined, ['generate_site', 'inspect_sections'], ['Hero rewrite', 'Pricing layout', 'Landing QA']],
-  ['app-prototype', 'AP', 'AP', '#7c3aed', 'Create high-fidelity mobile and desktop prototypes from product requirements.', 'Official', 'Prototype', 'available', ['Skill'], undefined, undefined, ['Interaction map', 'Screen flow', 'State coverage']],
+  ['site-builder', 'Site Builder', 'SB', '#1A74FF', 'Turn product positioning into responsive marketing websites and landing pages.', 'Official', 'Website', 'connected', ['MCP', 'Skill'], undefined, ['generate_site', 'inspect_sections'], ['Hero rewrite', 'Pricing layout', 'Landing QA']],
+  ['app-prototype', 'AP', 'AP', '#353535', 'Create high-fidelity mobile and desktop prototypes from product requirements.', 'Official', 'Prototype', 'available', ['Skill'], undefined, undefined, ['Interaction map', 'Screen flow', 'State coverage']],
   ['ux-researcher', 'UX', 'UX', '#0891b2', 'Cluster user feedback, identify friction, and produce research-backed design tasks.', 'Official', 'Research', 'connected', ['Connector', 'Skill'], ['Research repository', 'Interview notes'], undefined, ['Insight clustering', 'Journey mapping', 'Opportunity sizing']],
   ['presentation-maker', 'PM', 'PM', '#f97316', 'Create executive decks, pitch stories, and design review presentations.', 'Official', 'Slides', 'connected', ['Skill'], undefined, undefined, ['Storyline draft', 'Slide critique', 'Speaker notes']],
   ['figma-to-system', 'FS', 'FS', '#a855f7', 'Extract component patterns from Figma files and turn them into design-system rules.', 'Official', 'Design System', 'connected', ['Connector', 'MCP', 'Skill'], ['Figma OAuth', 'Component access'], ['inspect_components', 'export_tokens'], ['Token mapping', 'Component audit', 'Usage examples']],
@@ -196,7 +196,7 @@ const EXTRA_PLUGIN_DEMOS: PluginDemo[] = [
   ['portfolio-maker', 'PF', 'PF', '#111827', 'Create polished case studies, portfolios, and founder-facing narratives.', 'Personal', 'Website', 'installed', ['Skill'], undefined, undefined, ['Case study outline', 'Portfolio polish', 'Project narrative']],
   ['moodboard-maker', 'MM', 'MM', '#c026d3', 'Build visual directions, moodboards, and art-direction notes from a brief.', 'Personal', 'Design', 'installed', ['Skill'], undefined, undefined, ['Moodboard brief', 'Style territories', 'Reference critique']],
   ['design-critic', 'DC', 'DC', '#dc2626', 'Give precise critique on layout, hierarchy, readability, and craft.', 'Personal', 'Quality', 'installed', ['Skill'], undefined, undefined, ['Layout critique', 'Craft pass', 'Design rationale']],
-  ['prompt-to-site', 'PS', 'PS', '#2563eb', 'Convert rough prompts into structured site maps and first-pass HTML pages.', 'Personal', 'Website', 'installed', ['Skill'], undefined, undefined, ['Sitemap draft', 'Section plan', 'HTML starter']],
+  ['prompt-to-site', 'PS', 'PS', '#1A74FF', 'Convert rough prompts into structured site maps and first-pass HTML pages.', 'Personal', 'Website', 'installed', ['Skill'], undefined, undefined, ['Sitemap draft', 'Section plan', 'HTML starter']],
   ['deck-doctor', 'DD', 'DD', '#f59e0b', 'Tighten slide decks for narrative clarity, structure, and executive readability.', 'Personal', 'Slides', 'installed', ['Skill'], undefined, undefined, ['Deck diagnosis', 'Slide rewrite', 'Narrative arc']],
   ['icon-system', 'IS', 'IS', '#64748b', 'Create icon guidelines, usage rules, and simple SVG symbol directions.', 'Personal', 'Design System', 'installed', ['Skill'], undefined, undefined, ['Icon audit', 'Stroke rules', 'Usage matrix']],
   ['accessibility-coach', 'AC', 'AC', '#059669', 'Check contrast, semantics, focus states, and inclusive interaction patterns.', 'Personal', 'Quality', 'installed', ['Skill'], undefined, undefined, ['Contrast audit', 'Keyboard review', 'A11y copy']],
@@ -217,9 +217,9 @@ const EXTRA_PLUGIN_DEMOS: PluginDemo[] = [
 } as PluginDemo));
 
 const EXTRA_SKILL_DEMOS: SkillDemo[] = [
-  ['landing-page-qa', 'Landing Page QA', 'LQ', '#2563eb', 'Review hero clarity, conversion flow, proof points, and section rhythm.', 'Official', 'Website', 'enabled'],
+  ['landing-page-qa', 'Landing Page QA', 'LQ', '#1A74FF', 'Review hero clarity, conversion flow, proof points, and section rhythm.', 'Official', 'Website', 'enabled'],
   ['mobile-flow-audit', 'MF', '#0284c7', 'Inspect mobile navigation, screen density, states, and thumb-zone ergonomics.', 'Official', 'Mobile', 'enabled'],
-  ['design-token-mapper', 'DT', '#7c3aed', 'Map colors, type, spacing, and radius decisions into reusable token suggestions.', 'Official', 'Design System', 'enabled'],
+  ['design-token-mapper', 'DT', '#353535', 'Map colors, type, spacing, and radius decisions into reusable token suggestions.', 'Official', 'Design System', 'enabled'],
   ['deck-storyline', 'DS', '#f97316', 'Turn rough slide notes into a clear executive storyline.', 'Official', 'Slides', 'available'],
   ['pricing-page-review', 'PR', '#16a34a', 'Critique pricing tiers, plan names, objections, and upgrade cues.', 'Official', 'Growth', 'enabled'],
   ['accessibility-pass', 'AP', '#059669', 'Check generated UI against contrast, focus, labels, and motion basics.', 'Official', 'Quality', 'enabled'],
@@ -241,7 +241,7 @@ const EXTRA_SKILL_DEMOS: SkillDemo[] = [
   ['prompt-clarifier', 'PC', '#0ea5e9', 'Turn fuzzy product prompts into usable design requirements.', 'Personal', 'Productivity', 'enabled'],
   ['microinteraction-pass', 'MP', '#f59e0b', 'Suggest subtle hover, loading, and transition behavior for UI details.', 'Personal', 'Prototype', 'enabled'],
   ['handoff-checklist', 'HC', '#0284c7', 'Create engineering handoff checklists from finished screens.', 'Personal', 'Handoff', 'enabled'],
-  ['information-architecture', 'IA', '#7c3aed', 'Restructure navigation, grouping, and labels for clearer mental models.', 'Personal', 'Productivity', 'enabled'],
+  ['information-architecture', 'IA', '#353535', 'Restructure navigation, grouping, and labels for clearer mental models.', 'Personal', 'Productivity', 'enabled'],
   ['form-usability', 'FU', '#16a34a', 'Review forms for ordering, labels, validation, and completion friction.', 'Personal', 'Quality', 'enabled'],
 ].map(([id, name, icon, accent, description, source, category, status]) => ({
   id,
@@ -559,9 +559,6 @@ export function PluginMarketplaceDemo({ onTryPlugin }: PluginMarketplaceDemoProp
           <h1 id="plugin-marketplace-title" className="entry-section__title">
             扩展
           </h1>
-          <p>
-            安装专家套件、技能和连接器，为 Open Design 增加新的工作能力。
-          </p>
         </div>
         <div className="plugin-marketplace__hero-actions">
           <button
@@ -603,13 +600,6 @@ export function PluginMarketplaceDemo({ onTryPlugin }: PluginMarketplaceDemoProp
         </div>
 
       </div>
-
-      <p className="plugin-marketplace__mode-note">
-        {mode === 'plugins'
-          ? '专家套件是面向角色行业的工具套件，在对话框中输入 @ 或斜杠即可使用。'
-          : '技能是可复用的任务流程和审查规则，可独立使用，也可以被专家套件组合调用。'}
-      </p>
-
       <div className="plugin-marketplace__filter-block">
         <div className="plugin-marketplace__filters" aria-label="Marketplace source filters">
           {SOURCE_FILTERS.map((item) => (
@@ -917,11 +907,6 @@ export function PluginMarketplaceDemo({ onTryPlugin }: PluginMarketplaceDemoProp
             <header className="plugin-marketplace__create-head">
               <div>
                 <h2 id="plugin-create-title">新增 {createKind === 'plugin' ? 'Plugin' : 'Skill'}</h2>
-                <p>
-                  {createKind === 'plugin'
-                    ? '从 GitHub 或本地文件夹导入一个插件，上传后即可在团队内使用。'
-                    : '创建一个可复用的任务流程或审查规则，之后可以被 Plugin 复用。'}
-                </p>
               </div>
               <button type="button" aria-label="关闭新增面板" onClick={() => setCreateOpen(false)}>
                 <Icon name="close" size={15} />
@@ -945,40 +930,38 @@ export function PluginMarketplaceDemo({ onTryPlugin }: PluginMarketplaceDemoProp
             </div>
             <div className="plugin-marketplace__create-options">
               <article>
-                <span className="plugin-marketplace__create-option-icon" aria-hidden>
-                  <Icon name="external-link" size={20} />
-                </span>
                 <div>
                   <h3>从链接导入</h3>
                   <p>
                     粘贴 {createKind === 'plugin' ? '专家套件' : 'Skill'} 的公开链接，
                     Open Design 会拉取清单、校验能力并上传到团队空间。
                   </p>
-                  <label>
-                    <span>URL</span>
-                    <input placeholder={createKind === 'plugin' ? 'https://example.com/open-design-suite' : 'https://example.com/skill'} />
-                  </label>
+                  <div className="plugin-marketplace__url-import-row">
+                    <input
+                      aria-label="URL"
+                      placeholder={createKind === 'plugin' ? 'https://example.com/open-design-suite' : 'https://example.com/skill'}
+                    />
+                    <button type="button">导入并上传</button>
+                  </div>
                 </div>
-                <button type="button">导入并上传</button>
               </article>
               <article>
-                <span className="plugin-marketplace__create-option-icon" aria-hidden>
-                  <Icon name="folder" size={20} />
-                </span>
                 <div>
                   <h3>上传本地文件夹</h3>
                   <p>
                     选择包含 {createKind === 'plugin' ? 'open-design.json / SKILL.md' : 'SKILL.md'} 的本地目录，
                     校验通过后上传为团队 {createKind === 'plugin' ? '专家套件' : 'Skill'}。
                   </p>
-                  <button type="button" className="plugin-marketplace__folder-pick">
-                    <Icon name="folder" size={15} />
-                    选择文件夹
-                  </button>
+                  <div className="plugin-marketplace__folder-action-row">
+                    <button type="button" className="plugin-marketplace__folder-pick">
+                      <Icon name="folder" size={15} />
+                      选择文件夹
+                    </button>
+                    <button type="button">
+                      上传 {createKind === 'plugin' ? '专家套件' : 'Skill'}
+                    </button>
+                  </div>
                 </div>
-                <button type="button">
-                  上传 {createKind === 'plugin' ? '专家套件' : 'Skill'}
-                </button>
               </article>
             </div>
           </section>

@@ -653,8 +653,8 @@ export function RecentProjectsStrip({
         className={`recent-projects__row recent-projects__row--${view}${menuOpenId ? ' recent-projects__row--menu-open' : ''}${activeSelectionMode ? ' is-selecting' : ''}`}
         role="list"
       >
-        {visibleProjectCards.map(({ project, meta }) => {
-          const cover = projectCover(project, coverByProject[project.id] ?? null);
+        {visibleProjectCards.map(({ project, meta }, cardIndex) => {
+          const cover = projectCover(project, coverByProject[project.id] ?? null, cardIndex);
           const projectMoveAction: 'to-team' | 'to-personal' =
             meta.badge === 'shared' ? 'to-personal' : 'to-team';
           const designSystemProject = isDesignSystemProject(project);
@@ -666,6 +666,19 @@ export function RecentProjectsStrip({
           const selected = selectedProjectIds.has(project.id);
           const readonlySharedProject = isReadonlySharedProject(meta);
           const projectMutationAllowed = canMutateProject(meta);
+          const isShared = collaborationEnabled && space !== 'team' && meta.badge === 'shared';
+          const sharedBadge = (variant: 'overlay' | 'inline') =>
+            isShared ? (
+              <span
+                className={`recent-projects__card-badge recent-projects__card-badge--shared recent-projects__card-badge--${variant}`}
+              >
+                <svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="9" cy="8" r="3" />
+                  <path d="M3 20a6 6 0 0 1 12 0M16 11a3 3 0 1 0-1-5.8M21 20a6 6 0 0 0-5-5.9" />
+                </svg>
+                共享
+              </span>
+            ) : null;
           return (
             <div
               key={project.id}
@@ -737,18 +750,13 @@ export function RecentProjectsStrip({
                   ) : (
                     <span className="recent-projects__card-glyph">{cover.initial}</span>
                   )}
-                  {collaborationEnabled && space !== 'team' && meta.badge === 'shared' ? (
-                    <span className="recent-projects__card-badge recent-projects__card-badge--shared">
-                      <svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="9" cy="8" r="3" />
-                        <path d="M3 20a6 6 0 0 1 12 0M16 11a3 3 0 1 0-1-5.8M21 20a6 6 0 0 0-5-5.9" />
-                      </svg>
-                      共享
-                    </span>
-                  ) : null}
+                  {view === 'grid' ? sharedBadge('overlay') : null}
                 </div>
                 <div className="recent-projects__card-meta">
-                  <div className="recent-projects__card-name">{project.name}</div>
+                  <div className="recent-projects__card-name-row">
+                    <span className="recent-projects__card-name">{project.name}</span>
+                    {view === 'list' ? sharedBadge('inline') : null}
+                  </div>
                   <div className="recent-projects__card-footer">
                     <div className="recent-projects__card-time">
                       <span className="recent-projects__card-owner" aria-hidden>
@@ -1172,23 +1180,27 @@ function relativeTime(ts: number, t: ReturnType<typeof useT>): string {
   return new Date(ts).toLocaleDateString();
 }
 
+// Temporary placeholder covers for projects without a real cover: 12 mock
+// images under public/mock-covers, cycled by the card's list position so
+// neighboring cards never repeat. Remove once real covers exist for all
+// projects.
+const MOCK_COVER_COUNT = 12;
+function mockCoverUrl(cardIndex: number): string {
+  return `/mock-covers/cover-${cardIndex % MOCK_COVER_COUNT}.jpg`;
+}
+
 function projectCover(
   project: Project,
   override: { kind: 'html' | 'image' | 'video' | 'logo'; name: string } | null,
+  cardIndex: number,
 ): {
   kind: 'image' | 'video' | 'html' | 'logo' | 'fallback';
   src?: string;
   style: CSSProperties;
   initial: string;
 } {
-  let h = 0;
-  for (let i = 0; i < project.id.length; i += 1) {
-    h = (h * 31 + project.id.charCodeAt(i)) >>> 0;
-  }
-  const hue = h % 360;
-  const hue2 = (hue + 38) % 360;
   const style: CSSProperties = {
-    background: `radial-gradient(circle at 30% 28%, hsl(${hue} 70% 78% / 0.55), transparent 42%), linear-gradient(135deg, hsl(${hue} 65% 88%), hsl(${hue2} 70% 90%))`,
+    background: 'linear-gradient(135deg, var(--bg-subtle) 0%, var(--bg-panel) 100%)',
   };
   const trimmed = project.name.trim();
   const initial = (trimmed ? Array.from(trimmed)[0]! : '?').toUpperCase();
@@ -1208,7 +1220,7 @@ function projectCover(
     if (meta?.kind === 'video') return { kind: 'video', src, style, initial };
     if (/\.html?$/i.test(entry)) return { kind: 'html', src, style, initial };
   }
-  return { kind: 'fallback', style, initial };
+  return { kind: 'image', src: mockCoverUrl(cardIndex), style, initial };
 }
 
 type ProjectCategory = 'prototype' | 'live-artifact' | 'slide' | 'media' | 'brand';

@@ -74,7 +74,7 @@ const EMPTY_DRAFT: DraftEntry = {
 // of unlabelled inputs.
 const FIELD_LABEL_STYLE: CSSProperties = {
   display: 'block',
-  fontSize: 10,
+  fontSize: 12,
   fontWeight: 600,
   letterSpacing: 0.5,
   textTransform: 'uppercase',
@@ -2007,7 +2007,7 @@ export function MemorySection({
                       lineHeight: 1.5,
                     }}
                   />
-                  <p className="hint" style={{ fontSize: 11, marginTop: 4 }}>
+                  <p className="hint" style={{ fontSize: 12, marginTop: 4 }}>
                     {t('settings.memoryBodyHint')}
                   </p>
                 </div>
@@ -2024,7 +2024,7 @@ export function MemorySection({
                 <span
                   className="hint"
                   style={{
-                    fontSize: 11,
+                    fontSize: 12,
                     margin: 0,
                     color: 'var(--text-muted, #888)',
                   }}
@@ -2515,7 +2515,7 @@ export function MemorySection({
                 <span
                   className="hint"
                   style={{
-                    fontSize: 11,
+                    fontSize: 12,
                     margin: 0,
                     color:
                       indexDraft !== null

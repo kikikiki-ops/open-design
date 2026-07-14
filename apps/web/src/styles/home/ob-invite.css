@@ -7,7 +7,7 @@
   margin-bottom: 20px;
   background: color-mix(in srgb, var(--accent) 10%, var(--bg-panel));
   border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
-  border-radius: 10px;
+  border-radius: var(--radius-large, 8px);
   font-size: 14px;
   color: var(--text-body);
 }
@@ -79,7 +79,6 @@
 .ob-invite__textarea:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft, rgba(99, 102, 241, 0.18));
 }
 
 .ob-invite__hint {

@@ -4,7 +4,7 @@
 // header. Demo-only: all data is hard-coded Chinese mock content, no backend.
 // Canva-style two-column layout — form on the left, decorative art on the right.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Icon } from './Icon';
 
 export interface InviteRow {
@@ -27,6 +27,7 @@ interface Props {
 // Default invited role, aligned to the PRD matrix (管理员/成员 are assignable;
 // 所有者 is the workspace creator only and never assignable).
 const DEFAULT_ROLE = '成员';
+const ROLE_OPTIONS = ['管理员', DEFAULT_ROLE, '查看者'];
 
 export function InviteDialog({ open, onClose, freePlan = false, onSubmit, canAssignRoles = true }: Props) {
   const [rows, setRows] = useState<InviteRow[]>([{ email: '', role: DEFAULT_ROLE }]);
@@ -54,6 +55,25 @@ export function InviteDialog({ open, onClose, freePlan = false, onSubmit, canAss
   // passed to onSubmit use the same predicate.
   const isEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
   const hasValidEmail = rows.some((r) => isEmail(r.email));
+
+  // Custom role dropdown (replaces the native <select> for styling): one
+  // open row at a time, closed on outside-click / route away.
+  const [openRoleIndex, setOpenRoleIndex] = useState<number | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const roleListboxId = useId();
+  useEffect(() => {
+    if (openRoleIndex === null) return;
+    function onDown(e: MouseEvent) {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        setOpenRoleIndex(null);
+      }
+    }
+    window.addEventListener('mousedown', onDown);
+    return () => window.removeEventListener('mousedown', onDown);
+  }, [openRoleIndex]);
+  useEffect(() => {
+    if (!open) setOpenRoleIndex(null);
+  }, [open]);
 
   function handleConfirm() {
     const valid = rows.filter((r) => isEmail(r.email));
@@ -90,7 +110,7 @@ export function InviteDialog({ open, onClose, freePlan = false, onSubmit, canAss
               {canAssignRoles ? '分配角色' : '默认身份'}
             </span>
           </div>
-          <div className="entry-invite__rows">
+          <div className="entry-invite__rows" ref={panelRef}>
             {rows.map((row, i) => (
               <div className="entry-invite__fields" key={i}>
                 <input
@@ -100,16 +120,44 @@ export function InviteDialog({ open, onClose, freePlan = false, onSubmit, canAss
                   value={row.email}
                   onChange={(e) => updateRow(i, { email: e.target.value })}
                 />
-                <select
-                  className="entry-invite__role"
-                  value={canAssignRoles ? row.role : DEFAULT_ROLE}
-                  onChange={(e) => updateRow(i, { role: e.target.value })}
-                  disabled={!canAssignRoles}
-                  aria-label={canAssignRoles ? '分配角色' : '默认身份'}
-                >
-                  <option value="管理员">管理员</option>
-                  <option value="成员">成员</option>
-                </select>
+                <div className="entry-invite__role-picker">
+                  <button
+                    type="button"
+                    className="entry-invite__role"
+                    onClick={() => {
+                      if (!canAssignRoles) return;
+                      setOpenRoleIndex((current) => (current === i ? null : i));
+                    }}
+                    disabled={!canAssignRoles}
+                    aria-label={canAssignRoles ? '分配角色' : '默认身份'}
+                    aria-haspopup="listbox"
+                    aria-expanded={openRoleIndex === i}
+                    aria-controls={`${roleListboxId}-${i}`}
+                  >
+                    <span>{canAssignRoles ? row.role : DEFAULT_ROLE}</span>
+                    <Icon name="chevron-down" size={16} />
+                  </button>
+                  {openRoleIndex === i ? (
+                    <div className="entry-invite__role-menu" id={`${roleListboxId}-${i}`} role="listbox">
+                      {ROLE_OPTIONS.map((role) => (
+                        <button
+                          type="button"
+                          key={role}
+                          className={`entry-invite__role-option${(canAssignRoles ? row.role : DEFAULT_ROLE) === role ? ' is-selected' : ''}`}
+                          role="option"
+                          aria-selected={(canAssignRoles ? row.role : DEFAULT_ROLE) === role}
+                          onClick={() => {
+                            updateRow(i, { role });
+                            setOpenRoleIndex(null);
+                          }}
+                        >
+                          <span>{role}</span>
+                          {(canAssignRoles ? row.role : DEFAULT_ROLE) === role ? <Icon name="check" size={16} /> : null}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
                 {rows.length > 1 ? (
                   <button
                     type="button"

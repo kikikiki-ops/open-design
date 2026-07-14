@@ -55,8 +55,10 @@ interface Props {
    *   - 'footer': the home composer input-card footer pill.
    *   - 'home': the borderless trigger in the home composer's row below the
    *     card, sitting flush with the working-directory picker.
+   *   - 'icon': a text-free palette icon button matching the composer
+   *     toolbar's "+" icon-button, sitting inline in the send-button row.
    */
-  variant?: 'project' | 'footer' | 'home';
+  variant?: 'project' | 'footer' | 'home' | 'icon';
   /** Footer variant: visually-hidden label for the trigger button. */
   label?: string;
   /** Hide the recursive "Create" action when the picker is already on create. */
@@ -518,6 +520,37 @@ export function DesignSystemPicker({
       onClose={() => setPreviewModalSystem(null)}
     />
   ) : null;
+
+  if (variant === 'icon') {
+    return (
+      <div
+        ref={wrapRef}
+        className="composer-ds-icon"
+        data-testid="composer-design-system-picker"
+      >
+        <button
+          ref={triggerRef}
+          type="button"
+          className={`icon-btn composer-ds-icon-trigger od-tooltip${open ? ' is-active' : ''}${selected ? ' is-picked' : ''}`}
+          data-testid="composer-design-system-trigger"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-label={selected?.title ?? t('designSystemPicker.noneTitle')}
+          data-tooltip={selected?.title ?? t('designSystemPicker.noneTitle')}
+          disabled={loading}
+          title={selected?.title ?? t('designSystemPicker.noneTitle')}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <Icon name="palette" size={16} />
+          {selected ? (
+            <span className="composer-ds-icon-trigger-label">{selected.title}</span>
+          ) : null}
+        </button>
+        {popover}
+        {previewModal}
+      </div>
+    );
+  }
 
   if (variant === 'home') {
     return (

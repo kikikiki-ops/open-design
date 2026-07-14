@@ -21,11 +21,18 @@
   display: inline-flex;
   align-items: center;
   margin-right: 6px;
-  padding-right: 8px;
+  min-height: 30px;
+  padding: 2px;
   border: 0;
+  border-radius: 999px;
   background: transparent;
   cursor: pointer;
   font: inherit;
+  transition: background-color 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.presence__stack:hover {
+  background: color-mix(in srgb, var(--bg-subtle) 78%, transparent);
 }
 
 .presence__stack:focus-visible {
@@ -83,7 +90,7 @@
   padding: 0 6px;
   margin-left: -8px;
   border-radius: 13px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-muted, #64748b);
   background: var(--bg-subtle, #f1f5f9);
@@ -130,12 +137,12 @@
 
 .presence__popover-head strong {
   font-size: 13px;
-  font-weight: 780;
+  font-weight: 700;
 }
 
 .presence__popover-head span {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .presence__list {
@@ -149,7 +156,7 @@
   align-items: center;
   gap: 10px;
   padding: 8px;
-  border-radius: 10px;
+  border-radius: var(--radius-large, 8px);
   background: transparent;
 }
 
@@ -182,13 +189,13 @@
 
 .presence__member-copy strong {
   font-size: 13px;
-  font-weight: 740;
+  font-weight: 700;
 }
 
 .presence__member-copy small {
   overflow: hidden;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -233,7 +240,7 @@
   margin-top: 10px;
   padding: 2px 7px;
   border-radius: 4px 9px 9px 9px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1.4;
   color: #fff;
