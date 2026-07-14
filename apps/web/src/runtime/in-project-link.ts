@@ -165,7 +165,7 @@ function resolveAgainstResolvedDir(
   // other managed project. Imported-folder projects (`resolvedDir` is the
   // user's baseDir) reveal no managed root — no navigation is inferred.
   if (!projectId) return null;
-  const projectIdKey = isWindowsDrivePath(resolvedDir)
+  const projectIdKey = isWindowsDiskPath(resolvedDir)
     ? foldForComparison(projectId)
     : projectId;
   if (!resolvedDirKey.endsWith(`/${projectIdKey}`)) return null;
@@ -213,8 +213,8 @@ export function isPathLikeChatHref(href: string | null | undefined): boolean {
   // Windows drive-letter paths (`C:\…`, `C:/…`) match the RFC scheme
   // grammar below (single-letter scheme), so classify them first: they are
   // filesystem paths the SPA router can never serve — an unresolved one is
-  // always inert.
-  if (isWindowsDrivePath(trimmed)) return true;
+  // always inert. UNC shares (`\\server\…`) are filesystem paths too.
+  if (isWindowsDrivePath(trimmed) || isUncPath(trimmed)) return true;
   const normalizedHref = normalizeSameOriginHref(trimmed);
   if (/^[a-z][a-z0-9+.-]*:/i.test(normalizedHref)) return false;
   // Daemon-served prefixes return real content (downloads, exports, baked
@@ -255,16 +255,33 @@ function isWindowsDrivePath(path: string): boolean {
   return /^[a-z]:[\\/]/i.test(path);
 }
 
+// `\\server\share\…` — a Windows UNC absolute path. Only the backslash form
+// counts: a forward-slash `//host/…` is indistinguishable from a
+// protocol-relative URL and stays excluded upstream.
+function isUncPath(path: string): boolean {
+  return /^\\\\[^\\]/.test(path);
+}
+
 // Unify a decoded disk path for textual prefix comparison: POSIX absolute
-// paths pass through; Windows drive-letter paths normalize `\` to `/` and
-// upper-case the drive letter (the filesystem treats drives
-// case-insensitively). Anything else (relative paths, URLs) is not a disk
-// path.
+// paths pass through; Windows drive-letter and UNC paths normalize `\` to
+// `/` (drive letters upper-cased — the filesystem treats them
+// case-insensitively). A normalized UNC path keeps its `//server/…` shape.
+// Anything else (relative paths, URLs) is not a disk path.
 function normalizeDiskPath(path: string): string | null {
   if (path.startsWith('/')) return path;
-  if (!isWindowsDrivePath(path)) return null;
-  const unified = path.replace(/\\/g, '/');
-  return `${unified[0]!.toUpperCase()}${unified.slice(1)}`;
+  if (isWindowsDrivePath(path)) {
+    const unified = path.replace(/\\/g, '/');
+    return `${unified[0]!.toUpperCase()}${unified.slice(1)}`;
+  }
+  if (isUncPath(path)) return path.replace(/\\/g, '/');
+  return null;
+}
+
+// Whether a `normalizeDiskPath` output is a Windows shape (drive-letter or
+// UNC). Normalized UNC paths are the only ones starting with `//` — raw
+// protocol-relative hrefs never reach normalization.
+function isWindowsDiskPath(normalizedPath: string): boolean {
+  return isWindowsDrivePath(normalizedPath) || normalizedPath.startsWith('//');
 }
 
 // Lower-case for case-insensitive comparison, but only when folding keeps
@@ -279,7 +296,7 @@ function foldForComparison(value: string): string {
 // Comparison key for a `normalizeDiskPath` output: Windows paths fold case
 // (NTFS resolves paths case-insensitively), POSIX paths compare exactly.
 function diskPathComparisonKey(normalizedPath: string): string {
-  return isWindowsDrivePath(normalizedPath)
+  return isWindowsDiskPath(normalizedPath)
     ? foldForComparison(normalizedPath)
     : normalizedPath;
 }

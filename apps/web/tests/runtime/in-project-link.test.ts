@@ -489,6 +489,34 @@ describe('resolveChatFileLink (issue: chatpane file links opening a home-page wi
         ),
       ).toBeNull();
     });
+
+    it('proves current-project ownership on UNC share workspaces (case-insensitively)', () => {
+      // Network-share workspaces resolve to `\\server\share\…` paths
+      // (#5611 review round 9).
+      expect(
+        resolveChatFileLink(
+          '\\\\Server\\Share\\data\\projects\\project-1\\new-file.md',
+          new Set(['other.html']),
+          'project-1',
+          '\\\\server\\share\\data\\projects\\project-1',
+        ),
+      ).toEqual({ kind: 'workspace-file', filePath: 'new-file.md' });
+    });
+
+    it('navigates a UNC managed sibling to its owning project', () => {
+      expect(
+        resolveChatFileLink(
+          '\\\\server\\share\\data\\projects\\Other-Project\\deck-outline.md',
+          new Set(['unrelated.html']),
+          'project-1',
+          '\\\\server\\share\\data\\projects\\project-1',
+        ),
+      ).toEqual({
+        kind: 'project-file',
+        projectId: 'Other-Project',
+        filePath: 'deck-outline.md',
+      });
+    });
   });
 
   describe('imported-folder current projects (resolvedDir is the baseDir)', () => {
@@ -619,6 +647,10 @@ describe('isPathLikeChatHref (suppresses the detached home-window fallback)', ()
     expect(isPathLikeChatHref('C:\\Users\\me\\repo\\Dockerfile')).toBe(true);
     expect(isPathLikeChatHref('C:/Users/me/repo/README.md')).toBe(true);
     expect(isPathLikeChatHref('c:\\temp\\deck-outline.md')).toBe(true);
+  });
+
+  it('true for unresolvable UNC share paths', () => {
+    expect(isPathLikeChatHref('\\\\server\\share\\repo\\Dockerfile')).toBe(true);
   });
 
   it('true (and non-throwing) for app-route shapes with malformed percent-encoding', () => {
