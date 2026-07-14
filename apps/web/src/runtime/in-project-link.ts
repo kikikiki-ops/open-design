@@ -148,7 +148,14 @@ function resolveAgainstResolvedDir(
   if (decoded.split('/').some((segment) => segment === '..')) return null;
   const resolvedDir = normalizeDiskPath(projectResolvedDir.replace(/[\\/]+$/, ''));
   if (!resolvedDir) return null;
-  if (decoded.startsWith(`${resolvedDir}/`)) {
+  // Prefix proofs compare over case-folded keys on Windows paths (the
+  // filesystem is case-insensitive, so `C:\users\ME\…` and `C:\Users\me\…`
+  // are the same location); returned projectId/filePath values are always
+  // sliced from the ORIGINAL normalized strings so their casing survives.
+  // POSIX paths keep exact comparison.
+  const decodedKey = diskPathComparisonKey(decoded);
+  const resolvedDirKey = diskPathComparisonKey(resolvedDir);
+  if (decodedKey.startsWith(`${resolvedDirKey}/`)) {
     const filePath = decoded.slice(resolvedDir.length + 1);
     if (!filePath) return null;
     return { kind: 'workspace-file', filePath };
@@ -157,9 +164,17 @@ function resolveAgainstResolvedDir(
   // so a sibling `<projects-root>/<otherId>/<file>` provably belongs to that
   // other managed project. Imported-folder projects (`resolvedDir` is the
   // user's baseDir) reveal no managed root — no navigation is inferred.
-  if (!projectId || !resolvedDir.endsWith(`/${projectId}`)) return null;
+  if (!projectId) return null;
+  const projectIdKey = isWindowsDrivePath(resolvedDir)
+    ? foldForComparison(projectId)
+    : projectId;
+  if (!resolvedDirKey.endsWith(`/${projectIdKey}`)) return null;
   const managedRoot = resolvedDir.slice(0, resolvedDir.length - projectId.length - 1);
-  if (!managedRoot || !decoded.startsWith(`${managedRoot}/`)) return null;
+  const managedRootKey = resolvedDirKey.slice(
+    0,
+    resolvedDirKey.length - projectIdKey.length - 1,
+  );
+  if (!managedRoot || !decodedKey.startsWith(`${managedRootKey}/`)) return null;
   const rest = decoded.slice(managedRoot.length + 1);
   const separator = rest.indexOf('/');
   if (separator <= 0 || separator === rest.length - 1) return null;
@@ -250,6 +265,23 @@ function normalizeDiskPath(path: string): string | null {
   if (!isWindowsDrivePath(path)) return null;
   const unified = path.replace(/\\/g, '/');
   return `${unified[0]!.toUpperCase()}${unified.slice(1)}`;
+}
+
+// Lower-case for case-insensitive comparison, but only when folding keeps
+// the string length — slice offsets computed on the original strings must
+// stay aligned with positions matched on the folded keys (rare locale
+// characters like U+0130 grow when lower-cased).
+function foldForComparison(value: string): string {
+  const folded = value.toLowerCase();
+  return folded.length === value.length ? folded : value;
+}
+
+// Comparison key for a `normalizeDiskPath` output: Windows paths fold case
+// (NTFS resolves paths case-insensitively), POSIX paths compare exactly.
+function diskPathComparisonKey(normalizedPath: string): string {
+  return isWindowsDrivePath(normalizedPath)
+    ? foldForComparison(normalizedPath)
+    : normalizedPath;
 }
 
 function normalizeSameOriginHref(href: string): string {

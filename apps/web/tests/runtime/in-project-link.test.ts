@@ -449,6 +449,46 @@ describe('resolveChatFileLink (issue: chatpane file links opening a home-page wi
         ),
       ).toBeNull();
     });
+
+    it('matches the current project across mixed casing — NTFS is case-insensitive', () => {
+      // Same location on a normal Windows filesystem even though the
+      // casing differs (#5611 review round 8).
+      expect(
+        resolveChatFileLink(
+          'C:\\users\\ME\\.open-design\\data\\projects\\project-1\\new-file.md',
+          new Set(['other.html']),
+          'project-1',
+          'C:\\Users\\me\\.open-design\\data\\projects\\project-1',
+        ),
+      ).toEqual({ kind: 'workspace-file', filePath: 'new-file.md' });
+    });
+
+    it('navigates a mixed-case managed sibling and preserves its original casing', () => {
+      expect(
+        resolveChatFileLink(
+          'c:/users/me/.open-design/data/projects/Other-Project/deck-outline.md',
+          new Set(['unrelated.html']),
+          'project-1',
+          'C:\\Users\\me\\.open-design\\data\\projects\\project-1',
+        ),
+      ).toEqual({
+        kind: 'project-file',
+        projectId: 'Other-Project',
+        filePath: 'deck-outline.md',
+      });
+    });
+
+    it('keeps POSIX prefix proofs case-sensitive', () => {
+      // Linux filesystems distinguish case; only Windows paths fold.
+      expect(
+        resolveChatFileLink(
+          '/Data/Projects/project-1/new-file.md',
+          undefined,
+          'project-1',
+          '/data/projects/project-1',
+        ),
+      ).toBeNull();
+    });
   });
 
   describe('imported-folder current projects (resolvedDir is the baseDir)', () => {
