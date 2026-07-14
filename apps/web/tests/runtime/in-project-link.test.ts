@@ -521,6 +521,19 @@ describe('isPathLikeChatHref (suppresses the detached home-window fallback)', ()
     expect(isPathLikeChatHref('../Makefile')).toBe(true);
   });
 
+  it('true (and non-throwing) for app-route shapes with malformed percent-encoding', () => {
+    // parseRoute throws on decodeURIComponent('%E0'); the routability check
+    // must swallow that instead of crashing the click handler (#5611
+    // review round 6).
+    expect(isPathLikeChatHref('/projects/%E0')).toBe(true);
+    expect(isPathLikeChatHref('/design-systems/%E0/extra')).toBe(true);
+  });
+
+  it('false for the root path — it renders home on purpose', () => {
+    expect(isPathLikeChatHref('/')).toBe(false);
+    expect(isPathLikeChatHref('/?q=1')).toBe(false);
+  });
+
   it('false for external http(s) URLs', () => {
     expect(isPathLikeChatHref('https://example.com/docs')).toBe(false);
     expect(isPathLikeChatHref('http://example.com/x')).toBe(false);

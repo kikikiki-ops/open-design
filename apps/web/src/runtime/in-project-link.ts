@@ -197,8 +197,19 @@ export function isPathLikeChatHref(href: string | null | undefined): boolean {
   const withoutHash = normalizedHref.split('#')[0] ?? normalizedHref;
   const withoutQuery = withoutHash.split('?')[0] ?? withoutHash;
   if (!withoutQuery.startsWith('/')) return true;
-  const route = parseRoute(withoutQuery);
-  return route.kind === 'home' && route.view === 'home';
+  // The root path IS a recognized route (`/` and `/?q=…` render home on
+  // purpose) even though parseRoute reports it with the same shape as its
+  // unknown-route catch-all — special-case it before consulting the router.
+  if (withoutQuery.replace(/\/+$/, '') === '') return false;
+  try {
+    const route = parseRoute(withoutQuery);
+    return route.kind === 'home' && route.view === 'home';
+  } catch {
+    // parseRoute decodes route segments and throws on malformed
+    // percent-encoding (`/projects/%E0`) — an href the router would crash
+    // on is not a route; treat it as an inert path-like link.
+    return true;
+  }
 }
 
 // Same-origin prefixes the daemon serves directly (see `apps/web/next.config.ts`

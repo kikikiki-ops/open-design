@@ -218,6 +218,29 @@ describe('AssistantMessage — chat file-link routing (#1239)', () => {
     expect(window.location.pathname).toBe('/');
   });
 
+  it('does not crash on app-route links with malformed percent-encoding — the click stays inert', () => {
+    // parseRoute throws on decodeURIComponent('%E0'); the handler must treat
+    // the href as an inert path-like link, not raise an uncaught error.
+    const onRequestOpenFile = vi.fn();
+    const { container } = render(
+      <AssistantMessage
+        message={messageWithText('损坏的链接：[bad](/projects/%E0)。')}
+        streaming={false}
+        projectId="project-1"
+        onRequestOpenFile={onRequestOpenFile}
+      />,
+    );
+
+    const anchor = container.querySelector('a.md-link');
+    expect(anchor).not.toBeNull();
+
+    const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true });
+    expect(() => anchor!.dispatchEvent(clickEvent)).not.toThrow();
+    expect(onRequestOpenFile).not.toHaveBeenCalled();
+    expect(clickEvent.defaultPrevented).toBe(true);
+    expect(window.location.pathname).toBe('/');
+  });
+
   it('suppresses extensionless unresolvable file links too (Dockerfile-style names)', () => {
     // #5611 review round 5: extensionless file names (Dockerfile, Makefile,
     // README) must get the same inert treatment — the SPA router has no
