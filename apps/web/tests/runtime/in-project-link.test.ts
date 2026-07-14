@@ -271,17 +271,36 @@ describe('resolveChatFileLink (issue: chatpane file links opening a home-page wi
       ).toEqual({ kind: 'project-file', projectId: 'other-project', filePath: 'deck-outline.md' });
     });
 
-    it('routes a cross-project disk path to its owning project even when the basename collides with a current-project file', () => {
-      // `index.html` exists in BOTH projects. The disk path names its owning
-      // project explicitly, so the current-project basename fallback must
-      // not capture it — that would silently open the WRONG project's file.
+    it('prefers a current-project file match over a colliding managed-looking disk path', () => {
+      // `index.html` exists in the current project AND the disk path names a
+      // `/projects/<seg>/` boundary. The client cannot positively prove the
+      // segment is another project (it is just as likely a legacy name-keyed
+      // or imported-folder directory — the maintained contract in
+      // e2e/ui/project-file-link-routing.test.ts), so the current-project
+      // basename fallback wins. Navigation to the owning project only
+      // happens when NO current-project file matches; upgrading this case
+      // needs explicit reference-project metadata plumbed to the chat.
       expect(
         resolveChatFileLink(
           '/Users/mac/.open-design/data/projects/other-project/index.html',
           new Set(['index.html']),
           'project-1',
         ),
-      ).toEqual({ kind: 'project-file', projectId: 'other-project', filePath: 'index.html' });
+      ).toEqual({ kind: 'workspace-file', filePath: 'index.html' });
+    });
+
+    it('keeps the legacy name-keyed e2e fixture shape on the current project (regression for e2e/ui/project-file-link-routing.test.ts)', () => {
+      // Exact shape the maintained Playwright contract seeds: a 0.10.x
+      // preview data dir keyed by project NAME, linking a file that exists
+      // in the current project. The click must reopen the current project's
+      // tab, never navigate to `/projects/File Link Routing/…`.
+      expect(
+        resolveChatFileLink(
+          '/Users/mac/open-design/open-design-preview-0.10.0/projects/File%20Link%20Routing/index.html',
+          new Set(['index.html']),
+          'file-link-routing-1752480000000-abc123',
+        ),
+      ).toEqual({ kind: 'workspace-file', filePath: 'index.html' });
     });
 
     it('resolves an absolute managed-projects disk path to the owning project', () => {
@@ -333,6 +352,12 @@ describe('resolveChatFileLink (issue: chatpane file links opening a home-page wi
       expect(resolveChatFileLink('https://example.com/docs', undefined, 'project-1')).toBeNull();
     });
 
+    it('protocol-relative URLs are external, never managed-projects disk paths', () => {
+      expect(
+        resolveChatFileLink('//example.com/projects/x/y.html', undefined, 'project-1'),
+      ).toBeNull();
+    });
+
     it('absolute paths without a managed projects segment', () => {
       expect(resolveChatFileLink('/Users/mac/code/foo/bar.ts', undefined, 'project-1')).toBeNull();
     });
@@ -364,6 +389,21 @@ describe('isPathLikeChatHref (suppresses the detached home-window fallback)', ()
 
   it('true for same-origin app URLs (they reopen the SPA, not a document)', () => {
     expect(isPathLikeChatHref(`${window.location.origin}/deck-outline.md`)).toBe(true);
+  });
+
+  it('false for extensionless SPA routes — their default open renders real content', () => {
+    expect(isPathLikeChatHref('/automations')).toBe(false);
+    expect(isPathLikeChatHref('/projects/abc123')).toBe(false);
+    expect(isPathLikeChatHref('/design-systems/xyz')).toBe(false);
+  });
+
+  it('false for protocol-relative external URLs', () => {
+    expect(isPathLikeChatHref('//example.com/docs')).toBe(false);
+    expect(isPathLikeChatHref('//example.com/file.pdf')).toBe(false);
+  });
+
+  it('false for extensionless absolute filesystem paths (narrowed to confirmed file-like hrefs)', () => {
+    expect(isPathLikeChatHref('/usr/local/bin/node')).toBe(false);
   });
 
   it('false for external http(s) URLs', () => {

@@ -232,15 +232,12 @@ describe('AssistantMessage — chat file-link routing (#1239)', () => {
     expect(clickEvent.defaultPrevented).toBe(true);
   });
 
-  it('navigates managed-looking disk paths to their named project even when the basename matches a current-project file', () => {
-    // A `/projects/<segment>/` boundary claims an owning project, and that
-    // claim outranks the current-project basename fallback: `index.html`
-    // existing in the current project must not capture ANOTHER project's
-    // `index.html` (silently previewing the wrong file). The cost is that a
-    // legacy name-keyed directory (`projects/Web Prototype/` from 0.10.x
-    // previews) now navigates to that name instead of basename-matching —
-    // an in-window project-missing bounce at worst, never the detached
-    // home window.
+  it('routes legacy name-keyed disk paths that match project files through onRequestOpenFile', () => {
+    // Legacy 0.10.x preview data dirs are keyed by project NAME
+    // (`projects/Web Prototype/`). The client cannot tell that apart from
+    // another project's directory, so a current-project file match wins and
+    // reopens the workspace tab — the maintained contract in
+    // e2e/ui/project-file-link-routing.test.ts.
     const onRequestOpenFile = vi.fn();
     const { container } = render(
       <AssistantMessage
@@ -260,11 +257,32 @@ describe('AssistantMessage — chat file-link routing (#1239)', () => {
     const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true });
     anchor!.dispatchEvent(clickEvent);
 
-    expect(onRequestOpenFile).not.toHaveBeenCalled();
+    expect(onRequestOpenFile).toHaveBeenCalledTimes(1);
+    expect(onRequestOpenFile).toHaveBeenCalledWith('index.html');
     expect(clickEvent.defaultPrevented).toBe(true);
-    expect(decodeURIComponent(window.location.pathname)).toBe(
-      '/projects/Web Prototype/files/index.html',
+    expect(window.location.pathname).toBe('/');
+  });
+
+  it('keeps SPA-route links on their default behavior instead of swallowing them', () => {
+    // Extensionless same-origin routes like /automations are legitimate app
+    // pages: the default open still renders real content, so the handler
+    // must not preventDefault them into dead links.
+    const onRequestOpenFile = vi.fn();
+    const { container } = render(
+      <AssistantMessage
+        message={messageWithText('自动化配置见 [Automations](/automations)。')}
+        streaming={false}
+        projectId="project-1"
+        onRequestOpenFile={onRequestOpenFile}
+      />,
     );
+
+    const anchor = container.querySelector('a.md-link');
+    expect(anchor).not.toBeNull();
+    const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true });
+    anchor!.dispatchEvent(clickEvent);
+    expect(onRequestOpenFile).not.toHaveBeenCalled();
+    expect(clickEvent.defaultPrevented).toBe(false);
   });
 
   it('does not intercept external https:// URLs — preserves default target="_blank" behavior', () => {
@@ -381,11 +399,12 @@ describe('AssistantMessage — chat file-link routing (#1239)', () => {
     expect(clickEvent.defaultPrevented).toBe(false);
   });
 
-  it('routes a cross-project disk path away from a same-named current-project file', () => {
-    // `index.html` exists in BOTH the current project and the linked
-    // @-referenced project. The managed-projects disk path names its owning
-    // project, so the click must navigate there — not open the current
-    // project's same-named file through the workspace opener.
+  it('prefers the current-project file over a same-named managed-looking disk path', () => {
+    // `index.html` exists in the current project and the disk path carries a
+    // `/projects/<seg>/` boundary. Ownership cannot be proven client-side
+    // (legacy name-keyed and imported-folder dirs share this shape), so the
+    // current-project match wins; navigation to the owning project happens
+    // only when no current-project file matches (the 0.14.1 scenario).
     const onRequestOpenFile = vi.fn();
     const { container } = render(
       <AssistantMessage
@@ -403,8 +422,9 @@ describe('AssistantMessage — chat file-link routing (#1239)', () => {
     expect(anchor).not.toBeNull();
     const clickEvent = new MouseEvent('click', { bubbles: true, cancelable: true });
     anchor!.dispatchEvent(clickEvent);
-    expect(onRequestOpenFile).not.toHaveBeenCalled();
+    expect(onRequestOpenFile).toHaveBeenCalledTimes(1);
+    expect(onRequestOpenFile).toHaveBeenCalledWith('index.html');
     expect(clickEvent.defaultPrevented).toBe(true);
-    expect(window.location.pathname).toBe('/projects/other-project/files/index.html');
+    expect(window.location.pathname).toBe('/');
   });
 });

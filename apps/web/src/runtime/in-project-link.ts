@@ -83,13 +83,8 @@ export function resolveChatFileLink(
   const trimmed = href.trim();
   if (!trimmed || trimmed.startsWith('#')) return null;
   const normalizedHref = normalizeSameOriginHref(trimmed);
-  // Hrefs that name their owning project explicitly (app file routes and
-  // managed-projects disk paths) are classified FIRST. They must never fall
-  // through to the current-project basename fallback below: a cross-project
-  // `/…/projects/other/index.html` would otherwise be captured by a
-  // same-named file in the current project — common names like `index.html`
-  // or `README.md` make that collision realistic — and silently open the
-  // WRONG project's file.
+  // App file routes name their owning project explicitly and are never
+  // subject to the basename fallback, so classify them directly.
   const appRoute = extractAppProjectFileRoute(normalizedHref);
   if (appRoute) {
     const filePath = normalizeProjectFilePath(appRoute.filePath);
@@ -99,47 +94,61 @@ export function resolveChatFileLink(
     }
     return { kind: 'workspace-file', filePath };
   }
-  if (!/^[a-z][a-z0-9+.-]*:/i.test(normalizedHref)) {
-    const diskRoute = extractManagedProjectsDiskRoute(normalizedHref);
-    if (diskRoute) {
-      if (projectId && diskRoute.projectId === projectId) {
-        // Same project even when the file doesn't appear in
-        // `projectFileNames` (stale file list, or a file the agent just
-        // wrote): still open it in the current workspace rather than
-        // re-navigating to our own project.
-        return { kind: 'workspace-file', filePath: diskRoute.filePath };
-      }
-      return { kind: 'project-file', projectId: diskRoute.projectId, filePath: diskRoute.filePath };
-    }
-  }
-  // Everything else — relative paths, known-file basename matches, absolute
-  // paths outside the managed projects root — resolves against the current
-  // project only.
+  // Current-project resolution runs BEFORE disk-route navigation, including
+  // the known-file basename fallback for absolute paths. A disk path's
+  // `/projects/<seg>/` boundary does NOT positively prove another project's
+  // ownership: legacy 0.10.x preview data dirs are keyed by project NAME and
+  // imported-folder workspaces can contain a `projects/` directory of their
+  // own — both shapes reference CURRENT-project files (maintained contract:
+  // e2e/ui/project-file-link-routing.test.ts). Only a path no current-project
+  // file matches is treated as another project's file. Upgrading the
+  // ambiguous colliding-basename case to owning-project navigation needs
+  // explicit reference-project metadata plumbed to the chat surface.
   const currentProjectPath = asInProjectFilePath(href, projectFileNames, projectId);
   if (currentProjectPath) return { kind: 'workspace-file', filePath: currentProjectPath };
-  return null;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(normalizedHref)) return null;
+  const diskRoute = extractManagedProjectsDiskRoute(normalizedHref);
+  if (!diskRoute) return null;
+  if (projectId && diskRoute.projectId === projectId) {
+    // Same project even when the file doesn't appear in `projectFileNames`
+    // (stale file list, or a file the agent just wrote): still open it in
+    // the current workspace rather than re-navigating to our own project.
+    return { kind: 'workspace-file', filePath: diskRoute.filePath };
+  }
+  return { kind: 'project-file', projectId: diskRoute.projectId, filePath: diskRoute.filePath };
 }
 
 /**
- * Whether an unresolvable chat href still LOOKS like a file/route path —
- * i.e. it carries no scheme (after same-origin normalization) and is not a
- * same-document fragment. For these, the default `target="_blank"` fallback
- * can never do anything useful inside the app: Electron resolves the
- * relative/absolute path against the app origin and opens a detached window
- * whose SPA router lands on HOME. Callers should `preventDefault()` and
- * treat the link as inert instead (0.14.1 acceptance bug: chatpane file links opened a home-page window).
+ * Whether an unresolvable chat href is confirmed FILE-like — schemeless
+ * (after same-origin normalization), not a fragment, not a protocol-relative
+ * network URL, and its final path segment carries a file extension. For
+ * these, the default `target="_blank"` fallback can never do anything useful
+ * inside the app: Electron resolves the path against the app origin and
+ * opens a detached window whose SPA router lands on HOME. Callers should
+ * `preventDefault()` and treat the link as inert instead (0.14.1 acceptance
+ * bug: chatpane file links opened a home-page window).
+ *
+ * Deliberately NOT matched: extensionless schemeless hrefs. Those may be
+ * valid SPA routes (`/automations`, `/projects/<id>`, `/design-systems/<id>`)
+ * whose default open still renders real content — swallowing them would turn
+ * legitimate in-app links into dead links.
  */
 export function isPathLikeChatHref(href: string | null | undefined): boolean {
   if (typeof href !== 'string') return false;
   const trimmed = href.trim();
   if (!trimmed || trimmed.startsWith('#')) return false;
+  // Protocol-relative URLs (`//host/…`) are external network URLs.
+  if (trimmed.startsWith('//')) return false;
   const normalizedHref = normalizeSameOriginHref(trimmed);
   if (/^[a-z][a-z0-9+.-]*:/i.test(normalizedHref)) return false;
   // Daemon-served prefixes return real content (downloads, exports, baked
   // previews) rather than re-entering the SPA — keep their default link
   // behavior.
   if (isDaemonServedPath(normalizedHref)) return false;
-  return true;
+  const withoutHash = normalizedHref.split('#')[0] ?? normalizedHref;
+  const withoutQuery = withoutHash.split('?')[0] ?? withoutHash;
+  const lastSegment = withoutQuery.split('/').pop() ?? '';
+  return /\.[a-z0-9]+$/i.test(lastSegment);
 }
 
 // Same-origin prefixes the daemon serves directly (see `apps/web/next.config.ts`
@@ -210,6 +219,10 @@ function extractManagedProjectsDiskRoute(
   href: string,
 ): { projectId: string; filePath: string } | null {
   if (!href.startsWith('/')) return null;
+  // Protocol-relative URLs (`//host/…`) are external network URLs, never
+  // local disk paths — `//cdn.example.com/projects/x/y.html` must not be
+  // reinterpreted as a managed-projects file.
+  if (href.startsWith('//')) return null;
   // Daemon endpoints under /api (and static mounts) are URLs, not disk
   // paths — `/api/projects/<id>/export/…` must not be reinterpreted as a
   // managed-projects file.
