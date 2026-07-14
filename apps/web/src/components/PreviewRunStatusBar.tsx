@@ -154,7 +154,9 @@ export function PreviewRunStatusBar({
       aria-label={t(statusLabelKey(displayed))}
     >
       <div className={`${styles.card}${displayed.phase === 'failed' ? ` ${styles.failed}` : ''}`}>
-        <span className={styles.label}>{t(statusLabelKey(displayed))}</span>
+        <span key={`${displayed.message.id}:${displayed.stage}`} className={styles.label}>
+          {t(statusLabelKey(displayed))}
+        </span>
         {isFailure ? null : (
           <span className={styles.elapsed}>{t('previewRunStatus.elapsed', { time: elapsed })}</span>
         )}
