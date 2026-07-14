@@ -79,6 +79,10 @@ export const API_ERROR_CODES = [
   // `tools live-artifacts create` path) as a 422.
   'ARTIFACT_PUBLICATION_BLOCKED',
   'UPSTREAM_UNAVAILABLE',
+  // The daemon and desktop sidecar contract are version-skewed. A newer daemon
+  // sent a message such as `render-slides`, but the running desktop main process
+  // predates that message and rejected it before rendering could start.
+  'DESKTOP_SIDECAR_UNKNOWN_MESSAGE',
   'RATE_LIMITED',
   // PR #974 round-4: desktop-paired daemon received an import request
   // but the desktop main process has not yet registered its HMAC secret

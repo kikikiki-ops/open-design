@@ -7,7 +7,8 @@ import { promisify } from "node:util";
 import { NtExecutable, NtExecutableResource, Resource } from "resedit";
 import { describe, expect, it } from "vitest";
 
-import { materializeCachedUnpackedForInstaller } from "../src/win/builder.js";
+import { domToPptxBundleResource } from "../src/dom-to-pptx-resource.js";
+import { createWinElectronBuilderConfig, materializeCachedUnpackedForInstaller } from "../src/win/builder.js";
 import { createLauncherRuntimeSyncPowerShellScript } from "../src/win/custom-installer.js";
 import type { WinPaths } from "../src/win/types.js";
 import { readWinExecutableVersionSnapshot } from "../src/win/version-resource.js";
@@ -125,6 +126,36 @@ describe("materializeCachedUnpackedForInstaller", () => {
 });
 
 describe("Windows pack artifact boundaries", () => {
+  it("wires the dom-to-pptx bundle into electron-builder extraResources", async () => {
+    const root = await mkdtemp(join(tmpdir(), "open-design-win-builder-config-"));
+    const paths = createPaths(root);
+    const config = {
+      electronBuilderCliPath: "electron-builder",
+      electronVersion: "38.0.0",
+      namespace: "second",
+      portable: false,
+      to: "nsis",
+      webOutputMode: "standalone",
+      workspaceRoot: root,
+    } as Parameters<typeof createWinElectronBuilderConfig>[0];
+
+    try {
+      const builderConfig = createWinElectronBuilderConfig(config, paths, {
+        namespaceToken: "second",
+        packageVersion: "0.13.1",
+        webStandaloneHookConfigPath: null,
+      });
+
+      expect(builderConfig.extraResources).toContainEqual(domToPptxBundleResource(config));
+      expect(builderConfig.extraResources).toContainEqual({
+        from: join(root, "apps", "desktop", "vendor", "dom-to-pptx", "dom-to-pptx.bundle.js.gz"),
+        to: "dom-to-pptx.bundle.js.gz",
+      });
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it("does not build launcher payload artifacts for a pure dir target", async () => {
     const source = await readFile(new URL("../src/win/build.ts", import.meta.url), "utf8");
     expect(source).toContain("const hasLauncherPayloadTarget = hasNsisTarget || hasZipTarget");

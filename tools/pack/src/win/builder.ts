@@ -127,46 +127,17 @@ async function writeWebStandaloneHookConfig(config: ToolPackConfig, paths: WinPa
   return paths.webStandaloneHookConfigPath;
 }
 
-async function runElectronBuilderRaw(
+export function createWinElectronBuilderConfig(
   config: ToolPackConfig,
   paths: WinPaths,
-  projectDir: string,
-): Promise<WinPackTiming[]> {
-  const segments: WinPackTiming[] = [];
-  const runSegment = async <T>(
-    phase: string,
-    task: () => Promise<T>,
-    details?: Record<string, unknown>,
-  ): Promise<T> => {
-    const startedAt = Date.now();
-    logWinBuildProgress("segment:start", { phase });
-    try {
-      const result = await task();
-      logWinBuildProgress("segment:done", { durationMs: Date.now() - startedAt, phase });
-      return result;
-    } catch (error) {
-      logWinBuildProgress("segment:failed", {
-        durationMs: Date.now() - startedAt,
-        error: error instanceof Error ? error.message : String(error),
-        phase,
-      });
-      throw error;
-    } finally {
-      segments.push({ details, durationMs: Date.now() - startedAt, phase });
-    }
-  };
-
-  const namespaceToken = sanitizeNamespace(config.namespace);
-  const packagedVersion = await runSegment("electron-builder-raw:read-packaged-version", async () =>
-    readPackagedVersion(config)
-  );
-  const packageVersion = electronBuilderVersionForAppVersion(packagedVersion);
-  const webStandaloneHookConfigPath = config.webOutputMode === "standalone"
-    ? await runSegment("electron-builder-raw:write-web-standalone-hook-config", async () =>
-      writeWebStandaloneHookConfig(config, paths)
-    )
-    : null;
-  const builderConfig = {
+  options: {
+    namespaceToken: string;
+    packageVersion: string;
+    webStandaloneHookConfigPath: string | null;
+  },
+) {
+  const { namespaceToken, packageVersion, webStandaloneHookConfigPath } = options;
+  return {
     appId: "io.open-design.desktop",
     afterPack: webStandaloneHookConfigPath == null ? undefined : winResources.webStandaloneAfterPackHook,
     asar: ELECTRON_BUILDER_ASAR,
@@ -224,6 +195,52 @@ async function runElectronBuilderRaw(
       target: resolveElectronBuilderWinTargets(config.to).map((target) => ({ arch: ["x64"], target })),
     },
   };
+}
+
+async function runElectronBuilderRaw(
+  config: ToolPackConfig,
+  paths: WinPaths,
+  projectDir: string,
+): Promise<WinPackTiming[]> {
+  const segments: WinPackTiming[] = [];
+  const runSegment = async <T>(
+    phase: string,
+    task: () => Promise<T>,
+    details?: Record<string, unknown>,
+  ): Promise<T> => {
+    const startedAt = Date.now();
+    logWinBuildProgress("segment:start", { phase });
+    try {
+      const result = await task();
+      logWinBuildProgress("segment:done", { durationMs: Date.now() - startedAt, phase });
+      return result;
+    } catch (error) {
+      logWinBuildProgress("segment:failed", {
+        durationMs: Date.now() - startedAt,
+        error: error instanceof Error ? error.message : String(error),
+        phase,
+      });
+      throw error;
+    } finally {
+      segments.push({ details, durationMs: Date.now() - startedAt, phase });
+    }
+  };
+
+  const namespaceToken = sanitizeNamespace(config.namespace);
+  const packagedVersion = await runSegment("electron-builder-raw:read-packaged-version", async () =>
+    readPackagedVersion(config)
+  );
+  const packageVersion = electronBuilderVersionForAppVersion(packagedVersion);
+  const webStandaloneHookConfigPath = config.webOutputMode === "standalone"
+    ? await runSegment("electron-builder-raw:write-web-standalone-hook-config", async () =>
+      writeWebStandaloneHookConfig(config, paths)
+    )
+    : null;
+  const builderConfig = createWinElectronBuilderConfig(config, paths, {
+    namespaceToken,
+    packageVersion,
+    webStandaloneHookConfigPath,
+  });
 
   await runSegment("electron-builder-raw:prepare-config", async () => {
     await removeTree(paths.appBuilderOutputRoot);

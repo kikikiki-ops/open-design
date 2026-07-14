@@ -271,6 +271,70 @@ describe('screenshot export desktop renderer file handoff', () => {
     expect(bytes.equals(PPTX)).toBe(true);
   });
 
+  it('returns a structured sidecar-skew error when an older desktop does not know render-slides', async () => {
+    const skewedRenderer = async (): Promise<DesktopRenderSlidesResult> => {
+      throw new Error('unknown desktop sidecar message: render-slides');
+    };
+    const srv = (await startServer({
+      port: 0,
+      returnServer: true,
+      desktopSlideRenderer: skewedRenderer,
+    })) as { url: string; server: http.Server };
+    try {
+      const res = await fetch(`${srv.url}/api/projects/${projectId}/export/pptx`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName: 'index.html', editable: true }),
+      });
+      expect(res.status).toBe(502);
+      const body = (await res.json()) as {
+        error?: { code?: string; details?: { hint?: string }; message?: string; retryable?: boolean };
+      };
+      expect(body.error?.code).toBe('DESKTOP_SIDECAR_UNKNOWN_MESSAGE');
+      expect(body.error?.message).toContain('render-slides');
+      expect(body.error?.details?.hint).toContain('Restart or update');
+      expect(body.error?.retryable).toBe(true);
+    } finally {
+      await new Promise<void>((resolve) => srv.server.close(() => resolve()));
+    }
+  });
+
+  it('falls back to screenshot PPTX when editable rendering cannot load the dom-to-pptx bundle', async () => {
+    const fallbackInputs: DesktopRenderSlidesInput[] = [];
+    const bundleMissingRenderer = async (input: DesktopRenderSlidesInput): Promise<DesktopRenderSlidesResult> => {
+      fallbackInputs.push(input);
+      if (input.editable) throw new Error('dom-to-pptx vendor bundle not found');
+      if (!input.outputDir) return { ok: false, error: 'expected an outputDir handoff' };
+      await mkdir(input.outputDir, { recursive: true });
+      const file = path.join(input.outputDir, 'slide-0.png');
+      await writeFile(file, PNG);
+      return { ok: true, slideFiles: [file], width: 1920, height: 1080, mode: 'deck' };
+    };
+    const srv = (await startServer({
+      port: 0,
+      returnServer: true,
+      desktopSlideRenderer: bundleMissingRenderer,
+    })) as { url: string; server: http.Server };
+    try {
+      const res = await fetch(`${srv.url}/api/projects/${projectId}/export/pptx`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileName: 'index.html', editable: true }),
+      });
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toContain(
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      );
+      const bytes = Buffer.from(await res.arrayBuffer());
+      expect(bytes.subarray(0, 2).toString('latin1')).toBe('PK');
+      expect(fallbackInputs).toHaveLength(2);
+      expect(fallbackInputs[0]?.editable).toBe(true);
+      expect(fallbackInputs[1]?.editable).toBe(false);
+    } finally {
+      await new Promise<void>((resolve) => srv.server.close(() => resolve()));
+    }
+  });
+
   it('returns 422 when PPTX export is requested for a non-deck page', async () => {
     const noSlideRenderer = async (): Promise<DesktopRenderSlidesResult> => ({
       ok: false,

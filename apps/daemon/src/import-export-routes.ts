@@ -1,5 +1,6 @@
 import type { Express, Response } from 'express';
 import { PROJECT_EXPORT_MANIFEST_SCHEMA, isExportFormat } from '@open-design/contracts';
+import type { DesktopRenderSlidesInput, DesktopRenderSlidesResult } from '@open-design/sidecar-proto';
 import nodePath from 'node:path';
 import { readFile, rm } from 'node:fs/promises';
 import type { RouteDeps } from './server-context.js';
@@ -23,6 +24,28 @@ import { sandboxImportedProjectRootUnavailableReason } from './sandbox-mode.js';
 import { parseOrchestratorWorkspace } from './workspace-contract.js';
 
 export interface RegisterImportRoutesDeps extends RouteDeps<'db' | 'http' | 'uploads' | 'node' | 'ids' | 'paths' | 'imports' | 'auth' | 'projectStore' | 'conversations' | 'projectFiles' | 'validation'> {}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * A freshly updated daemon can ask an older still-running desktop main process
+ * to handle `render-slides`. Retrying screenshot PPTX cannot help there because
+ * both editable and screenshot PPTX use the same desktop message.
+ */
+function isSidecarVersionSkewError(err: unknown): boolean {
+  return /unknown \w+ sidecar message/i.test(errorMessage(err));
+}
+
+/**
+ * Editable PPTX depends on the vendored dom-to-pptx browser bundle. If only
+ * that bundle path is broken, the desktop renderer can still capture slide
+ * screenshots, so the daemon can return a usable screenshot PPTX.
+ */
+function isRendererBundleMissingError(err: unknown): boolean {
+  return /dom-to-pptx vendor bundle not found/i.test(errorMessage(err));
+}
 
 export function registerImportRoutes(app: Express, ctx: RegisterImportRoutesDeps) {
   const { db } = ctx;
@@ -627,16 +650,56 @@ export function registerProjectExportRoutes(app: Express, ctx: RegisterProjectEx
       // renderer outage — surface it as 502 UPSTREAM_UNAVAILABLE (matching the
       // `!rendered.ok` branch below), not the outer 400 BAD_REQUEST which is for
       // genuine request-validation / assembly errors.
-      let rendered;
+      let rendered: DesktopRenderSlidesResult;
+      const sendSidecarSkewError = (err: unknown) =>
+        sendApiError(
+          res,
+          502,
+          'DESKTOP_SIDECAR_UNKNOWN_MESSAGE',
+          `desktop renderer does not support render-slides: ${errorMessage(err)}`,
+          {
+            details: {
+              hint: 'Restart or update the desktop app so the daemon and desktop renderer use the same version.',
+            },
+            retryable: true,
+          },
+        );
+      const renderScreenshotPptxFallback = async (): Promise<DesktopRenderSlidesResult | null> => {
+        const fallbackInput: DesktopRenderSlidesInput = { ...input, editable: false };
+        try {
+          return await desktopSlideRenderer(fallbackInput);
+        } catch (fallbackErr: any) {
+          if (isSidecarVersionSkewError(fallbackErr)) {
+            sendSidecarSkewError(fallbackErr);
+          } else {
+            sendApiError(
+              res,
+              502,
+              'UPSTREAM_UNAVAILABLE',
+              `desktop renderer unavailable: ${errorMessage(fallbackErr)}`,
+            );
+          }
+          return null;
+        }
+      };
       try {
         rendered = await desktopSlideRenderer(input);
       } catch (err: any) {
-        return sendApiError(
-          res,
-          502,
-          'UPSTREAM_UNAVAILABLE',
-          `desktop renderer unavailable: ${err?.message || String(err)}`,
-        );
+        if (isSidecarVersionSkewError(err)) {
+          return sendSidecarSkewError(err);
+        }
+        if (renderOptions.editable && isRendererBundleMissingError(err)) {
+          const fallback = await renderScreenshotPptxFallback();
+          if (!fallback) return;
+          rendered = fallback;
+        } else {
+          return sendApiError(
+            res,
+            502,
+            'UPSTREAM_UNAVAILABLE',
+            `desktop renderer unavailable: ${errorMessage(err)}`,
+          );
+        }
       }
       const tRendered = Date.now();
 
@@ -648,15 +711,17 @@ export function registerProjectExportRoutes(app: Express, ctx: RegisterProjectEx
       // Editable PPTX: the renderer wrote a finished .pptx (native shapes/text)
       // to the scratch dir. Stream it directly — no image assembly. Confine the
       // path to the scratch dir, same defense as the image handoff.
-      if (renderOptions.editable) {
-        if (!rendered.ok || typeof rendered.pptxFile !== 'string') {
-          return sendApiError(
-            res,
-            502,
-            'UPSTREAM_UNAVAILABLE',
-            rendered.error || 'editable PPTX renderer returned no file',
-          );
-        }
+      if (
+        renderOptions.editable &&
+        (!rendered.ok || typeof rendered.pptxFile !== 'string') &&
+        isRendererBundleMissingError(rendered.error)
+      ) {
+        const fallback = await renderScreenshotPptxFallback();
+        if (!fallback) return;
+        rendered = fallback;
+      }
+
+      if (renderOptions.editable && rendered.ok && typeof rendered.pptxFile === 'string') {
         const canonicalDir = await fs.promises.realpath(renderOutputDir).catch(() => renderOutputDir);
         const realPptx = await fs.promises.realpath(rendered.pptxFile).catch(() => null);
         if (!realPptx || (realPptx !== canonicalDir && !realPptx.startsWith(canonicalDir + path.sep))) {

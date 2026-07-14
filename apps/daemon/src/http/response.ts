@@ -25,6 +25,7 @@ const ERROR_STATUS_BY_CODE: Partial<Record<ApiErrorCode, number>> = {
   INTERNAL_ERROR: 500,
   AGENT_UNAVAILABLE: 503,
   UPSTREAM_UNAVAILABLE: 502,
+  DESKTOP_SIDECAR_UNKNOWN_MESSAGE: 502,
 };
 
 export function statusForError(error: ApiError): number {
