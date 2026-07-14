@@ -6869,7 +6869,6 @@ export async function startServer({
         }
         send('error', createSseErrorPayload('AGENT_EXECUTION_FAILED', agentStreamError, {
           details: ev.raw ? { raw: ev.raw } : undefined,
-          retryable: false,
         }));
         return;
       }

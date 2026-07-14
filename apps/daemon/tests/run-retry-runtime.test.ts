@@ -104,6 +104,41 @@ describe('same-run retry runtime', () => {
     });
   });
 
+  it('retries a generic OpenCode stream error without an explicit retryability hint', async () => {
+    binDir = await mkdtemp(path.join(os.tmpdir(), 'od-run-retry-stream-error-bin-'));
+    const fakeOpenCode = await writeStreamErrorThenSuccessfulOpenCode(
+      binDir,
+      'opencode-stream-error-then-success',
+    );
+
+    delete process.env.POSTHOG_KEY;
+    delete process.env.POSTHOG_HOST;
+    delete process.env.LANGFUSE_PUBLIC_KEY;
+    delete process.env.LANGFUSE_SECRET_KEY;
+    delete process.env.LANGFUSE_BASE_URL;
+    delete process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL;
+
+    started = await startServer({ port: 0, returnServer: true }) as StartedServer;
+    await putConfig(started.url, {
+      agentId: 'opencode',
+      agentCliEnv: { opencode: { OPENCODE_BIN: fakeOpenCode } },
+      telemetry: { metrics: true, content: false, artifactManifest: false },
+      privacyDecisionAt: Date.now(),
+    });
+
+    const run = await createAndWaitForRun(started.url, 'opencode');
+    expect(run.status).toBe('succeeded');
+
+    const events = await readRunEvents(run.eventsLogPath);
+    expect(events.filter((event) => event.event === 'start')).toHaveLength(2);
+    expect(events.filter((event) => event.event === 'run_retry_attempted')).toHaveLength(1);
+    expect(events.find((event) => event.event === 'run_retry_attempted')?.data).toMatchObject({
+      failure_category: 'process_exit',
+      failure_detail: 'stream_error',
+      retry_reason: 'transient_failure',
+    });
+  });
+
   it('retries an ACP fatal close after persisting its runtime close reason', async () => {
     binDir = await mkdtemp(path.join(os.tmpdir(), 'od-run-retry-acp-fatal-bin-'));
     const fakeVela = await writeFatalThenSuccessfulVela(binDir, 'vela-fatal-then-success');
@@ -114,6 +149,8 @@ describe('same-run retry runtime', () => {
     delete process.env.LANGFUSE_SECRET_KEY;
     delete process.env.LANGFUSE_BASE_URL;
     delete process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL;
+    process.env.VELA_RUNTIME_KEY = `fake-runtime-key-${randomUUID()}`;
+    process.env.VELA_LINK_URL = 'https://amr-link.open-design.ai/v1';
 
     started = await startServer({ port: 0, returnServer: true }) as StartedServer;
     await putConfig(started.url, {
@@ -303,6 +340,8 @@ function snapshotEnv(): Record<string, string | undefined> {
     POSTHOG_HOST: process.env.POSTHOG_HOST,
     OD_CHAT_RUN_INACTIVITY_TIMEOUT_MS: process.env.OD_CHAT_RUN_INACTIVITY_TIMEOUT_MS,
     OD_CHAT_RUN_INACTIVITY_KILL_GRACE_MS: process.env.OD_CHAT_RUN_INACTIVITY_KILL_GRACE_MS,
+    VELA_RUNTIME_KEY: process.env.VELA_RUNTIME_KEY,
+    VELA_LINK_URL: process.env.VELA_LINK_URL,
   };
 }
 
@@ -366,6 +405,52 @@ if [ "$1" = "agent" ] && [ "$2" = "run" ]; then
   fi
 fi
 exec ${JSON.stringify(process.execPath)} ${JSON.stringify(FAKE_VELA)} "$@"
+`, 'utf8');
+  await chmod(bin, 0o755);
+  return bin;
+}
+
+async function writeStreamErrorThenSuccessfulOpenCode(dir: string, name: string): Promise<string> {
+  const bin = path.join(dir, name);
+  const counterPath = path.join(dir, `${name}-attempts`);
+  await writeFile(bin, `#!/usr/bin/env node
+const fs = require('node:fs');
+const argv = process.argv.slice(2);
+const counterPath = ${JSON.stringify(counterPath)};
+if (argv.includes('--version')) { console.log('1.17.7'); process.exit(0); }
+if (argv.includes('--help')) { console.log('opencode run [message..]'); process.exit(0); }
+if (argv[0] === 'models') { console.log('anthropic/claude-sonnet-4-5'); process.exit(0); }
+if (argv[0] !== 'run' || !process.cwd().includes('retry_runtime_')) {
+  process.exit(0);
+}
+let attempts = 0;
+try { attempts = Number(fs.readFileSync(counterPath, 'utf8')) || 0; } catch {}
+fs.writeFileSync(counterPath, String(attempts + 1));
+if (attempts === 0) {
+  console.log(JSON.stringify({
+    type: 'error',
+    error: { data: { message: 'synthetic generic stream frame failure' } },
+  }));
+  setTimeout(() => process.exit(1), 20);
+} else {
+  const sessionID = 'ses_retry_stream_error_success';
+  console.log(JSON.stringify({ type: 'step_start', sessionID, part: { type: 'step-start' } }));
+  console.log(JSON.stringify({
+    type: 'text',
+    sessionID,
+    part: { type: 'text', text: 'Recovered after a generic stream error.' },
+  }));
+  console.log(JSON.stringify({
+    type: 'step_finish',
+    sessionID,
+    part: {
+      type: 'step-finish',
+      tokens: { input: 8, output: 7, reasoning: 0, cache: { read: 0, write: 0 } },
+      cost: 0,
+    },
+  }));
+  setTimeout(() => process.exit(0), 20);
+}
 `, 'utf8');
   await chmod(bin, 0o755);
   return bin;
