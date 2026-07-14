@@ -18,6 +18,7 @@ import { STATUS_LABEL_KEYS } from './DesignsTab';
 import { isDesignSystemProject, isPublishedDesignSystemProject } from './design-system-project';
 import { useTeamMembers } from '../collab/useTeamMembers';
 import { notifyTeamProjectsChanged, useWorkspaceContext } from '../collab/useWorkspaceContext';
+import { moveWorkspaceProject } from '../state/projects';
 
 /** Which project space this strip renders. Drives the per-card 共享 badge
  *  (hidden in the all-shared team space) and the "{creator}创建" line: 'recent'
@@ -365,22 +366,18 @@ export function RecentProjectsStrip({
     setConfirmTarget(project);
   }
 
-  // Promote a project into the team space: fire the sync-intent the daemon uses
-  // to publish it for teammates. Server-side gated on `canShareProjects`, so a
-  // non-team / unpermitted caller gets a 403 and the project stays un-badged.
+  // Promote/demote a project through the same workspace move endpoint used by
+  // the full project grid so cards and in-file sharing cannot drift.
   async function handleShareToTeam(project: Project) {
     setShareErrorProjectId(null);
     setMenuOpenId(project.id);
     setSharingId(project.id);
     try {
-      const res = await fetch(`/api/projects/${encodeURIComponent(project.id)}/collab/sync-intent`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ event: 'project_team_share_requested', projectId: project.id }),
+      await moveWorkspaceProject({
+        projectId: project.id,
+        visibility: 'team',
+        workspaceContext,
       });
-      if (!res.ok) {
-        throw new Error(`share failed with status ${res.status}`);
-      }
       setSharedIds((prev) => new Set(prev).add(project.id));
       setUnsharedIds((prev) => {
         const next = new Set(prev);
@@ -404,14 +401,11 @@ export function RecentProjectsStrip({
     setMenuOpenId(project.id);
     setUnsharingId(project.id);
     try {
-      const res = await fetch(`/api/projects/${encodeURIComponent(project.id)}/collab/sync-intent`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ event: 'project_team_unshare_requested', projectId: project.id }),
+      await moveWorkspaceProject({
+        projectId: project.id,
+        visibility: 'personal',
+        workspaceContext,
       });
-      if (!res.ok) {
-        throw new Error(`unshare failed with status ${res.status}`);
-      }
       setUnsharedIds((prev) => new Set(prev).add(project.id));
       setSharedIds((prev) => {
         const next = new Set(prev);

@@ -91,8 +91,9 @@ import type { ChatSessionMode, WorkspaceContextItem, WorkspaceTeamProjectsRespon
 import {
   notifyTeamProjectsChanged,
   TEAM_PROJECTS_CHANGED_EVENT,
+  useWorkspaceContext,
 } from '../collab/useWorkspaceContext';
-import { createTerminal, killTerminal } from '../state/projects';
+import { createTerminal, killTerminal, moveWorkspaceProject } from '../state/projects';
 import type { QuestionForm } from '../artifacts/question-form';
 import { DesignFilesPanel, type DesignFilesNavState } from './DesignFilesPanel';
 import {
@@ -660,6 +661,7 @@ export function FileWorkspace({
   readonlyNotice,
 }: Props) {
   const t = useT();
+  const { context: workspaceContext } = useWorkspaceContext();
   // The chat column only shows a compact Questions banner; the form itself
   // lives here, including after submission when a banner click can reopen the
   // answered preview.
@@ -2524,15 +2526,11 @@ export function FileWorkspace({
     if (projectShareBusy) return;
     setProjectShareBusy(true);
     try {
-      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/collab/sync-intent`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          event: nextAccess === 'workspace' ? 'project_team_share_requested' : 'project_team_unshare_requested',
-          projectId,
-        }),
+      await moveWorkspaceProject({
+        projectId,
+        visibility: nextAccess === 'workspace' ? 'team' : 'personal',
+        workspaceContext,
       });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       setProjectShareAccess(nextAccess);
       notifyTeamProjectsChanged();
       setLauncherToast(

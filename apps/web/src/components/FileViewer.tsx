@@ -49,7 +49,9 @@ import { useT, useI18n } from '../i18n';
 import {
   notifyTeamProjectsChanged,
   TEAM_PROJECTS_CHANGED_EVENT,
+  useWorkspaceContext,
 } from '../collab/useWorkspaceContext';
+import { moveWorkspaceProject } from '../state/projects';
 import type { Dict, Locale } from '../i18n/types';
 import {
   fetchLiveArtifact,
@@ -5291,6 +5293,7 @@ function ReactComponentViewer({
   viewerOnly?: boolean;
 }) {
   const t = useT();
+  const { context: workspaceContext } = useWorkspaceContext();
   const [mode, setMode] = useState<'preview' | 'source'>('preview');
   const [source, setSource] = useState<string | null>(null);
   const [srcDoc, setSrcDoc] = useState('');
@@ -5514,15 +5517,11 @@ function ReactComponentViewer({
 
     setShareAccessBusy(true);
     try {
-      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/collab/sync-intent`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          event: nextAccess === 'workspace' ? 'project_team_share_requested' : 'project_team_unshare_requested',
-          projectId,
-        }),
+      await moveWorkspaceProject({
+        projectId,
+        visibility: nextAccess === 'workspace' ? 'team' : 'personal',
+        workspaceContext,
       });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       setShareAccess(nextAccess);
       notifyTeamProjectsChanged();
     } catch (error) {
@@ -6021,6 +6020,7 @@ function HtmlViewer({
   installationId?: string | null;
 }) {
   const { locale, t } = useI18n();
+  const { context: workspaceContext } = useWorkspaceContext();
   const analytics = useAnalytics();
   // Team collaboration: resolve comment anchors through the drift ladder when
   // the viewer is a team member of a shared project. Off (exact-match, single
@@ -6471,15 +6471,11 @@ function HtmlViewer({
 
     setShareAccessBusy(true);
     try {
-      const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/collab/sync-intent`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          event: nextAccess === 'workspace' ? 'project_team_share_requested' : 'project_team_unshare_requested',
-          projectId,
-        }),
+      await moveWorkspaceProject({
+        projectId,
+        visibility: nextAccess === 'workspace' ? 'team' : 'personal',
+        workspaceContext,
       });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       setShareAccess(nextAccess);
       notifyTeamProjectsChanged();
       setShareGuideToast(

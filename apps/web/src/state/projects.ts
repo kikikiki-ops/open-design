@@ -21,8 +21,10 @@ import type {
   PluginInstallOutcome,
   PluginShareAction,
   ProjectPluginFolderInstallRequest,
+  ProjectVisibility,
   TerminalSession,
   WorkspaceCollabContext,
+  WorkspaceProjectSummary,
   WorkspaceProjectsResponse,
 } from '@open-design/contracts';
 import { randomUUID } from '../utils/uuid';
@@ -51,6 +53,29 @@ export function workspaceProjectHeaders(context: WorkspaceCollabContext): Header
     'x-od-workspace-can-share-projects': String(context.permissions.canShareProjects),
     'x-od-workspace-can-write-synced-files': String(context.permissions.canWriteSyncedFiles),
   };
+}
+
+export async function moveWorkspaceProject(input: {
+  projectId: string;
+  visibility: ProjectVisibility;
+  workspaceContext: WorkspaceCollabContext | null;
+}): Promise<WorkspaceProjectSummary> {
+  const context = input.workspaceContext;
+  if (!context) throw new Error('Workspace context is required');
+  const resp = await fetch(
+    `/api/workspaces/${encodeURIComponent(context.workspaceId)}/projects/${encodeURIComponent(input.projectId)}/move`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...workspaceProjectHeaders(context),
+      },
+      body: JSON.stringify({ visibility: input.visibility }),
+    },
+  );
+  if (!resp.ok) throw new Error(`workspace project move failed with status ${resp.status}`);
+  const json = (await resp.json()) as { project: WorkspaceProjectSummary };
+  return json.project;
 }
 
 function omitWorkspaceContext<T extends { workspaceContext?: WorkspaceCollabContext | null }>(
