@@ -173,45 +173,20 @@ describe('AmrArtifactUpgradeGate', () => {
     expect(onHomeOfferChange).toHaveBeenCalledTimes(2);
   });
 
-  it('waits for the plan, then opens for Free or proceeds for paid', async () => {
+  it('fails open while the plan is unavailable, then prompts after Free resolves', async () => {
     const view = render(
       <AmrArtifactUpgradeGate {...BASE_PROPS} plan={null} planResolved={false} />,
     );
 
     act(() => publishFinishedRun());
-    let freeSettled = false;
-    const freeDecision = requestSend().then((value) => {
-      freeSettled = true;
-      return value;
-    });
-    await Promise.resolve();
-    expect(freeSettled).toBe(false);
+    await expect(requestSend()).resolves.toBe('proceed');
     expect(screen.queryByTestId('amr-artifact-upgrade-dialog')).toBeNull();
 
     view.rerender(<AmrArtifactUpgradeGate {...BASE_PROPS} plan="free" planResolved />);
+    const freeDecision = requestSend();
     await waitFor(() => expect(screen.getByTestId('amr-artifact-upgrade-dialog')).toBeTruthy());
     fireEvent.click(screen.getByTestId('amr-artifact-upgrade-later'));
     await expect(freeDecision).resolves.toBe('proceed');
-
-    act(() => publishFinishedRun({ runId: 'run-2', conversationId: 'conversation-2' }));
-    view.rerender(
-      <AmrArtifactUpgradeGate
-        {...BASE_PROPS}
-        activeConversationId="conversation-2"
-        plan={null}
-        planResolved={false}
-      />,
-    );
-    const paidDecision = requestSend('project-1', 'conversation-2');
-    view.rerender(
-      <AmrArtifactUpgradeGate
-        {...BASE_PROPS}
-        activeConversationId="conversation-2"
-        plan="plus"
-        planResolved
-      />,
-    );
-    await expect(paidDecision).resolves.toBe('proceed');
   });
 
   it('proceeds immediately for paid plans and runs without an artifact', async () => {

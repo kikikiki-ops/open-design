@@ -130,6 +130,8 @@ export function AmrArtifactUpgradeGate({
         !sessionKey
         || detail.source !== 'chat_send'
         || !eligibleSessionsRef.current.has(sessionKey)
+        || !planResolved
+        || !isFreeAmrPlan(plan)
       ) {
         return;
       }
@@ -150,13 +152,15 @@ export function AmrArtifactUpgradeGate({
     };
     window.addEventListener(AMR_ARTIFACT_UPGRADE_REQUEST_EVENT, handleRequest);
     return () => window.removeEventListener(AMR_ARTIFACT_UPGRADE_REQUEST_EVENT, handleRequest);
-  }, []);
+  }, [plan, planResolved]);
 
   useEffect(() => {
     const pending = pendingSendRef.current;
-    if (!pending || !planResolved) return;
+    if (!pending) return;
 
-    if (!isFreeAmrPlan(plan)) {
+    // Billing status can be unavailable while the Vela account remains
+    // logged in. An unknown plan must never leave an intercepted Send hanging.
+    if (!planResolved || !isFreeAmrPlan(plan)) {
       pendingSendRef.current = null;
       pending.settle('proceed');
       return;
