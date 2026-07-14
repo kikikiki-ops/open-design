@@ -258,27 +258,6 @@ export function mergeSavedPreviewComment(current: PreviewComment[], saved: Previ
   return current.map((comment, index) => (index === existingIndex ? saved : comment));
 }
 
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
-async function listConversationsWithRetry(projectId: string): Promise<Conversation[]> {
-  let lastError: unknown;
-  for (let attempt = 0; attempt <= CONVERSATION_LOAD_RETRY_DELAYS_MS.length; attempt += 1) {
-    try {
-      return await listConversations(projectId, { throwOnError: true });
-    } catch (err) {
-      lastError = err;
-      const delay = CONVERSATION_LOAD_RETRY_DELAYS_MS[attempt];
-      if (delay === undefined) break;
-      await wait(delay);
-    }
-  }
-  throw lastError instanceof Error
-    ? lastError
-    : new Error('Could not load conversations for this project.');
-}
-
 function mergeServerMessageWithLocal(server: ChatMessage, local?: ChatMessage): ChatMessage {
   if (!local) return server;
   const merged: ChatMessage = { ...server };
@@ -420,7 +399,6 @@ const MIN_WORKSPACE_PANEL_WIDTH = 400;
 const SPLIT_RESIZE_HANDLE_WIDTH = 8;
 const CHAT_PANEL_KEYBOARD_STEP = 16;
 const DESIGN_SYSTEM_AUDIT_AUTO_REPAIR_ATTEMPTS = 2;
-const CONVERSATION_LOAD_RETRY_DELAYS_MS = [120, 300, 600] as const;
 // Trailing-debounce window for the canonical (daemon + SQLite) tab-state write.
 // Embedded-browser navigation bursts settle well within this; the local cache
 // is written immediately so nothing is lost if the daemon write is coalesced.
@@ -1628,7 +1606,7 @@ export function ProjectView({
     pendingWritesRef.current.clear();
     (async () => {
       try {
-        const list = await listConversationsWithRetry(project.id);
+        const list = await listConversations(project.id);
         if (cancelled) return;
         if (list.length === 0) {
           const fresh = await createConversation(project.id);

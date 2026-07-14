@@ -267,7 +267,6 @@ export function BoardComposerPopover({
   queueOnSend = false,
   sendDisabled = false,
   sendDisabledReason,
-  allowSendToChat = true,
   t,
   scale = 1,
   bounds,
@@ -299,7 +298,6 @@ export function BoardComposerPopover({
   queueOnSend?: boolean;
   sendDisabled?: boolean;
   sendDisabledReason?: string;
-  allowSendToChat?: boolean;
   t: TranslateFn;
   scale?: number;
   bounds?: PopoverBounds;
@@ -570,33 +568,29 @@ export function BoardComposerPopover({
                   >
                     {t('chat.comments.addNote')}
                   </Button>
-                  {allowSendToChat ? (
-                    <Button
-                      variant="primary"
-                      data-testid="comment-add-send"
-                      disabled={sendBlocked}
-                      title={sendDisabled ? sendDisabledReason : undefined}
-                      onClick={() => void onSendBatch()}
-                    >
-                      {primaryLabel}
-                    </Button>
-                  ) : null}
+                  <Button
+                    variant="primary"
+                    data-testid="comment-add-send"
+                    disabled={sendBlocked}
+                    title={sendDisabled ? sendDisabledReason : undefined}
+                    onClick={() => void onSendBatch()}
+                  >
+                    {primaryLabel}
+                  </Button>
                 </>
               ) : (
                 <>
                   {/* Element: comment (save) is the primary CTA (also Enter);
                       send-to-chat is secondary. */}
-                  {allowSendToChat ? (
-                    <Button
-                      variant="ghost"
-                      data-testid="comment-add-send"
-                      disabled={sendBlocked}
-                      title={sendDisabled ? sendDisabledReason : undefined}
-                      onClick={() => void onSendBatch()}
-                    >
-                      {primaryLabel}
-                    </Button>
-                  ) : null}
+                  <Button
+                    variant="ghost"
+                    data-testid="comment-add-send"
+                    disabled={sendBlocked}
+                    title={sendDisabled ? sendDisabledReason : undefined}
+                    onClick={() => void onSendBatch()}
+                  >
+                    {primaryLabel}
+                  </Button>
                   <Button
                     variant="primary"
                     data-testid="comment-popover-save"
