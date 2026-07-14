@@ -1867,10 +1867,29 @@ describe('buildTracePayload', () => {
     expect(regBatch[0]!.body.metadata.stderr).toBeUndefined();
     expect(regBatch[0]!.body.metadata.stdout).toBeUndefined();
     expect(regBatch[0]!.body.metadata.diagnostics).toBeUndefined();
+    // Agent/runtime error text must also stay off the anonymous registration
+    // relay (metadata.error + statusMessage on spans / run-error event).
+    expect(regBatch[0]!.body.metadata.error).toBeUndefined();
+    expect(
+      regBatch.find((e) => e.body?.name === 'agent-run')?.body.statusMessage,
+    ).toBeUndefined();
+    expect(
+      regBatch.find((e) => e.body?.name === 'llm')?.body.statusMessage,
+    ).toBeUndefined();
+    expect(
+      regBatch.find((e) => e.body?.name === 'run-error')?.body.statusMessage,
+    ).toBeUndefined();
     expect(finalBatch[0]!.body.input).toBe('Make a landing page for a coffee shop.');
+    expect(finalBatch[0]!.body.metadata.error).toBe('provider failed');
     expect(finalBatch[0]!.body.metadata.stderr).toEqual(streamRun.stderr);
     expect(finalBatch[0]!.body.metadata.stdout).toEqual(streamRun.stdout);
     expect(finalBatch[0]!.body.metadata.diagnostics).toEqual(streamRun.diagnostics);
+    expect(
+      finalBatch.find((e) => e.body?.name === 'agent-run')?.body.statusMessage,
+    ).toBe('provider failed');
+    expect(
+      finalBatch.find((e) => e.body?.name === 'run-error')?.body.statusMessage,
+    ).toBe('provider failed');
   });
 
   it('uses distinct body and event ids for terminal_fallback vs final_message', () => {

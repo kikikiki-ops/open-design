@@ -1593,12 +1593,22 @@ export function buildTracePayload(
   // Object-registration needs manifests for upload authority but must not
   // double-write turn text when the final delivery goes through Vela.
   // `wantsTextContent` gates prompt/output/tool I/O and stream-tail metadata
-  // (stderr/stdout/diagnostics); `wantsArtifacts` gates object manifests used
-  // by the worker object-scope registry.
+  // (stderr/stdout/diagnostics). Agent/runtime error strings (`error` /
+  // `statusMessage`) are additionally stripped for object-registration so the
+  // anonymous relay never receives turn/error text before final Vela delivery.
+  // `wantsArtifacts` gates object manifests used by the worker object-scope
+  // registry.
   const consentOn =
     ctx.prefs.metrics === true && ctx.prefs.content === true;
   const wantsTextContent = deliveryPurpose === 'final' && consentOn;
   const wantsArtifacts = consentOn;
+  // Keep free-text error strings on final deliveries (including content-
+  // consent-off) so Langfuse still classifies failures; omit them only from
+  // the object-registration anonymous relay pass.
+  const errorText =
+    deliveryPurpose === 'object-registration'
+      ? undefined
+      : (ctx.run.error ?? undefined);
   // Object-registration is its own logical delivery; only final deliveries
   // further split by report trigger (terminal fallback vs finalized message).
   const idReportTrigger =
@@ -1714,7 +1724,7 @@ export function buildTracePayload(
     success,
     env: readTelemetryEnvironment(),
     status: ctx.run.status,
-    error: ctx.run.error ?? undefined,
+    error: errorText,
     error_code: ctx.run.errorCode,
     langfuse_trace_id: canonicalTraceId,
     identity_type: 'anonymous_installation',
@@ -1839,7 +1849,7 @@ export function buildTracePayload(
         input: inputText,
         output: outputText,
         level: success ? 'DEFAULT' : 'ERROR',
-        statusMessage: ctx.run.error ?? undefined,
+        statusMessage: errorText,
         metadata: {
           status: ctx.run.status,
           messageId: ctx.message.messageId || undefined,
@@ -1874,7 +1884,7 @@ export function buildTracePayload(
         input: generationInput,
         output: outputText,
         level: success ? 'DEFAULT' : 'ERROR',
-        statusMessage: ctx.run.error ?? undefined,
+        statusMessage: errorText,
         usage,
         metadata: {
           durationMs: ctx.eventsSummary.durationMs,
@@ -1904,7 +1914,7 @@ export function buildTracePayload(
         input: generationInput,
         output: outputText,
         level: 'ERROR',
-        statusMessage: ctx.run.error ?? undefined,
+        statusMessage: errorText,
         metadata: {
           durationMs: ctx.eventsSummary.durationMs,
           cost_usd: costBreakdown.cost_usd,
@@ -2048,7 +2058,7 @@ export function buildTracePayload(
         name: success ? 'error-summary' : 'run-error',
         startTime: endTimeIso,
         level: 'ERROR',
-        statusMessage: ctx.run.error ?? undefined,
+        statusMessage: errorText,
         metadata: {
           status: ctx.run.status,
           errors: ctx.eventsSummary.errors,

@@ -1633,14 +1633,18 @@ export function setRunTelemetryAcceptedAnchor(
       ? opts.assistantMessageId.trim()
       : '';
   if (assistantMessageId) {
+    // Only trust an explicit message id when it belongs to this run's
+    // assistant row; stale/foreign ids fall through to the run_id lookup.
     const byId = db
       .prepare(
         `SELECT id,
                 telemetry_accepted_report_trigger AS acceptedReportTrigger
            FROM messages
-          WHERE id = ?`,
+          WHERE id = ?
+            AND run_id = ?
+            AND role = 'assistant'`,
       )
-      .get(assistantMessageId) as DbRow | undefined;
+      .get(assistantMessageId, runId) as DbRow | undefined;
     if (byId && typeof byId.id === 'string') {
       messageId = byId.id;
       existingTrigger = normalizeTelemetryAcceptedReportTrigger(
@@ -1655,6 +1659,7 @@ export function setRunTelemetryAcceptedAnchor(
                 telemetry_accepted_report_trigger AS acceptedReportTrigger
            FROM messages
           WHERE run_id = ?
+            AND role = 'assistant'
           ORDER BY position DESC
           LIMIT 1`,
       )
@@ -1721,6 +1726,7 @@ export function getRunFeedbackTelemetryAnchor(
            FROM messages
           WHERE id = ?
             AND run_id = ?
+            AND role = 'assistant'
             AND run_status IN ('succeeded', 'failed', 'canceled')`,
       )
       .get(assistantMessageId.trim(), normalizedRunId) as DbRow | undefined;
@@ -1736,6 +1742,7 @@ export function getRunFeedbackTelemetryAnchor(
               telemetry_accepted_report_trigger AS acceptedReportTrigger
          FROM messages
         WHERE run_id = ?
+          AND role = 'assistant'
         ORDER BY position DESC
         LIMIT 1`,
     )

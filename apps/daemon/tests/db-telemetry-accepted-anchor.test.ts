@@ -207,4 +207,80 @@ describe('persisted telemetry accepted anchor', () => {
       acceptedReportTrigger: 'terminal_fallback',
     });
   });
+
+  it('setRunTelemetryAcceptedAnchor ignores foreign message ids and writes the run row', () => {
+    const runId = 'run-target-write';
+    const otherRunId = 'run-other-write';
+    const expectedBodyId = scopedTelemetryBodyId(runId, 'final', 'terminal_fallback');
+    const foreignBodyId = scopedTelemetryBodyId(otherRunId, 'final', 'final_message');
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+    const now = Date.now();
+    insertProject(db, {
+      id: 'proj-1',
+      name: 'Telemetry project',
+      createdAt: now,
+      updatedAt: now,
+    });
+    insertConversation(db, {
+      id: 'conv-1',
+      projectId: 'proj-1',
+      title: 'Telemetry run',
+      createdAt: now,
+      updatedAt: now,
+    });
+    upsertMessage(db, 'conv-1', {
+      id: 'assistant-foreign',
+      role: 'assistant',
+      content: 'other run',
+      runId: otherRunId,
+      runStatus: 'succeeded',
+      telemetryFinalized: true,
+      endedAt: now,
+    });
+    upsertMessage(db, 'conv-1', {
+      id: 'assistant-target',
+      role: 'assistant',
+      content: 'partial',
+      runId,
+      runStatus: 'failed',
+      telemetryFinalized: false,
+      endedAt: now,
+    });
+
+    // Foreign id must not write the anchor onto the other run's row.
+    expect(
+      setRunTelemetryAcceptedAnchor(db, {
+        runId,
+        assistantMessageId: 'assistant-foreign',
+        bodyId: expectedBodyId,
+        reportTrigger: 'terminal_fallback',
+      }),
+    ).toBe(true);
+    expect(getRunFeedbackTelemetryAnchor(db, runId)).toEqual({
+      runStatus: 'failed',
+      telemetryFinalized: false,
+      acceptedTraceBodyId: expectedBodyId,
+      acceptedReportTrigger: 'terminal_fallback',
+    });
+    expect(getRunFeedbackTelemetryAnchor(db, otherRunId, 'assistant-foreign')).toEqual({
+      runStatus: 'succeeded',
+      telemetryFinalized: true,
+      acceptedTraceBodyId: null,
+      acceptedReportTrigger: null,
+    });
+
+    // Matching id still writes the intended row.
+    expect(
+      setRunTelemetryAcceptedAnchor(db, {
+        runId: otherRunId,
+        assistantMessageId: 'assistant-foreign',
+        bodyId: foreignBodyId,
+        reportTrigger: 'final_message',
+      }),
+    ).toBe(true);
+    expect(
+      getRunFeedbackTelemetryAnchor(db, otherRunId, 'assistant-foreign')
+        ?.acceptedTraceBodyId,
+    ).toBe(foreignBodyId);
+  });
 });
