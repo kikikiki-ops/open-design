@@ -361,6 +361,16 @@ export type TrackingLangfuseDropReason =
   | 'relay_5xx'
   | 'langfuse_4xx'
   | 'langfuse_5xx'
+  // Vela authenticated telemetry sink (daemon → Vela Control API).
+  | 'vela_400'
+  | 'vela_401'
+  | 'vela_403'
+  | 'vela_413'
+  | 'vela_429'
+  | 'vela_5xx'
+  // Transport failures: distinguish abort/timeout from other network errors
+  // so dashboards can separate upstream slowness from connectivity issues.
+  | 'timeout'
   | 'network_error';
 export type TrackingLangfuseReportResult =
   | 'accepted'

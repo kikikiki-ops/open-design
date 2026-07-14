@@ -168,4 +168,41 @@ describe('analytics run_finished contract', () => {
     expect(payload.props.langfuse_report_result).toBe('failed');
     expect(payload.props.langfuse_delivery_status).toBe('failed');
   });
+
+  it('accepts Vela sink and timeout langfuse_drop_reason values', () => {
+    const velaFailed = {
+      event: 'langfuse_report_result',
+      props: {
+        page_name: 'chat_panel',
+        area: 'chat_panel',
+        project_id: 'proj-1',
+        conversation_id: 'conv-1',
+        run_id: 'run-1',
+        langfuse_trace_id: 'run-1',
+        langfuse_expected: true,
+        langfuse_delivery_status: 'failed',
+        langfuse_drop_reason: 'vela_5xx',
+        langfuse_report_result: 'failed',
+        langfuse_report_trigger: 'terminal_fallback',
+        report_duration_ms: 50,
+        result: 'failed',
+        error_code: 'AGENT_EXECUTION_FAILED',
+        agent_provider_id: 'codex_cli',
+        model_id: 'default',
+      },
+    } satisfies Extract<AnalyticsEventPayload, { event: 'langfuse_report_result' }>;
+
+    const timedOut = {
+      event: 'run_finished',
+      props: {
+        ...makeBaseRunFinishedProps(),
+        langfuse_expected: true,
+        langfuse_delivery_status: 'failed',
+        langfuse_drop_reason: 'timeout',
+      },
+    } satisfies Extract<AnalyticsEventPayload, { event: 'run_finished' }>;
+
+    expect(velaFailed.props.langfuse_drop_reason).toBe('vela_5xx');
+    expect(timedOut.props.langfuse_drop_reason).toBe('timeout');
+  });
 });

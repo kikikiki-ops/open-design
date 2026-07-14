@@ -2175,6 +2175,52 @@ describe('reportRunCompleted', () => {
     }
   });
 
+  it('reports timeout drop reason when Vela fetch aborts after retries', async () => {
+    const velaConfig = velaSink({ retries: 0 });
+    const timeoutError = new Error('The operation was aborted due to timeout');
+    timeoutError.name = 'TimeoutError';
+    const fetchSpy = vi.fn().mockRejectedValue(timeoutError);
+    const result = await reportRunCompleted(
+      makeCtx({
+        prefs: { metrics: true, content: true, artifactManifest: false },
+      }),
+      {
+        config: velaConfig,
+        fetchImpl: fetchSpy as any,
+      },
+    );
+    expect(result).toEqual({
+      langfuse_expected: true,
+      langfuse_delivery_status: 'failed',
+      langfuse_drop_reason: 'timeout',
+    });
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Vela telemetry fetch error: timeout'),
+    );
+  });
+
+  it('reports network_error drop reason for non-timeout Vela fetch failures', async () => {
+    const velaConfig = velaSink({ retries: 0 });
+    const fetchSpy = vi.fn().mockRejectedValue(new Error('ECONNRESET'));
+    const result = await reportRunCompleted(
+      makeCtx({
+        prefs: { metrics: true, content: true, artifactManifest: false },
+      }),
+      {
+        config: velaConfig,
+        fetchImpl: fetchSpy as any,
+      },
+    );
+    expect(result).toEqual({
+      langfuse_expected: true,
+      langfuse_delivery_status: 'failed',
+      langfuse_drop_reason: 'network_error',
+    });
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Vela telemetry fetch error: network_error'),
+    );
+  });
+
   it('falls back to anonymous relay on Vela 401/403', async () => {
     const velaConfig = velaSink({ controlKey: 'ck_expired' });
     const prevRelay = process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL;

@@ -92,6 +92,7 @@ export type LangfuseDropReason =
   | 'vela_413'
   | 'vela_429'
   | 'vela_5xx'
+  | 'timeout'
   | 'network_error';
 
 export interface LangfuseDeliveryState {
@@ -2102,12 +2103,14 @@ async function postVelaBatch(
       }
       // Network/timeout after retries: do NOT anonymous-fallback. Vela may have
       // already accepted the batch; anonymous write could overwrite identity.
+      // Surface timeout separately from network_error so telemetry can tell
+      // upstream slowness apart from transport failures.
       const errorKind = classifyFetchError(error);
       console.warn(`[langfuse-trace] Vela telemetry fetch error: ${errorKind}`);
       return {
         langfuse_expected: true,
         langfuse_delivery_status: 'failed',
-        langfuse_drop_reason: 'network_error',
+        langfuse_drop_reason: errorKind,
       };
     }
   }
