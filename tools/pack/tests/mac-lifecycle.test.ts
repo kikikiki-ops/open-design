@@ -5,11 +5,12 @@ import { join } from "node:path";
 import type { ChildProcess } from "node:child_process";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { DesktopStatusSnapshot } from "@open-design/sidecar-proto";
 
 import type { ToolPackConfig } from "../src/config.js";
 import { resolveMacPaths } from "../src/mac/paths.js";
 
-const requestJsonIpc = vi.fn(async () => ({ state: "running" }));
+const requestJsonIpc = vi.fn(async (): Promise<DesktopStatusSnapshot> => ({ state: "running" }));
 const resolveAppIpcPath = vi.fn(() => "/tmp/open-design/ipc/test/desktop.sock");
 const createSidecarLaunchEnv = vi.fn(({ extraEnv }: { extraEnv: NodeJS.ProcessEnv }) => extraEnv);
 const spawnLoggedProcess = vi.fn(async ({ env }: { env: NodeJS.ProcessEnv }) => {
@@ -83,6 +84,63 @@ afterEach(() => {
 });
 
 describe("startPackedMacApp", () => {
+  it("accepts a clean launcher exit when the delegated desktop becomes healthy", async () => {
+    const root = await mkdtemp(join(tmpdir(), "open-design-tools-pack-mac-lifecycle-"));
+    try {
+      const config = makeConfig(root);
+      const paths = resolveMacPaths(config);
+      const executablePath = join(paths.installedAppPath, "Contents", "MacOS", "Open Design");
+      const delegatedPid = 5678;
+
+      await mkdir(join(paths.installedAppPath, "Contents", "MacOS"), { recursive: true });
+      await writeFile(executablePath, "#!/bin/sh\nexit 0\n", "utf8");
+      await chmod(executablePath, 0o755);
+      requestJsonIpc.mockResolvedValue({ pid: delegatedPid, state: "running" });
+      spawnLoggedProcess.mockImplementationOnce(async ({ env }: { env: NodeJS.ProcessEnv }) => {
+        const child = Object.assign(new EventEmitter(), {
+          env,
+          pid: 1234,
+          unref: vi.fn(),
+        }) as unknown as ChildProcess & { env: NodeJS.ProcessEnv };
+        setTimeout(() => child.emit("exit", 0, null), 10);
+        return child;
+      });
+
+      const result = await startPackedMacApp(config);
+
+      expect(result.pid).toBe(delegatedPid);
+      expect(result.status).toEqual({ pid: delegatedPid, state: "running" });
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it("rejects a non-zero launcher exit before desktop handoff", async () => {
+    const root = await mkdtemp(join(tmpdir(), "open-design-tools-pack-mac-lifecycle-"));
+    try {
+      const config = makeConfig(root);
+      const paths = resolveMacPaths(config);
+      const executablePath = join(paths.installedAppPath, "Contents", "MacOS", "Open Design");
+
+      await mkdir(join(paths.installedAppPath, "Contents", "MacOS"), { recursive: true });
+      await writeFile(executablePath, "#!/bin/sh\nexit 1\n", "utf8");
+      await chmod(executablePath, 0o755);
+      spawnLoggedProcess.mockImplementationOnce(async ({ env }: { env: NodeJS.ProcessEnv }) => {
+        const child = Object.assign(new EventEmitter(), {
+          env,
+          pid: 1234,
+          unref: vi.fn(),
+        }) as unknown as ChildProcess & { env: NodeJS.ProcessEnv };
+        setTimeout(() => child.emit("exit", 1, null), 10);
+        return child;
+      });
+
+      await expect(startPackedMacApp(config)).rejects.toThrow("process exited early code=1 signal=null");
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it("writes a launch override when the bundled config is missing", async () => {
     const root = await mkdtemp(join(tmpdir(), "open-design-tools-pack-mac-lifecycle-"));
     try {
