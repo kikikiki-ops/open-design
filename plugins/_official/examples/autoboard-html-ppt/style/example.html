@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>超宽大屏商务增长 PPT — 示例</title>
+<title>AutoBoard HTML PPT — 11m × 3m 会场示例</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -14,7 +14,8 @@ html, body {
   font-family: "PingFang SC", "HarmonyOS Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
 }
 
-.slideshow {
+.slideshow,
+.deck-stage {
   position: relative;
   width: 100vw;
   height: 100vh;
@@ -40,7 +41,8 @@ html, body {
   --shadow-soft: rgba(11,45,58,.06);
 }
 
-.slide {
+.slide,
+.ppt-slide {
   position: absolute;
   top: 0;
   left: 0;
@@ -84,18 +86,18 @@ html, body {
   pointer-events: none;
 }
 
-.title-xl { font-size: 72px; font-weight: 600; color: var(--text-primary); line-height: 1.12; letter-spacing: -.02em; }
-.title-lg  { font-size: 60px; font-weight: 600; color: var(--text-primary); line-height: 1.15; letter-spacing: -.02em; }
-.title-md  { font-size: 48px; font-weight: 600; color: var(--text-primary); line-height: 1.2; }
-.subtitle  { font-size: 26px; font-weight: 400; color: var(--text-body); line-height: 1.5; }
-.body-text { font-size: 18px; font-weight: 400; color: var(--text-body); line-height: 1.6; }
+.title-xl { font-size: 88px; font-weight: 600; color: var(--text-primary); line-height: 1.12; letter-spacing: -.02em; }
+.title-lg  { font-size: 72px; font-weight: 600; color: var(--text-primary); line-height: 1.15; letter-spacing: -.02em; }
+.title-md  { font-size: 56px; font-weight: 600; color: var(--text-primary); line-height: 1.2; }
+.subtitle  { font-size: 32px; font-weight: 400; color: var(--text-body); line-height: 1.5; }
+.body-text { font-size: 20px; font-weight: 400; color: var(--text-body); line-height: 1.6; }
 .caption   { font-size: 16px; font-weight: 400; color: var(--text-muted); line-height: 1.5; }
 .gold-text { color: var(--gold-deep); }
 .teal-text { color: var(--teal-deep); }
 
-.number-xl { font-size: 88px; font-weight: 300; color: var(--text-primary); line-height: 1; letter-spacing: -.04em; }
-.number-lg { font-size: 72px; font-weight: 300; color: var(--text-primary); line-height: 1; letter-spacing: -.04em; }
-.number-md { font-size: 56px; font-weight: 300; color: var(--text-primary); line-height: 1; letter-spacing: -.04em; }
+.number-xl { font-size: 128px; font-weight: 300; color: var(--text-primary); line-height: 1; letter-spacing: -.04em; }
+.number-lg { font-size: 96px; font-weight: 300; color: var(--text-primary); line-height: 1; letter-spacing: -.04em; }
+.number-md { font-size: 72px; font-weight: 300; color: var(--text-primary); line-height: 1; letter-spacing: -.04em; }
 .number-unit { font-size: .45em; font-weight: 500; color: var(--text-muted); margin-left: 4px; vertical-align: baseline; }
 .number-label { font-size: 18px; color: var(--text-muted); margin-top: 10px; }
 
@@ -104,7 +106,7 @@ html, body {
   border: 1px solid rgba(213,174,121,.30);
   border-radius: 22px;
   box-shadow: 0 10px 28px var(--shadow-soft);
-  padding: 28px 32px;
+  padding: 32px 40px;
 }
 .card-sm {
   background: var(--white-card);
@@ -131,7 +133,7 @@ html, body {
   padding: 8px 20px;
   display: inline-flex;
   align-items: center;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 500;
   color: var(--text-primary);
   letter-spacing: .02em;
@@ -140,13 +142,13 @@ html, body {
 .tag {
   display: inline-flex;
   align-items: center;
-  height: 34px;
+  height: 40px;
   padding: 0 16px;
   border-radius: 999px;
   background: var(--white-card);
   border: 1px solid rgba(213,174,121,.35);
   color: var(--text-secondary);
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 500;
 }
 .tag-teal {
@@ -243,6 +245,8 @@ html, body {
 }
 .nav-dot {
   width: 6px; height: 6px; border-radius: 50%;
+  border: 0;
+  padding: 0;
   background: rgba(255,255,255,.25);
   cursor: pointer;
   transition: background .15s, transform .15s;
@@ -251,17 +255,18 @@ html, body {
   background: rgba(255,255,255,.75);
   transform: scale(1.3);
 }
+.nav-dot:focus-visible { outline: 2px solid #FFFFFF; outline-offset: 4px; }
 </style>
 </head>
 <body>
 
-<div class="slideshow" id="slideshow">
+<main class="slideshow deck-stage" id="slideshow" data-canvas-width="3696" data-canvas-height="1008" aria-label="AutoBoard HTML PPT 示例演示">
 
 <!-- SLIDE 1 · 封面页 — Cover -->
-<div class="slide active" data-label="封面页 · Cover">
-  <img class="bg-img" src="style/assets/bg-cover.svg"" alt="" />
-  <img class="fixed-brand-logo" src="style/assets/logo.svg"" alt="快手联盟" />
-  <div class="safe-zone">
+<section class="slide ppt-slide active" data-slide-index="1" data-source-pages="1" data-page-role="cover" data-page-type="CoverPage" data-layout-component="HeroLayout" data-page-variant="CoverHero" data-label="封面页 · Cover">
+  <img class="bg-img" src="assets/bg-cover.svg" alt="" aria-hidden="true" />
+  <img class="fixed-brand-logo" src="assets/logo.svg" alt="快手联盟" />
+  <div class="safe-zone" data-source-id="example-source-001">
     <div class="flex-col items-center justify-center text-center" style="height:100%;gap:32px;">
       <div class="card-header">2026 品牌营销峰会</div>
       <h1 class="title-xl" style="max-width:2200px;line-height:1.1;">
@@ -278,13 +283,13 @@ html, body {
       </div>
     </div>
   </div>
-</div>
+</section>
 
 <!-- SLIDE 2 · 数据结论页 — Data Highlights -->
-<div class="slide" data-label="数据结论页 · Data">
-  <img class="bg-img" src="style/assets/bg-content.svg"" alt="" />
-  <img class="fixed-brand-logo" src="style/assets/logo.svg"" alt="快手联盟" />
-  <div class="safe-zone">
+<section class="slide ppt-slide" data-slide-index="2" data-source-pages="2" data-page-role="content" data-page-type="MetricOverviewPage" data-layout-component="ColumnGridLayout" data-page-variant="MetricGrid" data-label="数据结论页 · Data">
+  <img class="bg-img" src="assets/bg-content.svg" alt="" aria-hidden="true" />
+  <img class="fixed-brand-logo" src="assets/logo.svg" alt="快手联盟" />
+  <div class="safe-zone" data-source-id="example-source-002">
     <div class="flex-col" style="height:100%;gap:40px;">
       <div class="flex-col items-center text-center gap-12">
         <span class="tag-teal" style="font-size:18px;height:38px;padding:0 20px;">年度核心成果 · 2025</span>
@@ -318,13 +323,13 @@ html, body {
       </div>
     </div>
   </div>
-</div>
+</section>
 
 <!-- SLIDE 3 · 案例成果页 — Case Study -->
-<div class="slide" data-label="案例成果页 · Case Study">
-  <img class="bg-img" src="style/assets/bg-content.svg"" alt="" />
-  <img class="fixed-brand-logo" src="style/assets/logo.svg"" alt="快手联盟" />
-  <div class="safe-zone">
+<section class="slide ppt-slide" data-slide-index="3" data-source-pages="3" data-page-role="content" data-page-type="CaseStudyPage" data-layout-component="CaseStudyLayout" data-page-variant="BackgroundSolutionResult" data-label="案例成果页 · Case Study">
+  <img class="bg-img" src="assets/bg-content.svg" alt="" aria-hidden="true" />
+  <img class="fixed-brand-logo" src="assets/logo.svg" alt="快手联盟" />
+  <div class="safe-zone" data-source-id="example-source-003">
     <div class="flex-col" style="height:100%;gap:32px;">
       <div class="flex-col items-center text-center gap-12">
         <span class="tag-gold" style="font-size:17px;height:38px;padding:0 20px;">案例复盘 · 云南白药</span>
@@ -373,13 +378,13 @@ html, body {
       </div>
     </div>
   </div>
-</div>
+</section>
 
 <!-- SLIDE 4 · 策略分析页 — Strategy -->
-<div class="slide" data-label="策略分析页 · Strategy">
-  <img class="bg-img" src="style/assets/bg-closing.svg"" alt="" />
-  <img class="fixed-brand-logo" src="style/assets/logo.svg"" alt="快手联盟" />
-  <div class="safe-zone">
+<section class="slide ppt-slide" data-slide-index="4" data-source-pages="4" data-page-role="content" data-page-type="StrategyPanoramaPage" data-layout-component="ColumnGridLayout" data-page-variant="StrategyColumns" data-label="策略分析页 · Strategy">
+  <img class="bg-img" src="assets/bg-content.svg" alt="" aria-hidden="true" />
+  <img class="fixed-brand-logo" src="assets/logo.svg" alt="快手联盟" />
+  <div class="safe-zone" data-source-id="example-source-004">
     <div class="flex-col" style="height:100%;gap:36px;">
       <div class="flex-col items-center text-center gap-12">
         <h2 class="title-md">人群有价值 + 策略大升级<br><span class="teal-text">每个痛点都有解法</span></h2>
@@ -434,18 +439,18 @@ html, body {
       </div>
     </div>
   </div>
-</div>
+</section>
 
-<!-- SLIDE 5 · 章节过渡页 — Section -->
-<div class="slide" data-label="章节过渡页 · Section">
-  <img class="bg-img" src="style/assets/bg-closing.svg"" alt="" />
-  <img class="fixed-brand-logo" src="style/assets/logo.svg"" alt="快手联盟" />
-  <div class="safe-zone">
+<!-- SLIDE 5 · 封尾页 — Closing -->
+<section class="slide ppt-slide" data-slide-index="5" data-source-pages="5" data-page-role="closing" data-page-type="ClosingPage" data-layout-component="HeroLayout" data-page-variant="ClosingHero" data-label="封尾页 · Closing">
+  <img class="bg-img" src="assets/bg-closing.svg" alt="" aria-hidden="true" />
+  <img class="fixed-brand-logo" src="assets/logo.svg" alt="快手联盟" />
+  <div class="safe-zone" data-source-id="example-source-005">
     <div class="flex-col items-center text-center" style="height:100%;justify-content:center;gap:32px;">
-      <div class="card-header" style="font-size:20px;padding:10px 28px;">PART 02</div>
-      <h1 class="title-xl">增长策略升级</h1>
+      <div class="card-header" style="font-size:20px;padding:10px 28px;">THANK YOU</div>
+      <h1 class="title-xl">携手增长，<span class="gold-text">共赢未来</span></h1>
       <p class="subtitle" style="max-width:1800px;color:var(--text-body);">
-        基于真实用户洞察，重构从触点到转化的完整链路
+        以真实用户洞察为起点，与合作伙伴共同创造确定性增长
       </p>
       <div class="flex-row gap-16 items-center">
         <span class="tag-teal">智能分钱</span>
@@ -454,17 +459,17 @@ html, body {
       </div>
     </div>
   </div>
-</div>
+</section>
 
-</div><!-- /.slideshow -->
+</main><!-- /.slideshow -->
 
-<div id="nav-hud">
+<nav id="nav-hud" aria-label="演示翻页控制">
   <button id="btn-prev" title="上一页 (←)" disabled>&#8592;</button>
   <div id="nav-dots"></div>
   <button id="btn-next" title="下一页 (→)">&#8594;</button>
   <span id="slide-counter">1 / 5</span>
   <span id="slide-type-label"></span>
-</div>
+</nav>
 
 <script>
 (function () {
@@ -474,7 +479,10 @@ html, body {
 
   var dotsContainer = document.getElementById('nav-dots');
   slides.forEach(function (_, i) {
-    var d = document.createElement('span');
+    var d = document.createElement('button');
+    d.type = 'button';
+    d.setAttribute('aria-label', '跳转到第 ' + (i + 1) + ' 页');
+    d.setAttribute('aria-current', i === 0 ? 'true' : 'false');
     d.className = 'nav-dot' + (i === 0 ? ' active' : '');
     d.addEventListener('click', function () { goTo(i); });
     dotsContainer.appendChild(d);
@@ -483,11 +491,13 @@ html, body {
   function getDots() { return dotsContainer.querySelectorAll('.nav-dot'); }
 
   function scaleActive() {
-    var vw = window.innerWidth;
-    var vh = window.innerHeight - 52;
+    var navEl = document.getElementById('nav-hud');
+    var navH  = navEl ? navEl.offsetHeight : 0;
+    var vw    = window.innerWidth;
+    var vh    = window.innerHeight - navH;
     var scale = Math.min(vw / 3696, vh / 1008);
-    var offsetX = (vw  - 3696 * scale) / 2;
-    var offsetY = (vh  - 1008 * scale) / 2;
+    var offsetX = (vw - 3696 * scale) / 2;
+    var offsetY = (vh - 1008 * scale) / 2;
     slides.forEach(function (s) {
       s.style.transform       = 'scale(' + scale + ')';
       s.style.transformOrigin = '0 0';
@@ -500,9 +510,11 @@ html, body {
     if (idx < 0 || idx >= total) return;
     slides[current].classList.remove('active');
     getDots()[current].classList.remove('active');
+    getDots()[current].setAttribute('aria-current', 'false');
     current = idx;
     slides[current].classList.add('active');
     getDots()[current].classList.add('active');
+    getDots()[current].setAttribute('aria-current', 'true');
     document.getElementById('slide-counter').textContent = (current + 1) + ' / ' + total;
     document.getElementById('slide-type-label').textContent = slides[current].dataset.label || '';
     document.getElementById('btn-prev').disabled = (current === 0);
@@ -520,11 +532,12 @@ html, body {
   });
 
   window.addEventListener('resize', scaleActive);
-  window.addEventListener('load', function () {
+  document.addEventListener('DOMContentLoaded', function () {
     scaleActive();
     document.getElementById('slide-type-label').textContent = slides[0].dataset.label || '';
     document.getElementById('btn-prev').disabled = true;
   });
+  window.addEventListener('load', scaleActive);
 })();
 </script>
 </body>

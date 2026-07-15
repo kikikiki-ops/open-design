@@ -47,7 +47,7 @@
 - 资源组合页
 - 总结收口页
 
-如果内容很多，优先提炼核心结论，不要把所有内容塞进一页。
+页面意图只决定视觉结构，不决定正式内容取舍。内容过多时先按总控内容账本重新分组或拆页；除非用户明确要求精简，否则不得以“提炼核心结论”为由删除、合并或改写正式内容。
 
 ---
 
@@ -160,11 +160,10 @@
 
 内容过多时，处理顺序：
 
-1. 提炼主结论
-2. 合并同类项
-3. 删除重复解释
-4. 拆成多页
-5. 弱化辅助内容
+1. 检查内容账本与关系绑定
+2. 重新分组并选择更适配的布局变体
+3. 拆成连续页面，并保留来源页与叙事顺序
+4. 仅弱化用户明确标记为辅助的内容
 
 严禁：缩小字号硬塞、压缩边距、密集表格、满屏小字。
 
@@ -176,13 +175,51 @@
 
 必须：
 
-- 使用固定尺寸容器：`width: 3696px; height: 1008px;`
-- 使用绝对布局或清晰 grid 布局。
-- 所有核心内容位于安全区内。
-- 背景流线为装饰层，不影响内容层。
-- 字号必须满足大屏阅读，主标题建议 60~72px。
-- 不要出现页面滚动。
-- 不要出现内容溢出。
+- `.slide` 容器使用固定尺寸：`width: 3696px; height: 1008px;`
+- `html, body, .slideshow` 使用 `width:100vw; height:100vh; overflow:hidden;`
+- **必须加入等比自适应缩放脚本**（见下方模板），确保任意屏幕尺寸下 3696×1008 都能完整等比居中显示
+- 使用 `position:absolute` 绝对布局，`transform-origin: 0 0`
+- 所有核心内容位于安全区内（左右各 220px，上下各 90px）
+- 背景流线为装饰层，不影响内容层
+- 字号必须满足大屏阅读，主标题建议 72~88px，正文不得小于 18px
+- 不要出现页面滚动
+- 不要出现内容溢出
+- 所有正式内容保留 `data-source-id`，页面保留 slide index、角色和背景变体
+
+#### 必须包含的自适应缩放脚本模板
+
+**每一个生成的 HTML PPT 都必须在 `</body>` 前包含以下脚本**（可根据是否有导航栏调整）：
+
+```html
+<script>
+(function () {
+  var SLIDE_W = 3696, SLIDE_H = 1008;
+  var slides = Array.from(document.querySelectorAll('.slide'));
+
+  function scaleSlides() {
+    var navEl = document.getElementById('nav-hud');
+    var navH  = navEl ? navEl.offsetHeight : 0;
+    var vw    = window.innerWidth;
+    var vh    = window.innerHeight - navH;
+    var scale = Math.min(vw / SLIDE_W, vh / SLIDE_H);
+    var ox    = (vw - SLIDE_W * scale) / 2;
+    var oy    = (vh - SLIDE_H * scale) / 2;
+    slides.forEach(function (s) {
+      s.style.transform       = 'scale(' + scale + ')';
+      s.style.transformOrigin = '0 0';
+      s.style.left            = ox + 'px';
+      s.style.top             = oy + 'px';
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', scaleSlides);
+  window.addEventListener('load',   scaleSlides);
+  window.addEventListener('resize', scaleSlides);
+})();
+</script>
+```
+
+**不允许**使用 `width:100vw; height:100vh` 直接拉伸 `.slide` 容器，这会破坏 3.67:1 超宽比例。
 
 ### 如果输出设计说明
 
@@ -246,6 +283,8 @@
 [ ] 页面信息是否低密度
 [ ] 是否避免赛博、炫光、复杂装饰和模板感
 [ ] 是否满足远距离观看可读性
+[ ] 是否在 100% 画布与缩放预览下均无溢出、遮挡和裁切
+[ ] 是否未因视觉降密度而删除、改写或合并正式内容
 ```
 
 ---
@@ -280,7 +319,7 @@ closing：封尾页背景
 
 ## 固定品牌信息禁用规则
 
-当前背景图资产本身已经包含左上角品牌标识，因此本风格 Skill 不应额外生成任何常驻品牌文字、常驻 Logo 组件或顶部小标签。
+背景图不承载品牌标识，因此本风格 Skill 不应额外生成任何常驻品牌文字或顶部小标签；Logo 仅通过独立组件渲染。
 
 默认禁止在页面中自动叠加：
 

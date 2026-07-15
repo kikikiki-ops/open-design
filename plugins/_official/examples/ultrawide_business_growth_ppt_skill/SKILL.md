@@ -176,13 +176,50 @@
 
 必须：
 
-- 使用固定尺寸容器：`width: 3696px; height: 1008px;`
-- 使用绝对布局或清晰 grid 布局。
-- 所有核心内容位于安全区内。
-- 背景流线为装饰层，不影响内容层。
-- 字号必须满足大屏阅读，主标题建议 60~72px。
-- 不要出现页面滚动。
-- 不要出现内容溢出。
+- `.slide` 容器使用固定尺寸：`width: 3696px; height: 1008px;`
+- `html, body, .slideshow` 使用 `width:100vw; height:100vh; overflow:hidden;`
+- **必须加入等比自适应缩放脚本**（见下方模板），确保任意屏幕尺寸下 3696×1008 都能完整等比居中显示
+- 使用 `position:absolute` 绝对布局，`transform-origin: 0 0`
+- 所有核心内容位于安全区内（左右各 220px，上下各 90px）
+- 背景流线为装饰层，不影响内容层
+- 字号必须满足大屏阅读，主标题建议 60~72px
+- 不要出现页面滚动
+- 不要出现内容溢出
+
+#### 必须包含的自适应缩放脚本模板
+
+**每一个生成的 HTML PPT 都必须在 `</body>` 前包含以下脚本**（可根据是否有导航栏调整 `NAV_H`）：
+
+```html
+<script>
+(function () {
+  var SLIDE_W = 3696, SLIDE_H = 1008;
+  var slides = Array.from(document.querySelectorAll('.slide'));
+
+  function scaleSlides() {
+    var navEl = document.getElementById('nav-hud');
+    var navH  = navEl ? navEl.offsetHeight : 0;
+    var vw    = window.innerWidth;
+    var vh    = window.innerHeight - navH;
+    var scale = Math.min(vw / SLIDE_W, vh / SLIDE_H);
+    var ox    = (vw - SLIDE_W * scale) / 2;
+    var oy    = (vh - SLIDE_H * scale) / 2;
+    slides.forEach(function (s) {
+      s.style.transform       = 'scale(' + scale + ')';
+      s.style.transformOrigin = '0 0';
+      s.style.left            = ox + 'px';
+      s.style.top             = oy + 'px';
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', scaleSlides);
+  window.addEventListener('load',   scaleSlides);
+  window.addEventListener('resize', scaleSlides);
+})();
+</script>
+```
+
+**不允许**使用 `width:100vw; height:100vh` 直接拉伸 `.slide` 容器，这会破坏 3.67:1 超宽比例。
 
 ### 如果输出设计说明
 

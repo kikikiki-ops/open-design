@@ -81,7 +81,65 @@
 可用内容区高度：828 px
 ```
 
-### 1.4 信息密度原则
+### 1.4 HTML 输出必须使用等比自适应缩放
+
+**所有 HTML 型 PPT 页面必须使用等比自适应缩放**，确保在任何浏览器窗口、iframe 或大屏上都能完整等比居中显示，而不是拉伸变形。
+
+**必须遵守的 CSS 结构：**
+
+```css
+html, body {
+  width: 100vw; height: 100vh;
+  overflow: hidden;
+  background: #111418; /* 黑色背景衬托居中区域 */
+}
+.slideshow {
+  position: relative;
+  width: 100vw; height: 100vh;
+  overflow: hidden;
+}
+.slide {
+  position: absolute;
+  width: 3696px; height: 1008px;
+  overflow: hidden;
+  transform-origin: 0 0;
+  display: none;
+}
+.slide.active { display: block; }
+```
+
+**必须包含的自适应缩放 JS（生成时复制此段，不得省略）：**
+
+```js
+(function () {
+  var SLIDE_W = 3696, SLIDE_H = 1008;
+  var slides = Array.from(document.querySelectorAll('.slide'));
+
+  function scaleSlides() {
+    var navEl = document.getElementById('nav-hud');
+    var navH  = navEl ? navEl.offsetHeight : 0;
+    var vw    = window.innerWidth;
+    var vh    = window.innerHeight - navH;
+    var scale = Math.min(vw / SLIDE_W, vh / SLIDE_H);
+    var ox    = (vw - SLIDE_W * scale) / 2;
+    var oy    = (vh - SLIDE_H * scale) / 2;
+    slides.forEach(function (s) {
+      s.style.transform       = 'scale(' + scale + ')';
+      s.style.transformOrigin = '0 0';
+      s.style.left            = ox + 'px';
+      s.style.top             = oy + 'px';
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', scaleSlides);
+  window.addEventListener('load',   scaleSlides);
+  window.addEventListener('resize', scaleSlides);
+})();
+```
+
+**禁止**直接用 `width:100%; height:100%` 或 `width:100vw; height:100vh` 拉伸 `.slide`，这会把 3.67:1 的比例变成屏幕比例。
+
+### 1.5 信息密度原则
 
 超宽大屏必须比普通 PPT 更克制：
 

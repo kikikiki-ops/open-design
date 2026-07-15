@@ -483,11 +483,14 @@ html, body {
   function getDots() { return dotsContainer.querySelectorAll('.nav-dot'); }
 
   function scaleActive() {
+    var navH = (document.getElementById('nav-hud') || {offsetHeight: 0}).offsetHeight || 0;
     var vw = window.innerWidth;
-    var vh = window.innerHeight - 52;
-    var scale = Math.min(vw / 3696, vh / 1008);
-    var offsetX = (vw  - 3696 * scale) / 2;
-    var offsetY = (vh  - 1008 * scale) / 2;
+    var vh = window.innerHeight - navH;
+    var scaleX = vw / 3696;
+    var scaleY = vh / 1008;
+    var scale  = Math.min(scaleX, scaleY);
+    var offsetX = (vw - 3696 * scale) / 2;
+    var offsetY = (vh - 1008 * scale) / 2;
     slides.forEach(function (s) {
       s.style.transform       = 'scale(' + scale + ')';
       s.style.transformOrigin = '0 0';
@@ -520,10 +523,13 @@ html, body {
   });
 
   window.addEventListener('resize', scaleActive);
-  window.addEventListener('load', function () {
+  document.addEventListener('DOMContentLoaded', function () {
     scaleActive();
     document.getElementById('slide-type-label').textContent = slides[0].dataset.label || '';
     document.getElementById('btn-prev').disabled = true;
+  });
+  window.addEventListener('load', function () {
+    scaleActive();
   });
 })();
 </script>
