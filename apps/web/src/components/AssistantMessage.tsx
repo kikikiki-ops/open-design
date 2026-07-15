@@ -11,7 +11,7 @@ import {
   resolveChatFileLink,
 } from "../runtime/in-project-link";
 import { navigate } from "../router";
-import { projectFileUrl, uploadProjectFiles } from "../providers/registry";
+import { deleteProjectFile, projectFileUrl, uploadProjectFiles } from "../providers/registry";
 import { useAnalytics } from "../analytics/provider";
 import {
   trackAssistantFeedbackButtonClick,
@@ -2639,6 +2639,7 @@ function FormBlock({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
+  const pendingUploadCleanupRef = useRef<ChatAttachment[]>([]);
   const submittedFromHistory = useMemo(
     () => (nextUserContent ? parseSubmittedAnswers(form, nextUserContent) : null),
     [form, nextUserContent],
@@ -2682,6 +2683,7 @@ function FormBlock({
     setUploadError(null);
     submittingRef.current = false;
     setSubmitting(false);
+    pendingUploadCleanupRef.current = [];
   }, [formKey]);
   useEffect(() => {
     if (!submittedFromHistory) return;
@@ -2769,6 +2771,17 @@ function FormBlock({
     [analytics.track, form.id, projectId],
   );
 
+  const rollbackPendingUploads = useCallback(async () => {
+    const pending = pendingUploadCleanupRef.current;
+    if (pending.length === 0) return true;
+    if (!projectId) return false;
+    const deleted = await Promise.all(
+      pending.map((attachment) => deleteProjectFile(projectId, attachment.path)),
+    );
+    pendingUploadCleanupRef.current = pending.filter((_, index) => !deleted[index]);
+    return pendingUploadCleanupRef.current.length === 0;
+  }, [projectId]);
+
   const handleSubmit = useCallback(
     async (
       text: string,
@@ -2779,6 +2792,17 @@ function FormBlock({
       if (submittingRef.current) return;
       submittingRef.current = true;
       setSubmitting(true);
+      if (
+        pendingUploadCleanupRef.current.length > 0 &&
+        !(await rollbackPendingUploads())
+      ) {
+        setUploadError(
+          t("questions.uploadFailed", { failed: Math.max(1, pendingUploadCleanupRef.current.length) }),
+        );
+        submittingRef.current = false;
+        setSubmitting(false);
+        return;
+      }
       let attachments: ChatAttachment[] = [];
       let context: RunContextSelection | undefined;
       let submittedText = text;
@@ -2789,13 +2813,13 @@ function FormBlock({
           setSubmitting(false);
           return;
         }
-        setUploadError(null);
         const flatFiles = fileSubmissions.flatMap((submission) =>
           submission.files.map((file) => ({
             file,
             questionLabel: submission.questionLabel,
           })),
         );
+        setUploadError(null);
         const result = await uploadProjectFiles(
           projectId,
           flatFiles.map((entry) => entry.file),
@@ -2808,16 +2832,10 @@ function FormBlock({
           error: error instanceof Error ? error.message : String(error),
         }));
         if (result.failed.length > 0 || result.uploaded.length !== flatFiles.length) {
-          const failed =
-            result.failed.length ||
-            Math.max(1, flatFiles.length - result.uploaded.length);
-          const uploaded = result.uploaded.length;
+          pendingUploadCleanupRef.current = result.uploaded;
+          await rollbackPendingUploads();
           const detail = result.error ? ` (${result.error})` : "";
-          setUploadError(
-            (uploaded > 0
-              ? t("questions.uploadPartialFailed", { uploaded, failed })
-              : t("questions.uploadFailed", { failed })) + detail,
-          );
+          setUploadError(t("questions.uploadFailed", { failed: flatFiles.length }) + detail);
           submittingRef.current = false;
           setSubmitting(false);
           return;
@@ -2865,7 +2883,7 @@ function FormBlock({
         onSubmit?.(submittedText);
       }
     },
-    [analytics.track, form, formKey, onSubmit, projectId, t],
+    [analytics.track, form, formKey, onSubmit, projectId, rollbackPendingUploads, t],
   );
 
   if (submittedFromHistory) {
