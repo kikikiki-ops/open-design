@@ -2415,7 +2415,6 @@ export const ar: Dict = {
   'previewRunStatus.succeeded': 'التصميم جاهز',
   'previewRunStatus.failed': 'التسليم يحتاج إلى اهتمام',
   'previewRunStatus.elapsed': 'الوقت المنقضي {time}',
-  'previewRunStatus.viewDetails': 'عرض التفاصيل',
   'workspace.designFilesLink': 'ملفات التصميم',
   'workspace.loadingSketch': 'جاري تحميل الرسم...',
   'workspace.newTab': 'علامة تبويب جديدة',

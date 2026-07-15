@@ -2641,7 +2641,6 @@ export const zhTW: Dict = {
   "previewRunStatus.succeeded": "設計已就緒",
   "previewRunStatus.failed": "交付需要處理",
   "previewRunStatus.elapsed": "已用時 {time}",
-  "previewRunStatus.viewDetails": "查看詳情",
   "workspace.designFilesLink": "設計檔案",
   "workspace.loadingSketch": "正在載入草圖…",
   "workspace.newTab": "新增分頁",

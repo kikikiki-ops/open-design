@@ -2631,7 +2631,6 @@ export const zhCN: Dict = {
   "previewRunStatus.succeeded": "设计已就绪",
   "previewRunStatus.failed": "交付需要处理",
   "previewRunStatus.elapsed": "已用时 {time}",
-  "previewRunStatus.viewDetails": "查看详情",
   "workspace.designFilesLink": "设计文件",
   "workspace.loadingSketch": "正在加载草图…",
   "workspace.newTab": "新建标签页",

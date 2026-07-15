@@ -2415,7 +2415,6 @@ export const tr: Dict = {
   'previewRunStatus.succeeded': 'Tasarım hazır',
   'previewRunStatus.failed': 'Teslimatın ilgilenilmesi gerekiyor',
   'previewRunStatus.elapsed': 'Geçen süre {time}',
-  'previewRunStatus.viewDetails': 'Ayrıntıları görüntüle',
   'workspace.designFilesLink': 'Tasarım Dosyaları',
   'workspace.loadingSketch': 'Taslak yükleniyor…',
   'workspace.newTab': 'Yeni sekme',

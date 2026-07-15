@@ -2415,7 +2415,6 @@ export const ptBR: Dict = {
   'previewRunStatus.succeeded': 'Design pronto',
   'previewRunStatus.failed': 'A entrega precisa de atenção',
   'previewRunStatus.elapsed': 'Decorrido {time}',
-  'previewRunStatus.viewDetails': 'Ver detalhes',
   'workspace.designFilesLink': 'Arquivos de design',
   'workspace.loadingSketch': 'Carregando esboço…',
   'workspace.newTab': 'Nova aba',

@@ -781,12 +781,7 @@ function AssistantMessageImpl({
   }
 
   return (
-    <div
-      id={`assistant-message-${message.id}`}
-      className="msg assistant"
-      data-assistant-message-id={message.id}
-      tabIndex={-1}
-    >
+    <div className="msg assistant">
       <div className="role">
         <AgentIcon id={roleIconId} size={20} className="role-agent-icon" />
         <span className="role-name">{roleName}</span>

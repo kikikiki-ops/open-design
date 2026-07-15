@@ -84,7 +84,7 @@ test('[P1] preview delivery status keeps persisted delivery-failure recovery in 
   await expect(status.locator('xpath=ancestor::*[@data-testid="design-files-empty"]')).toHaveCount(0);
   await expect(status).not.toContainText('Elapsed');
   await expect(page.getByTestId('preview-run-status-retry')).toHaveCount(0);
-  await expect(page.getByTestId('preview-run-status-view-details')).toBeVisible();
+  await expect(page.getByTestId('preview-run-status-view-details')).toHaveCount(0);
   const chatRetry = page.locator('.chat-error-retry');
   await expect(chatRetry).toBeVisible();
 

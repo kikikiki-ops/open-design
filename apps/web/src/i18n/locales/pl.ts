@@ -2415,7 +2415,6 @@ export const pl: Dict = {
   'previewRunStatus.succeeded': 'Projekt jest gotowy',
   'previewRunStatus.failed': 'Dostarczenie wymaga uwagi',
   'previewRunStatus.elapsed': 'Czas {time}',
-  'previewRunStatus.viewDetails': 'Zobacz szczegóły',
   'workspace.designFilesLink': 'Pliki projektu',
   'workspace.loadingSketch': 'Ładowanie szkicu…',
   'workspace.newTab': 'Nowa karta',

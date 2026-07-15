@@ -2415,7 +2415,6 @@ export const ko: Dict = {
   'previewRunStatus.succeeded': '디자인이 준비되었습니다',
   'previewRunStatus.failed': '전달에 확인이 필요합니다',
   'previewRunStatus.elapsed': '경과 시간 {time}',
-  'previewRunStatus.viewDetails': '세부정보 보기',
   'workspace.designFilesLink': '디자인 파일',
   'workspace.loadingSketch': '스케치 불러오는 중…',
   'workspace.newTab': '새 탭',

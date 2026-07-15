@@ -2415,7 +2415,6 @@ export const id: Dict = {
   'previewRunStatus.succeeded': 'Desain siap',
   'previewRunStatus.failed': 'Pengiriman perlu diperhatikan',
   'previewRunStatus.elapsed': 'Berlalu {time}',
-  'previewRunStatus.viewDetails': 'Lihat detail',
   'workspace.designFilesLink': 'File desain',
   'workspace.loadingSketch': 'Memuat sketsa...',
   'workspace.newTab': 'New tab',

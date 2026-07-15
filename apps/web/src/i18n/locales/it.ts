@@ -2415,7 +2415,6 @@ export const it: Dict = {
   'previewRunStatus.succeeded': 'Design pronto',
   'previewRunStatus.failed': 'La consegna richiede attenzione',
   'previewRunStatus.elapsed': 'Trascorso {time}',
-  'previewRunStatus.viewDetails': 'Visualizza dettagli',
   'workspace.designFilesLink': 'File di design',
   'workspace.loadingSketch': 'Caricamento dello schizzo…',
   'workspace.newTab': 'Nuova scheda',

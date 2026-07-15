@@ -2415,7 +2415,6 @@ export const ja: Dict = {
   'previewRunStatus.succeeded': 'デザインの準備ができました',
   'previewRunStatus.failed': '成果物の受け渡しに対応が必要です',
   'previewRunStatus.elapsed': '経過時間 {time}',
-  'previewRunStatus.viewDetails': '詳細を見る',
   'workspace.designFilesLink': 'デザインファイル',
   'workspace.loadingSketch': 'スケッチを読み込み中…',
   'workspace.newTab': '新しいタブ',
