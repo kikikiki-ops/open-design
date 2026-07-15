@@ -315,11 +315,17 @@ function getFilenameToChunkIdMap(): ChunkIdMap {
     const chunkId = registry[stackKey];
     if (!chunkId) continue;
     // The registry key is an Error().stack captured inside the injected chunk.
-    // Take the bottom-most frame that carries a filename — matches the frame
-    // @posthog/core keys the id on, so our lookup agrees with the maps.
+    // Key the chunk id on the frame where that Error was constructed — the
+    // chunk's own file. @posthog/core scans its stackParser output (which it
+    // reverses to oldest-first) from the end, i.e. the NEWEST frame; parseStack
+    // here keeps Error.stack's native newest-first order, so the newest frame
+    // is frames[0]. Take the first frame with a filename. A registration stack
+    // is typically multi-frame (the injected IIFE sits above webpack
+    // require/loader frames), so picking the wrong end would key the id onto a
+    // runtime-chunk filename and leave the real chunk with no entry.
     const frames = parseStack(stackKey, {});
-    for (let i = frames.length - 1; i >= 0; i--) {
-      const filename = frames[i]?.filename;
+    for (const frame of frames) {
+      const filename = frame?.filename;
       if (typeof filename === 'string' && filename) {
         map[filename] = chunkId;
         break;

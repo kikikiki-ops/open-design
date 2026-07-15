@@ -100,9 +100,18 @@ describe('error-tracking', () => {
 
   it('stamps chunk_id on frames whose chunk registered one, so PostHog can match the uploaded sourcemap', () => {
     // Mirror what `@posthog/cli sourcemap inject` registers at chunk load:
-    // key = the chunk's own Error().stack, value = its chunk id.
+    // key = the chunk's own Error().stack, value = its chunk id. The stack is
+    // multi-frame — the injected IIFE (newest, the chunk itself) sits above a
+    // webpack runtime frame (older) — so the id MUST key onto the newest
+    // frame's file (page-abc.js), not the outermost one. A loop that picked
+    // the wrong end would key it onto webpack-runtime.js and leave page-abc.js
+    // unmatched.
     (globalThis as { _posthogChunkIds?: Record<string, string> })._posthogChunkIds = {
-      'Error\n    at od://app/_next/static/chunks/page-abc.js:1:100': 'chunk-page-abc',
+      [[
+        'Error',
+        '    at od://app/_next/static/chunks/page-abc.js:1:100',
+        '    at __webpack_require__ (od://app/_next/static/chunks/webpack-runtime.js:2:200)',
+      ].join('\n')]: 'chunk-page-abc',
     };
     setExceptionTrackingContext({
       apiKey: 'phc_test',
