@@ -395,6 +395,12 @@ export function buildPackagedDaemonSpawnEnv(
           OD_TEAM_PROJECTS_TRANSPORT: "vela-cli",
           OD_COLLAB_TRANSPORT: "vela-cli",
           OD_RESOURCE_TRANSPORT: "vela-cli",
+          // The daemon derives the workspace-settings / members / dashboard
+          // console links (shown in the nav for owner/admin) from OD_VELA_WEB_URL;
+          // without it those entries stay hidden even for the owner. This is the
+          // feature-test profile's web origin (mirrors the vela CLI's WebURL for
+          // feature-test).
+          OD_VELA_WEB_URL: "https://amr-feature.powerformer.net",
         }
       : {}),
     ...(options.appVersion == null ? {} : { OD_APP_VERSION: options.appVersion }),

@@ -477,7 +477,18 @@ const BEDROCK_BYOK_UNSUPPORTED_MESSAGE =
   'AWS Bedrock BYOK chat requires AWS credential signing and is not supported by the current API-key proxy.';
 const CHAT_PANEL_KEYBOARD_STEP = 16;
 const DESIGN_SYSTEM_AUDIT_AUTO_REPAIR_ATTEMPTS = 2;
-const CONVERSATION_LOAD_RETRY_DELAYS_MS = [120, 300, 600] as const;
+// The conversations list 404s while a project is not yet in the local daemon DB.
+// For a personal project that is a transient blip, but opening a TEAM-SHARED
+// project a member has not pulled yet only registers it locally after the collab
+// status resolves and the auto-pull completes — several seconds against a remote
+// collab backend (e.g. a packaged feature-env build round-tripping through vela).
+// The old ~1s window ran out mid-pull and surfaced a hard "conversations 404"
+// error on first open of a shared project. Retry on the 404 long enough to cover
+// that sync (~12s); a genuinely missing project is rare on this path (the user
+// navigated in from a real project list) and still surfaces the error afterward.
+const CONVERSATION_LOAD_RETRY_DELAYS_MS = [
+  120, 300, 600, 1000, 1500, 2000, 2500, 3500,
+] as const;
 // Trailing-debounce window for the canonical (daemon + SQLite) tab-state write.
 // Embedded-browser navigation bursts settle well within this; the local cache
 // is written immediately so nothing is lost if the daemon write is coalesced.

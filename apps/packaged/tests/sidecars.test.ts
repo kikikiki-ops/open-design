@@ -427,6 +427,7 @@ describe('buildPackagedDaemonSpawnEnv', () => {
     expect(env.OD_TEAM_PROJECTS_TRANSPORT).toBe('vela-cli');
     expect(env.OD_COLLAB_TRANSPORT).toBe('vela-cli');
     expect(env.OD_RESOURCE_TRANSPORT).toBe('vela-cli');
+    expect(env.OD_VELA_WEB_URL).toBe('https://amr-feature.powerformer.net');
   });
 
   it('leaves the workspace-team transport off for non-feature-test builds', () => {
@@ -442,6 +443,7 @@ describe('buildPackagedDaemonSpawnEnv', () => {
       expect('OD_TEAM_PROJECTS_TRANSPORT' in env).toBe(false);
       expect('OD_COLLAB_TRANSPORT' in env).toBe(false);
       expect('OD_RESOURCE_TRANSPORT' in env).toBe(false);
+      expect('OD_VELA_WEB_URL' in env).toBe(false);
     }
   });
 
