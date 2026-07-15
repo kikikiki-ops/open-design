@@ -238,6 +238,9 @@ import { DesignSystemPicker } from './DesignSystemPicker';
 import { PluginDetailsModal } from './PluginDetailsModal';
 import { DesignSystemPreviewModal } from './DesignSystemPreviewModal';
 import { ChatPane } from './ChatPane';
+import { OdComputerOverlay } from './OdComputerOverlay';
+import { deriveCurrentRound } from '../runtime/task-steps';
+import type { OdComputerVariant } from './OdComputerPanel';
 import type { QuestionFormOpenRequest } from './AssistantMessage';
 import type { ChatSendMeta } from './ChatComposer';
 import {
@@ -1606,6 +1609,9 @@ export function ProjectView({
   const [liveArtifacts, setLiveArtifacts] = useState<LiveArtifactSummary[]>([]);
   const [liveArtifactEvents, setLiveArtifactEvents] = useState<LiveArtifactEventItem[]>([]);
   const [workspaceFocused, setWorkspaceFocused] = useState(false);
+  // Replayable Computer panel (spec §3.4): docked side view or global modal.
+  const [computerOpen, setComputerOpen] = useState(false);
+  const [computerVariant, setComputerVariant] = useState<OdComputerVariant>('side');
   const [commentInspectorActive, setCommentInspectorActive] = useState(false);
   const commentInspectorPortalId = useId();
   const leftInspectorActive = commentInspectorActive;
@@ -1972,6 +1978,31 @@ export function ProjectView({
   const currentConversationStreaming = streaming && streamingConversationId === activeConversationId;
   const currentConversationControlStreaming =
     currentConversationStreaming || currentConversationHasProgrammaticBrandExtractionRun;
+
+  // The latest round drives the replayable Computer panel (spec §3.4).
+  const currentRound = useMemo(
+    () => deriveCurrentRound(messages, { streaming: currentConversationControlStreaming }),
+    [messages, currentConversationControlStreaming],
+  );
+  const currentRoundEvents = useMemo(
+    () =>
+      currentRound
+        ? messages.find((message) => message.id === currentRound.assistantMessageId)?.events
+        : undefined,
+    [messages, currentRound],
+  );
+  const handleOpenComputer = useCallback(() => setComputerOpen(true), []);
+  // Auto-enlarge on run start: the first time a staged-flow round goes live,
+  // dock the Computer side view so the user watches progress in real time. Keyed
+  // per round so it opens once, and never for plain chat turns.
+  const autoOpenedComputerRoundRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!currentConversationControlStreaming || !flowSnapshot || !currentRound) return;
+    if (autoOpenedComputerRoundRef.current === currentRound.assistantMessageId) return;
+    autoOpenedComputerRoundRef.current = currentRound.assistantMessageId;
+    setComputerVariant('side');
+    setComputerOpen(true);
+  }, [currentConversationControlStreaming, flowSnapshot, currentRound]);
   const currentConversationBusy = currentConversationLoading
     || currentConversationStreaming
     || currentConversationHasActiveRun;
@@ -9225,6 +9256,7 @@ export function ProjectView({
               onReorderQueuedSends={reorderCurrentConversationQueuedChatSends}
               onSendQueuedNow={sendQueuedChatSendNow}
               onRequestOpenFile={requestOpenFile}
+              onOpenComputer={handleOpenComputer}
               onRequestPluginDetails={handleOpenContextPluginDetails}
               onRequestDesignSystemDetails={handleOpenContextDesignSystemDetails}
               onRequestPluginFolderAgentAction={handlePluginFolderAgentAction}
@@ -9391,6 +9423,17 @@ export function ProjectView({
             />
           )
         ) : null}
+        <OdComputerOverlay
+          open={computerOpen}
+          variant={computerVariant}
+          onVariantChange={setComputerVariant}
+          onClose={() => setComputerOpen(false)}
+          events={currentRoundEvents}
+          live={currentRound?.live ?? false}
+          status={currentRound?.status ?? null}
+          projectFileNames={projectFileNames}
+          onRequestOpenFile={requestOpenFile}
+        />
         <FileWorkspace
           projectId={project.id}
           projectKind={projectKindFromMetadataToTracking(currentProject.metadata) ?? 'prototype'}

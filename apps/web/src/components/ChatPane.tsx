@@ -513,6 +513,8 @@ interface Props {
   // FileWorkspace's openRequest. Tool cards, attachment chips, and
   // produced-file chips all call this.
   onRequestOpenFile?: (name: string) => void;
+  /** Opens the replayable Computer panel from the pinned task-progress card. */
+  onOpenComputer?: () => void;
   onRequestPluginDetails?: (pluginId: string) => void;
   onRequestDesignSystemDetails?: (system: DesignSystemSummary) => void;
   onRequestPluginFolderAgentAction?: (
@@ -850,6 +852,7 @@ export function ChatPane({
   onReorderQueuedSends,
   onSendQueuedNow,
   onRequestOpenFile,
+  onOpenComputer,
   onRequestPluginDetails,
   onRequestDesignSystemDetails,
   onRequestPluginFolderAgentAction,
@@ -2802,6 +2805,7 @@ export function ChatPane({
               stageArtifactPaths={stageArtifactPaths}
               stageActions={pinnedFlowStageActions}
               onOpenArtifact={onRequestOpenFile}
+              onOpenComputer={onOpenComputer}
             />
           ) : null}
           <div

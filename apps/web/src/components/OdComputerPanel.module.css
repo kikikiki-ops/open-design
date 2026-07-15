@@ -1,0 +1,310 @@
+/* Replayable Computer panel (spec §3.4). World-class, light-first, benchmarked
+   to Manus's "computer". Works docked (side) or as a modal (data-variant). */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  background: var(--bg-panel, #fff);
+  color: var(--text);
+  overflow: hidden;
+}
+
+.root[data-variant='modal'] {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 24px 60px -20px rgb(0 0 0 / 28%), 0 4px 14px -8px rgb(0 0 0 / 20%);
+}
+
+/* ---- header ---- */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  background: var(--bg-subtle, var(--bg-hover, #f3f4f6));
+  color: var(--text-muted, var(--text));
+}
+
+.titles {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+  flex: 1 1 auto;
+}
+
+.title {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.status {
+  overflow: hidden;
+  font-size: 11.5px;
+  color: var(--text-muted, var(--text));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.headerActions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+
+.iconBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted, var(--text));
+  cursor: pointer;
+  transition:
+    background 140ms cubic-bezier(0.23, 1, 0.32, 1),
+    color 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.iconBtn:hover {
+  background: var(--bg-hover, color-mix(in srgb, var(--text) 7%, transparent));
+  color: var(--text);
+}
+
+.iconBtn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ---- body ---- */
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px;
+}
+
+.toolWrap {
+  min-width: 0;
+}
+
+.thinking {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--bg-subtle, var(--bg-hover, #f7f7f8));
+  color: var(--text-muted, var(--text));
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.generic {
+  color: var(--text-muted, var(--text));
+  font-size: 12.5px;
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 120px;
+  color: var(--text-muted, var(--text));
+  font-size: 12.5px;
+  text-align: center;
+}
+
+.artifact {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-panel);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 140ms cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.artifact:hover:not(:disabled) {
+  border-color: var(--accent);
+  box-shadow: 0 4px 14px -8px rgb(0 0 0 / 25%);
+}
+
+.artifact:disabled {
+  cursor: default;
+}
+
+.artifactGlyph {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
+.artifactName {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artifactOpen {
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ---- timeline ---- */
+.timeline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+}
+
+.stepBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-panel);
+  color: var(--text-muted, var(--text));
+  cursor: pointer;
+  transition:
+    color 140ms cubic-bezier(0.23, 1, 0.32, 1),
+    border-color 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.stepBtn:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.stepBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.stepBtn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.scrubber {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 4px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.scrubber:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.liveState,
+.jumpLive {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.liveState {
+  color: var(--success, #2e9e5b);
+}
+
+.jumpLive {
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--bg-hover, color-mix(in srgb, var(--text) 7%, transparent));
+  color: var(--text);
+  cursor: pointer;
+  transition: background 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.jumpLive:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+
+.jumpLive:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.liveDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success, #2e9e5b);
+  animation: od-computer-pulse 1.6s ease-in-out infinite;
+}
+
+.liveDot[data-live='false'] {
+  background: var(--text-muted, #999);
+  animation: none;
+}
+
+.count {
+  flex: 0 0 auto;
+  color: var(--text-muted, var(--text));
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes od-computer-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liveDot {
+    animation: none;
+  }
+}

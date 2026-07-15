@@ -599,6 +599,7 @@ import { registerAutomationRoutes } from './routes/automation.js';
 import { registerDaemonRoutes } from './routes/daemon.js';
 import { registerGenuiRoutes } from './routes/genui.js';
 import { registerFlowRoutes } from './routes/flow.js';
+import { registerTaskRoutes } from './routes/tasks.js';
 import { registerInspireRoutes } from './routes/inspire.js';
 import {
   communityInspireCandidates,
@@ -3444,6 +3445,7 @@ export async function startServer({
     db,
     paths: { PROJECTS_DIR },
   });
+  registerTaskRoutes(app, { db });
   app.use('/api/inspire', requireLocalDaemonRequest);
   app.use('/api/conversations/:id/flow/inspire', requireLocalDaemonRequest);
   registerInspireRoutes(app, {

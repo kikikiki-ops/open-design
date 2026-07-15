@@ -361,6 +361,7 @@ const SUBCOMMAND_MAP = {
   templates: runTemplates,
   conversation: runConversation,
   flow: runFlow,
+  task: runTask,
   chat: runChat,
   daemon: runDaemon,
   atoms: runAtoms,
@@ -592,6 +593,8 @@ function printRootHelp() {
       plan → inspire → generate → deliver).
   od flow confirm <conversationId> [--prompt-file <path|->] [--json]
       Confirm the editable plan and open the inspiration checkpoint.
+  od task steps <conversationId> [--round N] [--json]
+      Print the per-round task steps — the timeline the Computer panel replays.
 
   od inspire <rank|apply|skip> [options]
       Rank shape-compatible templates or finalize a conversation's inspiration choice.
@@ -7544,6 +7547,73 @@ Common options:
     const progress = stage.progress ? ` ${stage.progress.done}/${stage.progress.total}` : '';
     const detail = stage.detail ? ` — ${stage.detail}` : '';
     console.log(`  ${icon} ${stage.id}${progress}${detail}`);
+  }
+  return;
+}
+
+// ---------------------------------------------------------------------------
+// Subcommand: od task  (per-round task steps — the Computer replay timeline)
+// ---------------------------------------------------------------------------
+const TASK_STRING_FLAGS = new Set(['daemon-url', 'conversation', 'round']);
+const TASK_BOOLEAN_FLAGS = new Set(['json']);
+const TASK_STEP_ICONS = { running: '◔', done: '✓', error: '✕' };
+
+function taskStepLine(step) {
+  const icon = TASK_STEP_ICONS[step.status] ?? '·';
+  const target = step.target ? ` ${step.target}` : '';
+  return `  ${icon} ${step.kind}${target}`;
+}
+
+async function runTask(args) {
+  if (args.length === 0 || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {
+    console.log(`Usage:
+  od task steps <conversationId> [--round N] [--json]
+                                      Print the per-round task steps — the same
+                                      timeline the Computer panel replays
+                                      (search / read / plan / generate / …).
+
+Common options:
+  --round <n>          Only the round at this 0-based index.
+  --daemon-url <url>   Open Design daemon HTTP base.
+  --json               Emit raw JSON.`);
+    process.exit(args.length === 0 ? 2 : 0);
+  }
+  const sub = args[0];
+  const rest = args.slice(1);
+  if (sub !== 'steps') {
+    console.error(`unknown subcommand: od task ${sub}`);
+    process.exit(2);
+  }
+  const flags = parseFlags(rest, { string: TASK_STRING_FLAGS, boolean: TASK_BOOLEAN_FLAGS });
+  const [positional] = positionalArgs(rest, TASK_STRING_FLAGS);
+  const conversationId =
+    typeof flags.conversation === 'string' && flags.conversation ? flags.conversation : positional;
+  if (!conversationId) {
+    console.error('Usage: od task steps <conversationId> [--round N] [--json]');
+    process.exit(2);
+  }
+  const base = (await cliDaemonUrl(flags)).replace(/\/$/, '');
+  const resp = await fetch(
+    `${base}/api/conversations/${encodeURIComponent(conversationId)}/tasks`,
+  );
+  if (!resp.ok) return structuredHttpFailure(resp, 'conversation-not-found');
+  const data = await resp.json();
+  let rounds = Array.isArray(data.rounds) ? data.rounds : [];
+  if (flags.round !== undefined && flags.round !== '') {
+    const target = Number(flags.round);
+    rounds = rounds.filter((round) => round.index === target);
+  }
+  if (flags.json) {
+    return process.stdout.write(JSON.stringify({ ...data, rounds }, null, 2) + '\n');
+  }
+  if (rounds.length === 0) {
+    console.log('[task] no rounds for this conversation');
+    return;
+  }
+  for (const round of rounds) {
+    const status = round.status ? ` · ${round.status}` : '';
+    console.log(`[task] round ${round.index}${status} · ${round.steps.length} step(s)`);
+    for (const step of round.steps) console.log(taskStepLine(step));
   }
   return;
 }
