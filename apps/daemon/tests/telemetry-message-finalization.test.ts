@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  clearRunAwaitingFinalAcceptance,
+  markRunAwaitingFinalAcceptance,
+  resetPendingRunFeedbackForTests,
+  shouldDeferRunFeedback,
+} from '../src/langfuse-trace.js';
+import {
   FORM_ANSWERED_GENERIC_OVERRIDE,
   composeChatUserRequestForAgent,
   createFinalizedMessageTelemetryReporter,
@@ -538,5 +544,76 @@ describe('Langfuse message finalization gate', () => {
         }),
       }),
     );
+  });
+
+  it('does not clear terminal_fallback awaiting tokens on ordinary non-final message writes', () => {
+    // During the failed/canceled terminal_fallback delay, web thumbs feedback
+    // may PUT /messages/:id without telemetryFinalized. That path must leave
+    // the schedule-time awaiting token intact so deferred scores still attach
+    // to the eventual runId:tf body instead of flushing on canonical runId.
+    resetPendingRunFeedbackForTests();
+    const runId = 'run-tf-delay-message-write';
+    markRunAwaitingFinalAcceptance(runId);
+    expect(shouldDeferRunFeedback({ runId })).toBe(true);
+
+    const report = vi.fn();
+    const reporter = createFinalizedMessageTelemetryReporter({
+      design: { runs: { get: vi.fn(() => undefined) } },
+      db: 'db',
+      dataDir: '/tmp/od-data',
+      reportedRuns: new Set<string>(),
+      report,
+    });
+
+    reporter(
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        content: 'partial',
+        runId,
+        runStatus: 'failed',
+      },
+      // Ordinary message update — no telemetryFinalized, no awaitingToken.
+      { content: 'partial with thumbs metadata' },
+    );
+
+    expect(report).not.toHaveBeenCalled();
+    expect(shouldDeferRunFeedback({ runId })).toBe(true);
+
+    clearRunAwaitingFinalAcceptance(runId);
+    expect(shouldDeferRunFeedback({ runId })).toBe(false);
+  });
+
+  it('releases only the provided schedule token when a non-final write cancels that attempt', () => {
+    resetPendingRunFeedbackForTests();
+    const runId = 'run-tf-cancel-specific-token';
+    const tokenTf = markRunAwaitingFinalAcceptance(runId);
+    const tokenOther = markRunAwaitingFinalAcceptance(runId);
+    expect(shouldDeferRunFeedback({ runId })).toBe(true);
+
+    const reporter = createFinalizedMessageTelemetryReporter({
+      design: { runs: { get: vi.fn(() => undefined) } },
+      db: 'db',
+      dataDir: '/tmp/od-data',
+      reportedRuns: new Set<string>(),
+      report: vi.fn(),
+    });
+
+    // Non-final path with the schedule token still releases only that attempt.
+    reporter(
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        content: 'still waiting',
+        runId,
+        runStatus: 'failed',
+      },
+      {},
+      { awaitingToken: tokenTf },
+    );
+
+    expect(shouldDeferRunFeedback({ runId })).toBe(true);
+    clearRunAwaitingFinalAcceptance(runId, tokenOther);
+    expect(shouldDeferRunFeedback({ runId })).toBe(false);
   });
 });

@@ -1509,13 +1509,13 @@ export function createFinalizedMessageTelemetryReporter({
         ? options.awaitingToken.trim()
         : '';
     if (!shouldReportRunCompletedFromMessage(saved, body)) {
-      // terminal_fallback may have marked at timer schedule; release only that
-      // attempt (or all tokens if this path never received one).
-      if (saved?.runId) {
-        clearRunAwaitingFinalAcceptance(
-          saved.runId,
-          reusedAwaitingToken || undefined,
-        );
+      // terminal_fallback may have marked at timer schedule; release only when
+      // this invocation actually received that schedule token. Generic non-final
+      // message writes (e.g. thumbs via PUT /messages/:id) pass no token —
+      // clearing with undefined would wipe every awaiting attempt and flush
+      // deferred feedback off the eventual runId:tf anchor.
+      if (saved?.runId && reusedAwaitingToken) {
+        clearRunAwaitingFinalAcceptance(saved.runId, reusedAwaitingToken);
       }
       return;
     }
