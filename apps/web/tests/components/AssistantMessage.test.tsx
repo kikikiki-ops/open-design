@@ -539,7 +539,7 @@ describe('AssistantMessage question forms', () => {
 
     await waitFor(() => {
       expect(onSubmitQuestionForm).toHaveBeenCalledWith(
-        expect.stringContaining('Reference assets: mood.png -> uploads/mood.png'),
+        expect.stringContaining('Uploaded file 1: mood.png -> uploads/mood.png (for: Reference assets)'),
         [expect.objectContaining({ name: 'mood.png', path: 'uploads/mood.png', order: 0 })],
         {
           workspaceItems: [
@@ -591,6 +591,43 @@ describe('AssistantMessage question forms', () => {
     expect(screen.getByText('Who is this for?')).toBeTruthy();
     expect(screen.getByText('Product evaluators')).toBeTruthy();
     expect(screen.queryByText('Quick brief — tailored')).toBeNull();
+  });
+
+  it('keeps file names in the answered summary when an upload appendix repeats a question label', () => {
+    const form = [
+      '<question-form id="references" title="References">',
+      JSON.stringify({
+        questions: [
+          {
+            id: 'assets',
+            label: 'Reference assets',
+            type: 'file',
+          },
+        ],
+      }),
+      '</question-form>',
+    ].join('\n');
+
+    render(
+      <AssistantMessage
+        message={baseMessage({
+          content: form,
+          events: [{ kind: 'text', text: form } as ChatMessage['events'][number]],
+        })}
+        streaming={false}
+        projectId="proj-1"
+        nextUserContent={[
+          '[form answers for references]',
+          '- Reference assets: mood.png',
+          '',
+          '[uploaded design files]',
+          '- Reference assets: mood.png -> uploads/mood.png',
+        ].join('\n')}
+      />,
+    );
+
+    expect(screen.getByTestId('question-form-summary')).toBeTruthy();
+    expect(screen.getByText('mood.png')).toBeTruthy();
   });
 
   it('does not recommend next steps on the same turn as an inline question form', () => {

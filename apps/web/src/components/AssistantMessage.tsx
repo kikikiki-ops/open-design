@@ -2451,6 +2451,7 @@ function ProseBlock({
   conversationId?: string | null;
   runId?: string | null;
   projectFileNames?: Set<string>;
+  projectResolvedDir?: string | null;
   onSubmitQuestionForm?: (
     text: string,
     attachments?: ChatAttachment[],
@@ -2923,15 +2924,8 @@ function appendInlineQuestionUploadSummary(
   const lines = ["[uploaded design files]"];
   attachments.forEach((attachment, index) => {
     const labels = labelsByFileName.get(attachment.name) ?? [];
-    const prefix = labels[0] ? `${labels[0]}: ` : "";
-    lines.push(`- ${prefix}${attachment.name} -> ${attachment.path}`);
-    if (labels.length > 1) {
-      lines.push(`  (also selected for: ${labels.slice(1).join(", ")})`);
-    }
-    if (!labels[0]) {
-      lines[lines.length - 1] =
-        `- Attachment ${index + 1}: ${attachment.name} -> ${attachment.path}`;
-    }
+    const labelSuffix = labels.length > 0 ? ` (for: ${labels.join(", ")})` : "";
+    lines.push(`- Uploaded file ${index + 1}: ${attachment.name} -> ${attachment.path}${labelSuffix}`);
   });
   return `${text}\n\n${lines.join("\n")}`;
 }

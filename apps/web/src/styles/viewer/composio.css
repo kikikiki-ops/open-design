@@ -894,6 +894,15 @@
   align-items: center;
   gap: 4px;
 }
+.qf-required {
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 5px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+}
 .qf-help {
   font-size: 11px;
   color: var(--text-muted);

@@ -428,7 +428,7 @@ describe('QuestionFormView', () => {
     });
   });
 
-  it('keeps required semantics without rendering a red asterisk', () => {
+  it('uses a readable required marker instead of a red asterisk', () => {
     const mixedForm = {
       id: 'discovery',
       title: 'Quick brief',
@@ -444,7 +444,7 @@ describe('QuestionFormView', () => {
     );
 
     const fields = container.querySelectorAll('.qf-field');
-    expect(fields[0]?.querySelector('.qf-required')).toBeNull();
+    expect(fields[0]?.querySelector('.qf-required')?.textContent).toBe('required');
     expect(fields[1]?.querySelector('.qf-required')).toBeNull();
   });
 
@@ -747,9 +747,10 @@ describe('QuestionFormView', () => {
     expect(screen.getByText('1 / 3').closest('.question-form-head')).toBeTruthy();
     expect(screen.getByText('Who will see this deck?')).toBeTruthy();
     expect(screen.queryByText('How detailed should it be?')).toBeNull();
-    expect((screen.getByRole('button', { name: 'Next step' }) as HTMLButtonElement).disabled).toBe(
-      true,
-    );
+    const nextStep = screen.getByRole('button', { name: 'Next step' }) as HTMLButtonElement;
+    expect(nextStep.disabled).toBe(true);
+    expect(nextStep.title).toBe('Fill in the required fields first');
+    expect(screen.getByText('required')).toBeTruthy();
 
     fireEvent.change(screen.getByRole('textbox'), {
       target: { value: 'Leadership and product team' },

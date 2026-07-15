@@ -474,6 +474,7 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
             >
               <label className="qf-label">
                 <span>{q.label}</span>
+                {q.required ? <span className="qf-required">{t('qf.required')}</span> : null}
               </label>
               {q.help ? <div className="qf-help">{q.help}</div> : null}
               {q.type === 'radio' && q.options && !visualStyleCards ? (
@@ -817,9 +818,11 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
                     submitDisabled || (isLastQuestion ? !ready : !currentQuestionReady)
                   }
                   title={
-                    isLastQuestion && !submitDisabled && ready
-                      ? t('qf.submitTitle')
-                      : undefined
+                    !submitDisabled && activeQuestion?.required === true && !currentQuestionReady
+                      ? t('qf.submitDisabledTitle')
+                      : isLastQuestion && !submitDisabled && ready
+                        ? t('qf.submitTitle')
+                        : undefined
                   }
                 >
                   {isLastQuestion
@@ -1590,8 +1593,10 @@ export function parseSubmittedAnswers(
   const answers: Record<string, string | string[]> = {};
   const labelToId = new Map<string, string>();
   for (const q of form.questions) labelToId.set(q.label.toLowerCase(), q.id);
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i] ?? '';
+  const uploadSummaryIndex = lines.findIndex((line) => /^\[uploaded design files\]$/i.test(line));
+  const answerLines = uploadSummaryIndex === -1 ? lines : lines.slice(0, uploadSummaryIndex);
+  for (let i = 1; i < answerLines.length; i++) {
+    const line = answerLines[i] ?? '';
     const m = /^[-*]\s*([^:]+):\s*(.*)$/.exec(line);
     if (!m) continue;
     const labelKey = m[1]!.trim().toLowerCase();
