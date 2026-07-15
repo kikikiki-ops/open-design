@@ -12,15 +12,29 @@ export type InspireChoiceUpdateResult =
 
 function storedChoice(request: InspireChoiceRequest): FlowInspireChoice {
   return request.action === 'apply'
-    ? { templateId: request.templateId, skipped: false }
-    : { templateId: null, skipped: true };
+    ? {
+        templateId: request.templateId ?? null,
+        designSystemId: request.designSystemId ?? null,
+        skipped: false,
+      }
+    : { templateId: null, designSystemId: null, skipped: true };
 }
 
 function choicesEqual(
   left: FlowInspireChoice | undefined,
   right: FlowInspireChoice,
 ): boolean {
-  return left?.templateId === right.templateId && left?.skipped === right.skipped;
+  return left?.templateId === right.templateId
+    && (left?.designSystemId ?? null) === right.designSystemId
+    && left?.skipped === right.skipped;
+}
+
+function appliedChoiceDetail(choice: FlowInspireChoice): string {
+  const parts = [
+    choice.templateId ? `Template ${choice.templateId}` : null,
+    choice.designSystemId ? `Design system ${choice.designSystemId}` : null,
+  ].filter((part): part is string => Boolean(part));
+  return parts.length > 0 ? `Using ${parts.join(' · ')}` : 'Using the default style';
 }
 
 /**
@@ -66,7 +80,7 @@ export function applyInspireChoice(
         state: targetState,
         detail: choice.skipped
           ? 'Skipped · Using the default style'
-          : 'Using template ' + choice.templateId,
+          : appliedChoiceDetail(choice),
       },
       now,
     );

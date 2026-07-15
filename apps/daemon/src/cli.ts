@@ -144,6 +144,7 @@ const INSPIRE_STRING_FLAGS = new Set([
   'limit',
   'locale',
   'template',
+  'design-system',
 ]);
 const INSPIRE_BOOLEAN_FLAGS = new Set(['help', 'h', 'json']);
 
@@ -288,6 +289,18 @@ const SHARE_BOOLEAN_FLAGS = new Set([
 const TASK_STRING_FLAGS = new Set(['daemon-url', 'conversation', 'round']);
 const TASK_BOOLEAN_FLAGS = new Set(['json']);
 const TASK_STEP_ICONS = { running: '◔', done: '✓', error: '✕' };
+// `od flow` is dispatched during module evaluation just like `od task`.
+// Keep every binding its handler reads above SUBCOMMAND_MAP to avoid a
+// temporal-dead-zone crash in both JSON and human-readable status output.
+const FLOW_STRING_FLAGS = new Set(['daemon-url', 'conversation', 'mode', 'prompt-file']);
+const FLOW_BOOLEAN_FLAGS = new Set(['json']);
+const FLOW_STAGE_ICONS = {
+  pending: '○',
+  active: '◔',
+  complete: '✓',
+  skipped: '⊘',
+  error: '✕',
+};
 // Defined near the top because `runFigma` is reachable through the
 // top-of-file SUBCOMMAND_MAP dispatch during module evaluation; a `const`
 // further down would still be in TDZ when the handler reads it.
@@ -833,7 +846,7 @@ async function runInspire(args) {
   od inspire search --prompt-file <path|-> [--source community|design-template|all] [--json]
   od inspire rank --brief <text> [--outline "Title 1|Title 2"] [--mode <shape>] [--json]
   od inspire rank --prompt-file <path|-> [--outline "Title 1|Title 2"] [--mode <shape>] [--json]
-  od inspire apply --conversation <id> --template <templateId> [--json]
+  od inspire apply --conversation <id> [--template <templateId>] [--design-system <id>] [--json]
   od inspire skip --conversation <id> [--json]
 
 Semantically searches visual Community examples, ranks the design-template
@@ -932,8 +945,15 @@ Common options:
       console.error('--conversation <id> is required');
       process.exit(2);
     }
-    if (sub === 'apply' && (!flags.template || !String(flags.template).trim())) {
-      console.error('--template <templateId> is required');
+    const templateId = typeof flags.template === 'string' && flags.template.trim()
+      ? flags.template.trim()
+      : null;
+    const designSystemId = typeof flags['design-system'] === 'string'
+      && flags['design-system'].trim()
+      ? flags['design-system'].trim()
+      : null;
+    if (sub === 'apply' && !templateId && !designSystemId) {
+      console.error('--template <templateId> or --design-system <id> is required');
       process.exit(2);
     }
     const resp = await fetch(
@@ -944,7 +964,11 @@ Common options:
         body: JSON.stringify(
           sub === 'skip'
             ? { action: 'skip' }
-            : { action: 'apply', templateId: String(flags.template).trim() },
+            : {
+                action: 'apply',
+                ...(templateId ? { templateId } : {}),
+                ...(designSystemId ? { designSystemId } : {}),
+              },
         ),
       },
     );
@@ -954,7 +978,10 @@ Common options:
     console.log(
       sub === 'skip'
         ? '[inspire] skipped'
-        : `[inspire] applied ${String(flags.template).trim()}`,
+        : `[inspire] applied ${[
+            templateId ? `template ${templateId}` : null,
+            designSystemId ? `design system ${designSystemId}` : null,
+          ].filter(Boolean).join(' + ')}`,
     );
     return;
   }
@@ -7447,16 +7474,6 @@ Common options:
 // — the CLI half of the dual-track surface for the staged flow
 // (specs/current/staged-flow-north-star.zh-CN.md §5.9).
 // ---------------------------------------------------------------------------
-
-const FLOW_STRING_FLAGS = new Set(['daemon-url', 'conversation', 'mode', 'prompt-file']);
-const FLOW_BOOLEAN_FLAGS = new Set(['json']);
-const FLOW_STAGE_ICONS = {
-  pending: '○',
-  active: '◔',
-  complete: '✓',
-  skipped: '⊘',
-  error: '✕',
-};
 
 async function runFlow(args) {
   if (args.length === 0 || args[0] === 'help' || args.includes('--help') || args.includes('-h')) {

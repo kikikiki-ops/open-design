@@ -3472,6 +3472,10 @@ export async function startServer({
         ...designTemplateInspireCandidates(templates, locale),
       ];
     },
+    listDesignSystemIds: async () =>
+      (await listAllDesignSystems())
+        .filter((system) => isProjectUsableDesignSystem(system))
+        .map((system) => system.id),
     loadConversationFlow: (conversationId) => {
       const conversation = getConversation(db, conversationId);
       return conversation ? getConversationFlow(db, conversationId) : undefined;
@@ -3498,6 +3502,13 @@ export async function startServer({
         projectRoot,
       });
       updateProject(db, project.id, { skillId: template.id });
+    },
+    applyDesignSystem: (conversationId, designSystemId) => {
+      const conversation = getConversation(db, conversationId);
+      if (!conversation) throw new Error('conversation not found');
+      const project = getProject(db, conversation.projectId);
+      if (!project) throw new Error('project not found');
+      updateProject(db, project.id, { designSystemId });
     },
   });
 

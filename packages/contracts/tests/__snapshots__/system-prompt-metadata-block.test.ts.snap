@@ -36,7 +36,10 @@ These are the structured choices the user made (or skipped) when creating this p
 
 - **kind**: deck
 - **slideCount**: 12
-- **speakerNotes**: true"
+- **speakerNotes**: true
+- **deckGenerationMode**: standard
+- **deckFast**: false
+- **standard deck output**: build the editable canonical HTML deck directly; do not flatten every page into an image."
 `;
 
 exports[`renderMetadataBlock (characterization via composeSystemPrompt chat-mode) > image kind with a reference prompt template 1`] = `

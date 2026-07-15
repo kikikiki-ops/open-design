@@ -79,6 +79,8 @@ vi.mock('../../src/utils/notifications', async (importOriginal) => ({
 }));
 
 vi.mock('../../src/providers/registry', () => ({
+  CLOUDFLARE_PAGES_PROVIDER_ID: 'cloudflare-pages',
+  DEFAULT_DEPLOY_PROVIDER_ID: 'vercel-self',
   deletePreviewComment: vi.fn(),
   fetchPreviewComments: (...args: unknown[]) => fetchPreviewComments(...args),
   fetchDesignSystem: (...args: unknown[]) => fetchDesignSystem(...args),
@@ -118,6 +120,7 @@ vi.mock('../../src/components/AvatarMenu', () => ({
 }));
 
 vi.mock('../../src/components/FileWorkspace', () => ({
+  DESIGN_FILES_TAB: '__design_files__',
   DESIGN_SYSTEM_TAB: '__design_system__',
   FileWorkspace: ({
     streaming,
@@ -128,6 +131,7 @@ vi.mock('../../src/components/FileWorkspace', () => ({
     onSendBoardCommentAttachments,
     onCommentModeChange,
     onFocusModeChange,
+    onOpenComputerModal,
   }: {
     streaming: boolean;
     messages?: ChatMessage[];
@@ -137,6 +141,7 @@ vi.mock('../../src/components/FileWorkspace', () => ({
     onSendBoardCommentAttachments: (attachments: unknown[]) => void;
     onCommentModeChange?: (active: boolean) => void;
     onFocusModeChange?: (focused: boolean) => void;
+    onOpenComputerModal?: (runId: string, stepId?: string) => void;
   }) => {
     const failedAssistant =
       [...(messages ?? [])]
@@ -181,6 +186,13 @@ vi.mock('../../src/components/FileWorkspace', () => ({
         onClick={() => onFocusModeChange?.(true)}
       >
         focus workspace
+      </button>
+      <button
+        type="button"
+        data-testid="workspace-open-computer-modal"
+        onClick={() => onOpenComputerModal?.('run-1')}
+      >
+        open computer modal
       </button>
       <button
         type="button"
@@ -935,7 +947,7 @@ describe('ProjectView conversation run isolation', () => {
     resolveConversationBMessages([]);
     await waitFor(() => expect(screen.getByTestId('send-message')).toHaveProperty('disabled', false));
 
-    fireEvent.click(screen.getByTestId('workspace-focus-mode'));
+    fireEvent.click(screen.getByTestId('computer-workspace-focus-toggle'));
     await waitFor(() =>
       expect(screen.getByTestId('active-conversation').closest('.split-chat-slot')?.hasAttribute('hidden')).toBe(true),
     );
@@ -948,6 +960,25 @@ describe('ProjectView conversation run isolation', () => {
       conversationId: 'conv-b',
       projectId: 'project-1',
     }));
+  });
+
+  it('closes the modal and docked Computer together so the conversation regains the full split', async () => {
+    renderProjectView();
+
+    await waitFor(() => expect(screen.getByTestId('active-conversation').textContent).toBe('conv-a'));
+    fireEvent.click(screen.getByTestId('workspace-open-computer-modal'));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Computer' });
+    const close = dialog.querySelector<HTMLButtonElement>('button[aria-label="task.computer.close"]');
+    expect(close).toBeTruthy();
+    fireEvent.click(close!);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('computer-workspace-shell').hasAttribute('hidden')).toBe(true);
+    });
+    const chatSlot = screen.getByTestId('active-conversation').closest('.split-chat-slot');
+    expect(chatSlot?.hasAttribute('hidden')).toBe(false);
+    expect(chatSlot?.closest('.split')?.classList.contains('split-chat-only')).toBe(true);
   });
   it('detaches saved comment attachments after queueing them for a busy conversation', async () => {
     fetchPreviewComments.mockResolvedValue([previewComment]);

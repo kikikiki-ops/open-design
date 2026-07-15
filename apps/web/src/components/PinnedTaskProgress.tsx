@@ -3,22 +3,26 @@
 // always visible, and shows only the CURRENT round's top-level steps. It is a
 // thin wrapper around FlowProgressCard: it owns the collapsible header (Computer
 // entry · current step · N/M · Live) and lets the card body render headless.
+// During a staged creation round the macro flow is canonical; TodoWrite remains
+// available only for a later lightweight edit round whose start post-dates the
+// last flow update.
 //
 // The card is a pure renderer — all advancement lives in the daemon flow tracker
 // and reaches here via the conversation FlowSnapshot.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import type { FlowSnapshot, FlowStageId } from '@open-design/contracts';
 import { useT } from '../i18n';
 import type { FlowStageArtifactPaths } from '../runtime/flow-artifacts';
 import { parseTodoWriteInput, type TodoItem } from '../runtime/todos';
 import {
+  computerStepsFromRound,
   taskStepBrief,
-  taskStepGlyph,
   type TaskRound,
   type TaskStep,
 } from '../runtime/task-steps';
 import { FlowProgressCard, flowProgressSummary } from './FlowProgressCard';
+import { Icon } from './Icon';
 import styles from './PinnedTaskProgress.module.css';
 
 export type PinnedTaskRunStatus =
@@ -60,29 +64,56 @@ export function PinnedTaskProgress({
   const terminal = round.status === 'succeeded' || round.status === 'failed' || round.status === 'canceled';
   const [collapsed, setCollapsed] = useState(terminal);
   const previousTerminalRef = useRef(terminal);
+  const previousRunIdRef = useRef(round.runId);
   useEffect(() => {
+    if (previousRunIdRef.current !== round.runId) {
+      previousRunIdRef.current = round.runId;
+      previousTerminalRef.current = terminal;
+      setCollapsed(terminal);
+      return;
+    }
     if (!previousTerminalRef.current && terminal) setCollapsed(true);
     previousTerminalRef.current = terminal;
-  }, [terminal]);
+  }, [round.runId, terminal]);
   const todos = useMemo(() => parseTodoWriteInput(todoInput), [todoInput]);
-  const flowSummary = flow ? flowProgressSummary(flow) : null;
+  const activeFlow = flow && (round.startedAt == null || flow.updatedAt >= round.startedAt)
+    ? flow
+    : null;
+  const flowSummary = activeFlow ? flowProgressSummary(activeFlow) : null;
+  const awaitingInput = !live && status === 'succeeded' && Boolean(flowSummary?.activeStage);
   const stepSummary = taskRoundSummary(round.steps);
   const todoSummary = todoProgressSummary(todos);
   const summary = flowSummary
     ? {
-        current: flowSummary.current,
-        total: flowSummary.total,
-        currentLabel: flowSummary.activeStage
-          ? t(flowSummary.activeStage.labelKey)
-          : t('flow.state.complete'),
-        currentGlyph: flowSummary.activeStage ? '◔' : '✓',
-      }
+      current: flowSummary.current,
+      total: flowSummary.total,
+      currentLabel: flowSummary.activeStage
+        ? t(flowSummary.activeStage.labelKey)
+        : t('flow.state.complete'),
+      status: flowSummary.activeStage ? ('running' as const) : ('done' as const),
+    }
     : todos.length > 0
       ? todoSummary
       : stepSummary;
+  const computerSteps = computerStepsFromRound(round);
+  const previewStep = computerSteps.find(({ step }) => step.status === 'running')?.step
+    ?? computerSteps.at(-1)?.step;
+  const previewLabel = previewStep ? taskStepBrief(previewStep, t) : t('task.computer.empty');
+  const previewStatusLabel = live
+    ? t('task.computer.live')
+    : awaitingInput
+      ? t('designs.status.awaitingInput')
+      : status === 'succeeded'
+        ? t('task.status.completed')
+        : '';
 
   return (
-    <div className={styles.root} data-testid="pinned-task-progress" data-live={live}>
+    <div
+      className={styles.root}
+      data-testid="pinned-task-progress"
+      data-live={live}
+      data-collapsed={collapsed}
+    >
       <div className={styles.head}>
         {onOpenComputer ? (
           <button
@@ -92,11 +123,21 @@ export function PinnedTaskProgress({
             aria-label={t('task.computer.open')}
             data-testid="pinned-task-computer-entry"
           >
-            <ComputerGlyph />
+            <ComputerPreviewThumbnail
+              label={previewLabel}
+              status={previewStep?.status ?? 'running'}
+              live={live}
+              statusLabel={previewStatusLabel}
+            />
           </button>
         ) : (
           <span className={styles.computer} aria-hidden>
-            <ComputerGlyph />
+            <ComputerPreviewThumbnail
+              label={previewLabel}
+              status={previewStep?.status ?? 'running'}
+              live={live}
+              statusLabel={previewStatusLabel}
+            />
           </span>
         )}
         <button
@@ -109,9 +150,7 @@ export function PinnedTaskProgress({
           <span className={styles.title}>
             {collapsed ? (
               <>
-                <span className={styles.currentGlyph} aria-hidden>
-                  {summary.currentGlyph}
-                </span>
+                <ProgressStatusIcon status={summary.status} />
                 <span className={styles.currentLabel}>{summary.currentLabel}</span>
               </>
             ) : (
@@ -124,12 +163,20 @@ export function PinnedTaskProgress({
               <span className={styles.liveDot} aria-hidden />
               {t('designs.badgeLive')}
             </span>
+          ) : awaitingInput ? (
+            <span
+              className={`${styles.terminal} ${styles.waiting}`}
+              data-testid="pinned-task-status"
+            >
+              <Icon name="comment" size={13} />
+              {t('designs.status.awaitingInput')}
+            </span>
           ) : status === 'succeeded' ? (
             <span
               className={`${styles.terminal} ${styles.done}`}
               data-testid="pinned-task-status"
             >
-              <span aria-hidden>✓</span>
+              <Icon name="check" size={13} />
               {t('task.status.completed')}
             </span>
           ) : status === 'failed' ? (
@@ -137,7 +184,7 @@ export function PinnedTaskProgress({
               className={`${styles.terminal} ${styles.failed}`}
               data-testid="pinned-task-status"
             >
-              <span aria-hidden>✕</span>
+              <Icon name="close" size={13} />
               {t('task.status.failed')}
             </span>
           ) : status === 'canceled' ? (
@@ -145,7 +192,7 @@ export function PinnedTaskProgress({
               className={`${styles.terminal} ${styles.stopped}`}
               data-testid="pinned-task-status"
             >
-              <span aria-hidden>⊘</span>
+              <Icon name="stop" size={13} />
               {t('task.status.stopped')}
             </span>
           ) : null}
@@ -157,7 +204,7 @@ export function PinnedTaskProgress({
             data-collapsed={collapsed}
             aria-hidden
           >
-            ⌄
+            <Icon name="chevron-down" size={15} />
           </span>
         </button>
       </div>
@@ -166,9 +213,9 @@ export function PinnedTaskProgress({
       >
         <div className="accordion-collapsible-inner">
           <div className={styles.bodyInner}>
-            {flow ? (
+            {activeFlow ? (
               <FlowProgressCard
-                flow={flow}
+                flow={activeFlow}
                 hideHead
                 stageArtifactPaths={stageArtifactPaths}
                 stageActions={stageActions}
@@ -195,7 +242,7 @@ function taskRoundSummary(steps: TaskStep[]) {
     current: Math.min(lastIndex + 1, total),
     total,
     currentLabel: active?.brief ?? 'Task',
-    currentGlyph: active ? taskStepGlyph(active.kind) : '◔',
+    status: active?.status ?? ('running' as const),
   };
 }
 
@@ -209,7 +256,7 @@ function todoProgressSummary(todos: TodoItem[]) {
     current: Math.min(index + 1, total),
     total,
     currentLabel: active?.activeForm ?? active?.content ?? 'Task',
-    currentGlyph: active?.status === 'completed' ? '✓' : active?.status === 'stopped' ? '⊘' : '◔',
+    status: active?.status ?? ('pending' as const),
   };
 }
 
@@ -218,7 +265,7 @@ function CompactTodoProgress({ todos }: { todos: TodoItem[] }) {
     <ol className={styles.compactList} data-testid="pinned-task-todos">
       {todos.map((todo, index) => (
         <li key={`${todo.content}:${index}`} data-status={todo.status}>
-          <span aria-hidden>{todo.status === 'completed' ? '✓' : todo.status === 'stopped' ? '⊘' : todo.status === 'in_progress' ? '◔' : '○'}</span>
+          <ProgressStatusIcon status={todo.status} />
           <span>{todo.status === 'in_progress' && todo.activeForm ? todo.activeForm : todo.content}</span>
         </li>
       ))}
@@ -239,22 +286,60 @@ function CompactStepProgress({
       {steps.length > 0 ? steps.map((step) => (
         <li key={step.id} data-status={step.status}>
           <button type="button" onClick={() => onOpenComputer?.(step.id)} disabled={!onOpenComputer}>
-            <span aria-hidden>{step.status === 'done' ? '✓' : step.status === 'error' ? '✕' : '◔'}</span>
+            <ProgressStatusIcon status={step.status} />
             <span>{taskStepBrief(step, t)}</span>
           </button>
         </li>
       )) : (
-        <li data-status="running"><span aria-hidden>◔</span><span>{t('task.computer.empty')}</span></li>
+        <li data-status="running"><ProgressStatusIcon status="running" /><span>{t('task.computer.empty')}</span></li>
       )}
     </ol>
   );
 }
 
-function ComputerGlyph() {
+// This is deliberately a structured miniature of the current Computer step,
+// not an iframe or captured bitmap. `memo` plus primitive props means token
+// deltas cannot repaint it; it updates only when the actual step/status changes.
+const ComputerPreviewThumbnail = memo(function ComputerPreviewThumbnail({
+  label,
+  status,
+  live,
+  statusLabel,
+}: {
+  label: string;
+  status: TaskStep['status'];
+  live: boolean;
+  statusLabel: string;
+}) {
   return (
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden>
-      <rect x="1.5" y="2.5" width="13" height="9" rx="1.2" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M5.5 14h5M8 11.5V14" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
+    <span className={styles.preview} data-testid="pinned-task-computer-preview" aria-hidden>
+      <span className={styles.previewBar}>
+        <span className={styles.previewDot} data-live={live} />
+        <span className={styles.previewStatus}>{statusLabel || (status === 'error' ? '!' : '')}</span>
+      </span>
+      <span className={styles.previewContent}>
+        <span className={styles.previewGlyph}><Icon name="present" size={12} /></span>
+        <span className={styles.previewLabel}>{label}</span>
+      </span>
+    </span>
+  );
+});
+
+type ProgressStatus = TaskStep['status'] | TodoItem['status'] | 'pending';
+
+function ProgressStatusIcon({ status }: { status: ProgressStatus }) {
+  const icon = status === 'done' || status === 'completed'
+    ? 'check'
+    : status === 'error'
+      ? 'close'
+      : status === 'stopped'
+        ? 'stop'
+        : status === 'pending'
+          ? 'minus'
+          : 'spinner';
+  return (
+    <span className={styles.progressStatusIcon} data-status={status} aria-hidden>
+      <Icon name={icon} size={13} />
+    </span>
   );
 }

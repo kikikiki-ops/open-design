@@ -41,10 +41,56 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-// Session rename was removed by design — chats are not renamed. These tests
-// cover what the session switcher does keep: the icon-only history trigger
-// opens a menu listing conversations, and selecting / deleting one calls back.
+// The conversation remains the primary operating surface. Its compact header
+// exposes the Computer workspace, Cloud, new-chat, history, and current-chat
+// actions without pushing those controls into the right-hand workspace.
 describe('ChatPane session switcher', () => {
+  it('exposes the primary conversation actions and opens Design files in Computer', () => {
+    const onOpenDesignFiles = vi.fn();
+    const onOpenCloud = vi.fn();
+    const onNewConversation = vi.fn();
+    renderChatPane({
+      conversations: [conversation({ id: 'conv-1', title: 'Contract review draft' })],
+      activeConversationId: 'conv-1',
+      onOpenDesignFiles,
+      onOpenCloud,
+      onNewConversation,
+    });
+
+    fireEvent.click(screen.getByTestId('chat-open-design-files'));
+    fireEvent.click(screen.getByTestId('chat-open-cloud'));
+    fireEvent.click(screen.getByTestId('chat-new-conversation'));
+
+    expect(onOpenDesignFiles).toHaveBeenCalledTimes(1);
+    expect(onOpenCloud).toHaveBeenCalledTimes(1);
+    expect(onNewConversation).toHaveBeenCalledTimes(1);
+  });
+
+  it('renames and deletes the active conversation from the header menu', () => {
+    const onRenameConversation = vi.fn();
+    const onDeleteConversation = vi.fn();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderChatPane({
+      conversations: [conversation({ id: 'conv-1', title: 'Contract review draft' })],
+      activeConversationId: 'conv-1',
+      onRenameConversation,
+      onDeleteConversation,
+    });
+
+    fireEvent.click(screen.getByTestId('chat-conversation-actions-trigger'));
+    fireEvent.click(screen.getByTestId('chat-conversation-rename'));
+    const renameInput = screen.getByTestId('chat-conversation-rename-input');
+    fireEvent.change(renameInput, { target: { value: 'Launch brief' } });
+    fireEvent.submit(renameInput.closest('form')!);
+
+    expect(onRenameConversation).toHaveBeenCalledWith('conv-1', 'Launch brief');
+
+    fireEvent.click(screen.getByTestId('chat-conversation-actions-trigger'));
+    fireEvent.click(screen.getByTestId('chat-conversation-delete'));
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(onDeleteConversation).toHaveBeenCalledWith('conv-1');
+  });
+
   it('opens the conversation history menu from the icon trigger', () => {
     renderChatPane({
       conversations: [
@@ -229,6 +275,11 @@ function renderChatPane(props: {
   conversations: Conversation[];
   activeConversationId: string | null;
   onSelectConversation?: (id: string) => void;
+  onDeleteConversation?: (id: string) => void;
+  onRenameConversation?: (id: string, title: string) => void;
+  onOpenDesignFiles?: () => void;
+  onOpenCloud?: () => void;
+  onNewConversation?: () => void;
 }) {
   return render(chatPaneElement(props));
 }
@@ -237,10 +288,20 @@ function chatPaneElement({
   conversations,
   activeConversationId,
   onSelectConversation,
+  onDeleteConversation,
+  onRenameConversation,
+  onOpenDesignFiles,
+  onOpenCloud,
+  onNewConversation,
 }: {
   conversations: Conversation[];
   activeConversationId: string | null;
   onSelectConversation?: (id: string) => void;
+  onDeleteConversation?: (id: string) => void;
+  onRenameConversation?: (id: string, title: string) => void;
+  onOpenDesignFiles?: () => void;
+  onOpenCloud?: () => void;
+  onNewConversation?: () => void;
 }) {
   return (
     <ChatPane
@@ -255,7 +316,11 @@ function chatPaneElement({
       conversations={conversations}
       activeConversationId={activeConversationId}
       onSelectConversation={onSelectConversation ?? vi.fn()}
-      onDeleteConversation={vi.fn()}
+      onDeleteConversation={onDeleteConversation ?? vi.fn()}
+      onRenameConversation={onRenameConversation}
+      onOpenDesignFiles={onOpenDesignFiles}
+      onOpenCloud={onOpenCloud}
+      onNewConversation={onNewConversation}
     />
   );
 }

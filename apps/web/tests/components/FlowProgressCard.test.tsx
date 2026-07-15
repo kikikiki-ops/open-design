@@ -8,7 +8,7 @@ import { FlowProgressCard } from '../../src/components/FlowProgressCard';
 afterEach(cleanup);
 
 describe('FlowProgressCard', () => {
-  it('keeps the optional research step out of the default pending ladder', () => {
+  it('shows the stable five-stage journey with research explicitly optional', () => {
     let flow = createFlowSnapshot('deck', { now: 1 });
     flow = applyFlowMarker(flow, { stage: 'clarify', state: 'active' }, 1);
 
@@ -16,14 +16,18 @@ describe('FlowProgressCard', () => {
 
     expect(screen.getByText('Task progress')).toBeTruthy();
     expect(screen.getByText('Step 1 of 5')).toBeTruthy();
-    expect(screen.getByText('Confirm the brief')).toBeTruthy();
-    expect(screen.queryByText('Research')).toBeNull();
+    expect(screen.getByText('Brief & questions')).toBeTruthy();
+    expect(screen.getByText('Research (optional)')).toBeTruthy();
+    expect(screen.getByText('Outline')).toBeTruthy();
+    expect(screen.getByText('Inspiration')).toBeTruthy();
+    expect(screen.getByText('Implement')).toBeTruthy();
+    // Delivery remains the completion CTA outside the progress journey.
+    expect(screen.queryByText('Download / share')).toBeNull();
     // Pending steps always carry a "when does this start" preview line.
-    expect(screen.getByText('Pick after the plan is confirmed')).toBeTruthy();
-    expect(screen.getByText('Download or share when generation ends')).toBeTruthy();
+    expect(screen.getByText('Pick after the outline is confirmed')).toBeTruthy();
   });
 
-  it('inserts the pending research step when deep research is selected', () => {
+  it('keeps the same five visible stages when deep research is selected', () => {
     const flow = {
       ...createFlowSnapshot('deck', { now: 1 }),
       researchMode: 'deep' as const,
@@ -31,8 +35,8 @@ describe('FlowProgressCard', () => {
 
     render(<FlowProgressCard flow={flow} />);
 
-    expect(screen.getByText('Step 1 of 6')).toBeTruthy();
-    expect(screen.getByText('Research')).toBeTruthy();
+    expect(screen.getByText('Step 1 of 5')).toBeTruthy();
+    expect(screen.getByText('Research (optional)')).toBeTruthy();
   });
 
   it('shows generate progress counts and stage detail lines', () => {
@@ -77,9 +81,14 @@ describe('FlowProgressCard', () => {
 
   it('opens a durable stage artifact from the progress card', () => {
     const onOpenArtifact = vi.fn();
+    const flow = applyFlowMarker(
+      createFlowSnapshot('deck', { now: 1 }),
+      { stage: 'clarify', state: 'active' },
+      2,
+    );
     render(
       <FlowProgressCard
-        flow={createFlowSnapshot('deck', { now: 1 })}
+        flow={flow}
         stageArtifactPaths={{ clarify: ['generated/brief.md'] }}
         onOpenArtifact={onOpenArtifact}
       />,
@@ -87,7 +96,7 @@ describe('FlowProgressCard', () => {
 
     fireEvent.click(
       screen.getByRole('button', {
-        name: 'Confirm the brief: generated/brief.md',
+        name: 'Brief & questions: generated/brief.md',
       }),
     );
 
@@ -125,9 +134,20 @@ describe('FlowProgressCard', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm the brief' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Brief & questions' }));
 
     expect(onOpenForm).toHaveBeenCalledOnce();
     expect(onOpenArtifact).not.toHaveBeenCalled();
+  });
+
+  it('does not attach a previous artifact to a stage that is still pending', () => {
+    render(
+      <FlowProgressCard
+        flow={createFlowSnapshot('prototype', { now: 1 })}
+        stageArtifactPaths={{ generate: ['generated/previous-round.html'] }}
+      />,
+    );
+
+    expect(screen.queryByText('generated/previous-round.html')).toBeNull();
   });
 });

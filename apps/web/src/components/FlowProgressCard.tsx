@@ -1,9 +1,10 @@
 // Staged-flow progress card (specs/current/staged-flow-north-star.zh-CN.md
-// §5.3). Renders a conversation's FlowSnapshot as the fixed stage ladder —
-// clarify → research → plan → inspire → generate → deliver — with one line of
-// detail per step. Pending steps always carry a "when does this start" hint so
-// the whole journey is legible before it happens (problem P1 in the spec).
-// The card is a pure renderer: all advancement lives in the daemon tracker.
+// §5.3). Renders the stable user-facing journey — brief/questions → optional
+// research → outline → inspiration → implementation — with one line of detail
+// per step. The underlying tracker keeps `deliver` as a terminal state so the
+// real workflow stays complete, but delivery is an outcome/CTA rather than a
+// sixth progress row. The card is a pure renderer: all advancement lives in the
+// daemon tracker.
 
 import type { FlowSnapshot, FlowStageId, FlowStageState } from '@open-design/contracts';
 import { FLOW_SHAPES } from '@open-design/contracts';
@@ -56,12 +57,10 @@ export function flowProgressSummary(flow: FlowSnapshot): FlowProgressSummary {
 }
 
 function visibleFlowStages(flow: FlowSnapshot) {
-  return flow.stages.filter(
-    (stage) =>
-      stage.id !== 'research' ||
-      flow.researchMode === 'deep' ||
-      stage.state !== 'pending',
-  );
+  // Research remains visible even when it will be skipped so users can
+  // understand the whole process up front. Delivery stays in the state machine
+  // and is surfaced by completion actions, not as another creative phase.
+  return flow.stages.filter((stage) => stage.id !== 'deliver');
 }
 
 const STAGE_HINT_KEY: Record<FlowStageId, keyof Dict> = {
@@ -142,7 +141,12 @@ export function FlowProgressCard({
               : t(STATE_KEY[stage.state]));
           const label = t(STAGE_LABEL_KEY[stage.id]);
           const stageAction = stageActions?.[stage.id];
-          const artifactPaths = stageArtifactPaths?.[stage.id] ?? [];
+          // Artifact paths are conversation-level recovery data. Never attach a
+          // previous round's output to a stage that has not started in the
+          // current flow.
+          const artifactPaths = stage.state === 'pending'
+            ? []
+            : stageArtifactPaths?.[stage.id] ?? [];
           const artifactPath = artifactPaths[0];
           const actionable = Boolean(stageAction || (artifactPath && onOpenArtifact));
           const content = (

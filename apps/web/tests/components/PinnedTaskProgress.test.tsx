@@ -14,14 +14,16 @@ function clarifyActiveDeck() {
   return flow;
 }
 
-function round(status: TaskRound['status'] = 'running'): TaskRound {
+function round(status: TaskRound['status'] = 'running', startedAt?: number): TaskRound {
   return {
     assistantMessageId: 'a1',
     runId: 'run-1',
+    runAttached: true,
     events: [],
     steps: [{ id: 's1', kind: 'plan', status: status === 'running' ? 'running' : 'done', brief: 'Task plan', title: 'Task plan', ts: 1 }],
     status,
     live: status === 'running',
+    ...(startedAt === undefined ? {} : { startedAt }),
   };
 }
 
@@ -48,6 +50,20 @@ describe('PinnedTaskProgress', () => {
     expect(screen.queryByTestId('pinned-task-live')).toBeNull();
   });
 
+  it('shows Needs input instead of completed while a staged flow awaits the user', () => {
+    render(
+      <PinnedTaskProgress
+        flow={clarifyActiveDeck()}
+        round={round('succeeded')}
+        live={false}
+        status="succeeded"
+      />,
+    );
+
+    expect(screen.getByTestId('pinned-task-status').textContent).toContain('Needs input');
+    expect(screen.queryByText('Task completed')).toBeNull();
+  });
+
   it('toggles between the expanded ladder and the collapsed single row', () => {
     render(<PinnedTaskProgress flow={clarifyActiveDeck()} round={round()} live />);
     const pinned = screen.getByTestId('pinned-task-progress');
@@ -62,6 +78,24 @@ describe('PinnedTaskProgress', () => {
     expect(screen.getByRole('button', { name: 'Expand' })).toBeTruthy();
   });
 
+  it('expands again when a new live round replaces a collapsed terminal round', () => {
+    const { rerender } = render(
+      <PinnedTaskProgress flow={clarifyActiveDeck()} round={round('succeeded')} live={false} status="succeeded" />,
+    );
+    expect(screen.getByTestId('pinned-task-progress').querySelector('.accordion-collapsible.open')).toBeNull();
+
+    rerender(
+      <PinnedTaskProgress
+        flow={clarifyActiveDeck()}
+        round={{ ...round(), runId: 'run-2' }}
+        live
+        status="running"
+      />,
+    );
+
+    expect(screen.getByTestId('pinned-task-progress').querySelector('.accordion-collapsible.open')).toBeTruthy();
+  });
+
   it('exposes a Computer entry only when a handler is provided', () => {
     const onOpenComputer = vi.fn();
     const { rerender } = render(<PinnedTaskProgress flow={clarifyActiveDeck()} round={round()} live />);
@@ -70,7 +104,56 @@ describe('PinnedTaskProgress', () => {
     rerender(
       <PinnedTaskProgress flow={clarifyActiveDeck()} round={round()} live onOpenComputer={onOpenComputer} />,
     );
+    expect(screen.getByTestId('pinned-task-computer-preview').textContent).toContain('Updated the plan');
     fireEvent.click(screen.getByTestId('pinned-task-computer-entry'));
     expect(onOpenComputer).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the canonical five-stage flow above current-round TodoWrite details', () => {
+    const flow = { ...clarifyActiveDeck(), updatedAt: 20 };
+    render(
+      <PinnedTaskProgress
+        flow={flow}
+        round={round('running', 10)}
+        todoInput={{
+          todos: [
+            { content: 'Align task progress', status: 'completed' },
+            { content: 'Polish Computer controls', status: 'in_progress', activeForm: 'Polishing Computer controls' },
+          ],
+        }}
+        live
+      />,
+    );
+
+    expect(screen.getByTestId('flow-progress-card')).toBeTruthy();
+    expect(screen.getByText('Brief & questions')).toBeTruthy();
+    expect(screen.getByText('Research (optional)')).toBeTruthy();
+    expect(screen.getByText('Outline')).toBeTruthy();
+    expect(screen.getByText('Inspiration')).toBeTruthy();
+    expect(screen.getByText('Implement')).toBeTruthy();
+    expect(screen.queryByTestId('pinned-task-todos')).toBeNull();
+    expect(screen.getByText('Step 1 of 5')).toBeTruthy();
+  });
+
+  it('keeps TodoWrite changes for a later edit round after the staged flow ended', () => {
+    const staleFlow = { ...clarifyActiveDeck(), updatedAt: 5 };
+    render(
+      <PinnedTaskProgress
+        flow={staleFlow}
+        round={round('running', 10)}
+        todoInput={{
+          todos: [
+            { content: 'Align task progress', status: 'completed' },
+            { content: 'Polish Computer controls', status: 'in_progress', activeForm: 'Polishing Computer controls' },
+          ],
+        }}
+        live
+      />,
+    );
+
+    expect(screen.getByTestId('pinned-task-todos').textContent).toContain('Align task progress');
+    expect(screen.getByTestId('pinned-task-todos').textContent).toContain('Polishing Computer controls');
+    expect(screen.queryByTestId('flow-progress-card')).toBeNull();
+    expect(screen.getByText('Step 2 of 2')).toBeTruthy();
   });
 });

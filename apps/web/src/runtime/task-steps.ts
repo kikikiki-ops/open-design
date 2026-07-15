@@ -5,6 +5,7 @@ import {
   type TaskStepKind,
 } from '@open-design/contracts';
 import type { Dict } from '../i18n/types';
+import { isTodoWriteToolName } from './todos';
 
 export type { TaskStep, TaskStepKind };
 export { deriveTaskSteps };
@@ -145,7 +146,7 @@ export interface ComputerStep {
 
 export function computerStepsFromRound(round: TaskRound | null | undefined): ComputerStep[] {
   if (!round) return [];
-  return round.steps.map((step) => ({
+  return round.steps.filter(isComputerStep).map((step) => ({
     step,
     ...(step.toolUse ? { use: step.toolUse } : {}),
     ...(step.toolResult ? { result: step.toolResult } : {}),
@@ -155,10 +156,17 @@ export function computerStepsFromRound(round: TaskRound | null | undefined): Com
 /** Backwards-compatible helper for isolated tests/renderers with only events. */
 export function computerStepsFromEvents(events: readonly PersistedAgentEvent[] | undefined): ComputerStep[] {
   if (!events) return [];
-  const steps = deriveTaskSteps(events);
+  const steps = deriveTaskSteps(events).filter(isComputerStep);
   return steps.map((step) => ({
     step,
     ...(step.toolUse ? { use: step.toolUse } : {}),
     ...(step.toolResult ? { result: step.toolResult } : {}),
   }));
+}
+
+function isComputerStep(step: TaskStep): boolean {
+  // TodoWrite/update_plan is the canonical state source for the composer-side
+  // Task progress card. Replaying the same snapshot as a Computer action makes
+  // the right panel duplicate (and visually compete with) that progress UI.
+  return !step.tool || !isTodoWriteToolName(step.tool);
 }

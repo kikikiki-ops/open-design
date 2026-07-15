@@ -39,12 +39,14 @@ describe('flow shape registry', () => {
   });
 
   it.each([
+    ['Create a 2026 humanoid robot investor deck', 'deck'],
     ['Build an interactive product prototype', 'prototype'],
     ['Create a SaaS landing page', 'landing'],
     ['Design a four-screen iOS app', 'mobile'],
     ['Build an analytics dashboard web app', 'webapp'],
     ['Write a product decision RFC', 'document'],
     ['Produce a PDF-first market analysis report', 'report'],
+    ['Design a launch poster for a music festival', 'media'],
     ['做一个手机应用原型', 'mobile'],
     ['写一份行业研究报告', 'report'],
   ] as const)('routes "%s" to %s', (request, shape) => {
@@ -57,8 +59,16 @@ describe('flow shape registry', () => {
     expect(snapshot.inspireChoice).toBeUndefined();
     expect({
       ...snapshot,
-      inspireChoice: { templateId: 'editorial-deck', skipped: false },
-    }.inspireChoice).toEqual({ templateId: 'editorial-deck', skipped: false });
+      inspireChoice: {
+        templateId: 'editorial-deck',
+        designSystemId: 'vercel',
+        skipped: false,
+      },
+    }.inspireChoice).toEqual({
+      templateId: 'editorial-deck',
+      designSystemId: 'vercel',
+      skipped: false,
+    });
   });
 
   it.each([
@@ -76,6 +86,8 @@ describe('flow shape registry', () => {
     expect(protocol).toContain(spec.clarifyDefaults[0]);
     expect(protocol).toContain(spec.deliverActions.join(', '));
     expect(protocol).toContain('overrides active skill, plugin, pipeline, Todo, and verification instructions');
+    expect(protocol).toContain('Brief and questions → research (optional) → outline → inspiration → implementation');
+    expect(protocol).toContain('TodoWrite is implementation detail only');
     expect(protocol).toContain('HARD TURN BOUNDARY');
     expect(protocol).toContain('END THE TURN IMMEDIATELY');
   });

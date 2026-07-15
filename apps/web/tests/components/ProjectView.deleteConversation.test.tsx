@@ -65,6 +65,8 @@ vi.mock('../../src/providers/daemon', () => ({
 }));
 
 vi.mock('../../src/providers/registry', () => ({
+  CLOUDFLARE_PAGES_PROVIDER_ID: 'cloudflare-pages',
+  DEFAULT_DEPLOY_PROVIDER_ID: 'vercel-self',
   deletePreviewComment: vi.fn(),
   fetchPreviewComments: (...args: unknown[]) => fetchPreviewComments(...args),
   fetchDesignSystem: (...args: unknown[]) => fetchDesignSystem(...args),

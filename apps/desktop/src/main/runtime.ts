@@ -1538,6 +1538,24 @@ function desktopPetUrl(baseUrl: string): string {
   return url.toString();
 }
 
+type OptionalDesktopPetWindow = Pick<BrowserWindow, "isDestroyed" | "loadURL">;
+
+export async function loadOptionalDesktopPetWindow(input: {
+  window: OptionalDesktopPetWindow;
+  currentUrl: string | null;
+  nextUrl: string;
+  onError?: (error: unknown) => void;
+}): Promise<string | null> {
+  if (input.window.isDestroyed() || input.nextUrl === input.currentUrl) return input.currentUrl;
+  try {
+    await input.window.loadURL(input.nextUrl);
+    return input.nextUrl;
+  } catch (error) {
+    input.onError?.(error);
+    return input.currentUrl;
+  }
+}
+
 // Encode the OS locale before stuffing it into a Chromium argv value
 // — BCP-47 region tags shouldn't contain `;` or `=`, but the renderer's
 // `process.argv` parser is happier if we never have to worry about it.
@@ -2693,10 +2711,14 @@ export async function createDesktopRuntime(options: DesktopRuntimeOptions): Prom
         currentUrl = url;
         pendingUrl = null;
         const nextPetUrl = desktopPetUrl(url);
-        if (!petWindow.isDestroyed() && nextPetUrl !== currentPetUrl) {
-          await petWindow.loadURL(nextPetUrl);
-          currentPetUrl = nextPetUrl;
-        }
+        currentPetUrl = await loadOptionalDesktopPetWindow({
+          window: petWindow,
+          currentUrl: currentPetUrl,
+          nextUrl: nextPetUrl,
+          onError: (error) => {
+            console.error("desktop pet load failed", error);
+          },
+        });
         if (!revealed) {
           void revealWhenReady();
         } else {

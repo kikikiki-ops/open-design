@@ -28,6 +28,42 @@
   gap: 6px;
 }
 
+.choiceSection {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.choiceSection + .choiceSection {
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.sectionHeading {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sectionHeading h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.sectionHeading p {
+  max-width: 620px;
+  margin: 3px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .fieldLabel {
   font-size: 12px;
   font-weight: 600;
@@ -202,13 +238,114 @@
   width: calc(100% - 20px);
 }
 
+.designSystemGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.noneDesignSystem {
+  width: 100%;
+  min-height: 42px;
+  grid-column: 1 / -1;
+  justify-self: stretch;
+}
+
+.designSystemCard {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto 1fr;
+  gap: 9px 12px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  transition:
+    border-color 140ms cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 140ms cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 140ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.designSystemCard:hover {
+  border-color: var(--border-strong);
+}
+
+.swatches {
+  display: flex;
+  overflow: hidden;
+  min-width: 0;
+  height: 24px;
+  grid-column: 1 / -1;
+  border: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.swatches:empty::before {
+  width: 100%;
+  content: '';
+  background: linear-gradient(90deg, var(--bg), var(--bg-muted));
+}
+
+.swatches span {
+  min-width: 18px;
+  flex: 1 1 0;
+}
+
+.designSystemCopy {
+  min-width: 0;
+}
+
+.designSystemCopy h4 {
+  margin: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.designSystemCopy p {
+  display: -webkit-box;
+  margin: 3px 0 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.designSystemCopy span {
+  display: inline-block;
+  margin-top: 5px;
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.designSystemCard > button {
+  align-self: center;
+}
+
 .footer {
+  position: sticky;
+  z-index: 2;
+  bottom: -8px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  padding-top: 14px;
+  margin: 0 -8px -8px;
+  padding: 14px 8px 8px;
   border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-panel) 94%, transparent);
+  backdrop-filter: blur(10px);
 }
 
 @keyframes inspire-skeleton {
@@ -252,5 +389,9 @@
 
   .footer button {
     width: 100%;
+  }
+
+  .designSystemGrid {
+    grid-template-columns: 1fr;
   }
 }

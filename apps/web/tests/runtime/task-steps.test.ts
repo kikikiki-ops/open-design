@@ -57,4 +57,19 @@ describe('computerStepsFromEvents', () => {
     expect(steps[0]?.use?.name).toBe('Read');
     expect(steps[0]?.result?.content).toBe('hi');
   });
+
+  it('excludes TodoWrite snapshots because they belong to the pinned task progress card', () => {
+    const steps = computerStepsFromEvents([
+      {
+        kind: 'tool_use',
+        id: 'todo-1',
+        name: 'TodoWrite',
+        input: { todos: [{ content: 'Plan the work', status: 'in_progress' }] },
+      },
+      { kind: 'tool_use', id: 'read-1', name: 'Read', input: { file_path: 'DESIGN.md' } },
+    ]);
+
+    expect(steps).toHaveLength(1);
+    expect(steps[0]?.use?.name).toBe('Read');
+  });
 });

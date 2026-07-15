@@ -12,13 +12,14 @@ import { useT } from '../i18n';
 import {
   computerStepsFromRound,
   taskStepBrief,
-  taskStepGlyph,
   taskStepTargetLabel,
   type ComputerStep,
   type TaskRound,
+  type TaskStep,
 } from '../runtime/task-steps';
 import type { ProjectFile } from '../types';
 import { FileViewer } from './FileViewer';
+import { Icon } from './Icon';
 import { ToolCard } from './ToolCard';
 import styles from './OdComputerPanel.module.css';
 
@@ -54,39 +55,43 @@ export function OdComputerPanel({
   const steps = useMemo(() => computerStepsFromRound(round), [round]);
   const total = steps.length;
 
-  // `-1` = follow live (pinned to the newest step); any other value locks the
-  // scrubber to a past step the user is inspecting.
-  const [selected, setSelected] = useState(-1);
+  // `null` = follow live. A concrete step id is a durable history lock: new
+  // events may append to the round, but they never move the user's selection.
+  // Index-based selection used to be reset whenever `steps` changed, which is
+  // exactly what made a live run yank the scrubber back to the newest event.
+  const [selectedStepId, setSelectedStepId] = useState<string | null>(initialStepId ?? null);
+  const [progressCollapsed, setProgressCollapsed] = useState(false);
   useEffect(() => {
-    if (!initialStepId) {
-      setSelected(-1);
-      return;
-    }
-    const requested = steps.findIndex(({ step }) => step.id === initialStepId);
-    setSelected(requested < 0 || requested === steps.length - 1 ? -1 : requested);
-  }, [initialStepId, round?.runId, steps]);
-  const following = selected < 0;
-  const index = total === 0 ? -1 : following ? total - 1 : Math.min(selected, total - 1);
+    setSelectedStepId(initialStepId ?? null);
+  }, [initialStepId, round?.runId]);
+  useEffect(() => {
+    setProgressCollapsed(false);
+  }, [round?.runId]);
+  const selectedIndex = selectedStepId
+    ? steps.findIndex(({ step }) => step.id === selectedStepId)
+    : -1;
+  const following = selectedStepId === null || selectedIndex < 0;
+  const index = total === 0 ? -1 : following ? total - 1 : selectedIndex;
   const active = index >= 0 ? steps[index] : undefined;
 
   const goPrev = () => {
-    if (index > 0) setSelected(index - 1);
+    if (index > 0) setSelectedStepId(steps[index - 1]?.step.id ?? null);
   };
   const goNext = () => {
     if (total === 0 || index >= total - 1) return;
     const next = index + 1;
-    setSelected(next >= total - 1 ? -1 : next);
+    setSelectedStepId(next >= total - 1 ? null : (steps[next]?.step.id ?? null));
   };
   const onScrub = (raw: number) => {
-    if (raw >= total - 1) setSelected(-1);
-    else setSelected(raw);
+    if (raw >= total - 1) setSelectedStepId(null);
+    else setSelectedStepId(steps[raw]?.step.id ?? null);
   };
 
   return (
     <section className={styles.root} data-testid="od-computer-panel" data-variant={variant}>
       <header className={styles.header}>
         <span className={styles.badge} aria-hidden>
-          <ComputerGlyph />
+          <Icon name="present" size={16} />
         </span>
         <div className={styles.titles}>
           <span className={styles.title}>{t('task.computer.title')}</span>
@@ -101,7 +106,7 @@ export function OdComputerPanel({
             <button
               type="button"
               className={styles.iconBtn}
-              onClick={() => onToggleView(active?.step.id)}
+              onClick={() => onToggleView(following ? undefined : active?.step.id)}
               aria-label={
                 variant === 'side' ? t('task.computer.expand') : t('task.computer.sideView')
               }
@@ -109,7 +114,7 @@ export function OdComputerPanel({
                 variant === 'side' ? t('task.computer.expand') : t('task.computer.sideView')
               }
             >
-              {variant === 'side' ? <ExpandGlyph /> : <DockGlyph />}
+              <Icon name={variant === 'side' ? 'maximize' : 'panel-left'} size={15} />
             </button>
           ) : null}
           {onClose ? (
@@ -120,7 +125,7 @@ export function OdComputerPanel({
               aria-label={t('task.computer.close')}
               title={t('task.computer.close')}
             >
-              <CloseGlyph />
+              <Icon name="close" size={14} />
             </button>
           ) : null}
         </div>
@@ -151,7 +156,7 @@ export function OdComputerPanel({
           disabled={index <= 0}
           aria-label={t('task.computer.prevStep')}
         >
-          <StepChevron dir="prev" />
+          <Icon name="chevron-left" size={14} />
         </button>
         <button
           type="button"
@@ -160,7 +165,7 @@ export function OdComputerPanel({
           disabled={total === 0 || index >= total - 1}
           aria-label={t('task.computer.nextStep')}
         >
-          <StepChevron dir="next" />
+          <Icon name="chevron-right" size={14} />
         </button>
         <input
           type="range"
@@ -193,7 +198,7 @@ export function OdComputerPanel({
           <button
             type="button"
             className={styles.jumpLive}
-            onClick={() => setSelected(-1)}
+            onClick={() => setSelectedStepId(null)}
             data-testid="od-computer-jump-live"
           >
             <span className={styles.liveDot} data-live={round?.live ?? false} aria-hidden />
@@ -201,12 +206,90 @@ export function OdComputerPanel({
           </button>
         )}
       </div>
-      <div className={styles.taskSummary} data-testid="od-computer-task-summary">
-        <span>{t('flow.title')}</span>
-        <span>{t('flow.stepOf', { current: Math.max(index + 1, 0), total: Math.max(total, 1) })}</span>
-        <span>{round?.live ? t('task.computer.live') : round?.status === 'failed' ? t('task.status.failed') : round?.status === 'canceled' ? t('task.status.stopped') : t('task.status.completed')}</span>
+      <div
+        className={styles.taskProgress}
+        data-testid="od-computer-task-summary"
+        data-collapsed={progressCollapsed}
+      >
+        <button
+          type="button"
+          className={styles.taskProgressToggle}
+          aria-expanded={!progressCollapsed}
+          aria-label={progressCollapsed ? t('designFiles.expandGroup') : t('designFiles.collapseGroup')}
+          onClick={() => setProgressCollapsed((collapsed) => !collapsed)}
+        >
+          <span className={styles.taskProgressTitle}>{t('flow.title')}</span>
+          <span className={round?.live ? styles.taskProgressLive : styles.taskProgressStatus}>
+            {round?.live ? (
+              <>
+                <span className={styles.liveDot} aria-hidden />
+                {t('task.computer.live')}
+              </>
+            ) : round?.status === 'failed' ? (
+              t('task.status.failed')
+            ) : round?.status === 'canceled' ? (
+              t('task.status.stopped')
+            ) : (
+              t('task.status.completed')
+            )}
+          </span>
+          <span className={styles.taskProgressCount}>
+            {t('flow.stepOf', progressPosition(steps))}
+          </span>
+          <span className={styles.taskProgressChevron} data-collapsed={progressCollapsed} aria-hidden>
+            <Icon name="chevron-down" size={14} />
+          </span>
+        </button>
+        <div className={`accordion-collapsible ${styles.taskProgressBody}${progressCollapsed ? '' : ' open'}`}>
+          <div className="accordion-collapsible-inner">
+            <ComputerTaskProgress
+              steps={steps}
+              activeStepId={active?.step.id}
+              onSelectStep={(stepId) => setSelectedStepId(stepId)}
+            />
+          </div>
+        </div>
       </div>
     </section>
+  );
+}
+
+function progressPosition(steps: ComputerStep[]) {
+  const activeIndex = steps.findIndex(({ step }) => step.status === 'running');
+  return {
+    current: Math.max(steps.length > 0 ? 1 : 0, activeIndex >= 0 ? activeIndex + 1 : steps.length),
+    total: Math.max(steps.length, 1),
+  };
+}
+
+function ComputerTaskProgress({
+  steps,
+  activeStepId,
+  onSelectStep,
+}: {
+  steps: ComputerStep[];
+  activeStepId?: string;
+  onSelectStep: (stepId: string) => void;
+}) {
+  const t = useT();
+  return (
+    <ol className={styles.taskProgressList} data-testid="od-computer-task-steps">
+      {steps.length > 0 ? (
+        steps.map(({ step }) => (
+          <li key={step.id} data-status={step.status} data-active={step.id === activeStepId}>
+            <button type="button" onClick={() => onSelectStep(step.id)}>
+              <StepStatusIcon status={step.status} />
+              <span>{taskStepBrief(step, t)}</span>
+            </button>
+          </li>
+        ))
+      ) : (
+        <li data-status="running" data-row="static">
+          <StepStatusIcon status="running" />
+          <span>{t('task.computer.empty')}</span>
+        </li>
+      )}
+    </ol>
   );
 }
 
@@ -231,7 +314,7 @@ function StepBody({
 }) {
   const t = useT();
   const { step, use, result } = computer;
-  const artifactFile = findArtifactFile(projectFiles, step.artifact?.name ?? step.target);
+  const artifactFile = findArtifactFile(projectFiles, step.artifact?.title ?? step.target);
   if (artifactFile && projectId && projectKind && ['generate', 'inspiration', 'outline', 'write', 'edit'].includes(step.kind)) {
     return (
       <div className={styles.artifactViewer} data-testid="od-computer-artifact-viewer">
@@ -273,7 +356,7 @@ function StepBody({
         disabled={!onRequestOpenFile}
       >
         <span className={styles.artifactGlyph} aria-hidden>
-          {taskStepGlyph('generate')}
+          <Icon name="file" size={15} />
         </span>
         <span className={styles.artifactName}>{name}</span>
         <span className={styles.artifactOpen}>{t('task.deliverable.open')}</span>
@@ -283,6 +366,17 @@ function StepBody({
   return <div className={styles.generic}>{taskStepBrief(step, t)}</div>;
 }
 
+function StepStatusIcon({ status }: { status: TaskStep['status'] }) {
+  return (
+    <span className={styles.taskProgressMarker} data-status={status} aria-hidden>
+      <Icon
+        name={status === 'done' ? 'check' : status === 'error' ? 'close' : 'spinner'}
+        size={13}
+      />
+    </span>
+  );
+}
+
 function findArtifactFile(files: ProjectFile[], raw: string | undefined): ProjectFile | undefined {
   if (!raw) return undefined;
   const target = raw.replace(/^\.\//, '').replace(/\\/g, '/');
@@ -290,58 +384,4 @@ function findArtifactFile(files: ProjectFile[], raw: string | undefined): Projec
     const name = (file.path || file.name).replace(/^\.\//, '').replace(/\\/g, '/');
     return name === target || name.endsWith(`/${target}`) || target.endsWith(`/${name}`);
   });
-}
-
-function ComputerGlyph() {
-  return (
-    <svg viewBox="0 0 16 16" width="15" height="15" fill="none" aria-hidden>
-      <rect x="1.5" y="2.5" width="13" height="9" rx="1.4" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M5.5 14h5M8 11.5V14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function ExpandGlyph() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden>
-      <path
-        d="M6 2.5H2.5V6M10 13.5H13.5V10M13.5 6V2.5H10M2.5 10v3.5H6"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function DockGlyph() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden>
-      <rect x="2" y="3" width="12" height="10" rx="1.3" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M10 3v10" stroke="currentColor" strokeWidth="1.3" />
-    </svg>
-  );
-}
-
-function CloseGlyph() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden>
-      <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function StepChevron({ dir }: { dir: 'prev' | 'next' }) {
-  return (
-    <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden>
-      <path
-        d={dir === 'prev' ? 'M10 3.5 5.5 8l4.5 4.5' : 'M6 3.5 10.5 8 6 12.5'}
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
 }

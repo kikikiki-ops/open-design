@@ -15,7 +15,11 @@ import {
 } from '../../src/components/FileWorkspace';
 import { I18nProvider } from '../../src/i18n';
 import { DesignFilesPanel } from '../../src/components/DesignFilesPanel';
-import { projectSplitClassName, projectSplitStyle } from '../../src/components/ProjectView';
+import {
+  applySplitChatPanelWidth,
+  projectSplitClassName,
+  projectSplitStyle,
+} from '../../src/components/ProjectView';
 import {
   fetchProjectFileText,
   uploadProjectFiles,
@@ -2273,6 +2277,7 @@ describe('projectSplitClassName', () => {
   it('marks the project split as focused so the chat pane can collapse globally', () => {
     expect(projectSplitClassName(false)).toBe('split');
     expect(projectSplitClassName(true)).toBe('split split-focus');
+    expect(projectSplitClassName(false, false)).toBe('split split-chat-only');
   });
 
   it('uses CSS variables for split widths so pointer resize can update layout without rerendering workspace content', () => {
@@ -2282,6 +2287,16 @@ describe('projectSplitClassName', () => {
       gridTemplateColumns: '512px 8px minmax(420px, 1fr)',
     });
     expect(projectSplitStyle(true, 512, 'minmax(420px, 1fr)')).toBeUndefined();
+    expect(projectSplitStyle(false, 512, 'minmax(420px, 1fr)', false)).toBeUndefined();
+  });
+
+  it('clears an imperatively resized grid when Computer closes or takes focus', () => {
+    const split = document.createElement('div');
+    applySplitChatPanelWidth(split, 756, 'minmax(400px, 1fr)');
+    expect(split.style.gridTemplateColumns).toBe('756px 8px minmax(400px, 1fr)');
+
+    applySplitChatPanelWidth(split, 756, 'minmax(400px, 1fr)', false);
+    expect(split.style.gridTemplateColumns).toBe('');
   });
 });
 
@@ -3309,6 +3324,45 @@ describe('FileWorkspace Computer task tab', () => {
     );
 
     expect(screen.getAllByRole('tab', { name: 'Computer' })).toHaveLength(1);
+  });
+
+  it('keeps one Computer replay tab and lets the active round replace older rounds', () => {
+    render(
+      <FileWorkspace
+        projectId="project-1"
+        projectKind="prototype"
+        files={[]}
+        liveArtifacts={[]}
+        onRefreshFiles={vi.fn()}
+        isDeck={false}
+        tabsState={{
+          tabs: ['computer:run-1', 'notes.md', 'computer:run-2'],
+          active: 'computer:run-2',
+        }}
+        onTabsStateChange={vi.fn()}
+        messages={[
+          {
+            id: 'message-1',
+            role: 'assistant',
+            content: '',
+            runId: 'run-1',
+            runStatus: 'succeeded',
+            events: [],
+          },
+          {
+            id: 'message-2',
+            role: 'assistant',
+            content: '',
+            runId: 'run-2',
+            runStatus: 'running',
+            events: [],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getAllByRole('tab', { name: 'Computer' })).toHaveLength(1);
+    expect(screen.getByRole('tab', { name: 'Computer' }).getAttribute('aria-selected')).toBe('true');
   });
 
   it('opens a durable computer:<runId> tab and renders the requested replay step', async () => {

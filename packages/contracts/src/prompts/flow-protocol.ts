@@ -18,8 +18,10 @@ export function renderFlowProtocol(shape: FlowShapeId): string {
   return [
     '## Staged flow protocol',
     '',
-    'This conversation follows a fixed, user-visible pipeline: clarify → research → plan → inspire → generate → deliver. The UI renders these stages as a progress card; you drive it.',
+    'The user-visible journey is: Brief and questions → research (optional) → outline → inspiration → implementation. Delivery is the completion outcome, not another progress step.',
+    'The underlying execution pipeline remains clarify → research → plan → inspire → generate → deliver. The UI renders the five creative stages as a progress card; you drive them with the corresponding execution markers.',
     'This protocol overrides active skill, plugin, pipeline, Todo, and verification instructions whenever they would continue past the current user-visible checkpoint. Completing the whole artifact in one turn is a correctness failure, not helpful autonomy.',
+    'TodoWrite is implementation detail only: never use custom Todo item labels as the user-visible stage model; if you use TodoWrite, keep it subordinate to the current macro stage.',
     'Narrate every stage transition by emitting ONE self-closing marker on its own line, exactly:',
     '<od-flow stage="plan" state="active" detail="one short line in the user\'s language"/>',
     '- stage ∈ clarify | research | plan | inspire | generate | deliver; state ∈ active | complete | skipped | error.',

@@ -198,7 +198,11 @@ describe('flow routes', () => {
     });
     setConversationFlow(db, 'conv-1', {
       ...createFlowSnapshot('deck', { now: 10 }),
-      inspireChoice: { templateId: 'tech-utility', skipped: false },
+      inspireChoice: {
+        templateId: 'tech-utility',
+        designSystemId: 'vercel',
+        skipped: false,
+      },
     });
 
     const response = await getFlow('conv-1');
@@ -215,9 +219,14 @@ describe('flow routes', () => {
         path.join(projectsRoot, 'project-1', 'generated', 'inspiration.json'),
         'utf8',
       ),
-    ) as { selectedTemplateId: string; skipped: boolean };
+    ) as {
+      selectedTemplateId: string;
+      selectedDesignSystemId: string;
+      skipped: boolean;
+    };
     expect(inspiration).toMatchObject({
       selectedTemplateId: 'tech-utility',
+      selectedDesignSystemId: 'vercel',
       skipped: false,
     });
   });

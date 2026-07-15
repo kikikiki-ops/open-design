@@ -1,7 +1,8 @@
 # 北极星链路:分阶段全链路生成流程(Staged Flow)
 
 > 状态:定稿 v1.1(2026-07-13)。对标 `nexu-io/codex-slides`(本地源码
-> `~/Projects/personal-work/experiments/ppt-anything`)的 6 步分阶段流,
+> `~/Projects/personal-work/experiments/ppt-anything`)的 6 状态执行流(用户可见为
+> 5 个创作阶段,交付是完成结果),
 > 把 Open Design 的「输入 → 澄清 → 生成 → 交付」重塑为一条**全程可见、
 > 默认可点、硬交付收尾**的北极星链路。
 >
@@ -242,14 +243,20 @@ OD 的架构是「daemon 孵化外部 agent CLI」,不能像 codex-slides 那样
 ### 5.3 进度卡(FlowProgressCard)
 
 - 新组件 `apps/web/src/components/FlowProgressCard.tsx` + CSS Module,
-  渲染 `FlowSnapshot`:标题「任务进度 · 第 X / N 步」,每步一行
+  渲染 `FlowSnapshot`:标题「任务进度 · 第 X / 5 步」,固定展示
+  `Brief / 问题确认 → 搜索（可选）→ 大纲 → 灵感 → 实现`,每步一行
   (✓ / ◔ / ○ / ⊘ / ✕ + label + detail),完全对应参考截图 1 的
   「Presentation progress · Step 5 of 5」。
+- `research` 无论是否启用 Deep research 都保留在梯子里并明确标记「可选」;
+  未执行时记 skipped,不能整行消失。底层 `deliver` 状态仍负责完成 CTA 与漏斗,
+  但不渲染成第 6 个创作步骤。
 - 位置:作为表单式状态块渲染在**最新 assistant 消息内部**,随聊天内容滚动;
   新 assistant 消息到达后进度卡跟随到最新消息,`FlowSnapshot` 更新时原位刷新,
   不钉在 `.chat-log` 顶部。
-- 与 TodoWrite 的关系:FlowProgressCard 和 TodoWrite 各自沿用消息时间线,
-  不互相替代;非 flow 会话(纯 chat、tune-collab)不渲染进度卡,保持现状。
+- 与 TodoWrite 的关系:FlowProgressCard 是当前生成轮的用户可见阶段模型;
+  TodoWrite 只能作为阶段内部实现细节,不能用临时条目替换这 5 个阶段。
+  后续轻量编辑轮按 `round.startedAt > flow.updatedAt` 回落到 TodoWrite;
+  非 flow 会话(纯 chat、tune-collab)保持轻量进度现状。
 - pending 步必须带「何时开始」预告文案(「大纲确认后开始」),这是
   P1「预期体感未知」的直接解药。
 - 展开/收起沿用 `.accordion-collapsible` 契约;动效遵守 UI animation
@@ -524,15 +531,19 @@ contracts;新端点三件套(HTTP+UI+CLI)同 PR;`src/` 下不加测试,测试进
 
 ### M3 灵感步
 
-- [ ] contracts + daemon:`POST /api/inspire/rank`(形态子集过滤 +
+- [x] contracts + daemon:`POST /api/inspire/rank`(形态子集过滤 +
       模型排序 + 关键词离线兜底)
 - [x] web:灵感面板(搜索/分类 chips/预览卡/Top-1 默认选中/明确跳过)
       — 2026-07-13
 - [x] daemon:apply/skip 落进 FlowSnapshot;apply 物化模板框架并推进状态
       — 2026-07-13
 - [x] CLI:`od inspire rank/apply/skip` — 2026-07-13
-- [ ] 测试:离线排序/apply/skip 幂等/模板物化单测 ✅;模型渐进 rerank 与
-      选中模板真实影响最终渲染的端到端彩排待补
+- [x] 灵感选择扩展为「模板方向 + 设计系统」两个独立维度；Web、contracts、
+      daemon 与 CLI 同步支持组合提交，选择会同时写入项目 `skillId` / `designSystemId`
+      与 `generated/inspiration.json`，后续生成读取完整 DESIGN.md 上下文。
+- [x] 测试:离线排序/apply/skip 幂等/模板物化/设计系统可用性与组合持久化单测；
+      生产桌面实测 `market-diligence-report + agentic` 同时生效。模型渐进 rerank
+      与最终成品的视觉影响仍由后续完整生成彩排持续观察。
 
 *验收*:断网(离线兜底)时面板仍秒出;skip 后进度卡显示「已跳过 ·
 使用默认风格」;选中的模板真实影响渲染风格。
@@ -577,6 +588,9 @@ contracts;新端点三件套(HTTP+UI+CLI)同 PR;`src/` 下不加测试,测试进
       tags 级独立过滤 — 2026-07-14
 - [ ] 每形态一次北极星彩排(≤ 8 分钟、三次默认点击)
 - [ ] e2e:六形态资源闭包矩阵已覆盖;真实 agent 的完整默认点击链路彩排待补
+- [x] 入口与路由矩阵:在同一生产 runtime 用 8 条真实 query 覆盖 deck / prototype /
+      landing / mobile / webapp / document / report / media，全部识别为正确 shape 并进入
+      `clarify`；其中 report 继续走到组合 Inspiration 落盘。
 
 *验收*:新形态接入证明为「只改注册表 + prompt 片段 + 目录标签」,
 零新组件;landing 与 document 各通过一次完整彩排。

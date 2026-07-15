@@ -8,6 +8,14 @@ export interface RankedInspireTemplate {
   category?: string;
 }
 
+export interface InspireDesignSystem {
+  id: string;
+  title: string;
+  summary?: string;
+  category?: string;
+  swatches?: readonly string[];
+}
+
 export interface InspireCategory {
   id: string;
   label: string;
@@ -24,19 +32,26 @@ export interface InspirePanelCopy {
   rankLabel: string;
   selectTemplate: string;
   selectedTemplate: string;
+  templateSectionTitle: string;
+  designSystemSectionTitle: string;
+  designSystemHint: string;
+  noneDesignSystem: string;
   apply: string;
   skip: string;
 }
 
 export interface InspirePanelProps {
   rankedTemplates: readonly RankedInspireTemplate[];
+  designSystems: readonly InspireDesignSystem[];
   loading: boolean;
-  selectedId: string | null;
+  selectedTemplateId: string | null;
+  selectedDesignSystemId: string | null;
   searchQuery?: string;
   categories?: readonly InspireCategory[];
   selectedCategory?: string | null;
-  onSelect: (id: string) => void;
-  onApply: (id: string) => void;
+  onSelect: (id: string | null) => void;
+  onSelectDesignSystem: (id: string | null) => void;
+  onApply: (templateId: string | null, designSystemId: string | null) => void;
   onSkip: () => void;
   onSearch: (query: string) => void;
   onCategory: (categoryId: string | null) => void;
@@ -54,6 +69,10 @@ const DEFAULT_COPY: InspirePanelCopy = {
   rankLabel: 'Rank',
   selectTemplate: 'Select',
   selectedTemplate: 'Selected',
+  templateSectionTitle: 'Template direction',
+  designSystemSectionTitle: 'Design system',
+  designSystemHint: 'Combine one system with the template so its tokens and components guide the build.',
+  noneDesignSystem: 'No design system',
   apply: 'Use this style',
   skip: 'Use the default style',
 };
@@ -64,12 +83,15 @@ export function inspireTemplatePreviewUrl(id: string): string {
 
 export function InspirePanel({
   rankedTemplates,
+  designSystems,
   loading,
-  selectedId,
+  selectedTemplateId,
+  selectedDesignSystemId,
   searchQuery = '',
   categories = [],
   selectedCategory = null,
   onSelect,
+  onSelectDesignSystem,
   onApply,
   onSkip,
   onSearch,
@@ -78,9 +100,16 @@ export function InspirePanel({
 }: InspirePanelProps) {
   const copy = { ...DEFAULT_COPY, ...copyOverrides };
   const selectedTemplate =
-    selectedId === null
+    selectedTemplateId === null
       ? undefined
-      : rankedTemplates.find((template) => template.id === selectedId);
+      : rankedTemplates.find((template) => template.id === selectedTemplateId);
+  const visibleDesignSystems = designSystems.filter((system) => {
+    const query = searchQuery.trim().toLocaleLowerCase();
+    if (!query) return true;
+    return [system.title, system.summary, system.category]
+      .filter(Boolean)
+      .some((value) => value?.toLocaleLowerCase().includes(query));
+  });
 
   return (
     <section
@@ -103,85 +132,143 @@ export function InspirePanel({
         />
       </label>
 
-      <div className={styles.categories} aria-label={copy.categoriesLabel}>
-        <Button
-          variant={selectedCategory === null ? 'primary' : 'subtle'}
-          aria-pressed={selectedCategory === null}
-          onClick={() => onCategory(null)}
-        >
-          {copy.allCategories}
-        </Button>
-        {categories.map((category) => (
-          <Button
-            key={category.id}
-            variant={selectedCategory === category.id ? 'primary' : 'subtle'}
-            aria-pressed={selectedCategory === category.id}
-            onClick={() => onCategory(category.id)}
-          >
-            {category.label}
-          </Button>
-        ))}
-      </div>
+      <section className={styles.choiceSection} aria-label={copy.templateSectionTitle}>
+        <div className={styles.sectionHeading}>
+          <h3>{copy.templateSectionTitle}</h3>
+        </div>
 
-      {loading ? (
-        <div className={styles.loading} role={'status'}>
-          <span>{copy.loading}</span>
-          <div className={styles.skeletonGrid} aria-hidden={true}>
-            <span />
-            <span />
-            <span />
+        <div className={styles.categories} aria-label={copy.categoriesLabel}>
+          <Button
+            variant={selectedCategory === null ? 'primary' : 'subtle'}
+            aria-pressed={selectedCategory === null}
+            onClick={() => onCategory(null)}
+          >
+            {copy.allCategories}
+          </Button>
+          {categories.map((category) => (
+            <Button
+              key={category.id}
+              variant={selectedCategory === category.id ? 'primary' : 'subtle'}
+              aria-pressed={selectedCategory === category.id}
+              onClick={() => onCategory(category.id)}
+            >
+              {category.label}
+            </Button>
+          ))}
+        </div>
+
+        {loading ? (
+          <div className={styles.loading} role={'status'}>
+            <span>{copy.loading}</span>
+            <div className={styles.skeletonGrid} aria-hidden={true}>
+              <span />
+              <span />
+              <span />
+            </div>
+          </div>
+        ) : rankedTemplates.length === 0 ? (
+          <div className={styles.empty}>{copy.empty}</div>
+        ) : (
+          <ol className={styles.grid}>
+            {rankedTemplates.map((template, index) => {
+              const selected = template.id === selectedTemplateId;
+              return (
+                <li key={template.id}>
+                  <article
+                    className={`${styles.card} ${selected ? styles.selected : ''}`}
+                    data-template-id={template.id}
+                    data-selected={selected ? 'true' : 'false'}
+                  >
+                    <div className={styles.preview} aria-hidden={true}>
+                      <iframe
+                        src={inspireTemplatePreviewUrl(template.id)}
+                        title={template.title}
+                        loading={'lazy'}
+                        sandbox={'allow-scripts'}
+                        tabIndex={-1}
+                      />
+                    </div>
+                    <div className={styles.cardCopy}>
+                      <div className={styles.cardHeading}>
+                        <h4 className={styles.templateTitle}>{template.title}</h4>
+                        <span className={styles.rank}>
+                          {copy.rankLabel} {index + 1}
+                        </span>
+                      </div>
+                      {template.reason ? (
+                        <p className={styles.reason}>{template.reason}</p>
+                      ) : null}
+                      {template.category ? (
+                        <span className={styles.category}>{template.category}</span>
+                      ) : null}
+                    </div>
+                    <Button
+                      variant={selected ? 'primary' : 'subtle'}
+                      className={styles.selectButton}
+                      aria-pressed={selected}
+                      onClick={() => onSelect(selected ? null : template.id)}
+                    >
+                      {selected ? copy.selectedTemplate : copy.selectTemplate}
+                    </Button>
+                  </article>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </section>
+
+      <section className={styles.choiceSection} aria-label={copy.designSystemSectionTitle}>
+        <div className={styles.sectionHeading}>
+          <div>
+            <h3>{copy.designSystemSectionTitle}</h3>
+            <p>{copy.designSystemHint}</p>
           </div>
         </div>
-      ) : rankedTemplates.length === 0 ? (
-        <div className={styles.empty}>{copy.empty}</div>
-      ) : (
-        <ol className={styles.grid}>
-          {rankedTemplates.map((template, index) => {
-            const selected = template.id === selectedId;
+        <div className={styles.designSystemGrid}>
+          <Button
+            variant={selectedDesignSystemId === null ? 'primary' : 'subtle'}
+            className={styles.noneDesignSystem}
+            aria-pressed={selectedDesignSystemId === null}
+            onClick={() => onSelectDesignSystem(null)}
+          >
+            {copy.noneDesignSystem}
+          </Button>
+          {visibleDesignSystems.map((system) => {
+            const selected = system.id === selectedDesignSystemId;
             return (
-              <li key={template.id}>
-                <article
-                  className={`${styles.card} ${selected ? styles.selected : ''}`}
-                  data-template-id={template.id}
-                  data-selected={selected ? 'true' : 'false'}
-                >
-                  <div className={styles.preview} aria-hidden={true}>
-                    <iframe
-                      src={inspireTemplatePreviewUrl(template.id)}
-                      title={template.title}
-                      loading={'lazy'}
-                      sandbox={'allow-scripts'}
-                      tabIndex={-1}
+              <article
+                key={system.id}
+                className={`${styles.designSystemCard} ${selected ? styles.selected : ''}`}
+                data-design-system-id={system.id}
+                data-selected={selected ? 'true' : 'false'}
+              >
+                <div className={styles.swatches} aria-hidden={true}>
+                  {(system.swatches ?? []).slice(0, 5).map((swatch, index) => (
+                    <span
+                      key={`${swatch}-${index}`}
+                      data-swatch={true}
+                      style={{ backgroundColor: swatch }}
                     />
-                  </div>
-                  <div className={styles.cardCopy}>
-                    <div className={styles.cardHeading}>
-                      <h3 className={styles.templateTitle}>{template.title}</h3>
-                      <span className={styles.rank}>
-                        {copy.rankLabel} {index + 1}
-                      </span>
-                    </div>
-                    {template.reason ? (
-                      <p className={styles.reason}>{template.reason}</p>
-                    ) : null}
-                    {template.category ? (
-                      <span className={styles.category}>{template.category}</span>
-                    ) : null}
-                  </div>
-                  <Button
-                    variant={selected ? 'primary' : 'subtle'}
-                    className={styles.selectButton}
-                    aria-pressed={selected}
-                    onClick={() => onSelect(template.id)}
-                  >
-                    {selected ? copy.selectedTemplate : copy.selectTemplate}
-                  </Button>
-                </article>
-              </li>
+                  ))}
+                </div>
+                <div className={styles.designSystemCopy}>
+                  <h4>{system.title}</h4>
+                  {system.summary ? <p>{system.summary}</p> : null}
+                  {system.category ? <span>{system.category}</span> : null}
+                </div>
+                <Button
+                  variant={selected ? 'primary' : 'subtle'}
+                  aria-pressed={selected}
+                  onClick={() => onSelectDesignSystem(selected ? null : system.id)}
+                >
+                  {selected ? copy.selectedTemplate : copy.selectTemplate}
+                </Button>
+              </article>
             );
           })}
-        </ol>
-      )}
+        </div>
+      </section>
 
       <footer className={styles.footer}>
         <Button variant={'ghost'} onClick={onSkip} disabled={loading}>
@@ -189,9 +276,9 @@ export function InspirePanel({
         </Button>
         <Button
           variant={'primary'}
-          disabled={loading || !selectedTemplate}
+          disabled={loading || (!selectedTemplate && !selectedDesignSystemId)}
           onClick={() => {
-            if (selectedTemplate) onApply(selectedTemplate.id);
+            onApply(selectedTemplate?.id ?? null, selectedDesignSystemId);
           }}
         >
           {copy.apply}

@@ -129,7 +129,7 @@ describe('inspiration routes', () => {
     });
   });
 
-  it('validates template ids and persists an apply exactly once', async () => {
+  it('validates and combines template + design-system choices exactly once', async () => {
     const flows = new Map<string, FlowSnapshot | null>([
       ['conversation-1', createFlowSnapshot('deck', { now: 1 })],
     ]);
@@ -137,6 +137,7 @@ describe('inspiration routes', () => {
       flows.set(id, flow);
     });
     const applyTemplate = vi.fn();
+    const applyDesignSystem = vi.fn();
     const app = express();
     app.use(express.json());
     registerInspireRoutes(app, {
@@ -144,6 +145,8 @@ describe('inspiration routes', () => {
       loadConversationFlow: (id) => flows.has(id) ? flows.get(id) : undefined,
       saveConversationFlow,
       applyTemplate,
+      listDesignSystemIds: () => ['vercel', 'ibm'],
+      applyDesignSystem,
       now: () => 10,
     });
 
@@ -173,23 +176,29 @@ describe('inspiration routes', () => {
       const applied = await postChoice({
         action: 'apply',
         templateId: 'coffee-story',
+        designSystemId: 'vercel',
       });
       expect(applied.status).toBe(200);
       expect((applied.body as InspireChoiceResponse).flow.inspireChoice).toEqual({
         templateId: 'coffee-story',
+        designSystemId: 'vercel',
         skipped: false,
       });
       expect(saveConversationFlow).toHaveBeenCalledTimes(1);
       expect(applyTemplate).toHaveBeenCalledOnce();
       expect(applyTemplate).toHaveBeenCalledWith('conversation-1', 'coffee-story');
+      expect(applyDesignSystem).toHaveBeenCalledOnce();
+      expect(applyDesignSystem).toHaveBeenCalledWith('conversation-1', 'vercel');
 
       const retry = await postChoice({
         action: 'apply',
         templateId: 'coffee-story',
+        designSystemId: 'vercel',
       });
       expect(retry.status).toBe(200);
       expect(saveConversationFlow).toHaveBeenCalledTimes(1);
       expect(applyTemplate).toHaveBeenCalledOnce();
+      expect(applyDesignSystem).toHaveBeenCalledOnce();
 
       const conflict = await postChoice({ action: 'skip' });
       expect(conflict.status).toBe(409);
@@ -222,7 +231,52 @@ describe('inspiration routes', () => {
         expect(response.status).toBe(200);
       }
       expect(saveConversationFlow).toHaveBeenCalledTimes(1);
-      expect(flow.inspireChoice).toEqual({ templateId: null, skipped: true });
+      expect(flow.inspireChoice).toEqual({
+        templateId: null,
+        designSystemId: null,
+        skipped: true,
+      });
+    });
+  });
+
+  it('accepts a design system without a template and rejects unknown systems', async () => {
+    let flow = createFlowSnapshot('prototype', { now: 1 });
+    const saveConversationFlow = vi.fn((_id: string, next: FlowSnapshot) => {
+      flow = next;
+    });
+    const applyDesignSystem = vi.fn();
+    const app = express();
+    app.use(express.json());
+    registerInspireRoutes(app, {
+      listCatalogueEntries: () => catalogue,
+      listDesignSystemIds: () => ['vercel'],
+      loadConversationFlow: () => flow,
+      saveConversationFlow,
+      applyDesignSystem,
+      now: () => 10,
+    });
+
+    await withServer(app, async (baseUrl) => {
+      const url = baseUrl + '/api/conversations/conversation-3/flow/inspire';
+      const unknown = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'apply', designSystemId: 'unknown' }),
+      });
+      expect(unknown.status).toBe(400);
+
+      const accepted = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'apply', designSystemId: 'vercel' }),
+      });
+      expect(accepted.status).toBe(200);
+      expect(flow.inspireChoice).toEqual({
+        templateId: null,
+        designSystemId: 'vercel',
+        skipped: false,
+      });
+      expect(applyDesignSystem).toHaveBeenCalledWith('conversation-3', 'vercel');
     });
   });
 });

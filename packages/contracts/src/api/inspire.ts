@@ -89,7 +89,13 @@ export interface InspireSearchResponse {
 
 /** `POST /api/conversations/:id/flow/inspire` request. */
 export type InspireChoiceRequest =
-  | { action: 'apply'; templateId: string }
+  | {
+      action: 'apply';
+      /** A template and a design system are complementary. At least one must
+       * be present; null explicitly clears that part of the choice. */
+      templateId?: string | null;
+      designSystemId?: string | null;
+    }
   | { action: 'skip' };
 
 /** `POST /api/conversations/:id/flow/inspire` response. */

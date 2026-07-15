@@ -1239,6 +1239,16 @@ interface WorkspaceActionToast {
   ttlMs?: number;
 }
 
+function keepOneComputerTab(tabs: readonly string[], active: string | null): string[] {
+  const uniqueTabs = Array.from(new Set(tabs));
+  const computerTabs = uniqueTabs.filter(isComputerTabId);
+  if (computerTabs.length <= 1) return uniqueTabs;
+  const keptComputer = active && computerTabs.some((tab) => tab === active)
+    ? active
+    : computerTabs.at(-1)!;
+  return uniqueTabs.filter((tab) => !isComputerTabId(tab) || tab === keptComputer);
+}
+
 export function FileWorkspace({
   projectId,
   projectKind,
@@ -1363,12 +1373,12 @@ export function FileWorkspace({
   // for the same tab is already in flight. Treat tab ids as a set at this
   // boundary. Once messages are present, also discard an optimistic
   // computer:<messageId> superseded by the daemon's computer:<runId>.
-  const persistedTabs = useMemo(
-    () => Array.from(new Set(tabsState.tabs)).filter(
+  const persistedTabs = useMemo(() => keepOneComputerTab(
+    tabsState.tabs.filter(
       (name) => canonicalComputerTabs.size === 0 || !isComputerTabId(name) || canonicalComputerTabs.has(name),
     ),
-    [canonicalComputerTabs, tabsState.tabs],
-  );
+    tabsState.active ?? null,
+  ), [canonicalComputerTabs, tabsState.active, tabsState.tabs]);
   // Launcher "create" actions (New Terminal / Side Chat) resolve
   // asynchronously; keep the latest committed tab state out of render
   // closures so opening the new tab appends to the freshest list instead of
@@ -1708,8 +1718,11 @@ export function FileWorkspace({
     active: string | null,
     nextBrowserTabs = browserTabs,
   ): OpenTabsState {
-    const normalizedTabs = Array.from(new Set(tabs)).filter(
-      (name) => canonicalComputerTabs.size === 0 || !isComputerTabId(name) || canonicalComputerTabs.has(name),
+    const normalizedTabs = keepOneComputerTab(
+      tabs.filter(
+        (name) => canonicalComputerTabs.size === 0 || !isComputerTabId(name) || canonicalComputerTabs.has(name),
+      ),
+      active,
     );
     // Active may deliberately be a root, browser, Questions, or flow-stage
     // tab that does not live in this file-tab array.

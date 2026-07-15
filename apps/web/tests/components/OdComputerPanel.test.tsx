@@ -68,4 +68,61 @@ describe('OdComputerPanel', () => {
     expect(screen.getByTestId('od-computer-status').textContent).toContain('deck.html');
     expect(screen.getByTestId('od-computer-live')).toBeTruthy();
   });
+
+  it('keeps a manually selected history step when new live events append', () => {
+    const { rerender } = render(<OdComputerPanel round={round(threeSteps, true)} variant="side" />);
+    fireEvent.change(screen.getByTestId('od-computer-scrubber'), { target: { value: '0' } });
+    expect(screen.getByTestId('od-computer-status').textContent).toContain('agent replay');
+
+    rerender(
+      <OdComputerPanel
+        round={round([
+          ...threeSteps,
+          { kind: 'tool_use', id: 't4', name: 'Bash', input: { command: 'pnpm typecheck' } },
+        ], true)}
+        variant="side"
+      />,
+    );
+
+    expect(screen.getByTestId('od-computer-status').textContent).toContain('agent replay');
+    expect(screen.getByTestId('od-computer-jump-live')).toBeTruthy();
+
+    fireEvent.click(screen.getByTestId('od-computer-jump-live'));
+    expect(screen.getByTestId('od-computer-status').textContent).toContain('pnpm typecheck');
+    expect(screen.getByTestId('od-computer-live')).toBeTruthy();
+  });
+
+  it('expands and collapses the task progress list below the timeline', () => {
+    render(<OdComputerPanel round={round(threeSteps, true)} variant="side" />);
+
+    expect(screen.getByTestId('od-computer-task-steps')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse' }));
+    expect(screen.getByTestId('od-computer-task-summary').getAttribute('data-collapsed')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'Expand' }));
+    expect(screen.getByTestId('od-computer-task-summary').getAttribute('data-collapsed')).toBe('false');
+  });
+
+  it('keeps TodoWrite snapshots out of the Computer timeline and progress list', () => {
+    const todoContent = 'Polish the task progress alignment';
+    render(
+      <OdComputerPanel
+        round={round([
+          {
+            kind: 'tool_use',
+            id: 'todo-1',
+            name: 'TodoWrite',
+            input: { todos: [{ content: todoContent, status: 'in_progress' }] },
+          },
+          { kind: 'tool_result', toolUseId: 'todo-1', content: 'ok', isError: false },
+          { kind: 'tool_use', id: 'read-1', name: 'Read', input: { file_path: 'DESIGN.md' } },
+        ], true)}
+        variant="side"
+      />,
+    );
+
+    expect(screen.getByTestId('od-computer-status').textContent).toContain('DESIGN.md');
+    expect(screen.getByTestId('od-computer-panel').textContent).not.toContain(todoContent);
+    expect(screen.queryByTestId('od-computer-task-todos')).toBeNull();
+    expect(screen.getByTestId('od-computer-task-steps').querySelectorAll('li')).toHaveLength(1);
+  });
 });

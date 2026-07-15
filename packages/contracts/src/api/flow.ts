@@ -51,6 +51,9 @@ export type FlowResearchMode = 'deep' | 'basic' | 'off';
 
 export interface FlowInspireChoice {
   templateId: string | null;
+  /** Primary design system selected at the inspiration checkpoint. Its full
+   * DESIGN.md becomes authoritative on the following generation turn. */
+  designSystemId: string | null;
   skipped: boolean;
 }
 
@@ -117,6 +120,7 @@ export const FLOW_SHAPES: Record<FlowShapeId, FlowShapeSpec> = {
   deck: {
     id: 'deck',
     routingHints: [
+      'deck',
       'slide deck',
       'slides',
       'presentation',

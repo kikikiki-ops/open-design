@@ -15,6 +15,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { hasOdCard } from '@open-design/contracts';
+import { Button } from '@open-design/components';
 import { useAnalytics } from '../analytics/provider';
 import { getResolvedDeviceId } from '../analytics/client';
 import { trackChatPanelClick, trackMessageQueueClick, trackRunFailedToastSurfaceView } from '../analytics/events';
@@ -557,6 +558,10 @@ interface Props {
   // Header "+" button — kicks off ProjectView's create-conversation flow.
   onNewConversation?: () => void;
   newConversationDisabled?: boolean;
+  /** Re-opens the right-hand Computer workspace on its Design files tab. */
+  onOpenDesignFiles?: () => void;
+  /** Opens the Open Design Cloud account / subscription surface. */
+  onOpenCloud?: () => void;
   // Conversation list that used to live in the topbar. The chat tab now
   // owns the list so users can browse + switch conversations without
   // leaving the pane.
@@ -572,6 +577,7 @@ interface Props {
   messagesConversationId?: string | null;
   onSelectConversation: (id: string) => void;
   onDeleteConversation: (id: string) => void;
+  onRenameConversation?: (id: string, title: string) => void;
   // Composer settings/CLI button forwards to here. The dialog lives in App
   // (it owns the AppConfig lifecycle) so we just pass the open trigger.
   onOpenSettings?: (section?: SettingsSection) => void;
@@ -876,11 +882,14 @@ export function ChatPane({
   forkingMessageId = null,
   onNewConversation,
   newConversationDisabled = false,
+  onOpenDesignFiles,
+  onOpenCloud,
   conversations,
   activeConversationId,
   messagesConversationId = null,
   onSelectConversation,
   onDeleteConversation,
+  onRenameConversation,
   onOpenSettings,
   showByokRecoveryAction = false,
   onSwitchToLocalCli,
@@ -963,6 +972,7 @@ export function ChatPane({
   const amrAuthPrevLoggedInRef = useRef<boolean | undefined>(undefined);
   const chatLogScrollIdleTimerRef = useRef<number | null>(null);
   const historyWrapRef = useRef<HTMLDivElement | null>(null);
+  const conversationActionsRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<ChatComposerHandle | null>(null);
   const composerSlotRef = useRef<HTMLDivElement | null>(null);
   const composerLayerRef = useRef<HTMLDivElement | null>(null);
@@ -1206,6 +1216,9 @@ export function ChatPane({
   ]);
   const [tab, setTab] = useState<Tab>('chat');
   const [showConvList, setShowConvList] = useState(false);
+  const [showConversationActions, setShowConversationActions] = useState(false);
+  const [renamingActiveConversation, setRenamingActiveConversation] = useState(false);
+  const [activeConversationTitleDraft, setActiveConversationTitleDraft] = useState('');
   const [conversationSearch, setConversationSearch] = useState('');
   const deferredConversationSearch = useDeferredValue(conversationSearch);
   const [scrolledFromBottom, setScrolledFromBottom] = useState(false);
@@ -1953,6 +1966,27 @@ export function ChatPane({
 
   const activeConversation =
     conversations.find((c) => c.id === activeConversationId) ?? null;
+
+  useEffect(() => {
+    if (!showConversationActions && !renamingActiveConversation) return;
+    function onPointer(e: MouseEvent) {
+      const target = e.target as Node;
+      if (conversationActionsRef.current?.contains(target)) return;
+      setShowConversationActions(false);
+      setRenamingActiveConversation(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return;
+      setShowConversationActions(false);
+      setRenamingActiveConversation(false);
+    }
+    document.addEventListener('mousedown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [renamingActiveConversation, showConversationActions]);
   const filteredConversations = useMemo(
     () => filterConversations(conversations, deferredConversationSearch, t),
     [conversations, deferredConversationSearch, t],
@@ -2207,6 +2241,54 @@ export function ChatPane({
         {projectHeader ? (
           <span className="chat-project-header-title">{projectHeader}</span>
         ) : null}
+        <div className="chat-project-primary-actions">
+          {onOpenCloud ? (
+            <Button
+              variant="subtle"
+              className="chat-cloud-entry"
+              data-testid="chat-open-cloud"
+              title={t('settings.amrCloud')}
+              onClick={onOpenCloud}
+            >
+              <Icon name="sparkles" size={14} />
+              <span>{t('settings.amrCloud')}</span>
+            </Button>
+          ) : null}
+          {onOpenDesignFiles ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="chat-project-action-button"
+              data-testid="chat-open-design-files"
+              title={t('workspace.allProjectFiles')}
+              aria-label={t('workspace.allProjectFiles')}
+              onClick={onOpenDesignFiles}
+            >
+              <Icon name="folder" size={16} />
+            </Button>
+          ) : null}
+          {onNewConversation ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="chat-project-action-button"
+              data-testid="chat-new-conversation"
+              title={t('chat.new')}
+              aria-label={t('chat.new')}
+              disabled={newConversationDisabled}
+              onClick={() => {
+                if (newConversationDisabled) return;
+                trackChatPanelClick(analytics.track, {
+                  page_name: 'chat_panel',
+                  area: 'chat_panel',
+                  element: 'new_chat',
+                });
+                onNewConversation();
+              }}
+            >
+              <Icon name="plus" size={16} />
+            </Button>
+          ) : null}
         <div
           className={`chat-history-wrap chat-session-switcher${showConvList ? ' open' : ''}`}
           ref={historyWrapRef}
@@ -2320,6 +2402,96 @@ export function ChatPane({
                   ))
                 )}
               </div>
+            </div>
+          ) : null}
+        </div>
+          {activeConversation && onRenameConversation ? (
+            <div
+              ref={conversationActionsRef}
+              className={`chat-conversation-actions${showConversationActions || renamingActiveConversation ? ' open' : ''}`}
+            >
+              <Button
+                variant="ghost"
+                size="icon"
+                className="chat-project-action-button"
+                data-testid="chat-conversation-actions-trigger"
+                title={t('chat.conversationsTitle')}
+                aria-label={t('chat.conversationsTitle')}
+                aria-haspopup="menu"
+                aria-expanded={showConversationActions || renamingActiveConversation}
+                onClick={() => {
+                  setRenamingActiveConversation(false);
+                  setShowConversationActions((open) => !open);
+                }}
+              >
+                <Icon name="more-horizontal" size={17} />
+              </Button>
+              {showConversationActions ? (
+                <div className="chat-conversation-actions-menu" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-testid="chat-conversation-rename"
+                    onClick={() => {
+                      setActiveConversationTitleDraft(
+                        activeConversation.title || t('chat.untitledConversation'),
+                      );
+                      setShowConversationActions(false);
+                      setRenamingActiveConversation(true);
+                    }}
+                  >
+                    <Icon name="pencil" size={15} />
+                    <span>{t('common.rename')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="danger"
+                    data-testid="chat-conversation-delete"
+                    onClick={() => {
+                      setShowConversationActions(false);
+                      const title = activeConversation.title || t('chat.untitledConversation');
+                      if (confirm(t('chat.deleteConversationConfirm', { title }))) {
+                        onDeleteConversation(activeConversation.id);
+                      }
+                    }}
+                  >
+                    <Icon name="trash" size={15} />
+                    <span>{t('common.delete')}</span>
+                  </button>
+                </div>
+              ) : null}
+              {renamingActiveConversation ? (
+                <form
+                  className="chat-conversation-rename-popover"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const title = activeConversationTitleDraft.trim();
+                    if (!title) return;
+                    onRenameConversation(activeConversation.id, title);
+                    setRenamingActiveConversation(false);
+                  }}
+                >
+                  <input
+                    autoFocus
+                    value={activeConversationTitleDraft}
+                    data-testid="chat-conversation-rename-input"
+                    aria-label={t('common.rename')}
+                    onChange={(event) => setActiveConversationTitleDraft(event.currentTarget.value)}
+                  />
+                  <div className="chat-conversation-rename-actions">
+                    <Button
+                      variant="ghost"
+                      onClick={() => setRenamingActiveConversation(false)}
+                    >
+                      {t('common.cancel')}
+                    </Button>
+                    <Button variant="primary" type="submit" disabled={!activeConversationTitleDraft.trim()}>
+                      {t('common.save')}
+                    </Button>
+                  </div>
+                </form>
+              ) : null}
             </div>
           ) : null}
         </div>

@@ -1,6 +1,6 @@
 # 任务进度与可回放 Computer(Task Progress + Replayable Computer)
 
-> 状态:定稿 v1.0(2026-07-14)。对标 Manus 的「极简会话 + 电脑回放」体验,
+> 状态:已实现并验收 v1.0(2026-07-15)。对标 Manus 的「极简会话 + 电脑回放」体验,
 > 在 `staged-flow-north-star.zh-CN.md`(北极星链路)之上,重塑 Open Design 的
 > **过程可见性**:会话只留最关键信息,所有中间过程收进一个**按轮次(round)
 > 打点、可回放、可实时跟随**的 Computer 面板;进度以**每一轮任务**为单位,
@@ -18,7 +18,8 @@
 
 ## 1. 现状四问题
 
-1. **进度割裂**:staged-flow 的 `FlowProgressCard`(6 阶段)按**会话**持久化在
+1. **进度割裂**:staged-flow 的 `FlowSnapshot`(6 个执行状态,其中交付是结果)
+   按**会话**持久化在
    `conversations.flow_json`,内联在最后一条 assistant 消息里;`TodoWrite` 的
    `TodoCard` 不是实体,由消息事件 latest-wins 派生,内联锚定在首条 TodoWrite 上。
    两者互不相干,都**不按轮次**切分。
@@ -33,9 +34,10 @@
   `messages.run_id` / `run_status`。**生成和编辑是不同的 run → 不同的 task**;
   同一会话里再发一条 = 新 task。`run_status` 直接给出
   **live(`running` → 绿色 ● Live)/ 结束(`succeeded|failed|canceled`)**。
-- **steps = 对该轮 `events_json` 的精选投影**:把每个 `tool_use` 按 `id`↔`toolUseId`
-  与其 `tool_result` 关联,加上 `live_artifact` 与 TodoWrite 写入,按**工具名**
-  分类为步骤种类(§4)。事件顺序天然保序(append-only `events_json`);实时顺序
+- **steps = 对该轮 `events_json` 的精选投影**:把每个可回放 `tool_use` 按 `id`↔`toolUseId`
+  与其 `tool_result` 关联,加上 `live_artifact`,按**工具名**分类为步骤种类(§4)。
+  `TodoWrite` / `update_plan` 只作为左侧固定 Task progress 的状态源,不进入 Computer
+  时间轴和右侧步骤摘要,避免同一份计划在两处重复。事件顺序天然保序(append-only `events_json`);实时顺序
   由每 run 的 `events.jsonl` + 单调 `event id` + `Last-Event-ID` 重放兜底。
 - 关键约束(用户明确):全局视图**是输入框上方,不是数据库看板**。因此步骤
   **从已持久化的 `messages.events_json` 派生**,不新增 task/step 表。
@@ -56,8 +58,12 @@
 - 新组件 `PinnedTaskProgress.tsx`,作为 `QueuedSendStrip` 的兄弟节点渲染,
   夹在它和 `.chat-composer-slot` 之间,位于 `.chat-log` 滚动容器之外;复用
   `QueuedSendStrip` 既有的 ResizeObserver/MutationObserver 自动滚动接线。
-- 只展示**当前一轮的顶层步骤**:生成 → 6 阶段梯(复用 `FlowProgressCard`);
-  编辑 → 更轻的顶层 TodoWrite 清单。
+- 只展示**当前一轮的顶层步骤**:生成 → 稳定的 5 阶段梯
+  `Brief / 问题确认 → 搜索（可选）→ 大纲 → 灵感 → 实现`(复用
+  `FlowProgressCard`);交付仍是底层 `deliver` 状态和完成 CTA,不占第 6 行。
+- TodoWrite 是实现细节,不能把 agent 临时写的工具清单变成用户可见的阶段模型:
+  当前 flow 的 `updatedAt` 不早于当前轮 `startedAt` 时,5 阶段 flow 优先;
+  只有后续轻量编辑轮(当前轮开始时间晚于最后一次 flow 更新)才展示 TodoWrite / update_plan。
 - **可折叠**(复用 `.accordion-collapsible` 的 `0fr→1fr` 网格动画):
   - 展开 = `Task progress` 标题 + N/M + 顶层清单;
   - 折叠 = 单行 `[Computer 入口缩略图] [当前正在执行的步骤] [N/M ⌄]`;
@@ -71,8 +77,9 @@
 信息架构定位(面向普通用户,层级最优):
 - **左侧会话 = 入口 + reference + 状态 + 最终产物**。它只承载最简单有效的信息:
   一行行 brief、任务**状态**、以及最终**产物**入口。
-- **Computer = 全过程的唯一详情载体**,包含**核心 task 步骤本身**、每个 todo、
-  搜索/读取/思考/plan/灵感/产物,以及它们的完整内容与时间轴回放。
+- **Computer = 可回放执行过程的唯一详情载体**,包含**核心 task 步骤本身**、
+  搜索/读取/思考/写入/灵感/产物,以及它们的完整内容与时间轴回放。Todo 状态只在
+  左侧固定 Task progress 展示和更新。
 
 - 运行中,会话里每个顶层步骤只显示**一行精炼 brief**(`TaskStep.brief`)+ 状态
   字形,而非完整工具卡;点 brief 在 Computer 里打开该步骤。
@@ -102,13 +109,26 @@
   新组件 `OdComputerPanel.tsx`:
   - **顶部**状态行 `Using {tool} · {target}`,取自当前/选中步骤。
   - **正文**用**既有 family 卡**渲染选中步骤的类型化内容——`WebSearchCard`
-    (搜索列表)、`FileReadCard`(读取详情)、`FileWriteCard`/`TodoCard`
-    (plan/大纲)、`WebFetchCard`,以及 `FileViewer`(产物/deck 预览)。
+    (搜索列表)、`FileReadCard`(读取详情)、`FileWriteCard`(plan/大纲)、
+    `WebFetchCard`,以及 `FileViewer`(产物/deck 预览)。TodoWrite 不在 Computer 渲染。
   - **底部时间轴**:◀ ▶ 上一步/下一步、可拖拽进度条、● Live + **Jump to live**;
     下方是 `Task progress` 迷你摘要。
 - **两种呈现**:(a) 停靠 **Side view**(分栏里的新 body);(b) 全局 **弹框**
   (同一 `OdComputerPanel`)。二者可切换。**运行即放大**:一轮开始时激活
   `computer:` 标签(可配合 `workspaceFocused`)并实时跟随。
+- **统一 Computer 外壳**:右侧最大的一级容器固定命名为 Computer；Design Files、
+  Browser、文件预览、终端、Questions 与每轮回放标签都属于它的内部工作区，不再与
+  Computer 并列。外壳标题行只承载当前上下文、全屏/Side view 和关闭操作。
+- **会话优先的 1:1 布局**:首次打开按 `chat 1fr / 8px 拖拽柄 / Computer 1fr`
+  呈现，用户拖拽后仅持久化会话宽度；关闭 Computer 后会话占满全部可用宽度，重新从
+  文件/回放入口打开时恢复分栏。关闭只隐藏并保留内部工作区挂载，避免 iframe、文件预览
+  和回放状态反复重建。
+- **全屏与弹框退出语义**:Computer 可独占右侧全部工作区并一键回到 Side view；回放弹框
+  的关闭按钮同时退出弹框和右侧 Computer，让会话恢复全屏。显式 Dock 操作仍只把弹框
+  放回已打开的 Computer。
+- **会话头部入口**:会话右上角提供 Open Design Cloud、打开 Design Files、新建会话、
+  历史记录和更多操作；更多操作内包含 Rename / Delete，文件入口直接打开 Computer 内
+  的 Design Files，Cloud 入口复用既有 Cloud 设置/订阅引导。
 - 复用:标签壳 + `ProjectTabsState` 持久化;既有 `liveArtifactEvents` 流的追加
   模式;`FileViewer` + `ToolCard` family 卡渲染内容。这是**新 body 类型**,不是
   fork `FileViewer`。
@@ -117,7 +137,7 @@
 
 | kind | 触发(工具名 / 事件) | Computer 正文渲染 |
 | --- | --- | --- |
-| `plan` / `outline` | `TodoWrite` / 写 plan 产物(`generated/outline.md` 等) | `TodoCard` / `FileWriteCard` |
+| `plan` / `outline` | 写 plan 产物(`generated/outline.md` 等) | `FileWriteCard` / `FileViewer` |
 | `search` | `WebSearch` / `web_search` | `WebSearchCard` |
 | `search-drilldown` | `WebFetch` / `web_fetch` / 对搜索结果的 `Read` | `WebFetchCard` / `FileReadCard` |
 | `read` | `Read` / `read_file` | `FileReadCard` |
@@ -162,3 +182,71 @@ PR 模板 Surface area 两个框都勾。
 - 双 namespace `tools-dev` 人工核验:跑一次 deck 生成,看固定卡 + Computer 实时
   (自动放大),回放上一步;再跑一次编辑,确认是独立 task;点一个追问 chip。
 - `od task steps <id> --json` 与 UI 所见一致。
+
+## 9. 实施与验收记录（2026-07-15）
+
+- [x] M1：每轮 task、输入框上方固定进度卡、Live/终态、完成后自动折叠、主产物与
+  3 个追问入口已落地。
+- [x] M2：`computer:<runId>` 持久标签、自动聚焦、Side view / 弹框切换、类型化正文、
+  上一步/下一步、拖拽时间轴与 Jump to live 已落地；会话正文已收敛为摘要、状态与主产物。
+- [x] M3：共享步骤投影覆盖 plan / outline / search / search-drilldown / read / write /
+  edit / list / command / inspiration / generate / thinking / tool；Web 文案已补齐全部 locale。
+- [x] UI / CLI 双轨：daemon 只读任务路由与 `od task steps <conversationId>
+  [--round N] [--json]` 使用同一份 `packages/contracts` 投影，无数据库迁移。
+- [x] 自动化验证：contracts、daemon route/CLI/mock replay、Web task 派生/固定卡/
+  完成态/Computer/FileWorkspace 测试，Web 生产构建，仓库 guard、typecheck 与 i18n 检查。
+- [x] 实机验证：在可见 Browser 中跑完一轮真实 42 步任务，覆盖读取、搜索、规划、写入、
+  编辑与命令；确认运行期 Computer 自动打开、完成后仅保留一个 Computer 标签、历史回放、
+  Jump to live、弹框/Side view 切换、终态折叠、主产物及 3 个追问。另以两个独立 namespace
+  同时启动并核对各自 daemon/web 状态与日志归属。
+
+### 9.1 交互打磨补充验收（2026-07-15）
+
+- [x] 首内容到达前同步渲染明确的 `Preparing...` 状态；录制回放的可见 Browser 实测在发送后
+  416 ms 内出现，不再只留一个空白 Assistant 容器。
+- [x] Computer 的历史选择改为按 `stepId` 锁定。live 回放中选择 Grep 后，slider max 从 1
+  增至 2 时标题仍保持 Grep；点击 Jump to live 后切到最新 Edit。
+- [x] Computer 底部 Task progress 支持独立折叠，只投影可回放 task steps；TodoWrite / update_plan
+  变化只展示在输入框上方的 Task progress。输入框进度保留折叠能力，并在新 live round 自动展开。
+- [x] 输入框 Computer 入口由静态图标升级为当前步骤的轻量结构化缩略预览；只接收 step
+  label / glyph / status / live 原始值并使用 `memo`，不挂载 iframe、不截图，避免 token delta
+  触发高成本重绘。
+- [x] 生产构建 Browser 视觉验收发现并修复右侧 step 文案被父级 grid 压进 18px marker 列的
+  布局问题；最终 DOM 与截图均确认完整文案可见。详细记录见根目录 `design-qa.md`。
+- [x] 信息架构补充验收：Computer 投影显式过滤 TodoWrite / update_plan，右侧标题、正文、
+  时间轴和步骤摘要均不再出现 Todo；Todo 更新只保留在左侧固定进度卡，并优先于旧的
+  会话级 staged flow。两侧统一使用 Icon 组件，并重新校准标题、状态、N/M、折叠箭头和
+  时间轴控制的尺寸与基线。
+- [x] 右侧收敛为单一 Computer 一级容器，Pages / Design Files、Browser、文件预览、终端、
+  Questions 与回放全部在其内部；默认双栏实测为 `636 / 8 / 636px`，拖拽后为
+  `756 / 8 / 516px`，恢复 Side view 后重新回到精确 1:1。
+- [x] Computer 关闭后会话实测占满 `1280px` 且拖拽柄卸载；Computer 全屏时右侧占满
+  `1280px`、会话隐藏。回放弹框的关闭按钮同时退出弹框和 Computer，最终回到会话全屏。
+- [x] 会话头部 Open Design Cloud、Design Files、新建、历史、更多菜单均完成生产运行态
+  校验；Design Files 会重开 Computer 并激活文件入口，Rename / Delete 使用既有会话能力。
+- [x] Web 全量回归：426 个测试文件通过，4,392 条用例通过、7 条跳过；同时通过仓库
+  `guard`（78 条策略测试）、根级 `typecheck` 与 Web 生产构建。
+- [x] 五阶段进度补充验收：用户可见固定为
+  `Brief / 问题确认 → 搜索（可选）→ 大纲 → 灵感 → 实现`;TodoWrite 只在后续
+  轻量编辑轮接管。等待 brief 时显示“等待回复”而非“任务已完成”,pending 阶段不挂
+  旧轮次产物。`od flow status --json` 与人类可读输出均通过真实 daemon 验证。
+
+### 9.2 多形态、灵感组合与桌面韧性补充验收（2026-07-15）
+
+- [x] 使用可见 Browser / Desktop runtime 和零 token mock provider 覆盖 8 类真实 query：
+  deck、prototype、landing、mobile、webapp、document、report、media。8/8 返回正确
+  `FlowShapeId`，且第一屏均进入 `Brief & questions`，搜索仍作为第二个可选阶段显示。
+- [x] Inspiration 不再只选模板：同一面板并列展示真实模板预览与可用设计系统（色板、
+  分类、说明）；用户可以只选其一或组合选择。生产桌面实际选择
+  `market-diligence-report + agentic` 后，项目 `skillId` / `designSystemId`、
+  `FlowSnapshot.inspireChoice` 与 `generated/inspiration.json` 三处一致。
+- [x] System prompt 默认质量管线已覆盖所有模式：生成前运行 `design-taste-frontend`，
+  交付前运行 anti-slop / brand 自检与 `impeccable-design-polish`；简单动效 CSS first，
+  只有时间线/滚动编排等复杂场景才使用 GSAP，并强制 reduced-motion fallback。
+- [x] Desktop 可选 pet 页面发生重定向或加载失败时，不再阻断主窗口 reveal；新增红绿
+  回归测试隔离该错误，真实桌面重启确认主应用可用且失败只记录为可选 pet 日志。
+- [x] 跨多轮持久化只保留一个可替换的 Computer 回放标签。点击历史轮次摘要仍可把该轮
+  放入同一回放位，不再堆出多个同名 Computer 标签；生产桌面确认 tab 数从多个收敛为 1。
+- [x] 重新实测上一步（3/3 → 2/3）、Jump to live（2/3 → 3/3）、右侧 Task progress
+  折叠、左侧五阶段卡展开和 `Brief / Research(optional) / Outline / Inspiration /
+  Implement` 五个标签完整可见。

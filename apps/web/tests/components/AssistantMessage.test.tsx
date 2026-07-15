@@ -192,6 +192,42 @@ describe('AssistantMessage feedback gate', () => {
     expect(screen.queryByRole('button', { name: 'Fork from here' })).toBeNull();
   });
 
+  it('shows immediate preparation feedback before the first content event', () => {
+    const { rerender } = render(
+      <AssistantMessage
+        message={baseMessage({
+          content: '',
+          events: [
+            { kind: 'status', label: 'initializing', detail: 'claude-opus' } as ChatMessage['events'][number],
+          ],
+          runStatus: 'running',
+          endedAt: undefined,
+        })}
+        streaming
+        projectId="proj-1"
+      />,
+    );
+
+    expect(screen.getByTestId('assistant-warmup').textContent).toContain('Preparing');
+
+    rerender(
+      <AssistantMessage
+        message={baseMessage({
+          content: 'I am starting now.',
+          events: [
+            { kind: 'text', text: 'I am starting now.' } as ChatMessage['events'][number],
+          ],
+          runStatus: 'running',
+          endedAt: undefined,
+        })}
+        streaming
+        projectId="proj-1"
+      />,
+    );
+
+    expect(screen.queryByTestId('assistant-warmup')).toBeNull();
+  });
+
   it('shows the feedback widget after a successful turn that produced files', () => {
     render(
       <AssistantMessage

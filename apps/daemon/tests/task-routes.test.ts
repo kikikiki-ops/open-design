@@ -103,7 +103,8 @@ describe('task routes', () => {
     expect(body?.conversationId).toBe('conv-1');
     expect(body?.rounds).toHaveLength(2);
 
-    const [first, second] = body!.rounds;
+    const first = body!.rounds[0]!;
+    const second = body!.rounds[1]!;
     expect(first).toMatchObject({ index: 0, runId: 'run-1', status: 'succeeded' });
     expect(first.steps.map((s: { kind: string }) => s.kind)).toEqual(['search', 'generate']);
     expect(first.steps[0]).toMatchObject({ target: 'pitch decks', status: 'done' });

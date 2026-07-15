@@ -1379,7 +1379,7 @@ a.avatar-item:visited {
 
 /* -------- Split / panes -------------------------------------------- */
 .split {
-  --project-chat-panel-width: 460px;
+  --project-chat-panel-width: 640px;
   --project-workspace-panel-track: minmax(400px, 1fr);
   display: grid;
   grid-template-columns:
@@ -1410,6 +1410,9 @@ a.avatar-item:visited {
   background: var(--text-strong);
 }
 .split.split-focus {
+  grid-template-columns: minmax(0, 1fr);
+}
+.split.split-chat-only {
   grid-template-columns: minmax(0, 1fr);
 }
 .split-chat-slot {

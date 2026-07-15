@@ -38,6 +38,11 @@ export interface RegisterInspireRoutesDeps {
     conversationId: string,
     templateId: string,
   ) => MaybePromise<void>;
+  listDesignSystemIds?: () => MaybePromise<readonly string[]>;
+  applyDesignSystem?: (
+    conversationId: string,
+    designSystemId: string | null,
+  ) => MaybePromise<void>;
   now?: () => number;
 }
 
@@ -96,9 +101,26 @@ function parseChoiceRequest(value: unknown): InspireChoiceRequest | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const body = value as Record<string, unknown>;
   if (body.action === 'skip') return { action: 'skip' };
-  if (body.action !== 'apply' || typeof body.templateId !== 'string') return null;
-  const templateId = body.templateId.trim();
-  return templateId ? { action: 'apply', templateId } : null;
+  if (body.action !== 'apply') return null;
+  const hasTemplate = Object.hasOwn(body, 'templateId');
+  const hasDesignSystem = Object.hasOwn(body, 'designSystemId');
+  const templateId = typeof body.templateId === 'string'
+    ? body.templateId.trim() || null
+    : body.templateId === null || (!hasTemplate && body.templateId === undefined)
+      ? null
+      : undefined;
+  const designSystemId = typeof body.designSystemId === 'string'
+    ? body.designSystemId.trim() || null
+    : body.designSystemId === null || (!hasDesignSystem && body.designSystemId === undefined)
+      ? null
+      : undefined;
+  if (templateId === undefined || designSystemId === undefined) return null;
+  if (templateId === null && designSystemId === null) return null;
+  return {
+    action: 'apply',
+    ...(hasTemplate ? { templateId } : {}),
+    ...(hasDesignSystem ? { designSystemId } : {}),
+  };
 }
 
 export function registerInspireRoutes(
@@ -169,13 +191,22 @@ export function registerInspireRoutes(
       }
 
       if (!current.inspireChoice && request.action === 'apply') {
-        const eligible = filterInspireCatalogue(
-          current.shape,
-          await deps.listCatalogueEntries(),
-        );
-        if (!eligible.some((entry) => entry.id === request.templateId)) {
-          res.status(400).json({ error: 'templateId is not eligible for this flow' });
-          return;
+        if (request.templateId) {
+          const eligible = filterInspireCatalogue(
+            current.shape,
+            await deps.listCatalogueEntries(),
+          );
+          if (!eligible.some((entry) => entry.id === request.templateId)) {
+            res.status(400).json({ error: 'templateId is not eligible for this flow' });
+            return;
+          }
+        }
+        if (request.designSystemId) {
+          const designSystemIds = await deps.listDesignSystemIds?.() ?? [];
+          if (!designSystemIds.includes(request.designSystemId)) {
+            res.status(400).json({ error: 'designSystemId is not available' });
+            return;
+          }
         }
       }
 
@@ -186,7 +217,15 @@ export function registerInspireRoutes(
       }
       if (result.status === 'updated') {
         if (request.action === 'apply') {
-          await deps.applyTemplate?.(conversationId, request.templateId);
+          if (request.templateId) {
+            await deps.applyTemplate?.(conversationId, request.templateId);
+          }
+          if (Object.hasOwn(request, 'designSystemId')) {
+            await deps.applyDesignSystem?.(
+              conversationId,
+              request.designSystemId ?? null,
+            );
+          }
         }
         await deps.saveConversationFlow(conversationId, result.flow);
       }

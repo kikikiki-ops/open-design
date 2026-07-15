@@ -65,6 +65,7 @@ export async function materializeFlowArtifacts(
         version: 1,
         conversationId: input.conversationId,
         selectedTemplateId: input.flow.inspireChoice.templateId,
+        selectedDesignSystemId: input.flow.inspireChoice.designSystemId,
         skipped: input.flow.inspireChoice.skipped,
         updatedAt: input.flow.updatedAt,
       },

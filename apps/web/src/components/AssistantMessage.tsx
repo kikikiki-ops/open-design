@@ -845,6 +845,21 @@ function AssistantMessageImpl({
         <span className="role-name">{roleName}</span>
       </div>
       <div className="assistant-flow">
+        {preparing ? (
+          <div
+            className={styles.warmup}
+            role="status"
+            aria-live="polite"
+            data-testid="assistant-warmup"
+          >
+            <span className={styles.warmupDot} aria-hidden />
+            <span className={styles.warmupLabel}>
+              {preparingStatus === "thinking"
+                ? t("assistant.statusThinking")
+                : t("assistant.statusPreparing")}
+            </span>
+          </div>
+        ) : null}
         {minimalTaskTranscript ? (
           <TaskStepBriefList
             steps={taskSteps}

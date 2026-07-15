@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   InspirePanel,
   type InspirePanelProps,
+  type InspireDesignSystem,
   type RankedInspireTemplate,
 } from '../../src/components/InspirePanel';
 
@@ -31,13 +32,32 @@ const templates: RankedInspireTemplate[] = [
   },
 ];
 
+const designSystems: InspireDesignSystem[] = [
+  {
+    id: 'vercel',
+    title: 'Vercel',
+    summary: 'Crisp monochrome product UI with restrained color.',
+    category: 'Technology',
+    swatches: ['#000000', '#ffffff', '#0070f3'],
+  },
+  {
+    id: 'ibm',
+    title: 'IBM Carbon',
+    summary: 'Structured enterprise interfaces with a blue accent.',
+    category: 'Enterprise',
+    swatches: ['#161616', '#f4f4f4', '#0f62fe'],
+  },
+];
+
 function createProps(
   overrides: Partial<InspirePanelProps> = {},
 ): InspirePanelProps {
   return {
     rankedTemplates: templates,
+    designSystems,
     loading: false,
-    selectedId: null,
+    selectedTemplateId: null,
+    selectedDesignSystemId: null,
     searchQuery: '',
     categories: [
       { id: 'deck', label: 'Deck' },
@@ -45,6 +65,7 @@ function createProps(
     ],
     selectedCategory: null,
     onSelect: vi.fn(),
+    onSelectDesignSystem: vi.fn(),
     onApply: vi.fn(),
     onSkip: vi.fn(),
     onSearch: vi.fn(),
@@ -75,7 +96,7 @@ describe('InspirePanel', () => {
 
     const controlledProps = createProps({
       ...props,
-      selectedId: 'minimal/deck',
+      selectedTemplateId: 'minimal/deck',
     });
     view.rerender(<InspirePanel {...controlledProps} />);
     const selectedCard = view.container.querySelector(
@@ -83,7 +104,31 @@ describe('InspirePanel', () => {
     );
     expect(selectedCard?.getAttribute('data-selected')).toBe('true');
     fireEvent.click(screen.getByRole('button', { name: 'Use this style' }));
-    expect(props.onApply).toHaveBeenCalledWith('minimal/deck');
+    expect(props.onApply).toHaveBeenCalledWith('minimal/deck', null);
+  });
+
+  it('lets one design system combine with the selected template', () => {
+    const props = createProps({
+      selectedTemplateId: 'minimal/deck',
+      selectedDesignSystemId: 'vercel',
+    });
+    const view = render(<InspirePanel {...props} />);
+
+    const vercel = view.container.querySelector('[data-design-system-id="vercel"]');
+    expect(vercel?.getAttribute('data-selected')).toBe('true');
+    expect(vercel?.querySelectorAll('[data-swatch]')).toHaveLength(3);
+
+    fireEvent.click(
+      within(
+        view.container.querySelector('[data-design-system-id="ibm"]') as HTMLElement,
+      ).getByRole('button', { name: 'Select' }),
+    );
+    expect(props.onSelectDesignSystem).toHaveBeenCalledWith('ibm');
+
+    fireEvent.click(screen.getByRole('button', { name: 'No design system' }));
+    expect(props.onSelectDesignSystem).toHaveBeenCalledWith(null);
+    fireEvent.click(screen.getByRole('button', { name: 'Use this style' }));
+    expect(props.onApply).toHaveBeenCalledWith('minimal/deck', 'vercel');
   });
 
   it('forwards search, category, skip, and card selection actions', () => {

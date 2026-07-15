@@ -239,6 +239,7 @@ import { PluginDetailsModal } from './PluginDetailsModal';
 import { DesignSystemPreviewModal } from './DesignSystemPreviewModal';
 import { ChatPane } from './ChatPane';
 import { OdComputerOverlay } from './OdComputerOverlay';
+import { ComputerWorkspaceShell } from './ComputerWorkspaceShell';
 import { deriveCurrentRound, findTaskRound } from '../runtime/task-steps';
 import type { QuestionFormOpenRequest } from './AssistantMessage';
 import type { ChatSendMeta } from './ChatComposer';
@@ -255,8 +256,17 @@ import { buildRepoImportPrompt, designSystemNeedsRepoConnect } from './design-sy
 import { isDesignSystemProject, resolveProjectDesignSystemId } from './design-system-project';
 import { collectReferencedJsxNames } from '../runtime/jsx-module-refs';
 import { KNOWN_PROVIDERS } from '../state/config';
-import { DESIGN_SYSTEM_TAB, FileWorkspace, type BrowserOpenRequest } from './FileWorkspace';
-import { InspirePanel, type RankedInspireTemplate } from './InspirePanel';
+import {
+  DESIGN_FILES_TAB,
+  DESIGN_SYSTEM_TAB,
+  FileWorkspace,
+  type BrowserOpenRequest,
+} from './FileWorkspace';
+import {
+  InspirePanel,
+  type InspireDesignSystem,
+  type RankedInspireTemplate,
+} from './InspirePanel';
 import { OutlinePanel, type OutlinePage } from './OutlinePanel';
 import {
   ResearchWorkspacePanel,
@@ -506,10 +516,10 @@ let liveArtifactEventSequence = 0;
 // local literal to respect the web↔daemon boundary.
 const BRAND_KIT_FILE = 'brand.html';
 const BRAND_EMPTY_TRANSCRIPT_RETRY_DELAYS_MS = [120, 500, 1_200, 2_000] as const;
-const CHAT_PANEL_WIDTH_STORAGE_KEY = 'open-design.project.chatPanelWidth';
-const DEFAULT_CHAT_PANEL_WIDTH = 460;
+const CHAT_PANEL_WIDTH_STORAGE_KEY = 'open-design.project.chatPanelWidth.v2';
+const DEFAULT_CHAT_PANEL_WIDTH = 640;
 const MIN_CHAT_PANEL_WIDTH = 345;
-const MAX_CHAT_PANEL_WIDTH = 720;
+const MAX_CHAT_PANEL_WIDTH = 1600;
 const COMMENT_INSPECTOR_PANEL_WIDTH = 320;
 const MIN_WORKSPACE_PANEL_WIDTH = 400;
 const SPLIT_RESIZE_HANDLE_WIDTH = 8;
@@ -822,6 +832,15 @@ function readSavedChatPanelWidth(): number {
       : DEFAULT_CHAT_PANEL_WIDTH;
   } catch {
     return DEFAULT_CHAT_PANEL_WIDTH;
+  }
+}
+
+function hasSavedChatPanelWidth(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(CHAT_PANEL_WIDTH_STORAGE_KEY) !== null;
+  } catch {
+    return false;
   }
 }
 
@@ -1142,7 +1161,11 @@ function appendLiveArtifactEventItem(
   return next.length > 50 ? next.slice(next.length - 50) : next;
 }
 
-export function projectSplitClassName(workspaceFocused: boolean): string {
+export function projectSplitClassName(
+  workspaceFocused: boolean,
+  computerWorkspaceOpen = true,
+): string {
+  if (!computerWorkspaceOpen) return 'split split-chat-only';
   return workspaceFocused ? 'split split-focus' : 'split';
 }
 
@@ -1174,8 +1197,9 @@ export function projectSplitStyle(
   workspaceFocused: boolean,
   chatPanelWidth: number,
   workspacePanelTrack: string,
+  computerWorkspaceOpen = true,
 ): ProjectSplitStyle | undefined {
-  if (workspaceFocused) return undefined;
+  if (workspaceFocused || !computerWorkspaceOpen) return undefined;
   return {
     '--project-chat-panel-width': `${chatPanelWidth}px`,
     '--project-workspace-panel-track': workspacePanelTrack,
@@ -1183,12 +1207,17 @@ export function projectSplitStyle(
   };
 }
 
-function applySplitChatPanelWidth(
+export function applySplitChatPanelWidth(
   split: HTMLDivElement | null,
   width: number,
   workspacePanelTrack: string,
+  splitLayoutActive = true,
 ): void {
   if (!split) return;
+  if (!splitLayoutActive) {
+    split.style.removeProperty('grid-template-columns');
+    return;
+  }
   split.style.setProperty('--project-chat-panel-width', `${width}px`);
   split.style.gridTemplateColumns =
     `${width}px ${SPLIT_RESIZE_HANDLE_WIDTH}px ${workspacePanelTrack}`;
@@ -1575,7 +1604,10 @@ export function ProjectView({
   const [researchReportMarkdown, setResearchReportMarkdown] = useState('');
   const [outlinePages, setOutlinePages] = useState<OutlinePage[]>([]);
   const [inspireTemplates, setInspireTemplates] = useState<RankedInspireTemplate[]>([]);
-  const [inspireSelectedId, setInspireSelectedId] = useState<string | null>(null);
+  const [inspireSelectedTemplateId, setInspireSelectedTemplateId] = useState<string | null>(null);
+  const [inspireSelectedDesignSystemId, setInspireSelectedDesignSystemId] = useState<string | null>(
+    project.designSystemId ?? null,
+  );
   const [inspireLoading, setInspireLoading] = useState(false);
   const [inspireSearch, setInspireSearch] = useState('');
   const [inspireCategory, setInspireCategory] = useState<string | null>(null);
@@ -1608,6 +1640,7 @@ export function ProjectView({
   const [liveArtifacts, setLiveArtifacts] = useState<LiveArtifactSummary[]>([]);
   const [liveArtifactEvents, setLiveArtifactEvents] = useState<LiveArtifactEventItem[]>([]);
   const [workspaceFocused, setWorkspaceFocused] = useState(false);
+  const [computerWorkspaceOpen, setComputerWorkspaceOpen] = useState(true);
   // Replayable Computer panel (spec §3.4): a durable workspace tab plus an
   // optional focused modal for the same run/step.
   const [computerOpenRequest, setComputerOpenRequest] = useState<{
@@ -1765,6 +1798,8 @@ export function ProjectView({
   const [workspacePanelMinWidth, setWorkspacePanelMinWidth] = useState(MIN_WORKSPACE_PANEL_WIDTH);
   const [resizingChatPanel, setResizingChatPanel] = useState(false);
   const splitRef = useRef<HTMLDivElement | null>(null);
+  const splitInitialWidthAppliedRef = useRef(false);
+  const chatPanelHadSavedWidthRef = useRef(hasSavedChatPanelWidth());
   const chatPanelWidthRef = useRef(chatPanelWidth);
   const preferredChatPanelWidthRef = useRef(chatPanelWidth);
   const resizeStartPreferredWidthRef = useRef(chatPanelWidth);
@@ -1993,11 +2028,17 @@ export function ProjectView({
     [messages, currentConversationControlStreaming],
   );
   const handleOpenComputer = useCallback((runId: string, stepId?: string) => {
+    setComputerWorkspaceOpen(true);
     computerOpenNonceRef.current += 1;
     setComputerOpenRequest({ runId, ...(stepId ? { stepId } : {}), nonce: computerOpenNonceRef.current });
   }, []);
   const handleOpenComputerModal = useCallback((runId: string, stepId?: string) => {
     setComputerModalRequest({ runId, ...(stepId ? { stepId } : {}) });
+  }, []);
+  const handleCloseComputerSurface = useCallback(() => {
+    setComputerModalRequest(null);
+    setWorkspaceFocused(false);
+    setComputerWorkspaceOpen(false);
   }, []);
   // Auto-open once for every live round, including plain edit/chat turns. The
   // user can still scrub away; only a new assistant run focuses Computer again.
@@ -2159,6 +2200,7 @@ export function ProjectView({
         });
       }
     }
+    setComputerWorkspaceOpen(true);
     setQuestionsFocusNonce((n) => n + 1);
   }, [
     lastAssistantMessageId,
@@ -2287,7 +2329,8 @@ export function ProjectView({
       setOutlinePages([]);
       outlinePagesRef.current = [];
       setInspireTemplates([]);
-      setInspireSelectedId(null);
+      setInspireSelectedTemplateId(null);
+      setInspireSelectedDesignSystemId(null);
       setPreviewComments([]);
       setAttachedComments([]);
       setMessagesConversationId(null);
@@ -2306,7 +2349,8 @@ export function ProjectView({
     setOutlinePages([]);
     outlinePagesRef.current = [];
     setInspireTemplates([]);
-    setInspireSelectedId(null);
+    setInspireSelectedTemplateId(null);
+    setInspireSelectedDesignSystemId(project.designSystemId ?? null);
     setInspireSearch('');
     setInspireCategory(null);
     setPreviewComments([]);
@@ -2489,10 +2533,15 @@ export function ProjectView({
           }];
         });
         setInspireTemplates(ranked);
-        setInspireSelectedId(
+        setInspireSelectedTemplateId(
           flowSnapshot.inspireChoice?.skipped
             ? null
             : flowSnapshot.inspireChoice?.templateId ?? ranked[0]?.id ?? null,
+        );
+        setInspireSelectedDesignSystemId(
+          flowSnapshot.inspireChoice?.skipped
+            ? null
+            : flowSnapshot.inspireChoice?.designSystemId ?? project.designSystemId ?? null,
         );
       })
       .catch(() => {
@@ -2508,11 +2557,13 @@ export function ProjectView({
     designTemplates,
     flowSnapshot?.activeStage,
     flowSnapshot?.inspireChoice?.skipped,
+    flowSnapshot?.inspireChoice?.designSystemId,
     flowSnapshot?.inspireChoice?.templateId,
     flowSnapshot?.shape,
     locale,
     outlinePages,
     project.name,
+    project.designSystemId,
     stagedFlowBrief,
   ]);
 
@@ -2837,8 +2888,14 @@ export function ProjectView({
   const requestOpenFile = useCallback((name: string, options?: { automatic?: boolean }) => {
     if (!name) return;
     if (options?.automatic && hasQuestionsRef.current) return;
+    setComputerWorkspaceOpen(true);
     setOpenRequest({ name, nonce: Date.now() });
   }, []);
+
+  useEffect(() => {
+    if (!browserOpenRequest) return;
+    setComputerWorkspaceOpen(true);
+  }, [browserOpenRequest]);
 
   const queueOutlineSave = useCallback(
     (pages: readonly OutlinePage[]): Promise<void> => {
@@ -7909,7 +7966,11 @@ export function ProjectView({
   }, []);
 
   const handleInspireChoice = useCallback(
-    async (action: 'apply' | 'skip', templateId?: string) => {
+    async (
+      action: 'apply' | 'skip',
+      templateId?: string | null,
+      designSystemId?: string | null,
+    ) => {
       if (!activeConversationId) return;
       const pickedTemplateId = action === 'apply' ? templateId ?? null : null;
       const rankIndex =
@@ -7944,21 +8005,37 @@ export function ProjectView({
           activeConversationId,
           action === 'skip'
             ? { action: 'skip' }
-            : { action: 'apply', templateId: templateId ?? '' },
+            : {
+                action: 'apply',
+                templateId: templateId ?? null,
+                designSystemId: designSystemId ?? null,
+              },
         );
         trackChoice('success');
         trackStagedFlowSnapshot(result.flow);
         setFlowSnapshot(result.flow);
-        setInspireSelectedId(result.flow.inspireChoice?.templateId ?? null);
+        setInspireSelectedTemplateId(result.flow.inspireChoice?.templateId ?? null);
+        setInspireSelectedDesignSystemId(
+          result.flow.inspireChoice?.designSystemId ?? null,
+        );
         if (action === 'apply') {
-          onProjectChange({ ...project, skillId: templateId ?? null });
+          onProjectChange({
+            ...project,
+            ...(templateId ? { skillId: templateId } : {}),
+            designSystemId: designSystemId ?? null,
+            updatedAt: Date.now(),
+          });
           await refreshWorkspaceItems();
-          requestOpenFile('index.html', { automatic: true });
+          if (templateId) requestOpenFile('index.html', { automatic: true });
         }
+        const appliedParts = [
+          templateId ? `template ${templateId}` : null,
+          designSystemId ? `design system ${designSystemId}` : null,
+        ].filter((part): part is string => Boolean(part));
         await handleSend(
           action === 'skip'
             ? '[inspiration — skip]'
-            : `[inspiration — ${templateId ?? ''}]`,
+            : `[inspiration — ${appliedParts.join(' + ')}]`,
           [],
           [],
           action === 'apply' && templateId ? { skillIds: [templateId] } : undefined,
@@ -8093,21 +8170,47 @@ export function ProjectView({
     // browse beyond the leading recommendations.
     return !query && !inspireCategory ? matching.slice(0, 6) : matching;
   }, [inspireCategory, inspireSearch, inspireTemplates]);
+  const visibleInspireDesignSystems = useMemo<InspireDesignSystem[]>(() => {
+    const query = inspireSearch.trim().toLocaleLowerCase();
+    const matching = designSystems
+      .filter((system) => (system.status ?? 'published') !== 'draft')
+      .filter((system) => {
+        if (!query) return true;
+        return [system.title, system.summary, system.category]
+          .filter(Boolean)
+          .some((value) => value?.toLocaleLowerCase().includes(query));
+      })
+      .sort((left, right) => {
+        if (left.id === projectDesignSystemId) return -1;
+        if (right.id === projectDesignSystemId) return 1;
+        if (left.source === 'user' && right.source !== 'user') return -1;
+        if (right.source === 'user' && left.source !== 'user') return 1;
+        return left.title.localeCompare(right.title, locale);
+      })
+      .map((system) => ({
+        id: system.id,
+        title: system.title,
+        summary: system.summary,
+        category: system.category,
+        swatches: system.swatches,
+      }));
+    return query ? matching.slice(0, 18) : matching.slice(0, 8);
+  }, [designSystems, inspireSearch, locale, projectDesignSystemId]);
   useEffect(() => {
     if (flowSnapshot?.activeStage !== 'inspire') return;
     if (visibleInspireTemplates.length === 0) {
-      setInspireSelectedId(null);
+      setInspireSelectedTemplateId(null);
       return;
     }
     if (
-      !inspireSelectedId ||
-      !visibleInspireTemplates.some((template) => template.id === inspireSelectedId)
+      !inspireSelectedTemplateId ||
+      !visibleInspireTemplates.some((template) => template.id === inspireSelectedTemplateId)
     ) {
-      setInspireSelectedId(visibleInspireTemplates[0]?.id ?? null);
+      setInspireSelectedTemplateId(visibleInspireTemplates[0]?.id ?? null);
     }
   }, [
     flowSnapshot?.activeStage,
-    inspireSelectedId,
+    inspireSelectedTemplateId,
     visibleInspireTemplates,
   ]);
   const flowWorkspace = useMemo(() => {
@@ -8178,14 +8281,17 @@ export function ProjectView({
         content: (
           <InspirePanel
             rankedTemplates={visibleInspireTemplates}
+            designSystems={visibleInspireDesignSystems}
             loading={inspireLoading}
-            selectedId={inspireSelectedId}
+            selectedTemplateId={inspireSelectedTemplateId}
+            selectedDesignSystemId={inspireSelectedDesignSystemId}
             searchQuery={inspireSearch}
             categories={inspireCategories}
             selectedCategory={inspireCategory}
-            onSelect={setInspireSelectedId}
-            onApply={(templateId) => {
-              void handleInspireChoice('apply', templateId);
+            onSelect={setInspireSelectedTemplateId}
+            onSelectDesignSystem={setInspireSelectedDesignSystemId}
+            onApply={(templateId, designSystemId) => {
+              void handleInspireChoice('apply', templateId, designSystemId);
             }}
             onSkip={() => {
               void handleInspireChoice('skip');
@@ -8203,6 +8309,10 @@ export function ProjectView({
               rankLabel: t('flow.inspire.rank'),
               selectTemplate: t('flow.inspire.select'),
               selectedTemplate: t('common.selected'),
+              templateSectionTitle: t('project.typeTemplate'),
+              designSystemSectionTitle: t('misc.designSystem'),
+              designSystemHint: t('designFiles.usefulInfoTip4'),
+              noneDesignSystem: t('designSystemPicker.noneTitle'),
               apply: t('flow.inspire.apply'),
               skip: t('flow.inspire.skip'),
             }}
@@ -8220,7 +8330,8 @@ export function ProjectView({
     inspireCategory,
     inspireLoading,
     inspireSearch,
-    inspireSelectedId,
+    inspireSelectedDesignSystemId,
+    inspireSelectedTemplateId,
     outlinePages,
     requestOpenFile,
     researchReportPath,
@@ -8228,6 +8339,7 @@ export function ProjectView({
     researchRounds,
     t,
     visibleInspireTemplates,
+    visibleInspireDesignSystems,
   ]);
   const chatResizeLabel = t('project.resizeChatPanel');
   const workspacePanelTrack =
@@ -8261,10 +8373,15 @@ export function ProjectView({
   ): number => {
     const next = clampChatPanelWidth(preferredWidth, maxWidth);
     chatPanelWidthRef.current = next;
-    applySplitChatPanelWidth(splitRef.current, next, workspacePanelTrack);
+    applySplitChatPanelWidth(
+      splitRef.current,
+      next,
+      workspacePanelTrack,
+      computerWorkspaceOpen && !workspaceFocused,
+    );
     if (options.commitState !== false) setChatPanelWidth(next);
     return next;
-  }, [workspacePanelTrack]);
+  }, [computerWorkspaceOpen, workspaceFocused, workspacePanelTrack]);
 
   const applyChatPanelWidth = useCallback((
     width: number,
@@ -8295,8 +8412,13 @@ export function ProjectView({
 
   useEffect(() => {
     chatPanelWidthRef.current = chatPanelWidth;
-    applySplitChatPanelWidth(splitRef.current, chatPanelWidth, workspacePanelTrack);
-  }, [chatPanelWidth, workspacePanelTrack]);
+    applySplitChatPanelWidth(
+      splitRef.current,
+      chatPanelWidth,
+      workspacePanelTrack,
+      computerWorkspaceOpen && !workspaceFocused,
+    );
+  }, [chatPanelWidth, computerWorkspaceOpen, workspaceFocused, workspacePanelTrack]);
 
   useEffect(() => {
     chatPanelMaxWidthRef.current = chatPanelMaxWidth;
@@ -8308,11 +8430,20 @@ export function ProjectView({
 
     const updateAllowedWidth = () => {
       const splitWidth = split.clientWidth;
+      if (splitWidth <= 0) return;
       const nextWorkspaceMin = workspacePanelMinWidthForSplit(splitWidth);
       const nextMax = maxChatPanelWidthForSplit(splitWidth);
       chatPanelMaxWidthRef.current = nextMax;
       setWorkspacePanelMinWidth(nextWorkspaceMin);
       setChatPanelMaxWidth(nextMax);
+      if (!splitInitialWidthAppliedRef.current) {
+        splitInitialWidthAppliedRef.current = true;
+        if (!chatPanelHadSavedWidthRef.current) {
+          preferredChatPanelWidthRef.current = clampPreferredChatPanelWidth(
+            Math.round((splitWidth - SPLIT_RESIZE_HANDLE_WIDTH) / 2),
+          );
+        }
+      }
       renderPreferredChatPanelWidth(preferredChatPanelWidthRef.current, nextMax);
     };
 
@@ -9211,11 +9342,16 @@ export function ProjectView({
       <div
         ref={splitRef}
         className={[
-          projectSplitClassName(workspaceFocused),
+          projectSplitClassName(workspaceFocused, computerWorkspaceOpen),
           leftInspectorActive && !workspaceFocused ? 'split-manual-edit' : '',
           resizingChatPanel && !workspaceFocused ? 'is-resizing-chat' : '',
         ].filter(Boolean).join(' ')}
-        style={projectSplitStyle(workspaceFocused, splitLeftPanelWidth, workspacePanelTrack)}
+        style={projectSplitStyle(
+          workspaceFocused,
+          splitLeftPanelWidth,
+          workspacePanelTrack,
+          computerWorkspaceOpen,
+        )}
       >
         <div className="split-chat-slot" hidden={workspaceFocused}>
           {commentInspectorActive ? (
@@ -9284,11 +9420,14 @@ export function ProjectView({
               forkingMessageId={forkingMessageId}
               onNewConversation={handleNewConversation}
               newConversationDisabled={newConversationDisabled}
+              onOpenDesignFiles={() => requestOpenFile(DESIGN_FILES_TAB)}
+              onOpenCloud={onOpenAmrSettings}
               conversations={conversations}
               activeConversationId={activeConversationId}
               messagesConversationId={messagesConversationId}
               onSelectConversation={handleSelectConversation}
               onDeleteConversation={handleDeleteConversation}
+              onRenameConversation={handleRenameConversation}
               config={config}
               onOpenSettings={onOpenSettings}
               showByokRecoveryAction={
@@ -9411,7 +9550,7 @@ export function ProjectView({
             </div>
           )}
         </div>
-        {!workspaceFocused ? (
+        {!workspaceFocused && computerWorkspaceOpen ? (
           leftInspectorActive ? (
             <div className="split-edit-divider" aria-hidden />
           ) : (
@@ -9433,7 +9572,7 @@ export function ProjectView({
         ) : null}
         <OdComputerOverlay
           open={computerModalRequest !== null}
-          onClose={() => setComputerModalRequest(null)}
+          onClose={handleCloseComputerSurface}
           round={computerModalRequest
             ? findTaskRound(messages, computerModalRequest.runId, {
                 streamingRunId: currentRound?.live ? currentRound.runId : null,
@@ -9451,7 +9590,20 @@ export function ProjectView({
             handleOpenComputer(runId, stepId);
           }}
         />
-        <FileWorkspace
+        <ComputerWorkspaceShell
+          open={computerWorkspaceOpen}
+          focused={workspaceFocused}
+          title={t('task.computer.title')}
+          detail={currentRound?.live
+            ? `${t('task.computer.live')} · ${t('workspace.allProjectFiles')}`
+            : t('workspace.allProjectFiles')}
+          expandLabel={t('task.computer.expand')}
+          restoreLabel={t('task.computer.sideView')}
+          closeLabel={t('task.computer.close')}
+          onToggleFocus={() => setWorkspaceFocused((focused) => !focused)}
+          onClose={handleCloseComputerSurface}
+        >
+          <FileWorkspace
           projectId={project.id}
           projectKind={projectKindFromMetadataToTracking(currentProject.metadata) ?? 'prototype'}
           rootDirName={(() => {
@@ -9496,8 +9648,6 @@ export function ProjectView({
           activePluginActionPaths={activePluginActionPaths}
           preferredPreviewFile={currentProject.metadata?.entryFile ?? null}
           autoPreviewDesignArtifacts={currentProject.metadata?.importedFrom === 'folder'}
-          focusMode={workspaceFocused}
-          onFocusModeChange={setWorkspaceFocused}
           designSystemProject={designSystemProject}
           designSystemBrandId={designSystemBrandId}
           designSystemEditable={designSystemEditable}
@@ -9673,7 +9823,8 @@ export function ProjectView({
               });
             })();
           }}
-        />
+          />
+        </ComputerWorkspaceShell>
       </div>
       {contextPluginDetails ? (
         <PluginDetailsModal
