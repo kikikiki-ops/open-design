@@ -21,6 +21,7 @@ const reportWorkflowPath = join(workspaceRoot, ".github", "workflows", "report.a
 const bakePluginPreviewsWorkflowPath = join(workspaceRoot, ".github", "workflows", "bake-plugin-previews.yml");
 const bakePluginPreviewsPrWorkflowPath = join(workspaceRoot, ".github", "workflows", "bake-plugin-previews-pr.yml");
 const dockerImageWorkflowPath = join(workspaceRoot, ".github", "workflows", "docker-image.yml");
+const flakePath = join(workspaceRoot, "flake.nix");
 const backportAutomergeWorkflowPath = join(workspaceRoot, ".github", "workflows", "backport-automerge.yml");
 const bakePreviewsAutomergeWorkflowPath = join(
   workspaceRoot,
@@ -945,6 +946,16 @@ process.stdin.on("end", () => {
       web_workspace_tests: { result: "failure" },
     };
     await expect(validateGatePasses(workflow, "pull_request", needsWithFailedWeb)).resolves.toBe(false);
+  });
+
+  it("[P1] includes launcher protocol in the Nix daemon workspace build", async () => {
+    const flake = await readFile(flakePath, "utf8");
+    const daemonWorkspaces = sectionBetween(flake, "      daemonWorkspacePaths = [", "      ];");
+
+    expect(daemonWorkspaces).toContain('"packages/launcher-proto"');
+    expect(daemonWorkspaces.indexOf('"packages/launcher-proto"')).toBeLessThan(
+      daemonWorkspaces.indexOf('"apps/daemon"'),
+    );
   });
 
   it("[P2] routes default CI through cost-sensitive runner tiers", async () => {
