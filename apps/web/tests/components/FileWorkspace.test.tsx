@@ -3142,7 +3142,41 @@ describe('FileWorkspace empty-project generation contract', () => {
     expect(screen.queryByTestId('preview-run-status-retry')).toBeNull();
     expect(previewStatus).not.toHaveTextContent('Elapsed');
     fireEvent.click(screen.getByTestId('preview-run-status-view-details'));
-    expect(onViewRunDetails).toHaveBeenCalledTimes(1);
+    expect(onViewRunDetails).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'delivery-failure' }),
+    );
+  });
+
+  it('does not mount main-preview delivery feedback over a browser tab', () => {
+    render(
+      <FileWorkspace
+        projectId="project-1"
+        projectKind="prototype"
+        files={[workspaceFile('previous-design.html')]}
+        liveArtifacts={[]}
+        onRefreshFiles={vi.fn()}
+        isDeck={false}
+        tabsState={{
+          tabs: ['previous-design.html'],
+          active: '__browser__:1',
+          browserTabs: [{ id: '__browser__:1', label: 'Browser', url: 'https://example.com' }],
+        }}
+        onTabsStateChange={vi.fn()}
+        messages={[
+          {
+            ...assistantMessage('failed'),
+            id: 'browser-delivery-failure',
+            runStatus: 'succeeded',
+            resultDeliveryState: 'delivery_failed',
+            sessionMode: 'design',
+            endedAt: 1_700_000_012_000,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId('design-browser-panel')).toBeTruthy();
+    expect(screen.queryByTestId('preview-run-status')).toBeNull();
   });
 
   it('keeps a delivered confirmation on the preview canvas after files arrive', () => {

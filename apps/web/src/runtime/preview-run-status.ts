@@ -26,16 +26,30 @@ function isActiveDesignRun(message: ChatMessage): boolean {
   return message.runStatus === 'queued' || message.runStatus === 'running';
 }
 
-const ANALYZING_STATUS_LABELS = new Set(['requesting', 'starting', 'initializing', 'thinking']);
+// These statuses describe lifecycle progress, not a user-visible design
+// output. Runtimes do not agree on the exact label, so keep looking back for
+// an output-bearing event before advancing the preview copy to generation.
+const PRE_OUTPUT_STATUS_LABELS = new Set([
+  'queued',
+  'requesting',
+  'starting',
+  'initializing',
+  'thinking',
+  'running',
+  'model',
+  'working',
+  'streaming',
+]);
 
 function activeDesignRunStage(message: ChatMessage): Extract<PreviewRunStatusStage, 'analyzing' | 'generating'> {
   const events = message.events ?? [];
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index];
     if (!event) continue;
-    if (event.kind === 'thinking') return 'analyzing';
+    if (event.kind === 'thinking') continue;
     if (event.kind === 'status') {
-      return ANALYZING_STATUS_LABELS.has(event.label) ? 'analyzing' : 'generating';
+      if (PRE_OUTPUT_STATUS_LABELS.has(event.label)) continue;
+      return 'generating';
     }
     if (
       event.kind === 'text'
@@ -104,11 +118,17 @@ export function previewRunStatusVisibleAt(
   now: number,
 ): boolean {
   if (status.phase !== 'succeeded') return true;
-  // A missing end timestamp is an old/partially persisted message. Show the
-  // confirmation while this page instance is alive rather than inventing a
-  // completion time that could make it linger after a later return.
-  if (status.message.endedAt === undefined) return true;
-  return now < status.message.endedAt + PREVIEW_RUN_SUCCESS_VISIBLE_MS;
+  const completedAt = previewRunStatusCompletedAt(status);
+  return completedAt !== undefined && now < completedAt + PREVIEW_RUN_SUCCESS_VISIBLE_MS;
+}
+
+/**
+ * Persisted turns normally carry `endedAt`. When an older record does not,
+ * anchor the confirmation to its real start/creation timestamp instead of
+ * reviving a stale success on every later visit.
+ */
+export function previewRunStatusCompletedAt(status: PreviewRunStatus): number | undefined {
+  return status.message.endedAt ?? status.message.startedAt ?? status.message.createdAt;
 }
 
 export function formatPreviewRunElapsed(elapsedMs: number): string {

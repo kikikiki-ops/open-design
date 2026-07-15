@@ -49,6 +49,34 @@ describe('preview run status', () => {
     expect(generating?.stage).toBe('generating');
   });
 
+  it.each(['running', 'model', 'working'])(
+    'keeps the run in analysis for the neutral %s lifecycle status',
+    (label) => {
+      const status = latestPreviewRunStatus(
+        [designMessage({ events: [{ kind: 'status', label }] })],
+        STARTED_AT + 1_000,
+      );
+
+      expect(status?.stage).toBe('analyzing');
+    },
+  );
+
+  it('waits to verify delivery before the final file refresh has resolved', () => {
+    const status = latestPreviewRunStatus(
+      [
+        designMessage({
+          runStatus: 'succeeded',
+          producedFiles: undefined,
+          traceObjectFiles: undefined,
+        }),
+      ],
+      STARTED_AT + 2_000,
+    );
+
+    expect(status).toMatchObject({ phase: 'verifying', stage: 'verifying' });
+    expect(status && previewRunStatusVisibleAt(status, STARTED_AT + 2_000)).toBe(true);
+  });
+
   it('holds success briefly, then lets the surface fade away', () => {
     const endedAt = STARTED_AT + 5_000;
     const status = latestPreviewRunStatus(
@@ -59,6 +87,24 @@ describe('preview run status', () => {
     expect(status?.phase).toBe('succeeded');
     expect(status && previewRunStatusVisibleAt(status, endedAt + PREVIEW_RUN_SUCCESS_VISIBLE_MS - 1)).toBe(true);
     expect(status && previewRunStatusVisibleAt(status, endedAt + PREVIEW_RUN_SUCCESS_VISIBLE_MS)).toBe(false);
+  });
+
+  it('does not restore an old delivered confirmation without an end timestamp', () => {
+    const status = latestPreviewRunStatus(
+      [
+        designMessage({
+          runStatus: 'succeeded',
+          resultDeliveryState: 'delivered',
+          endedAt: undefined,
+        }),
+      ],
+      STARTED_AT + PREVIEW_RUN_SUCCESS_VISIBLE_MS + 1,
+    );
+
+    expect(status?.phase).toBe('succeeded');
+    expect(
+      status && previewRunStatusVisibleAt(status, STARTED_AT + PREVIEW_RUN_SUCCESS_VISIBLE_MS + 1),
+    ).toBe(false);
   });
 
   it('keeps delivery failures visible and selects the latest persisted turn after a return', () => {

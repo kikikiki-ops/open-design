@@ -11,6 +11,7 @@ import {
   formatPreviewRunElapsed,
   latestPreviewRunStatus,
   PREVIEW_RUN_SUCCESS_VISIBLE_MS,
+  previewRunStatusCompletedAt,
   previewRunStatusVisibleAt,
   type PreviewRunStatus,
 } from '../runtime/preview-run-status';
@@ -23,7 +24,7 @@ interface Props {
   projectId: string;
   conversationId?: string | null;
   messages: readonly ChatMessage[];
-  onViewDetails?: () => void;
+  onViewDetails?: (message: ChatMessage) => void;
 }
 
 function statusLabelKey(status: PreviewRunStatus):
@@ -58,10 +59,14 @@ export function PreviewRunStatusBar({
   const [now, setNow] = useState(() => Date.now());
   const current = useMemo(
     () => {
-      const status = latestPreviewRunStatus(messages, now);
-      return status && previewRunStatusVisibleAt(status, now) ? status : null;
+      // `now` is only a render tick for active/success timers. Evaluate the
+      // message set against the wall clock so switching to an old conversation
+      // cannot briefly revive an already-expired success state.
+      const evaluatedAt = Date.now();
+      const status = latestPreviewRunStatus(messages, evaluatedAt);
+      return status && previewRunStatusVisibleAt(status, evaluatedAt) ? status : null;
     },
-    [messages, now],
+    [conversationId, messages, now],
   );
   const [lastVisible, setLastVisible] = useState<PreviewRunStatus | null>(current);
   const [leaving, setLeaving] = useState(false);
@@ -93,7 +98,7 @@ export function PreviewRunStatusBar({
     }
     if (current.phase !== 'succeeded') return;
 
-    const completedAt = current.message.endedAt;
+    const completedAt = previewRunStatusCompletedAt(current);
     if (completedAt === undefined) return;
     const remaining = Math.max(0, completedAt + PREVIEW_RUN_SUCCESS_VISIBLE_MS - Date.now());
     const fade = window.setTimeout(
@@ -175,7 +180,7 @@ export function PreviewRunStatusBar({
               data-testid="preview-run-status-view-details"
               onClick={() => {
                 trackClick();
-                onViewDetails();
+                onViewDetails(displayed.message);
               }}
             >
               {t('previewRunStatus.viewDetails')}

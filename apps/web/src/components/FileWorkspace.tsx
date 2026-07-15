@@ -274,7 +274,7 @@ interface Props {
   artifactHtml?: string | null;
   conversationError?: string | null;
   /** Restores the chat pane when the compact preview hint requests details. */
-  onViewRunDetails?: () => void;
+  onViewRunDetails?: (message: ChatMessage) => void;
   // Contextual failure recovery, mirrored from the chat error card so the
   // preview surface can offer the same one-click fix (AMR authorize, terminal
   // sign-in) instead of a bare retry.
@@ -2929,6 +2929,12 @@ export function FileWorkspace({
     return liveArtifactEntries.find((entry) => entry.tabId === activeTab) ?? null;
   }, [activeTab, liveArtifactEntries]);
 
+  // The delivery hint belongs to the main design-preview surface only. Browser,
+  // terminal, questions, design-system, and side-chat tabs carry their own
+  // context and must not inherit status/analytics from the primary chat.
+  const showPreviewRunStatus =
+    activeTab === DESIGN_FILES_TAB || activeLiveArtifact !== null || activeFile !== null;
+
   // Identity-stable props for the memoized FileViewer. Without these, every
   // FileWorkspace state change (closing an adjacent tab, drag hover, launcher
   // toggles) would hand FileViewer fresh object/function identities and drag
@@ -4000,7 +4006,7 @@ export function FileWorkspace({
             .
           </div>
         )}
-        {activeTab !== QUESTIONS_TAB && !isSideChatTabId(activeTab) && !isTerminalTabId(activeTab) ? (
+        {showPreviewRunStatus ? (
           <div className="ws-preview-run-status-slot">
             <PreviewRunStatusBar
               projectId={projectId}
