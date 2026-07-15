@@ -17,7 +17,11 @@ export interface ResourceHubPrincipal {
 export function contextToResourceHubPrincipal(
   context: WorkspaceCollabContext | null,
 ): ResourceHubPrincipal | null {
-  if (!context?.workspaceId || !context.workspaceMemberId) return null;
+  if (
+    context?.workspaceType !== 'team' ||
+    !context.workspaceId ||
+    !context.workspaceMemberId
+  ) return null;
   return {
     memberId: context.workspaceMemberId,
     teamId: context.teamId ?? context.workspaceId,

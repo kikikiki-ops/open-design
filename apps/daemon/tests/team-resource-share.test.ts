@@ -84,7 +84,11 @@ describe('team resource share permission gate', () => {
     expect(service.isShared('mock-team-expert-kit')).toBe(true);
     await expect(service.unshare('mock-team-expert-kit')).resolves.toBe(true);
     expect(service.isShared('mock-team-expert-kit')).toBe(false);
-    expect(calls.at(-1)).toEqual(['remove', 'skill-mock-team-expert-kit', '--json']);
+    expect(calls.at(-1)).toEqual([
+      'remove',
+      'skill-t-1-mock-team-expert-kit',
+      '--json',
+    ]);
   });
 
   it('lists resources already shared through another daemon via Vela CLI', async () => {
@@ -125,6 +129,37 @@ describe('team resource share permission gate', () => {
       },
     ]);
     expect(service.isShared('mock-team-expert-kit')).toBe(true);
+  });
+
+  it('preserves the workspace-scoped hub id for teammate materialization', async () => {
+    const service = createTeamResourceShareService({
+      kind: 'skill',
+      idPrefix: 'skill',
+      resolveDir: () => '/tmp/skill',
+      getPrincipal: () => principal,
+      getCanShare: () => false,
+      run: async () => JSON.stringify({
+        resources: [
+          {
+            id: 'skill-t-1-shared-kit',
+            kind: 'skill',
+            deletedAt: null,
+            ownerMemberId: 'wm-owner',
+            metadata: { localId: 'shared-kit' },
+          },
+        ],
+      }),
+      env: { OD_WORKSPACE_CONTEXT_SOURCE: 'vela' },
+    });
+
+    const [resource] = await service.sharedResources();
+    expect(resource).toEqual({
+      id: 'shared-kit',
+      ownerMemberId: 'wm-owner',
+      canUnshare: false,
+    });
+    expect(resource?.hubResourceId).toBe('skill-t-1-shared-kit');
+    expect(Object.keys(resource ?? {})).not.toContain('hubResourceId');
   });
 
   it('reconciles stale local shared ids when Vela reports the resource removed', async () => {

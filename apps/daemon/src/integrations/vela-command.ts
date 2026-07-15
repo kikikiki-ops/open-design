@@ -19,6 +19,20 @@ export interface VelaCommandOptions {
   maxBuffer?: number;
 }
 
+export function velaWorkspaceCommandOptions(
+  workspaceId: string | null | undefined,
+): VelaCommandOptions {
+  const requestedWorkspaceId = workspaceId?.trim();
+  return {
+    configuredEnv: {
+      VELA_INVOCATION_SOURCE: 'open-design',
+      ...(requestedWorkspaceId
+        ? { VELA_WORKSPACE_ID: requestedWorkspaceId }
+        : {}),
+    },
+  };
+}
+
 function configuredAmrEnv(
   env: NodeJS.ProcessEnv,
   explicit: Record<string, string> = {},

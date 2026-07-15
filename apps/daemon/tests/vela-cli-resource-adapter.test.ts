@@ -7,11 +7,13 @@ import {
 
 function recordingRun(outputs: Record<string, string>) {
   const calls: string[][] = [];
-  const run = async (args: string[]): Promise<string> => {
+  const workspaces: Array<string | undefined> = [];
+  const run = async (args: string[], workspaceId?: string): Promise<string> => {
     calls.push(args);
+    workspaces.push(workspaceId);
     return outputs[args[0] ?? ''] ?? '';
   };
-  return { run, calls };
+  return { run, calls, workspaces };
 }
 
 function scriptedRun(steps: Array<{ match: string[]; output?: string; error?: Error }>) {
@@ -40,7 +42,7 @@ describe('createVelaCliResourceAdapter', () => {
     const { run, calls } = recordingRun({ push: JSON.stringify({ version: 7, id: 'v7' }) });
     const adapter = createVelaCliResourceAdapter({ ...OPTS, run });
     const result = await adapter.publish({ projectId: 'p1', reason: 'edit' });
-    expect(result).toEqual({ version: 7 });
+    expect(result).toEqual({ version: 7, versionId: 'v7' });
     expect(calls[0]).toEqual([
       'push',
       'design_system',
@@ -55,6 +57,44 @@ describe('createVelaCliResourceAdapter', () => {
       '.live-artifacts',
       '--exclude',
       '.od-skills',
+      '--exclude',
+      '.git',
+      '--exclude',
+      'node_modules',
+      '--exclude',
+      '.npmrc',
+      '--exclude',
+      '.yarnrc',
+      '--exclude',
+      '.yarnrc.yml',
+      '--exclude',
+      '.aws',
+      '--exclude',
+      '.ssh',
+      '--exclude',
+      '.azure',
+      '--exclude',
+      '.docker',
+      '--exclude',
+      '.gnupg',
+      '--exclude',
+      '.kube',
+      '--exclude',
+      '.pulumi',
+      '--exclude',
+      '.terraform',
+      '--exclude',
+      '.git-credentials',
+      '--exclude',
+      '.netrc',
+      '--exclude',
+      '.pypirc',
+      '--exclude',
+      'terraform.tfstate',
+      '--exclude',
+      'terraform.tfstate.backup',
+      '--exclude-prefix',
+      '.env',
     ]);
   });
 
@@ -80,6 +120,44 @@ describe('createVelaCliResourceAdapter', () => {
       '.live-artifacts',
       '--exclude',
       '.od-skills',
+      '--exclude',
+      '.git',
+      '--exclude',
+      'node_modules',
+      '--exclude',
+      '.npmrc',
+      '--exclude',
+      '.yarnrc',
+      '--exclude',
+      '.yarnrc.yml',
+      '--exclude',
+      '.aws',
+      '--exclude',
+      '.ssh',
+      '--exclude',
+      '.azure',
+      '--exclude',
+      '.docker',
+      '--exclude',
+      '.gnupg',
+      '--exclude',
+      '.kube',
+      '--exclude',
+      '.pulumi',
+      '--exclude',
+      '.terraform',
+      '--exclude',
+      '.git-credentials',
+      '--exclude',
+      '.netrc',
+      '--exclude',
+      '.pypirc',
+      '--exclude',
+      'terraform.tfstate',
+      '--exclude',
+      'terraform.tfstate.backup',
+      '--exclude-prefix',
+      '.env',
       '--metadata-json',
       JSON.stringify({ name: 'Launch Deck', metadata: { kind: 'deck' } }),
     ]);
@@ -107,6 +185,35 @@ describe('createVelaCliResourceAdapter', () => {
     const adapter = createVelaCliResourceAdapter({ ...OPTS, run });
     expect(await adapter.syncLatest!({ projectId: 'p1' })).toEqual({ version: 3 });
     expect(calls[0]).toEqual(['head', 'project-p1', '--ref', 'published', '--json']);
+  });
+
+  it('passes the selected team workspace to every scoped Vela invocation', async () => {
+    const principal = {
+      teamId: 'team-selected',
+      memberId: 'member-1',
+      role: 'member',
+      lifecycleState: 'active',
+      workspaceType: 'team',
+    } as const;
+    const { run, workspaces } = recordingRun({
+      push: JSON.stringify({ version: 7 }),
+      head: JSON.stringify({ version: 7 }),
+      pull: '{}',
+      remove: '{}',
+    });
+    const adapter = createVelaCliResourceAdapter({ ...OPTS, run });
+
+    await adapter.publish({ projectId: 'p1', principal, reason: 'edit' });
+    await adapter.syncLatest!({ projectId: 'p1', principal });
+    await adapter.pull!({ projectId: 'p1', principal });
+    await adapter.unpublish!({ projectId: 'p1', principal });
+
+    expect(workspaces).toEqual([
+      'team-selected',
+      'team-selected',
+      'team-selected',
+      'team-selected',
+    ]);
   });
 
   it('treats a null head version (nothing published) as no result', async () => {
@@ -166,6 +273,27 @@ describe('createVelaCliResourceAdapter', () => {
     expect(calls).toHaveLength(2);
   });
 
+  it('does not hide authentication failures behind a legacy pull fallback', async () => {
+    const principal = { teamId: 't1', memberId: 'm1', role: 'member', lifecycleState: 'active' } as const;
+    const { run, calls } = scriptedRun([
+      {
+        match: ['pull', 'design_system', 'project-t1-m1-p1', '/copies/p1', '--ref', 'published', '--json'],
+        error: new Error('API request failed with status 403: missing_principal'),
+      },
+    ]);
+    const adapter = createVelaCliResourceAdapter({
+      ...OPTS,
+      resourceIdFor: (id, inputPrincipal) =>
+        inputPrincipal ? `project-${inputPrincipal.teamId}-${inputPrincipal.memberId}-${id}` : `project-${id}`,
+      run,
+    });
+
+    await expect(adapter.pull!({ projectId: 'p1', principal })).rejects.toThrow(
+      'missing_principal',
+    );
+    expect(calls).toHaveLength(1);
+  });
+
   it('removes a project from the team resource index', async () => {
     const { run, calls } = recordingRun({ remove: JSON.stringify({ ok: true }) });
     const adapter = createVelaCliResourceAdapter({ ...OPTS, run });
@@ -200,9 +328,17 @@ describe('transport selection', () => {
 
   it('gates team identity on a live team workspace context', () => {
     expect(
-      contextHasTeamIdentity({ workspaceType: 'team', teamId: 't1' } as never),
+      contextHasTeamIdentity({
+        workspaceType: 'team',
+        workspaceId: 't1',
+        workspaceMemberId: 'm1',
+      } as never),
     ).toBe(true);
-    expect(contextHasTeamIdentity({ workspaceType: 'personal' } as never)).toBe(false);
+    expect(contextHasTeamIdentity({
+      workspaceType: 'personal',
+      workspaceId: 'personal-1',
+      workspaceMemberId: 'm1',
+    } as never)).toBe(false);
     expect(contextHasTeamIdentity(null)).toBe(false);
   });
 });

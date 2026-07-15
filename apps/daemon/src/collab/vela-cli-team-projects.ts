@@ -5,17 +5,27 @@ import type {
   VelaTeamProjectRecord,
   VelaTeamProjectSyncState,
 } from '../integrations/vela-team-projects.js';
-import { runVelaCommand } from '../integrations/vela-command.js';
+import {
+  runVelaCommand,
+  velaWorkspaceCommandOptions,
+} from '../integrations/vela-command.js';
 
 const PROJECT_RESOURCE_PREFIX = 'project-';
 
-export type RunVelaTeamProjects = (args: string[]) => Promise<string>;
-export type RunVelaResources = (args: string[]) => Promise<string>;
+export type RunVelaTeamProjects = (
+  args: string[],
+  workspaceId?: string,
+) => Promise<string>;
+export type RunVelaResources = (
+  args: string[],
+  workspaceId?: string,
+) => Promise<string>;
 
 interface VelaCliTeamProjectCatalogOptions {
   run?: RunVelaTeamProjects;
   runResource?: RunVelaResources;
   supportsTeamProjects?: () => boolean | Promise<boolean>;
+  getWorkspaceId?: () => string | null | undefined;
 }
 
 export interface VelaTeamProjectCatalog {
@@ -71,10 +81,15 @@ export function createVelaCliTeamProjectCatalog(
 ): VelaTeamProjectCatalog {
   const run = options.run ?? defaultRunVelaTeamProjects;
   const runResource = options.runResource ?? defaultRunVelaResources;
-  const supportsTeamProjects = createTeamProjectsCapabilityCheck(run, options.supportsTeamProjects);
+  const getWorkspaceId = () => options.getWorkspaceId?.()?.trim() || undefined;
+  const supportsTeamProjects = createTeamProjectsCapabilityCheck(
+    run,
+    options.supportsTeamProjects,
+    getWorkspaceId,
+  );
 
   async function runJson<T>(args: string[]): Promise<T> {
-    const stdout = await run(args);
+    const stdout = await run(args, getWorkspaceId());
     const trimmed = stdout.trim();
     if (!trimmed) return {} as T;
     return JSON.parse(trimmed) as T;
@@ -83,7 +98,10 @@ export function createVelaCliTeamProjectCatalog(
   return {
     async list(): Promise<TeamProject[]> {
       if (!(await supportsTeamProjects())) {
-        const resources = await listSharedProjectResources(runResource);
+        const resources = await listSharedProjectResources(
+          runResource,
+          getWorkspaceId(),
+        );
         return resources.map(toFallbackTeamProject);
       }
       const payload = await runJson<TeamProjectsListWire>(['list']);
@@ -111,14 +129,14 @@ export function createVelaCliTeamProjectCatalog(
       if (input.metadata && Object.keys(input.metadata).length > 0) {
         args.push('--metadata-json', JSON.stringify(input.metadata));
       }
-      await run(args);
+      await run(args, getWorkspaceId());
     },
 
     async remove(projectId): Promise<void> {
       // The resource adapter removes the resource-index row in compatibility
       // mode; there is no separate catalog row to delete.
       if (!(await supportsTeamProjects())) return;
-      await run(['remove', projectId]);
+      await run(['remove', projectId], getWorkspaceId());
     },
   };
 }
@@ -128,10 +146,15 @@ export function createVelaCliTeamProjectCatalogClient(
 ): VelaTeamProjectCatalogClient {
   const run = options.run ?? defaultRunVelaTeamProjects;
   const runResource = options.runResource ?? defaultRunVelaResources;
-  const supportsTeamProjects = createTeamProjectsCapabilityCheck(run, options.supportsTeamProjects);
+  const getWorkspaceId = () => options.getWorkspaceId?.()?.trim() || undefined;
+  const supportsTeamProjects = createTeamProjectsCapabilityCheck(
+    run,
+    options.supportsTeamProjects,
+    getWorkspaceId,
+  );
 
   async function runJson<T>(args: string[]): Promise<T> {
-    const stdout = await run(args);
+    const stdout = await run(args, getWorkspaceId());
     const trimmed = stdout.trim();
     if (!trimmed) return {} as T;
     return JSON.parse(trimmed) as T;
@@ -140,7 +163,10 @@ export function createVelaCliTeamProjectCatalogClient(
   return {
     async list(): Promise<VelaTeamProjectRecord[]> {
       if (!(await supportsTeamProjects())) {
-        const resources = await listSharedProjectResources(runResource);
+        const resources = await listSharedProjectResources(
+          runResource,
+          getWorkspaceId(),
+        );
         return resources.map(toFallbackVelaTeamProjectRecord);
       }
       const payload = await runJson<TeamProjectsListWire>(['list']);
@@ -165,18 +191,26 @@ export function createVelaCliTeamProjectCatalogClient(
       if (input.lastSyncedVersionId?.trim()) {
         args.push('--last-synced-version-id', input.lastSyncedVersionId.trim());
       }
-      const stdout = await run(args);
+      const stdout = await run(args, getWorkspaceId());
       return toVelaTeamProjectRecord(JSON.parse(stdout.trim()) as unknown);
     },
   };
 }
 
-export function createVelaCliTeamProjectCatalogClientFromEnv(): VelaTeamProjectCatalogClient | null {
-  return shouldUseVelaCliTeamProjectCatalog() ? createVelaCliTeamProjectCatalogClient() : null;
+export function createVelaCliTeamProjectCatalogClientFromEnv(
+  options: VelaCliTeamProjectCatalogOptions = {},
+): VelaTeamProjectCatalogClient | null {
+  return shouldUseVelaCliTeamProjectCatalog()
+    ? createVelaCliTeamProjectCatalogClient(options)
+    : null;
 }
 
-export function createVelaCliTeamProjectCatalogFromEnv(): VelaTeamProjectCatalog | null {
-  return shouldUseVelaCliTeamProjectCatalog() ? createVelaCliTeamProjectCatalog() : null;
+export function createVelaCliTeamProjectCatalogFromEnv(
+  options: VelaCliTeamProjectCatalogOptions = {},
+): VelaTeamProjectCatalog | null {
+  return shouldUseVelaCliTeamProjectCatalog()
+    ? createVelaCliTeamProjectCatalog(options)
+    : null;
 }
 
 export function shouldUseVelaCliTeamProjectCatalog(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -286,15 +320,26 @@ function recordObject(value: unknown): Record<string, unknown> | null {
 function createTeamProjectsCapabilityCheck(
   run: RunVelaTeamProjects,
   injected?: () => boolean | Promise<boolean>,
+  getWorkspaceId?: () => string | undefined,
 ): () => Promise<boolean> {
   // The packaged dependency can lag the source-built CLI. Probe once per
   // adapter so source builds use the richer catalog while older builds retain
   // resource-index discovery without a version pin.
   let result: Promise<boolean> | null = null;
   return () => {
+    if (!injected && run === defaultRunVelaTeamProjects) {
+      defaultTeamProjectsCapability ??= run(
+        ['--help'],
+        getWorkspaceId?.(),
+      ).then(
+        () => true,
+        () => false,
+      );
+      return defaultTeamProjectsCapability;
+    }
     result ??= injected
       ? Promise.resolve().then(injected)
-      : run(['--help']).then(
+      : run(['--help'], getWorkspaceId?.()).then(
           () => true,
           () => false,
         );
@@ -302,10 +347,13 @@ function createTeamProjectsCapabilityCheck(
   };
 }
 
+let defaultTeamProjectsCapability: Promise<boolean> | null = null;
+
 async function listSharedProjectResources(
   runResource: RunVelaResources,
+  workspaceId?: string,
 ): Promise<SharedResourceWire[]> {
-  const stdout = await runResource(['shared', '--json']);
+  const stdout = await runResource(['shared', '--json'], workspaceId);
   const trimmed = stdout.trim();
   if (!trimmed) return [];
   const payload = JSON.parse(trimmed) as SharedResourcesListWire;
@@ -398,8 +446,14 @@ function fallbackProjectId(
   return suffix;
 }
 
-const defaultRunVelaTeamProjects: RunVelaTeamProjects = (args) =>
-  runVelaCommand(['team-projects', ...args]);
+const defaultRunVelaTeamProjects: RunVelaTeamProjects = (args, workspaceId) =>
+  runVelaCommand(
+    ['team-projects', ...args],
+    velaWorkspaceCommandOptions(workspaceId),
+  );
 
-const defaultRunVelaResources: RunVelaResources = (args) =>
-  runVelaCommand(['resource', ...args]);
+const defaultRunVelaResources: RunVelaResources = (args, workspaceId) =>
+  runVelaCommand(
+    ['resource', ...args],
+    velaWorkspaceCommandOptions(workspaceId),
+  );

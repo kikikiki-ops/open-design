@@ -18,6 +18,11 @@ export interface ResourcePublishInput {
   principal?: ResourceHubPrincipal;
 }
 
+export interface PublishedResourceVersion {
+  version: number;
+  versionId?: string;
+}
+
 export interface ResourcePublishAdapter {
   /**
    * Publish the current state of a project's sync unit to the resource hub and
@@ -25,14 +30,14 @@ export interface ResourcePublishAdapter {
    * written (content-first / pointer-last). Returns the new version, or null if
    * there was nothing to publish.
    */
-  publish(input: ResourcePublishInput & { reason: string }): Promise<{ version: number } | null>;
+  publish(input: ResourcePublishInput & { reason: string }): Promise<PublishedResourceVersion | null>;
   /**
    * Read the currently-published head for a project. The scheduler decides
    * *when* a member pulls; the adapter reports what head is available. Optional:
    * the local stub reports the in-memory head; the real hub adapter resolves the
    * published ref. Returns null when nothing has been published yet.
    */
-  syncLatest?(input: ResourcePublishInput): Promise<{ version: number } | null>;
+  syncLatest?(input: ResourcePublishInput): Promise<PublishedResourceVersion | null>;
   /**
    * Materialize the published tree into the member's local copy. Optional: the
    * local stub has no bytes to fetch; the real hub adapter fetches the missing
@@ -52,7 +57,12 @@ export interface CollabPublishSchedulerOptions {
   /** Coalesce window (ms). Rapid changes within it collapse into one publish. */
   debounceMs?: number;
   /** Fired after a successful publish so the orchestrator can notify members. */
-  onPublished?: (result: { projectId: string; version: number; reason: string }) => void;
+  onPublished?: (result: {
+    projectId: string;
+    version: number;
+    versionId?: string;
+    reason: string;
+  }) => void;
   onError?: (result: { projectId: string; error: unknown }) => void;
 }
 
@@ -133,7 +143,14 @@ export class CollabPublishScheduler {
     const reason = state.reason;
     try {
       const result = await this.adapter.publish({ projectId, reason });
-      if (result) this.onPublished?.({ projectId, version: result.version, reason });
+      if (result) {
+        this.onPublished?.({
+          projectId,
+          version: result.version,
+          ...(result.versionId ? { versionId: result.versionId } : {}),
+          reason,
+        });
+      }
     } catch (error) {
       this.onError?.({ projectId, error });
     } finally {

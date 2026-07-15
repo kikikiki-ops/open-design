@@ -159,6 +159,7 @@ import {
   readVelaLoginStatus,
   resolveAmrProfile,
 } from './integrations/vela.js';
+import { projectResourceIdFor } from './integrations/vela-team-projects.js';
 import {
   amrAccountFailureDetails,
   classifyAmrAccountFailureSignal,
@@ -595,6 +596,7 @@ import {
   type TeamResourceShareRecord,
   type TeamResourceShareService,
 } from './collab/team-resource-share.js';
+import { createTeamResourceVersionStore } from './collab/team-resource-version-store.js';
 import {
   contextToResourceHubPrincipal,
   type ResourceHubPrincipal,
@@ -3845,10 +3847,19 @@ export async function startServer({
       ...(project.metadata ? { metadata: project.metadata } : {}),
     };
   };
-  const velaCliCollabClient = createVelaCliCollabClientFromEnv();
-  const velaCliTeamProjectCatalog = createVelaCliTeamProjectCatalogFromEnv();
-  const velaCliWorkspaceTeamProjectCatalog = createVelaCliTeamProjectCatalogClientFromEnv();
   const activeWorkspace = createActiveWorkspaceSelectionStore(RUNTIME_DATA_DIR);
+  const teamResourceVersions = createTeamResourceVersionStore(RUNTIME_DATA_DIR);
+  const getActiveWorkspaceId = () => activeWorkspace.get();
+  const velaCliCollabClient = createVelaCliCollabClientFromEnv(process.env, {
+    getWorkspaceId: getActiveWorkspaceId,
+  });
+  const velaCliTeamProjectCatalog = createVelaCliTeamProjectCatalogFromEnv({
+    getWorkspaceId: getActiveWorkspaceId,
+  });
+  const velaCliWorkspaceTeamProjectCatalog =
+    createVelaCliTeamProjectCatalogClientFromEnv({
+      getWorkspaceId: getActiveWorkspaceId,
+    });
   // Generic stale-while-revalidate cache: after the first load every call
   // returns the last value for the key immediately and refreshes in the
   // background once it is older than freshMs; concurrent callers coalesce on the
@@ -4191,9 +4202,7 @@ export async function startServer({
       }
       updateProject(db, projectId, { metadata });
     },
-    describeProject: describeCollabProject,
     onTeamShareStateChanged: persistWorkspaceProjectVisibility,
-    ...(velaCliTeamProjectCatalog ? { teamProjectCatalog: velaCliTeamProjectCatalog } : {}),
     // Resolve the owner's display name + role from the collab-cloud directory so
     // /collab/status can hand the client a named "shared project" banner.
     ...(collabCloud
@@ -4253,11 +4262,24 @@ export async function startServer({
   };
   async function syncSharedTeamPlugin(resource): Promise<void> {
     const existing = getInstalledPlugin(db, resource.id);
+    const currentContext = await collab.workspaceContext.current({});
+    const workspaceId = currentContext?.workspaceId;
+    const isOwnedByCurrentMember =
+      typeof resource.ownerMemberId === 'string' &&
+      typeof currentContext?.workspaceMemberId === 'string' &&
+      resource.ownerMemberId === currentContext.workspaceMemberId;
+    if (isOwnedByCurrentMember) return;
+    if (
+      existing &&
+      workspaceId &&
+      resource.versionId &&
+      teamResourceVersions.get(workspaceId, 'plugin', resource.id) === resource.versionId
+    ) return;
     const remoteDescription = typeof resource.description === 'string' ? resource.description.trim() : '';
     const localDescription = typeof existing?.manifest?.description === 'string'
       ? existing.manifest.description.trim()
       : '';
-    if (existing && (!remoteDescription || localDescription === remoteDescription)) return;
+    if (existing && !resource.versionId && (!remoteDescription || localDescription === remoteDescription)) return;
 
     const stagedFolder = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'od-team-plugin-'));
     try {
@@ -4270,7 +4292,8 @@ export async function startServer({
         '--ref',
         'published',
         '--json',
-      ]);
+      ], activeWorkspace.get() ?? undefined);
+      let installed = false;
       for await (const ev of installFromLocalFolder(db, {
         source: `team:plugin:${resource.id}`,
         roots: PLUGIN_REGISTRY_ROOTS,
@@ -4278,11 +4301,22 @@ export async function startServer({
         _stagedSourceKind: 'user',
         lockfilePath: PLUGIN_LOCKFILE_PATH,
       })) {
-        if (ev.kind === 'success') return;
+        if (ev.kind === 'success') {
+          installed = true;
+          break;
+        }
         if (ev.kind === 'error') {
           console.warn(`[team-resources] failed to install shared plugin ${resource.id}: ${ev.message}`);
           return;
         }
+      }
+      if (installed && workspaceId && resource.versionId) {
+        await teamResourceVersions.set(
+          workspaceId,
+          'plugin',
+          resource.id,
+          resource.versionId,
+        );
       }
     } catch (error) {
       console.warn(
@@ -4302,6 +4336,7 @@ export async function startServer({
       typeof resource.ownerMemberId === 'string' &&
       typeof currentContext?.workspaceMemberId === 'string' &&
       resource.ownerMemberId === currentContext.workspaceMemberId;
+    const workspaceId = currentContext?.workspaceId;
     async function markTeamSynced(): Promise<void> {
       if (isOwnedByCurrentMember) return;
       const metadataPath = path.join(targetDir, 'metadata.json');
@@ -4321,7 +4356,21 @@ export async function startServer({
         'utf8',
       );
     }
-    if (fs.existsSync(targetDir)) {
+    if (isOwnedByCurrentMember) return;
+    if (
+      fs.existsSync(targetDir) &&
+      workspaceId &&
+      resource.versionId &&
+      teamResourceVersions.get(
+        workspaceId,
+        'design_system',
+        resource.id,
+      ) === resource.versionId
+    ) {
+      await markTeamSynced();
+      return;
+    }
+    if (fs.existsSync(targetDir) && !resource.versionId) {
       await markTeamSynced();
       return;
     }
@@ -4336,14 +4385,75 @@ export async function startServer({
         '--ref',
         'published',
         '--json',
-      ]);
+      ], activeWorkspace.get() ?? undefined);
       await fs.promises.rm(targetDir, { recursive: true, force: true }).catch(() => undefined);
       await fs.promises.mkdir(USER_DESIGN_SYSTEMS_DIR, { recursive: true });
       await fs.promises.rename(stagedFolder, targetDir);
       await markTeamSynced();
+      if (workspaceId && resource.versionId) {
+        await teamResourceVersions.set(
+          workspaceId,
+          'design_system',
+          resource.id,
+          resource.versionId,
+        );
+      }
     } catch (error) {
       console.warn(
         `[team-resources] failed to pull shared design system ${resource.id}:`,
+        error instanceof Error ? error.message : error,
+      );
+      await fs.promises.rm(stagedFolder, { recursive: true, force: true }).catch(() => undefined);
+    }
+  }
+  async function syncSharedTeamSkill(resource): Promise<void> {
+    const dirId = stripPrefixAndValidateId(
+      resource.id,
+      resource.id.startsWith('user:') ? 'user:' : '',
+    );
+    if (!dirId) return;
+    const targetDir = path.join(USER_SKILLS_DIR, dirId);
+    const currentContext = await collab.workspaceContext.current({});
+    const workspaceId = currentContext?.workspaceId;
+    const isOwnedByCurrentMember =
+      typeof resource.ownerMemberId === 'string' &&
+      typeof currentContext?.workspaceMemberId === 'string' &&
+      resource.ownerMemberId === currentContext.workspaceMemberId;
+    if (isOwnedByCurrentMember) return;
+    if (
+      fs.existsSync(targetDir) &&
+      workspaceId &&
+      resource.versionId &&
+      teamResourceVersions.get(workspaceId, 'skill', resource.id) === resource.versionId
+    ) return;
+    if (fs.existsSync(targetDir) && !resource.versionId) return;
+
+    const stagedFolder = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'od-team-skill-'));
+    try {
+      const { runVelaResourceCommand } = await import('./collab/vela-cli-resource-adapter.js');
+      await runVelaResourceCommand([
+        'pull',
+        'skill',
+        resource.hubResourceId ?? `skill-${resource.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`,
+        stagedFolder,
+        '--ref',
+        'published',
+        '--json',
+      ], workspaceId);
+      await fs.promises.rm(targetDir, { recursive: true, force: true });
+      await fs.promises.mkdir(USER_SKILLS_DIR, { recursive: true });
+      await fs.promises.rename(stagedFolder, targetDir);
+      if (workspaceId && resource.versionId) {
+        await teamResourceVersions.set(
+          workspaceId,
+          'skill',
+          resource.id,
+          resource.versionId,
+        );
+      }
+    } catch (error) {
+      console.warn(
+        `[team-resources] failed to pull shared skill ${resource.id}:`,
         error instanceof Error ? error.message : error,
       );
       await fs.promises.rm(stagedFolder, { recursive: true, force: true }).catch(() => undefined);
@@ -4368,6 +4478,27 @@ export async function startServer({
       () => activeWorkspace.get() ?? '',
       3000,
     );
+  const sharedTeamResourcesCommand = createSwrCache(
+    async () => {
+      const { runVelaResourceCommand } = await import('./collab/vela-cli-resource-adapter.js');
+      return runVelaResourceCommand(
+        ['shared', '--json'],
+        activeWorkspace.get() ?? undefined,
+      );
+    },
+    () => activeWorkspace.get() ?? '',
+    3000,
+  );
+  const runTeamResourceCommand = async (
+    args: string[],
+    workspaceId?: string,
+  ) => {
+    if (args.length === 2 && args[0] === 'shared' && args[1] === '--json') {
+      return sharedTeamResourcesCommand();
+    }
+    const { runVelaResourceCommand } = await import('./collab/vela-cli-resource-adapter.js');
+    return runVelaResourceCommand(args, workspaceId);
+  };
   const designSystemsTeamShare = createTeamResourceShareService({
     kind: 'design_system',
     idPrefix: 'ds',
@@ -4383,6 +4514,7 @@ export async function startServer({
     },
     getPrincipal: teamShareGetPrincipal,
     getCanShare: teamShareGetCanShare,
+    run: runTeamResourceCommand,
   });
   registerTeamResourceShareRoutes(app, {
     basePath: 'design-systems',
@@ -4409,6 +4541,7 @@ export async function startServer({
     },
     getPrincipal: teamShareGetPrincipal,
     getCanShare: teamShareGetCanShare,
+    run: runTeamResourceCommand,
   });
   registerTeamResourceShareRoutes(app, {
     basePath: 'plugins',
@@ -4435,11 +4568,13 @@ export async function startServer({
     },
     getPrincipal: teamShareGetPrincipal,
     getCanShare: teamShareGetCanShare,
+    run: runTeamResourceCommand,
   });
   registerTeamResourceShareRoutes(app, {
     basePath: 'skills',
+    syncSharedResource: syncSharedTeamSkill,
     share: skillsTeamShare,
-    listTeam: cachedTeamResourceList(skillsTeamShare),
+    listTeam: cachedTeamResourceList(skillsTeamShare, syncSharedTeamSkill),
   });
 
   registerMemoryRoutes(app, {

@@ -10,7 +10,6 @@ import {
 } from '../collab/resource-principal.js';
 import { parseVelaResourceSnapshot, runVelaResourceCommand } from '../collab/vela-cli-resource-adapter.js';
 import { readVelaControlApiContext } from '../integrations/vela.js';
-import { projectResourceIdFor } from '../integrations/vela-team-projects.js';
 import { readProjectManifest } from '../project-locations.js';
 
 /** The fields register-on-pull reads out of a pulled project's manifest. */
@@ -39,21 +38,6 @@ export interface PulledProjectStore {
   update?: (input: RegisterPulledProjectInput) => void;
 }
 
-interface TeamProjectCatalogWriter {
-  upsert(
-    input: {
-      projectId: string;
-      resourceId?: string;
-      displayName?: string | null;
-      syncState?: 'pending_upload' | 'syncing' | 'synced' | 'failed';
-      lastSyncedVersionId?: string | null;
-      metadata?: Record<string, unknown> | null;
-    },
-    principal?: ResourceHubPrincipal | null,
-  ): Promise<unknown>;
-  remove(projectId: string, principal?: ResourceHubPrincipal | null): Promise<unknown>;
-}
-
 export interface RegisterCollabSyncRoutesDeps {
   collab: Pick<
     CollabRuntime,
@@ -75,8 +59,6 @@ export interface RegisterCollabSyncRoutesDeps {
   resolveOwnerDisplayName?: (
     memberId: string,
   ) => Promise<{ displayName: string; role: 'owner' | 'admin' | 'member' } | null>;
-  teamProjectCatalog?: TeamProjectCatalogWriter;
-  describeProject?: (projectId: string) => Promise<PulledProjectManifest | null> | PulledProjectManifest | null;
   projectStore?: PulledProjectStore;
   resolveProjectDir?: (projectId: string) => string | Promise<string>;
   resolvePullDir?: (projectId: string) => string;
@@ -294,8 +276,6 @@ export function registerCollabSyncRoutes(app: Express, deps: RegisterCollabSyncR
     resolveSharedProject,
     markTeamProjectRevoked,
     resolveOwnerDisplayName,
-    teamProjectCatalog,
-    describeProject,
   } = deps;
   const readManifest = deps.readManifest ?? readProjectManifest;
 
@@ -471,7 +451,7 @@ export function registerCollabSyncRoutes(app: Express, deps: RegisterCollabSyncR
         '--metadata-json',
         JSON.stringify(metadata),
         '--json',
-      ]);
+      ], principal.teamId);
       const snapshot = parseVelaResourceSnapshot(await runVelaResourceCommand([
         'snapshot',
         resourceId,
@@ -480,7 +460,7 @@ export function registerCollabSyncRoutes(app: Express, deps: RegisterCollabSyncR
         '--name',
         path.basename(filePath),
         '--json',
-      ]));
+      ], principal.teamId));
       if (!snapshot) {
         return res.status(502).json({ error: 'PUBLIC_SNAPSHOT_UNAVAILABLE' });
       }
@@ -531,7 +511,7 @@ export function registerCollabSyncRoutes(app: Express, deps: RegisterCollabSyncR
         resourceId,
         slug,
         '--json',
-      ]);
+      ], principal.teamId);
       publicFilePublications.delete(publicFilePublicationKey(projectId, filePath, principal));
       return res.json({ ok: true, slug, fileName: filePath });
     } catch (error) {
@@ -602,25 +582,6 @@ export function registerCollabSyncRoutes(app: Express, deps: RegisterCollabSyncR
       if (nextPublishedVersion == null) {
         return res.status(502).json({ error: 'TEAM_PROJECT_PUBLISH_UNAVAILABLE' });
       }
-      try {
-        const project = await describeProject?.(projectId) ?? null;
-        await teamProjectCatalog?.upsert(
-          {
-            projectId,
-            ...(principal ? { resourceId: projectResourceIdFor(projectId, principal) } : {}),
-            displayName: project?.name ?? null,
-            syncState: 'synced',
-            ...(project ? { metadata: { ...project } } : {}),
-          },
-          principal,
-        );
-      } catch (error) {
-        console.warn('[od] failed to write Vela team project catalog:', error);
-        await requestTeamUnshare(projectId, principal).catch((unshareError: unknown) => {
-          console.warn('[od] failed to roll back team-shared project after catalog failure:', unshareError);
-        });
-        return res.status(502).json({ error: 'TEAM_PROJECT_CATALOG_UNAVAILABLE' });
-      }
       deps.onTeamShareStateChanged?.({
         projectId,
         principal,
@@ -644,12 +605,6 @@ export function registerCollabSyncRoutes(app: Express, deps: RegisterCollabSyncR
       const ownerMemberId = sharedProject?.ownerMemberId ?? projectOwnerMemberId(projectId, principal);
       if (ownerMemberId && ownerMemberId !== callerMemberId) {
         return res.status(403).json({ error: 'WORKSPACE_PROJECT_UNSHARE_DENIED' });
-      }
-      try {
-        await teamProjectCatalog?.remove(projectId, principal);
-      } catch (error) {
-        console.warn('[od] failed to remove Vela team project catalog entry:', error);
-        return res.status(502).json({ error: 'TEAM_PROJECT_CATALOG_UNAVAILABLE' });
       }
       await requestTeamUnshare(projectId, principal);
       deps.onTeamShareStateChanged?.({

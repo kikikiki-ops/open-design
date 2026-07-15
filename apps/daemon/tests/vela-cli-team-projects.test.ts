@@ -9,8 +9,10 @@ describe('Vela CLI team-project catalog adapter', () => {
   it('maps list output into team-project DTOs', async () => {
     const catalog = createVelaCliTeamProjectCatalog({
       supportsTeamProjects: () => true,
-      run: async (args) => {
+      getWorkspaceId: () => 'team-selected',
+      run: async (args, workspaceId) => {
         expect(args).toEqual(['list']);
+        expect(workspaceId).toBe('team-selected');
         return JSON.stringify({
           projects: [
             {
