@@ -2489,6 +2489,79 @@ describe('langfuse-bridge.reportRunFeedbackFromDaemon', () => {
     );
   });
 
+  it('queues feedback during live awaiting window when no sink is configured yet', async () => {
+    // terminal_fallback / final_message is in flight (awaiting mark set) but
+    // the user has not logged into Vela and has no relay/Langfuse. lateFinalOpen
+    // is false (no accepted terminal_fallback body). Feedback must still enqueue
+    // without a stale sink config so a later login + accept can flush the score
+    // — not return skipped_no_sink and drop it permanently.
+    await writeAppCfg({
+      installationId: 'install-uuid-1',
+      telemetry: { metrics: true, content: true },
+    });
+    // No Vela / relay / Langfuse at submit time.
+    delete process.env.VELA_CONTROL_KEY;
+    delete process.env.VELA_API_URL;
+    delete process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL;
+    delete process.env.LANGFUSE_PUBLIC_KEY;
+    delete process.env.LANGFUSE_SECRET_KEY;
+    const fetchSpy = vi.fn().mockResolvedValue(new Response('', { status: 202 }));
+    const runId = 'run-awaiting-no-sink-yet';
+    markRunAwaitingFinalAcceptance(runId);
+    const db = {
+      prepare: (sql: string) => {
+        if (
+          sql.includes('telemetry_accepted_body_id') ||
+          sql.includes('run_telemetry_accepted_anchors')
+        ) {
+          return {
+            get: () => ({
+              runStatus: 'failed',
+              telemetryFinalizedAt: null,
+              acceptedTraceBodyId: null,
+              acceptedReportTrigger: null,
+              acceptedDeliveryChannel: null,
+            }),
+          };
+        }
+        return { get: () => undefined, run: () => ({ changes: 0 }), all: () => [] };
+      },
+    };
+    const outcome = await reportRunFeedbackFromDaemon({
+      dataDir,
+      runId,
+      rating: 'negative',
+      reasonCodes: ['matched_request'],
+      hasCustomReason: false,
+      customReason: '',
+      db,
+      fetchImpl: fetchSpy as any,
+    });
+    expect(outcome).toEqual({ status: 'accepted' });
+    expect(hasPendingRunFeedbackForTests(runId)).toBe(true);
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    // User logs into Vela before the delayed final-purpose report accepts.
+    process.env.VELA_CONTROL_KEY = 'ck_logged_in_later';
+    process.env.VELA_API_URL = 'https://amr-api.example.com';
+    rememberAcceptedFinalTraceBodyId(
+      runId,
+      scopedTelemetryBodyId(runId, 'final', 'terminal_fallback'),
+      'terminal_fallback',
+      'vela',
+      velaSinkIdentityFingerprint('prod', 'ck_logged_in_later'),
+    );
+    await vi.waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalled();
+    });
+    expect(String(fetchSpy.mock.calls[0]![0])).toContain(
+      '/api/v1/open-design/telemetry',
+    );
+    expect(String(fetchSpy.mock.calls[0]![1].headers?.Authorization ?? '')).toBe(
+      'Bearer ck_logged_in_later',
+    );
+  });
+
   it('ships cold finalized/no-anchor feedback on the canonical body (no indefinite defer)', async () => {
     // Pre-migration or never-accepted rows: telemetry_finalized_at set, no
     // accepted body/channel, and no in-flight markRunAwaitingFinalAcceptance.

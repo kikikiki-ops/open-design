@@ -265,6 +265,11 @@ export function clearRunAwaitingFinalAcceptance(
   // custom reason if live consent flipped off while waiting.
   const flushPrefs = prefsForDeferredFeedbackFlush(pending.ctx.prefs);
   if (flushPrefs == null) return;
+  // Submit-time opts may pin a Vela Control Key / profile. Logout or AMR
+  // switch during the awaiting window must not reuse that stale sink on the
+  // canonical fallback path — strip config so resolveReportConfig re-reads
+  // the live env (same idea as flushReportOpts on accepted-body flush).
+  const { config: _staleSubmitConfig, ...canonicalFlushOpts } = pending.opts;
   void reportRunFeedback(
     {
       ...pending.ctx,
@@ -272,7 +277,7 @@ export function clearRunAwaitingFinalAcceptance(
       // Never invent `:tf` without acceptance; canonical is the legacy target.
       traceId: key,
     },
-    pending.opts,
+    canonicalFlushOpts,
   ).catch((err) => {
     console.warn(
       '[langfuse-trace] legacy/canonical deferred feedback flush failed:',

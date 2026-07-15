@@ -1328,15 +1328,6 @@ export async function reportRunFeedbackFromDaemon(
     requireVelaIdentity:
       requireChannel === 'vela' ? (acceptedVelaIdentity ?? null) : null,
   });
-  // When the sticky accepted channel cannot deliver (e.g. Vela profile switch
-  // or logout during the late-final window), still refresh the deferred queue
-  // so a later final_message under a new identity can replay the latest score.
-  // Only suppress the immediate network send; do not return skipped_no_sink
-  // while the late-final handoff is open.
-  const lateFinalOpen = isLateFinalFeedbackHandoffOpen(opts.runId);
-  if (!canDeliver && !lateFinalOpen) {
-    return { status: 'skipped_no_sink' };
-  }
   const resolveInput = {
     runId: opts.runId,
     ...(runStatus !== undefined ? { runStatus } : {}),
@@ -1352,6 +1343,18 @@ export async function reportRunFeedbackFromDaemon(
   // `:tf` delivery but also pass acceptedReportTrigger so reportRunFeedback
   // refreshes the deferred queue for a later final_message replay.
   const deferFeedback = shouldDeferRunFeedback(resolveInput);
+  // When the sticky accepted channel cannot deliver (e.g. Vela profile switch
+  // or logout during the late-final window), still refresh the deferred queue
+  // so a later final_message under a new identity can replay the latest score.
+  // Same for the *live* final-acceptance window before any body is accepted:
+  // a missing sink must not return skipped_no_sink while
+  // markRunAwaitingFinalAcceptance is open — the user may log in / add a
+  // relay before the delayed fallback or final_message accepts. Only suppress
+  // the immediate network send; enqueue without a submit-time sink config.
+  const lateFinalOpen = isLateFinalFeedbackHandoffOpen(opts.runId);
+  if (!canDeliver && !lateFinalOpen && !deferFeedback) {
+    return { status: 'skipped_no_sink' };
+  }
   const ctx: FeedbackReportContext = {
     runId: opts.runId,
     ...(deferFeedback

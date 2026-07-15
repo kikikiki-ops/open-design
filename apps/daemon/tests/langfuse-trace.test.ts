@@ -3956,35 +3956,147 @@ describe('reportRunFeedback', () => {
   });
 
   it('flushes deferred feedback to canonical only after the last in-flight attempt fails', async () => {
+    // Canonical flush strips submit-time opts.config and re-resolves the live
+    // sink (logout / profile switch safety). Seed env so re-resolution works.
     resetAcceptedFinalTraceBodyIdsForTests();
     resetPendingRunFeedbackForTests();
+    setLiveTelemetryPrefsReaderForTests(() => ({
+      metrics: true,
+      content: true,
+    }));
     const runId = 'run-dual-inflight-both-fail';
+    const previous = {
+      LANGFUSE_PUBLIC_KEY: process.env.LANGFUSE_PUBLIC_KEY,
+      LANGFUSE_SECRET_KEY: process.env.LANGFUSE_SECRET_KEY,
+      LANGFUSE_BASE_URL: process.env.LANGFUSE_BASE_URL,
+      OPEN_DESIGN_TELEMETRY_RELAY_URL: process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL,
+      VELA_CONTROL_KEY: process.env.VELA_CONTROL_KEY,
+      VELA_API_URL: process.env.VELA_API_URL,
+    };
+    process.env.LANGFUSE_PUBLIC_KEY = 'pk';
+    process.env.LANGFUSE_SECRET_KEY = 'sk';
+    process.env.LANGFUSE_BASE_URL = 'https://us.cloud.langfuse.com';
+    delete process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL;
+    delete process.env.VELA_CONTROL_KEY;
+    delete process.env.VELA_API_URL;
     const fetchSpy = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ successes: [], errors: [] }), { status: 207 }),
     );
 
-    const tokenTf = markRunAwaitingFinalAcceptance(runId);
-    const tokenFinal = markRunAwaitingFinalAcceptance(runId);
-    await reportRunFeedback(
-      makeFeedbackCtx({
-        runId,
-        runStatus: 'failed',
-        telemetryFinalized: false,
-        reasonCodes: [],
-      }),
-      { config: TEST_CONFIG, fetchImpl: fetchSpy as any },
-    );
-    expect(fetchSpy).not.toHaveBeenCalled();
+    try {
+      const tokenTf = markRunAwaitingFinalAcceptance(runId);
+      const tokenFinal = markRunAwaitingFinalAcceptance(runId);
+      await reportRunFeedback(
+        makeFeedbackCtx({
+          runId,
+          runStatus: 'failed',
+          telemetryFinalized: false,
+          reasonCodes: [],
+        }),
+        { config: TEST_CONFIG, fetchImpl: fetchSpy as any },
+      );
+      expect(fetchSpy).not.toHaveBeenCalled();
 
-    clearRunAwaitingFinalAcceptance(runId, tokenTf);
-    expect(fetchSpy).not.toHaveBeenCalled();
+      clearRunAwaitingFinalAcceptance(runId, tokenTf);
+      expect(fetchSpy).not.toHaveBeenCalled();
 
-    clearRunAwaitingFinalAcceptance(runId, tokenFinal);
-    await vi.waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalled();
-    });
-    const body = JSON.parse(fetchSpy.mock.calls[0]![1].body as string);
-    expect(body.batch[0].body.traceId).toBe(runId);
+      clearRunAwaitingFinalAcceptance(runId, tokenFinal);
+      await vi.waitFor(() => {
+        expect(fetchSpy).toHaveBeenCalled();
+      });
+      const body = JSON.parse(fetchSpy.mock.calls[0]![1].body as string);
+      expect(body.batch[0].body.traceId).toBe(runId);
+    } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+      resetPendingRunFeedbackForTests();
+    }
+  });
+
+  it('re-resolves live sink when clearRunAwaitingFinalAcceptance flushes after Vela logout/profile switch', async () => {
+    // Queued under Control Key A while a final-purpose attempt is open. User
+    // logs out / switches AMR before every attempt ends without acceptance.
+    // clearRunAwaitingFinalAcceptance must not replay with pending.opts.config
+    // (stale key A) — strip and re-resolve so the canonical score lands on the
+    // live anonymous path (or key B), never the previous Vela account.
+    resetAcceptedFinalTraceBodyIdsForTests();
+    resetPendingRunFeedbackForTests();
+    setLiveTelemetryPrefsReaderForTests(() => ({
+      metrics: true,
+      content: true,
+    }));
+    const runId = 'run-clear-awaiting-stale-vela-config';
+    const previous = {
+      VELA_CONTROL_KEY: process.env.VELA_CONTROL_KEY,
+      VELA_API_URL: process.env.VELA_API_URL,
+      OPEN_DESIGN_TELEMETRY_RELAY_URL: process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL,
+      LANGFUSE_PUBLIC_KEY: process.env.LANGFUSE_PUBLIC_KEY,
+      LANGFUSE_SECRET_KEY: process.env.LANGFUSE_SECRET_KEY,
+    };
+    process.env.OPEN_DESIGN_TELEMETRY_RELAY_URL =
+      'https://telemetry.open-design.ai/api/langfuse';
+    delete process.env.VELA_CONTROL_KEY;
+    delete process.env.VELA_API_URL;
+    delete process.env.LANGFUSE_PUBLIC_KEY;
+    delete process.env.LANGFUSE_SECRET_KEY;
+
+    const velaAtSubmit: TelemetrySinkConfig = {
+      kind: 'vela',
+      apiUrl: 'https://amr-api.example.com',
+      controlKey: 'ck_stale_profile_a',
+      timeoutMs: 20_000,
+      retries: 0,
+      profile: 'prod',
+      authSource: 'env',
+    };
+    const fetchSpy = vi.fn().mockResolvedValue(new Response('{}', { status: 207 }));
+
+    try {
+      const token = markRunAwaitingFinalAcceptance(runId);
+      await reportRunFeedback(
+        makeFeedbackCtx({
+          runId,
+          runStatus: 'failed',
+          telemetryFinalized: false,
+          reasonCodes: [],
+        }),
+        { config: velaAtSubmit, fetchImpl: fetchSpy as any },
+      );
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(hasPendingRunFeedbackForTests(runId)).toBe(true);
+
+      // Logout / profile switch: live env has only the anonymous relay.
+      // Last final-purpose attempt ends without acceptance → canonical flush.
+      clearRunAwaitingFinalAcceptance(runId, token);
+
+      await vi.waitFor(() => {
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+      });
+      expect(String(fetchSpy.mock.calls[0]![0])).toBe(
+        'https://telemetry.open-design.ai/api/langfuse',
+      );
+      expect(String(fetchSpy.mock.calls[0]![0])).not.toContain(
+        '/api/v1/open-design/telemetry',
+      );
+      const auth = String(
+        (fetchSpy.mock.calls[0]![1] as RequestInit).headers?.Authorization ?? '',
+      );
+      expect(auth).not.toContain('ck_stale_profile_a');
+      const body = JSON.parse(
+        (fetchSpy.mock.calls[0]![1] as RequestInit).body as string,
+      );
+      expect(body.batch[0].type).toBe('score-create');
+      expect(body.batch[0].body.traceId).toBe(runId);
+      expect(hasPendingRunFeedbackForTests(runId)).toBe(false);
+    } finally {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+      resetPendingRunFeedbackForTests();
+    }
   });
 
   it('defers feedback submitted before terminal_fallback acceptance onto runId:tf', async () => {
