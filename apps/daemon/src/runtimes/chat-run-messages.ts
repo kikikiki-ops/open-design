@@ -296,10 +296,17 @@ export function pinAssistantMessageOnRunCreate(db: SqliteDb, run: ChatRunMessage
     const nextRunId =
       typeof run.id === 'string' && run.id.trim() ? run.id.trim() : null;
     const clearAcceptedTelemetryAnchor = prevRunId !== nextRunId;
+    // Ownership change (retry reusing the assistant id under a new run_id)
+    // must write the new run's status. Preserving a prior terminal
+    // run_status would make a fresh retry look completed until the next
+    // message upsert, so feedback and other terminal-state logic can
+    // observe run B as failed/succeeded/canceled before it produces output.
+    // Same-run re-pins still preserve an already-terminal status.
     db.prepare(
       `UPDATE messages
           SET run_id = ?,
               run_status = CASE
+                WHEN ? THEN ?
                 WHEN run_status IN ('succeeded', 'failed', 'canceled') THEN run_status
                 ELSE ?
               END,
@@ -325,6 +332,8 @@ export function pinAssistantMessageOnRunCreate(db: SqliteDb, run: ChatRunMessage
         WHERE id = ?`,
     ).run(
       run.id,
+      clearAcceptedTelemetryAnchor ? 1 : 0,
+      run.status,
       run.status,
       run.sessionMode ?? null,
       run.context ? JSON.stringify(run.context) : null,

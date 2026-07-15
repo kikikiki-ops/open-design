@@ -463,8 +463,9 @@ describe('persisted telemetry accepted anchor', () => {
       acceptedVelaIdentity: null,
     });
     expect(getRunFeedbackTelemetryAnchor(db, newRunId, 'assistant-1')).toEqual({
-      // Terminal run_status is preserved by the pin CASE expression.
-      runStatus: 'failed',
+      // Ownership change must take the new run's non-terminal status so a
+      // fresh retry is not observed as already completed.
+      runStatus: 'running',
       telemetryFinalized: false,
       acceptedTraceBodyId: null,
       acceptedReportTrigger: null,
@@ -486,6 +487,8 @@ describe('persisted telemetry accepted anchor', () => {
 
     // Same run_id pin keeps an accepted anchor (idempotent re-pin) without
     // re-opening the finalization gate (anchor write does not finalize).
+    // Terminal status is preserved only on same-run pins; after ownership
+    // change the row is still non-terminal here.
     expect(
       setRunTelemetryAcceptedAnchor(db, {
         runId: newRunId,
@@ -502,7 +505,7 @@ describe('persisted telemetry accepted anchor', () => {
       createdAt: Date.now(),
     });
     expect(getRunFeedbackTelemetryAnchor(db, newRunId, 'assistant-1')).toEqual({
-      runStatus: 'failed',
+      runStatus: 'running',
       telemetryFinalized: false,
       acceptedTraceBodyId: newRunId,
       acceptedReportTrigger: 'final_message',
