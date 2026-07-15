@@ -306,6 +306,34 @@ describe('AssistantMessage feedback gate', () => {
 });
 
 describe('AssistantMessage minimal task transcript', () => {
+  it('renders the primary HTML deliverable as a large inline preview card', () => {
+    const onOpenComputer = vi.fn();
+    render(
+      <AssistantMessage
+        message={baseMessage({
+          runId: 'run-preview',
+          events: [
+            { kind: 'tool_use', id: 'write-preview', name: 'Write', input: { file_path: 'deck.html' } },
+            { kind: 'tool_result', toolUseId: 'write-preview', content: 'ok', isError: false },
+            { kind: 'text', text: 'The deck is ready.' },
+          ],
+          producedFiles: [producedFile('deck.html')],
+        })}
+        streaming={false}
+        projectId="proj-1"
+        isLast
+        onOpenComputer={onOpenComputer}
+      />,
+    );
+
+    const preview = screen.getByTestId('primary-deliverable-preview');
+    const frame = preview.querySelector('iframe');
+    expect(frame?.getAttribute('src')).toContain('/api/projects/proj-1/raw/deck.html');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open deck.html' }));
+    expect(onOpenComputer).toHaveBeenCalledWith('run-preview', 'write-preview');
+  });
+
   it('collapses completed tool detail into briefs, status, one deliverable, and three one-click follow-ups', () => {
     const onOpenComputer = vi.fn();
     const onTaskFollowup = vi.fn();
@@ -337,7 +365,7 @@ describe('AssistantMessage minimal task transcript', () => {
     expect(screen.getByTestId('primary-deliverable').textContent).not.toContain('notes.html');
     expect(screen.getAllByTestId(/^task-followup-/)).toHaveLength(3);
 
-    fireEvent.click(screen.getByRole('button', { name: /deck\.html/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open deck.html' }));
     fireEvent.click(screen.getByRole('button', { name: /Generated.*deck\.html/ }));
     expect(onOpenComputer).toHaveBeenCalledWith('run-1', 'write-1');
 

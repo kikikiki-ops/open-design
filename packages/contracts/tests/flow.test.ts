@@ -88,6 +88,10 @@ describe('flow shape registry', () => {
     expect(protocol).toContain('overrides active skill, plugin, pipeline, Todo, and verification instructions');
     expect(protocol).toContain('Brief and questions → research (optional) → outline → inspiration → implementation');
     expect(protocol).toContain('TodoWrite is implementation detail only');
+    expect(protocol).toContain('Clarify is a hard quality gate');
+    expect(protocol).toContain('Every progress marker must correspond to observable work');
+    expect(protocol).toContain('template and/or design system');
+    expect(protocol).toContain('keep the latest usable preview mounted');
     expect(protocol).toContain('HARD TURN BOUNDARY');
     expect(protocol).toContain('END THE TURN IMMEDIATELY');
   });

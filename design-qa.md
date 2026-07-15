@@ -95,6 +95,20 @@ final result: passed
 - Replay / five-stage state: `.tmp/design-qa/query-matrix/11-replay-live-and-progress.png`
 - Single Computer tab: `.tmp/design-qa/query-matrix/12-replay-single-computer-tab.png`
 
+## Experience priority contract
+
+- The design brief is now a hard quality gate rather than a prelude to tool activity. The composed
+  prompt requires the outcome, audience, content/IA, scope, brand/reference, constraints, and
+  acceptance bar before research or generation can advance.
+- The first response remains immediate: one short acknowledgement plus one localized form with
+  recommended defaults. The form now names success criteria directly instead of burying them in an
+  “anything else” field.
+- Progress is explicitly truthful and observable: slow work starts with a concrete active state,
+  durable batches advance counts, the latest useful preview stays mounted, and the user can remain
+  in history until choosing Jump to live.
+- Visual ambition stays bounded by the brief: selected template and/or design system, anti-slop and
+  brand checks, reduced-motion-safe transitions, and at most one justified flourish.
+
 ## Query matrix
 
 | Query intent | Expected / actual shape | First visible stage |

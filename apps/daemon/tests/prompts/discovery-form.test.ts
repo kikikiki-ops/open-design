@@ -14,6 +14,21 @@ const DISCOVERY_AND_PHILOSOPHY = renderDiscoveryAndPhilosophy('filesystem');
 // the brief into two turns again.
 
 describe('discovery.ts task-type form (single-shot brief)', () => {
+  it('prioritizes a sufficient design brief before visible execution', () => {
+    expect(DISCOVERY_AND_PHILOSOPHY).toContain(
+      'Design quality and brief completeness outrank premature activity.',
+    );
+    expect(DISCOVERY_AND_PHILOSOPHY).toContain(
+      'outcome and artifact, audience, content or information architecture, scope, brand or references, constraints, and the acceptance bar',
+    );
+    expect(DISCOVERY_AND_PHILOSOPHY).toContain(
+      'Every progress signal must describe observable work',
+    );
+    expect(DISCOVERY_AND_PHILOSOPHY).toContain(
+      'keep the latest usable preview visible',
+    );
+  });
+
   it('emits a task-type form that asks the routing question plus the discovery brief', () => {
     expect(DISCOVERY_AND_PHILOSOPHY).toContain('<question-form id="task-type"');
     // Task-type radio + the four discovery brief fields must all live in this

@@ -250,3 +250,17 @@ PR 模板 Surface area 两个框都勾。
 - [x] 重新实测上一步（3/3 → 2/3）、Jump to live（2/3 → 3/3）、右侧 Task progress
   折叠、左侧五阶段卡展开和 `Brief / Research(optional) / Outline / Inspiration /
   Implement` 五个标签完整可见。
+
+### 9.3 设计垂类体验优先级补充（2026-07-15）
+
+- [x] system prompt 把“需求充分与设计质量优先于过早执行”提升为最高原则；进入
+  research/plan 前必须获得或可靠推断产出、受众、内容/信息架构、范围、品牌/参考、
+  约束与成功标准，缺少会实质改变结果的信息时继续澄清。
+- [x] 默认 task-type 与 discovery 表单把末项升级为“成功标准与约束”，引导用户说明
+  什么叫优秀，同时继续遵守单卡、推荐默认值与不重复提问约束。
+- [x] flow protocol 明确进度是真实工作契约：慢操作前先发 active，detail 必须具体，
+  durable 工作落地后才更新 done/total，禁止为了显得忙而制造重复/虚假进度。
+- [x] Inspiration 协议同步到组合模型：模板和/或设计系统同时作为视觉证据与 source of
+  truth；生成按小批次持久化并持续挂载最新可用预览，使回放与实时查看都不出现空窗。
+- [x] focused prompt tests 覆盖 daemon、API/contracts 与 8 个 flow shape，确保上述体验
+  原则不会在本地 provider 与 BYOK/API 路径间漂移。

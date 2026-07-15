@@ -1,4 +1,5 @@
 import { Fragment, memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Button, VisuallyHidden } from '@open-design/components';
 import { ToolCard } from "./ToolCard";
 import { FileOpsSummary } from "./FileOpsSummary";
 import {
@@ -6,7 +7,11 @@ import {
   type MarkdownLinkClickHandler,
 } from "../runtime/markdown";
 import { asInProjectFilePath } from "../runtime/in-project-link";
-import { projectFileUrl } from "../providers/registry";
+import {
+  fetchProjectFilePreview,
+  fetchProjectFileText,
+  projectFileUrl,
+} from "../providers/registry";
 import { useAnalytics } from "../analytics/provider";
 import {
   trackAssistantFeedbackButtonClick,
@@ -2281,8 +2286,79 @@ function ProducedFiles({
   onOpenPrimary?: () => void;
 }) {
   const t = useT();
+  const openFile = (file: ProjectFile) => {
+    if (onOpenPrimary) {
+      onOpenPrimary();
+      return;
+    }
+    onRequestOpenFile?.(file.name);
+  };
+
+  if (prominent) {
+    const primary = files[0];
+    if (!primary) return null;
+    const canOpen = Boolean(onOpenPrimary || onRequestOpenFile);
+    const openLabel = `${t("assistant.openFile")} ${primary.name}`;
+    return (
+      <div className={`produced-files ${styles.primaryDeliverable}`} data-testid="primary-deliverable">
+        <div className="produced-files-label">{t("assistant.producedFiles")}</div>
+        <article className={styles.primaryDeliverableCard}>
+          <header className={styles.primaryDeliverableHeader}>
+            <span className={styles.primaryDeliverableIcon} aria-hidden>
+              <Icon name={kindIconName(primary.kind)} size={18} />
+            </span>
+            <span className={styles.primaryDeliverableIdentity}>
+              <span className={styles.primaryDeliverableName} title={primary.name}>
+                {primary.name}
+              </span>
+              <span className={styles.primaryDeliverableSize}>{humanBytes(primary.size)}</span>
+            </span>
+            <span className={styles.primaryDeliverableActions}>
+              {canOpen ? (
+                <Button
+                  variant="ghost"
+                  className={styles.primaryDeliverableAction}
+                  onClick={() => openFile(primary)}
+                  aria-label={`${t("assistant.openFile")}: ${primary.name}`}
+                >
+                  <Icon name="eye" size={14} />
+                  <span>{t("assistant.openFile")}</span>
+                </Button>
+              ) : null}
+              <a
+                className={styles.primaryDeliverableAction}
+                href={projectFileUrl(projectId, primary.name)}
+                download={primary.name}
+              >
+                <Icon name="download" size={14} />
+                <span>{t("assistant.downloadFile")}</span>
+              </a>
+            </span>
+          </header>
+          <div className={styles.primaryDeliverablePreview} data-testid="primary-deliverable-preview">
+            <PrimaryDeliverablePreview projectId={projectId} file={primary} />
+            {canOpen ? (
+              <Button
+                variant="ghost"
+                className={styles.primaryDeliverablePreviewHit}
+                onClick={() => openFile(primary)}
+                aria-label={openLabel}
+              >
+                <VisuallyHidden>{openLabel}</VisuallyHidden>
+                <span className={styles.primaryDeliverablePreviewHint} aria-hidden>
+                  <Icon name="eye" size={15} />
+                  {t("assistant.openFile")}
+                </span>
+              </Button>
+            ) : null}
+          </div>
+        </article>
+      </div>
+    );
+  }
+
   return (
-    <div className={`produced-files${prominent ? ` ${styles.primaryDeliverable}` : ''}`} data-testid={prominent ? 'primary-deliverable' : undefined}>
+    <div className="produced-files">
       <div className="produced-files-label">{t("assistant.producedFiles")}</div>
       <div className="produced-files-list">
         {files.map((f) => (
@@ -2299,7 +2375,7 @@ function ProducedFiles({
                 <button
                   type="button"
                   className="ghost"
-                  onClick={() => onOpenPrimary ? onOpenPrimary() : onRequestOpenFile?.(f.name)}
+                  onClick={() => openFile(f)}
                 >
                   {t("assistant.openFile")}
                 </button>
@@ -2315,6 +2391,154 @@ function ProducedFiles({
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function PrimaryDeliverablePreview({
+  projectId,
+  file,
+}: {
+  projectId: string;
+  file: ProjectFile;
+}) {
+  const url = `${projectFileUrl(projectId, file.name)}?v=${Math.round(file.mtime)}`;
+  const isImage = file.kind === 'image' || (file.kind === 'sketch' && file.mime.startsWith('image/'));
+
+  if (file.kind === 'html') {
+    return (
+      <iframe
+        className={styles.primaryDeliverableMedia}
+        title={file.name}
+        src={url}
+        sandbox="allow-scripts allow-downloads"
+        loading="lazy"
+        tabIndex={-1}
+      />
+    );
+  }
+  if (isImage) {
+    return (
+      <img
+        className={styles.primaryDeliverableMedia}
+        src={url}
+        alt=""
+        loading="lazy"
+        decoding="async"
+      />
+    );
+  }
+  if (file.kind === 'video') {
+    return (
+      <video
+        className={styles.primaryDeliverableMedia}
+        src={url}
+        muted
+        playsInline
+        preload="metadata"
+      />
+    );
+  }
+  if (file.kind === 'pdf') {
+    return (
+      <iframe
+        className={styles.primaryDeliverableMedia}
+        title={file.name}
+        src={url}
+        loading="lazy"
+        tabIndex={-1}
+      />
+    );
+  }
+  if (file.kind === 'text' || file.kind === 'code') {
+    return <PrimaryTextDeliverablePreview projectId={projectId} file={file} />;
+  }
+  if (file.kind === 'document' || file.kind === 'presentation' || file.kind === 'spreadsheet') {
+    return <PrimaryDocumentDeliverablePreview projectId={projectId} file={file} />;
+  }
+  return (
+    <span className={styles.primaryDeliverableFallback}>
+      <Icon name={kindIconName(file.kind)} size={34} />
+      <span>{file.name}</span>
+    </span>
+  );
+}
+
+function PrimaryTextDeliverablePreview({
+  projectId,
+  file,
+}: {
+  projectId: string;
+  file: ProjectFile;
+}) {
+  const t = useT();
+  const [content, setContent] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setContent(null);
+    void fetchProjectFileText(projectId, file.name, { cacheBustKey: file.mtime }).then((next) => {
+      if (!cancelled) setContent(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [file.mtime, file.name, projectId]);
+
+  if (content === null) {
+    return <span className={styles.primaryDeliverableLoading}>{t('fileViewer.loading')}</span>;
+  }
+  if (/\.mdx?$/i.test(file.name)) {
+    return <div className={styles.primaryDeliverableDocument}>{renderMarkdown(content)}</div>;
+  }
+  return <pre className={styles.primaryDeliverableCode}>{content}</pre>;
+}
+
+function PrimaryDocumentDeliverablePreview({
+  projectId,
+  file,
+}: {
+  projectId: string;
+  file: ProjectFile;
+}) {
+  const t = useT();
+  const [preview, setPreview] = useState<Awaited<ReturnType<typeof fetchProjectFilePreview>>>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setPreview(null);
+    void fetchProjectFilePreview(projectId, file.name).then((next) => {
+      if (cancelled) return;
+      setPreview(next);
+      setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [file.mtime, file.name, projectId]);
+
+  if (loading) {
+    return <span className={styles.primaryDeliverableLoading}>{t('fileViewer.loading')}</span>;
+  }
+  if (!preview) {
+    return (
+      <span className={styles.primaryDeliverableFallback}>
+        <Icon name={kindIconName(file.kind)} size={34} />
+        <span>{file.name}</span>
+      </span>
+    );
+  }
+  return (
+    <div className={styles.primaryDeliverableDocument}>
+      <h2>{preview.title}</h2>
+      {preview.sections.slice(0, 3).map((section, index) => (
+        <section key={`${section.title}-${index}`}>
+          <h3>{section.title}</h3>
+          {section.lines.slice(0, 5).map((line, lineIndex) => (
+            <p key={`${lineIndex}-${line}`}>{line}</p>
+          ))}
+        </section>
+      ))}
     </div>
   );
 }

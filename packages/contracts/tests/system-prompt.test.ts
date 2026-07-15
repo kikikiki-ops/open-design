@@ -64,6 +64,18 @@ describe('DISCOVERY_AND_PHILOSOPHY (contracts copy) — TodoWrite plan item coun
 });
 
 describe('DISCOVERY_AND_PHILOSOPHY (contracts copy) — prompt routing parity', () => {
+  it('keeps confidence-before-spectacle experience priorities in the API prompt', () => {
+    expect(DISCOVERY_AND_PHILOSOPHY).toContain(
+      'Design quality and brief completeness outrank premature activity.',
+    );
+    expect(DISCOVERY_AND_PHILOSOPHY).toContain(
+      'Every progress signal must describe observable work',
+    );
+    expect(DISCOVERY_AND_PHILOSOPHY).toContain(
+      'keep the latest usable preview visible',
+    );
+  });
+
   it('uses the single-shot task-type form shape from the daemon prompt', () => {
     expect(DISCOVERY_AND_PHILOSOPHY).toContain('<question-form id="task-type"');
     for (const id of ['taskType', 'audience', 'brand', 'scale', 'constraints']) {
