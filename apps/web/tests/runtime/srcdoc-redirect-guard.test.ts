@@ -166,7 +166,7 @@ describe('injected redirect guard breaks meta-refresh loops (#710)', () => {
     expect(h.windowName()).toBe('');
   });
 
-  it('reports no-meta load-time script redirects before author code can keep reloading', () => {
+  it('counts no-meta load-time script redirects before author code can keep reloading', () => {
     const scriptRedirectGuard = extractGuardBody(
       buildSrcdoc('<!doctype html><html><head><script>location.reload()</script></head><body>x</body></html>'),
     );
@@ -174,11 +174,54 @@ describe('injected redirect guard breaks meta-refresh loops (#710)', () => {
       href: 'about:srcdoc',
       baseURI: 'https://preview.local/index.html',
     });
+    for (let hop = 1; hop <= PREVIEW_REDIRECT_GUARD_MAX_HOPS; hop++) {
+      h.setClock(1_000 + hop);
+      h.load([], scriptRedirectGuard);
+      expect(h.posted, `hop ${hop} must not report`).toHaveLength(0);
+    }
+    h.setClock(1_000 + PREVIEW_REDIRECT_GUARD_MAX_HOPS + 1);
     h.load([], scriptRedirectGuard);
     expect(h.posted).toHaveLength(1);
     expect(h.posted[0]?.type).toBe(PREVIEW_REDIRECT_LOOP_MESSAGE);
-    expect(h.posted[0]?.hops).toBe(1);
+    expect(h.posted[0]?.hops).toBe(PREVIEW_REDIRECT_GUARD_MAX_HOPS + 1);
     expect(h.windowName()).toBe('');
+  });
+
+  it('does not park legitimate click handlers or prose mentions on first render', () => {
+    const clickHandlerGuard = extractGuardBody(
+      buildSrcdoc('<!doctype html><html><body><button onclick="location.reload()">Refresh</button></body></html>'),
+    );
+    const proseGuard = extractGuardBody(
+      buildSrcdoc('<!doctype html><html><body><p>Use location.reload() to refresh.</p></body></html>'),
+    );
+    const clickHarness = createIframeHarness({
+      href: 'about:srcdoc',
+      baseURI: 'https://preview.local/index.html',
+    });
+    clickHarness.load([], clickHandlerGuard);
+    expect(clickHarness.posted).toHaveLength(0);
+
+    const proseHarness = createIframeHarness({
+      href: 'about:srcdoc',
+      baseURI: 'https://preview.local/index.html',
+    });
+    proseHarness.load([], proseGuard);
+    expect(proseHarness.posted).toHaveLength(0);
+  });
+
+  it('resets no-meta script redirect candidates after the window for slow auto-refresh pages', () => {
+    const slowRefreshGuard = extractGuardBody(
+      buildSrcdoc('<!doctype html><html><head><script>setTimeout(() => location.reload(), 30000)</script></head><body>x</body></html>'),
+    );
+    const h = createIframeHarness({
+      href: 'about:srcdoc',
+      baseURI: 'https://preview.local/index.html',
+    });
+    for (let hop = 0; hop < PREVIEW_REDIRECT_GUARD_MAX_HOPS + 2; hop++) {
+      h.setClock(1_000 + hop * (PREVIEW_REDIRECT_GUARD_WINDOW_MS + 500));
+      h.load([], slowRefreshGuard);
+    }
+    expect(h.posted).toHaveLength(0);
   });
 
   it('allows a bounded non-self chain but trips once the hop budget is exceeded', () => {

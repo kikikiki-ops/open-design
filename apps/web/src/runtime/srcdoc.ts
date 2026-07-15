@@ -1351,6 +1351,34 @@ function injectPreviewRedirectGuard(
   function clearState(){
     try { if (typeof window.name === 'string' && window.name.indexOf(NAME_PREFIX) === 0) window.name = ''; } catch (_) {}
   }
+  function nextState(){
+    var t = nowMs();
+    var prev = readState();
+    var withinWindow = prev && (t - prev.windowStart) <= WINDOW_MS;
+    return { hops: (withinWindow ? prev.hops : 0) + 1, windowStart: withinWindow ? prev.windowStart : t };
+  }
+  function scheduleCandidateReset(state){
+    try {
+      if (typeof setTimeout !== 'function') return;
+      setTimeout(function(){
+        try {
+          var current = readState();
+          if (current && current.hops === state.hops && current.windowStart === state.windowStart) clearState();
+        } catch (_) {}
+      }, WINDOW_MS + 1);
+    } catch (_) {}
+  }
+  function recordScriptRedirectCandidate(){
+    if (!BLOCK_LOAD_TIME_SCRIPT_REDIRECT) return;
+    var state = nextState();
+    if (state.hops > MAX_HOPS) {
+      clearState();
+      report(state.hops);
+      return;
+    }
+    writeState(state);
+    scheduleCandidateReset(state);
+  }
   function metaRefreshes(){
     var out = [];
     try {
@@ -1407,15 +1435,9 @@ function injectPreviewRedirectGuard(
   }
   function evaluate(){
     var metas = metaRefreshes();
-    if (BLOCK_LOAD_TIME_SCRIPT_REDIRECT) {
-      neutralize(metas);
-      clearState();
-      report(1);
-      return;
-    }
     if (!metas.length) {
       // No refresh directive: this document breaks any accumulating chain.
-      clearState();
+      if (!BLOCK_LOAD_TIME_SCRIPT_REDIRECT) clearState();
       return;
     }
     var selfLoop = false;
@@ -1424,10 +1446,7 @@ function injectPreviewRedirectGuard(
       if (parsed.delayMs <= SELF_MIN_DELAY_MS && isSelfTarget(parsed.url)) { selfLoop = true; break; }
       if (isFastSrcdocUrlHop(parsed)) { selfLoop = true; break; }
     }
-    var t = nowMs();
-    var prev = readState();
-    var withinWindow = prev && (t - prev.windowStart) <= WINDOW_MS;
-    var state = { hops: (withinWindow ? prev.hops : 0) + 1, windowStart: withinWindow ? prev.windowStart : t };
+    var state = nextState();
     if (selfLoop || state.hops > MAX_HOPS) {
       neutralize(metas);
       clearState();
@@ -1436,6 +1455,7 @@ function injectPreviewRedirectGuard(
     }
     writeState(state);
   }
+  recordScriptRedirectCandidate();
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', evaluate);
   } else {
