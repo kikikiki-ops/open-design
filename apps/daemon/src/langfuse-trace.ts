@@ -330,10 +330,19 @@ export function rememberAcceptedFinalTraceBodyId(
   // not double-ship the same deferred score on the canonical body. Acceptance
   // supersedes all in-flight tokens for this run.
   runsAwaitingFinalAcceptance.delete(key);
+  // Open the late-final re-attach window as soon as terminal_fallback wins so
+  // mid-window live re-ratings can refresh the deferred queue even when no
+  // pre-acceptance feedback was pending. final_message cancels this timer.
+  if (reportTrigger === 'terminal_fallback') {
+    schedulePendingTerminalFallbackQueueDrop(key);
+  } else if (reportTrigger === 'final_message') {
+    cancelPendingTerminalFallbackQueueDrop(key);
+  }
   // Replay any feedback that arrived during the terminal_fallback delay (or
   // before final_message acceptance) onto the body that was actually accepted.
   // Keep the queue after terminal_fallback so a later final_message can re-
-  // attach the same score to the canonical body when it wins the anchor.
+  // attach the same score to the canonical body when it wins the anchor —
+  // bounded by TERMINAL_FALLBACK_LATE_FINAL_FEEDBACK_MS for TF-only runs.
   flushPendingRunFeedback(key, acceptedBodyId, reportTrigger, channel, identity);
 }
 
@@ -376,6 +385,71 @@ type PendingRunFeedbackEntry = {
  * detaches the score from the only body that eventually exists (`runId:tf`).
  */
 const pendingRunFeedbackByRunId = new Map<string, PendingRunFeedbackEntry>();
+
+/**
+ * How long deferred feedback may remain after a `terminal_fallback` acceptance
+ * so a later `final_message` can re-attach the same score to the canonical body.
+ *
+ * Terminal-fallback-only runs never get that late final: without a bound the
+ * map would retain custom reasons and `opts.config` (including a Vela Control
+ * Key from the submit-time sink) until daemon exit. Concurrent final-purpose
+ * flights that finish inside this window still re-flush from the queue.
+ */
+export const TERMINAL_FALLBACK_LATE_FINAL_FEEDBACK_MS = 30_000;
+
+/**
+ * One-shot timers that drop `pendingRunFeedbackByRunId` after terminal_fallback
+ * when no late final_message claims the queue. Keyed by run id.
+ */
+const pendingTerminalFallbackQueueDropTimers = new Map<
+  string,
+  ReturnType<typeof setTimeout>
+>();
+
+function cancelPendingTerminalFallbackQueueDrop(runId: string): void {
+  const key = typeof runId === 'string' ? runId.trim() : '';
+  if (!key) return;
+  const timer = pendingTerminalFallbackQueueDropTimers.get(key);
+  if (!timer) return;
+  clearTimeout(timer);
+  pendingTerminalFallbackQueueDropTimers.delete(key);
+}
+
+/**
+ * Schedule a bounded drop of deferred feedback retained after terminal_fallback.
+ * Idempotent per run: the first schedule wins so re-ratings refresh the payload
+ * without extending secret retention indefinitely.
+ */
+function schedulePendingTerminalFallbackQueueDrop(runId: string): void {
+  const key = typeof runId === 'string' ? runId.trim() : '';
+  if (!key) return;
+  if (pendingTerminalFallbackQueueDropTimers.has(key)) return;
+  const timer = setTimeout(() => {
+    pendingTerminalFallbackQueueDropTimers.delete(key);
+    // A concurrent final-purpose attempt may still accept and re-flush; keep
+    // the queue and re-arm until that attempt ends without acceptance.
+    if (awaitingFinalAcceptanceCount(key) > 0) {
+      schedulePendingTerminalFallbackQueueDrop(key);
+      return;
+    }
+    // final_message already owns the anchor and deleted the queue on flush.
+    if (acceptedFinalTraceBodyIds.get(key)?.reportTrigger === 'final_message') {
+      pendingRunFeedbackByRunId.delete(key);
+      return;
+    }
+    // Terminal-fallback-only (or late final never came): drop retained secrets.
+    pendingRunFeedbackByRunId.delete(key);
+  }, TERMINAL_FALLBACK_LATE_FINAL_FEEDBACK_MS);
+  timer.unref?.();
+  pendingTerminalFallbackQueueDropTimers.set(key, timer);
+}
+
+/** True while the late-final re-attach window is still open for a run. */
+function hasPendingTerminalFallbackQueueRetention(runId: string): boolean {
+  const key = typeof runId === 'string' ? runId.trim() : '';
+  if (!key) return false;
+  return pendingTerminalFallbackQueueDropTimers.has(key);
+}
 
 /**
  * True when feedback should wait for an accepted final-purpose body id.
@@ -495,12 +569,16 @@ function flushPendingRunFeedback(
   if (!key || !bodyId) return;
   const pending = pendingRunFeedbackByRunId.get(key);
   if (!pending) return;
-  // Drop the queue only once final_message owns the anchor. A terminal_fallback
-  // acceptance may be followed by a later final_message that prefers the
-  // canonical body; deleting here would permanently leave the only score on
-  // `runId:tf`.
+  // final_message owns the anchor: drop immediately. terminal_fallback keeps
+  // the entry so a later final_message can re-attach onto the canonical body,
+  // but only for a bounded late-final window (see
+  // TERMINAL_FALLBACK_LATE_FINAL_FEEDBACK_MS) so TF-only runs do not retain
+  // custom reasons / opts.config (Vela Control Keys) until process exit.
   if (reportTrigger === 'final_message') {
     pendingRunFeedbackByRunId.delete(key);
+    cancelPendingTerminalFallbackQueueDrop(key);
+  } else if (reportTrigger === 'terminal_fallback') {
+    schedulePendingTerminalFallbackQueueDrop(key);
   }
   void reportRunFeedback(
     {
@@ -522,9 +600,20 @@ function flushPendingRunFeedback(
 
 /** Test-only: clear deferred feedback between cases. */
 export function resetPendingRunFeedbackForTests(): void {
+  for (const timer of pendingTerminalFallbackQueueDropTimers.values()) {
+    clearTimeout(timer);
+  }
+  pendingTerminalFallbackQueueDropTimers.clear();
   pendingRunFeedbackByRunId.clear();
   runsAwaitingFinalAcceptance.clear();
   awaitingFinalAcceptanceTokenSeq = 0;
+}
+
+/** Test-only: whether deferred feedback is still queued for a run. */
+export function hasPendingRunFeedbackForTests(runId: string): boolean {
+  const key = typeof runId === 'string' ? runId.trim() : '';
+  if (!key) return false;
+  return pendingRunFeedbackByRunId.has(key);
 }
 
 /**
@@ -3375,8 +3464,10 @@ export async function reportRunFeedback(
   // The bridge pins an explicit `:tf` body id once the DB/process anchor is
   // accepted, so we must refresh even when `traceId` is present — otherwise
   // mid-window re-ratings leave the queue on a stale pre-fallback payload.
-  // final_message flush deletes the queue before shipping, so it never
-  // re-enters here after the canonical body wins.
+  // Only retain while the late-final window is open or a final-purpose attempt
+  // is still in flight — re-queuing after the window would leak secrets again
+  // with no completer to clear them. final_message flush deletes the queue
+  // before shipping, so it never re-enters here after the canonical body wins.
   const runKey = typeof ctx.runId === 'string' ? ctx.runId.trim() : '';
   const acceptedTrigger =
     acceptedFinalTraceBodyIds.get(runKey)?.reportTrigger ??
@@ -3384,11 +3475,19 @@ export async function reportRunFeedback(
     ctx.acceptedReportTrigger === 'final_message'
       ? ctx.acceptedReportTrigger
       : null);
-  if (runKey && acceptedTrigger === 'terminal_fallback') {
+  if (
+    runKey &&
+    acceptedTrigger === 'terminal_fallback' &&
+    (hasPendingTerminalFallbackQueueRetention(runKey) ||
+      awaitingFinalAcceptanceCount(runKey) > 0)
+  ) {
     // Keep the deferred entry unpinned so final_message flush can re-target
     // the canonical body via rememberAcceptedFinalTraceBodyId.
     const { traceId: _pinnedTraceId, ...unpinnedCtx } = ctx;
     queuePendingRunFeedback(unpinnedCtx, opts);
+    // Ensure a drop is scheduled when retention came only from an in-flight
+    // final attempt (no prior TF flush scheduled a timer yet).
+    schedulePendingTerminalFallbackQueueDrop(runKey);
   }
 
   let batch: unknown[];

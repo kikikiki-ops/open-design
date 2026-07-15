@@ -17,6 +17,7 @@ import {
   readTelemetrySinkConfig,
   readTelemetrySinkConfigForChannel,
   clearRunAwaitingFinalAcceptance,
+  hasPendingRunFeedbackForTests,
   markRunAwaitingFinalAcceptance,
   rememberAcceptedFinalTraceBodyId,
   reportRunCompleted,
@@ -27,6 +28,7 @@ import {
   scopedTelemetryBodyId,
   shouldDeferRunFeedback,
   stableIngestionEventId,
+  TERMINAL_FALLBACK_LATE_FINAL_FEEDBACK_MS,
   toVelaTelemetryEnvelope,
   velaSinkIdentityFingerprint,
   type FeedbackReportContext,
@@ -4139,6 +4141,91 @@ describe('reportRunFeedback', () => {
     expect(finalScoreBody.batch[0].body.id).toBe(`${runId}-rating`);
     expect(finalScoreBody.batch[0].body.traceId).not.toBe(fallbackTraceId);
     expect(resolveFeedbackTraceId({ runId })).toBe(runId);
+  });
+
+  it('drops terminal-fallback-only deferred feedback after the late-final window', async () => {
+    // TF-only runs never get a final_message; the deferred queue must not keep
+    // custom reasons / opts.config (Control Keys) until daemon exit.
+    vi.useFakeTimers();
+    try {
+      resetAcceptedFinalTraceBodyIdsForTests();
+      resetPendingRunFeedbackForTests();
+      const runId = 'run-feedback-tf-only-drop';
+      const fallbackTraceId = scopedTelemetryBodyId(
+        runId,
+        'final',
+        'terminal_fallback',
+      );
+      const fetchSpy = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ successes: [], errors: [] }), { status: 207 }),
+      );
+
+      markRunAwaitingFinalAcceptance(runId);
+      await reportRunFeedback(
+        makeFeedbackCtx({
+          runId,
+          runStatus: 'failed',
+          telemetryFinalized: false,
+          reasonCodes: ['other'],
+          customReason: 'leaky-custom-reason',
+        }),
+        { config: TEST_CONFIG, fetchImpl: fetchSpy as any },
+      );
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(hasPendingRunFeedbackForTests(runId)).toBe(true);
+
+      rememberAcceptedFinalTraceBodyId(
+        runId,
+        fallbackTraceId,
+        'terminal_fallback',
+        'langfuse',
+      );
+
+      // Immediate flush onto :tf; queue retained for a possible late final.
+      await vi.waitFor(() => {
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+      });
+      const flushed = JSON.parse(fetchSpy.mock.calls[0]![1].body as string);
+      expect(flushed.batch[0].body.traceId).toBe(fallbackTraceId);
+      expect(hasPendingRunFeedbackForTests(runId)).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(TERMINAL_FALLBACK_LATE_FINAL_FEEDBACK_MS);
+      expect(hasPendingRunFeedbackForTests(runId)).toBe(false);
+
+      // A final_message after the window must not re-ship the dropped payload.
+      const finalCompleted = await reportRunCompleted(
+        makeCtx({
+          prefs: { metrics: true, content: true, artifactManifest: false },
+          run: {
+            runId,
+            status: 'failed',
+            startedAt: 1_700_000_000_000,
+            endedAt: 1_700_000_002_000,
+          },
+        }),
+        {
+          config: TEST_CONFIG,
+          fetchImpl: fetchSpy as any,
+          reportTrigger: 'final_message',
+        },
+      );
+      expect(finalCompleted).toEqual({
+        langfuse_expected: true,
+        langfuse_delivery_status: 'accepted',
+        langfuse_delivery_channel: 'langfuse',
+      });
+      await vi.waitFor(() => {
+        expect(fetchSpy).toHaveBeenCalledTimes(2);
+      });
+      const finalBody = JSON.parse(fetchSpy.mock.calls[1]![1].body as string);
+      expect(
+        finalBody.batch.some((item: { type: string }) => item.type === 'score-create'),
+      ).toBe(false);
+      expect(hasPendingRunFeedbackForTests(runId)).toBe(false);
+    } finally {
+      vi.useRealTimers();
+      resetPendingRunFeedbackForTests();
+    }
   });
 
   it('re-resolves a stale submit-time sink when deferred feedback flushes on a different channel', async () => {
