@@ -794,7 +794,7 @@ test('[P1] design files batch delete removes selected files and keeps cancel ret
     .toBe(true);
 });
 
-test('[P1] design files batch download posts selected names to the archive endpoint', async ({ page }) => {
+test('[P1] design files filters by kind and downloads every visible file', async ({ page }) => {
   await routeMockAgents(page);
 
   await gotoEntryHome(page);
@@ -804,9 +804,9 @@ test('[P1] design files batch download posts selected names to the archive endpo
   await expectWorkspaceReady(page);
 
   const { projectId } = await getCurrentProjectContext(page);
-  let archiveRequest: { files?: string[] } | null = null;
+  const archiveCapture: { request?: { files?: string[] } } = {};
   await page.route(`**/api/projects/${projectId}/archive/batch`, async (route) => {
-    archiveRequest = route.request().postDataJSON() as { files?: string[] };
+    archiveCapture.request = route.request().postDataJSON() as { files?: string[] };
     await route.fulfill({
       status: 200,
       headers: {
@@ -817,26 +817,35 @@ test('[P1] design files batch download posts selected names to the archive endpo
     });
   });
 
-  await seedProjectFile(page, projectId, 'download-alpha.txt', 'alpha');
-  await seedProjectFile(page, projectId, 'download-beta.txt', 'beta');
-  await seedProjectFile(page, projectId, 'download-skip.txt', 'skip');
+  await seedProjectFile(page, projectId, 'download-alpha.png', TINY_PNG_B64, 'base64');
+  await seedProjectFile(page, projectId, 'download-beta.png', TINY_PNG_B64, 'base64');
+  await seedProjectFile(page, projectId, 'download-skip.html', '<!doctype html><p>skip</p>');
   await page.reload();
   await expectWorkspaceReady(page);
   await openAllProjectFiles(page);
 
-  const alpha = page.getByTestId('design-file-row-download-alpha.txt');
-  const beta = page.getByTestId('design-file-row-download-beta.txt');
+  const alpha = page.getByTestId('design-file-row-download-alpha.png');
+  const beta = page.getByTestId('design-file-row-download-beta.png');
   await expect(alpha).toBeVisible();
   await expect(beta).toBeVisible();
-  await alpha.getByRole('checkbox').click();
-  await beta.getByRole('checkbox').click();
+
+  await page.getByRole('button', { name: /filter by kind/i }).click();
+  await page.getByRole('checkbox', { name: /^image/i }).click();
+  await expect(page.getByTestId('design-file-row-download-skip.html')).toHaveCount(0);
+  await page.getByRole('checkbox', { name: /select everything/i }).click();
+  await expect(page.getByTestId('design-files-batch-bar')).toContainText('2');
 
   const downloadPromise = page.waitForEvent('download');
   await page.getByTestId('design-files-batch-bar').getByRole('button', { name: /^Download$/i }).click();
   const download = await downloadPromise;
 
   expect(download.suggestedFilename()).toBe('selected-design-files.zip');
-  expect(archiveRequest).toEqual({ files: ['download-alpha.txt', 'download-beta.txt'] });
+  expect(archiveCapture.request).toBeDefined();
+  const requestedFiles = archiveCapture.request?.files ?? [];
+  expect([...requestedFiles].sort()).toEqual([
+    'download-alpha.png',
+    'download-beta.png',
+  ]);
 });
 
 test('[P0] @critical file workspace restores HTML preview after switching through a source file', async ({ page }) => {

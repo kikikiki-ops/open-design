@@ -1,3 +1,4 @@
+import { Button } from '@open-design/components';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAnalytics } from '../analytics/provider';
 import { trackFileManagerClick } from '../analytics/events';
@@ -20,6 +21,7 @@ import { getPluginFolderCandidates } from './design-files/pluginFolders';
 import { Icon } from './Icon';
 import { LiveArtifactBadges } from './LiveArtifactBadges';
 import { isRenderableSketchJson, SketchPreview } from './SketchPreview';
+import styles from './DesignFilesPanel.module.css';
 
 type TranslateFn = (key: keyof Dict, vars?: Record<string, string | number>) => string;
 
@@ -331,6 +333,12 @@ export function DesignFilesPanel({
   const [preview, setPreview] = useState<string | null>(null);
   const autoPreviewAppliedRef = useRef(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [kindFilter, setKindFilter] = useState<Set<ProjectFileKind>>(
+    () => new Set(navState?.kindFilter ?? []),
+  );
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false);
+  const filterMenuRef = useRef<HTMLDivElement | null>(null);
+  const filterPopoverRef = useRef<HTMLDivElement | null>(null);
   const lastKeyPress = useRef<Map<string, number>>(new Map());
   const [deleting, setDeleting] = useState(false);
   const [installingFolder, setInstallingFolder] = useState<string | null>(null);
@@ -351,12 +359,12 @@ export function DesignFilesPanel({
 
   useEffect(() => {
     onNavStateChange?.({
-      kindFilter: navState?.kindFilter ?? new Set(),
+      kindFilter,
       currentDir,
       page: 0,
       pageSize: 30,
     });
-  }, [currentDir, navState?.kindFilter, onNavStateChange]);
+  }, [currentDir, kindFilter, onNavStateChange]);
 
   // Derive immediate subdirectories and files at the current directory level
   // from the flat files list. Files with names like "a/b/c.html" contribute
@@ -391,11 +399,49 @@ export function DesignFilesPanel({
     };
   }, [files, folders, currentDir]);
 
+  const kindCounts = useMemo(() => {
+    const counts = new Map<ProjectFileKind, number>();
+    for (const file of filesAtCurrentDir) {
+      counts.set(file.kind, (counts.get(file.kind) ?? 0) + 1);
+    }
+    return counts;
+  }, [filesAtCurrentDir]);
+
+  const availableKinds = useMemo(
+    () =>
+      Array.from(kindCounts.keys()).sort(
+        (a, b) => SECTION_ORDER.indexOf(a) - SECTION_ORDER.indexOf(b),
+      ),
+    [kindCounts],
+  );
+
+  useEffect(() => {
+    if (availableKinds.length === 0) return;
+    setKindFilter((previous) => {
+      if (previous.size === 0) return previous;
+      const available = new Set(availableKinds);
+      const next = new Set(Array.from(previous).filter((kind) => available.has(kind)));
+      return next.size === previous.size ? previous : next;
+    });
+  }, [availableKinds]);
+
+  const filteredFilesAtCurrentDir = useMemo(() => {
+    if (kindFilter.size === 0) return filesAtCurrentDir;
+    return filesAtCurrentDir.filter((file) => kindFilter.has(file.kind));
+  }, [filesAtCurrentDir, kindFilter]);
+
+  const allVisibleFilesSelected =
+    filteredFilesAtCurrentDir.length > 0 &&
+    filteredFilesAtCurrentDir.every((file) => selected.has(file.name));
+  const someVisibleFilesSelected =
+    !allVisibleFilesSelected &&
+    filteredFilesAtCurrentDir.some((file) => selected.has(file.name));
+
   // Group files at the current level into semantic sections, ordered by
   // SECTION_ORDER. Files within a section sort most-recently-modified first.
   const sections = useMemo(() => {
     const grouped = new Map<FileCategory, ProjectFile[]>();
-    for (const f of filesAtCurrentDir) {
+    for (const f of filteredFilesAtCurrentDir) {
       const category = fileCategory(f);
       const bucket = grouped.get(category) ?? [];
       bucket.push(f);
@@ -407,7 +453,17 @@ export function DesignFilesPanel({
     return SECTION_ORDER.filter((category) => grouped.has(category)).map(
       (category) => [category, grouped.get(category)!] as const,
     );
-  }, [filesAtCurrentDir]);
+  }, [filteredFilesAtCurrentDir]);
+
+  useEffect(() => {
+    if (kindFilter.size === 0) return;
+    setSelected((previous) => {
+      if (previous.size === 0) return previous;
+      const visibleNames = new Set(filteredFilesAtCurrentDir.map((file) => file.name));
+      const next = new Set(Array.from(previous).filter((name) => visibleNames.has(name)));
+      return next.size === previous.size ? previous : next;
+    });
+  }, [filteredFilesAtCurrentDir, kindFilter]);
 
   // Reset selection and renaming state when the user navigates into or out of
   // a directory.
@@ -530,6 +586,50 @@ export function DesignFilesPanel({
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [projectMenuOpen]);
+
+  useEffect(() => {
+    if (!filterMenuOpen) return;
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (target instanceof Node && filterMenuRef.current?.contains(target)) return;
+      setFilterMenuOpen(false);
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setFilterMenuOpen(false);
+    }
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [filterMenuOpen]);
+
+  useEffect(() => {
+    if (filterPopoverRef.current) {
+      filterPopoverRef.current.inert = !filterMenuOpen;
+    }
+  }, [filterMenuOpen]);
+
+  function toggleKindFilter(kind: ProjectFileKind) {
+    setKindFilter((previous) => {
+      const next = new Set(previous);
+      if (next.has(kind)) next.delete(kind);
+      else next.add(kind);
+      return next;
+    });
+  }
+
+  function toggleSelectVisibleFiles() {
+    setSelected((previous) => {
+      const next = new Set(previous);
+      for (const file of filteredFilesAtCurrentDir) {
+        if (allVisibleFilesSelected) next.delete(file.name);
+        else next.add(file.name);
+      }
+      return next;
+    });
+  }
 
   function toggleSelect(name: string) {
     setSelected((prev) => {
@@ -1010,6 +1110,95 @@ export function DesignFilesPanel({
     </nav>
   );
 
+  const kindFilterControl = availableKinds.length > 1 ? (
+    <div className={styles.kindFilter} ref={filterMenuRef}>
+      <Button
+        variant="ghost"
+        className={`${styles.filterTrigger}${
+          kindFilter.size > 0 ? ` ${styles.active}` : ''
+        }`}
+        aria-haspopup="dialog"
+        aria-expanded={filterMenuOpen}
+        aria-label={t('designFiles.filterBy')}
+        onClick={() => setFilterMenuOpen((open) => !open)}
+      >
+        <Icon name="sliders" size={13} />
+        <span className={styles.filterTriggerLabel}>
+          {kindFilter.size === 0
+            ? t('designFiles.filterBy')
+            : kindFilter.size === 1
+              ? kindLabel(Array.from(kindFilter)[0]!, t)
+              : t('designFiles.filterCount', { n: kindFilter.size })}
+        </span>
+        {kindFilter.size > 0 ? (
+          <span className={styles.filterCount} aria-hidden>
+            {kindFilter.size}
+          </span>
+        ) : null}
+      </Button>
+      <div
+        ref={filterPopoverRef}
+        className={`${styles.filterPopover}${filterMenuOpen ? ` ${styles.open}` : ''}`}
+        role="dialog"
+        aria-label={t('designFiles.filterBy')}
+        aria-hidden={!filterMenuOpen}
+      >
+        <div className={styles.filterHeader}>
+          <span>{t('designFiles.filterBy')}</span>
+          {kindFilter.size > 0 ? (
+            <Button
+              variant="ghost"
+              className={styles.filterClear}
+              onClick={() => setKindFilter(new Set())}
+            >
+              {t('designFiles.filterClear')}
+            </Button>
+          ) : null}
+        </div>
+        <ul className={styles.filterList}>
+          {availableKinds.map((kind) => (
+            <li key={kind}>
+              <label className={styles.filterItem}>
+                <input
+                  type="checkbox"
+                  checked={kindFilter.has(kind)}
+                  onChange={() => toggleKindFilter(kind)}
+                />
+                <span className={styles.filterGlyph} aria-hidden>
+                  {kindGlyph(kind)}
+                </span>
+                <span className={styles.filterLabel}>{kindLabel(kind, t)}</span>
+                <span className={styles.filterItemCount}>{kindCounts.get(kind) ?? 0}</span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  ) : null;
+
+  const selectAllControl = filteredFilesAtCurrentDir.length > 0 ? (
+    <Button
+      variant="ghost"
+      className={`${styles.selectAllToggle}${
+        allVisibleFilesSelected || someVisibleFilesSelected ? ` ${styles.active}` : ''
+      }`}
+      role="checkbox"
+      aria-label={t('designFiles.selectAll')}
+      aria-checked={someVisibleFilesSelected ? 'mixed' : allVisibleFilesSelected}
+      onClick={toggleSelectVisibleFiles}
+    >
+      <span className={styles.selectAllBox} aria-hidden>
+        {allVisibleFilesSelected ? (
+          <Icon name="check" size={12} />
+        ) : someVisibleFilesSelected ? (
+          <Icon name="minus" size={12} />
+        ) : null}
+      </span>
+      <span>{allVisibleFilesSelected ? t('designFiles.clearSelection') : t('designFiles.selectAll')}</span>
+    </Button>
+  ) : null;
+
   const visibleUploadError = uploadError ?? dropReadError;
   const hasSelection = selected.size > 0;
 
@@ -1028,6 +1217,12 @@ export function DesignFilesPanel({
           <div className="df-topbar-left">{breadcrumbs}</div>
           <div className="df-topbar-right">{fileActions}</div>
         </div>
+        {kindFilterControl || selectAllControl ? (
+          <div className={styles.listControls}>
+            {kindFilterControl}
+            {selectAllControl}
+          </div>
+        ) : null}
         <div
           className="df-body"
           onDragEnter={(ev) => {

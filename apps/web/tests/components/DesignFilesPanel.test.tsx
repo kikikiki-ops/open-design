@@ -137,15 +137,27 @@ describe("DesignFilesPanel sections", () => {
     vi.useRealTimers();
   });
 
-  it("does not show grouping, sort, filter, or pagination chrome", () => {
+  it("does not show grouping, sort, or pagination chrome", () => {
     renderPanel(generateFiles(60));
 
     expect(screen.queryByRole("group", { name: "Group by" })).toBeNull();
     expect(document.querySelector(".df-table")).toBeNull();
     expect(document.querySelector(".df-th-sortable")).toBeNull();
-    expect(document.querySelector(".df-kind-filter")).toBeNull();
     expect(document.querySelector(".df-pagination")).toBeNull();
     expect(document.querySelector(".df-page-btn")).toBeNull();
+  });
+
+  it("filters the visible export candidates by file kind", () => {
+    renderPanel([
+      file({ name: "page.html", kind: "html", mime: "text/html" }),
+      file({ name: "chart.png", kind: "image", mime: "image/png" }),
+    ]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Filter by kind" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /^Image/ }));
+
+    expect(screen.getByTestId("design-file-row-chart.png")).toBeTruthy();
+    expect(screen.queryByTestId("design-file-row-page.html")).toBeNull();
   });
 
   it("renders a single-line toolbar with file actions and no up/refresh buttons", () => {
@@ -266,6 +278,63 @@ describe("DesignFilesPanel large list", () => {
 describe("DesignFilesPanel selection", () => {
   afterEach(() => cleanup());
 
+  it("selects and clears every file visible through the active kind filter", () => {
+    const { container } = renderPanel([
+      file({ name: "page.html", kind: "html", mime: "text/html" }),
+      file({ name: "chart.png", kind: "image", mime: "image/png" }),
+      file({ name: "photo.jpg", kind: "image", mime: "image/jpeg" }),
+    ]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Filter by kind" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /^Image/ }));
+
+    const selectVisible = screen.getByRole("checkbox", {
+      name: "Select everything",
+    });
+    fireEvent.click(selectVisible);
+
+    expect(selectVisible.getAttribute("aria-checked")).toBe("true");
+    expect(
+      Array.from(container.querySelectorAll(".df-file-row.selected")).map(
+        (row) => row.getAttribute("data-testid"),
+      ),
+    ).toEqual([
+      "design-file-row-chart.png",
+      "design-file-row-photo.jpg",
+    ]);
+
+    fireEvent.click(selectVisible);
+    expect(selectVisible.getAttribute("aria-checked")).toBe("false");
+    expect(container.querySelectorAll(".df-file-row.selected")).toHaveLength(0);
+  });
+
+  it("removes hidden selections before a filtered batch action", async () => {
+    const { onDeleteFiles } = renderPanel([
+      file({ name: "page.html", kind: "html", mime: "text/html" }),
+      file({ name: "chart.png", kind: "image", mime: "image/png" }),
+    ]);
+
+    fireEvent.click(
+      screen
+        .getByTestId("design-file-row-page.html")
+        .querySelector(".df-row-check")!,
+    );
+    fireEvent.click(
+      screen
+        .getByTestId("design-file-row-chart.png")
+        .querySelector(".df-row-check")!,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Filter by kind" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /^Image/ }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Download 1 as ZIP")).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId("design-files-batch-delete"));
+
+    expect(onDeleteFiles).toHaveBeenCalledWith(["chart.png"]);
+  });
+
   it("shows the batch bar and passes every selected file to batch delete", () => {
     const files = generateFiles(3);
     const { container, onDeleteFiles } = renderPanel(files);
@@ -283,6 +352,11 @@ describe("DesignFilesPanel selection", () => {
     expect(
       container.querySelector('[data-testid="design-files-batch-bar"]'),
     ).toBeTruthy();
+    expect(
+      screen
+        .getByRole("checkbox", { name: "Select everything" })
+        .getAttribute("aria-checked"),
+    ).toBe("mixed");
 
     fireEvent.click(
       container.querySelector('[data-testid="design-files-batch-delete"]')!,
@@ -632,6 +706,49 @@ describe("DesignFilesPanel directory navigation", () => {
       "assets",
     );
     expect(screen.getByTestId("design-file-row-assets/logo.png")).toBeTruthy();
+  });
+
+  it("preserves the active kind filter when remounted with navState", async () => {
+    let saved: DesignFilesNavState | undefined;
+    const files = [
+      file({ name: "page.html", kind: "html", mime: "text/html" }),
+      file({ name: "chart.png", kind: "image", mime: "image/png" }),
+    ];
+
+    function makePanel(nav?: DesignFilesNavState) {
+      return (
+        <DesignFilesPanel
+          projectId="test-project"
+          files={files}
+          liveArtifacts={[]}
+          navState={nav}
+          onNavStateChange={(state) => {
+            saved = state;
+          }}
+          onRefreshFiles={vi.fn()}
+          onOpenFile={vi.fn()}
+          onOpenLiveArtifact={vi.fn()}
+          onRenameFile={vi.fn()}
+          onDeleteFile={vi.fn()}
+          onDeleteFiles={vi.fn()}
+          onUpload={vi.fn()}
+          onUploadFiles={vi.fn()}
+          onPaste={vi.fn()}
+          onNewSketch={vi.fn()}
+        />
+      );
+    }
+
+    const { unmount } = render(makePanel());
+    fireEvent.click(screen.getByRole("button", { name: "Filter by kind" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /^Image/ }));
+    await waitFor(() => expect(saved?.kindFilter.has("image")).toBe(true));
+
+    unmount();
+    render(makePanel(saved));
+
+    expect(screen.getByTestId("design-file-row-chart.png")).toBeTruthy();
+    expect(screen.queryByTestId("design-file-row-page.html")).toBeNull();
   });
 
   it("navigates up one level via the parent breadcrumb", () => {
