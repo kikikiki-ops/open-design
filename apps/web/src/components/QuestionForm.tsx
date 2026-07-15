@@ -84,7 +84,11 @@ interface Props {
   ) => void;
   submitDisabled?: boolean;
   visualStyleContext?: VisualStyleContext;
-  autoContinueOptional?: boolean;
+  // Every active question form moves on after the timeout. Required fields
+  // still block an explicit submit, but a timeout records them as skipped so
+  // the agent can apply its sensible defaults instead of leaving the user
+  // stranded on an unattended form.
+  autoContinueAfterTimeout?: boolean;
 }
 
 export interface QuestionFormFileSubmission {
@@ -115,7 +119,7 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
     onSubmit,
     submitDisabled = false,
     visualStyleContext,
-    autoContinueOptional = false,
+    autoContinueAfterTimeout = false,
   },
   ref,
 ) {
@@ -397,8 +401,7 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
   });
   const ready = withinSelectionLimits && requiredAnswered;
   const canSkipAll = form.questions.every((q) => q.required !== true);
-  const autoContinueEnabled =
-    autoContinueOptional && canSkipAll && !locked && !submitDisabled;
+  const autoContinueEnabled = autoContinueAfterTimeout && !locked && !submitDisabled;
   const currentQuestionReady =
     !activeQuestion ||
     activeQuestion.required !== true ||

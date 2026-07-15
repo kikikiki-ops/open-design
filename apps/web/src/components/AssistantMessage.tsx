@@ -2927,7 +2927,7 @@ function FormBlock({
         onSubmit={onSubmit ? (...args) => void handleSubmit(...args) : undefined}
         submitDisabled={submitDisabled || submitting}
         visualStyleContext={visualStyleContext}
-        autoContinueOptional
+        autoContinueAfterTimeout
       />
       {uploadError ? (
         <div className="qf-upload-error" role="alert">

@@ -689,7 +689,7 @@ describe('QuestionFormView', () => {
     );
   });
 
-  it('auto-continues after ten minutes only when every question is optional', () => {
+  it('auto-continues after ten minutes even when required questions are unanswered', () => {
     vi.useFakeTimers();
     try {
       const optionalSubmit = vi.fn();
@@ -702,7 +702,7 @@ describe('QuestionFormView', () => {
         <QuestionFormView
           form={optionalForm}
           interactive
-          autoContinueOptional
+          autoContinueAfterTimeout
           onSubmit={optionalSubmit}
         />,
       );
@@ -721,13 +721,17 @@ describe('QuestionFormView', () => {
         <QuestionFormView
           form={richForm}
           interactive
-          autoContinueOptional
+          autoContinueAfterTimeout
           onSubmit={requiredSubmit}
         />,
       );
-      expect(screen.queryByLabelText(/Auto-continues when the timer ends/)).toBeNull();
+      expect(screen.getByLabelText(/Auto-continues when the timer ends 10:00/)).toBeTruthy();
       act(() => vi.advanceTimersByTime(10 * 60 * 1000));
-      expect(requiredSubmit).not.toHaveBeenCalled();
+      expect(requiredSubmit).toHaveBeenCalledWith(
+        expect.stringContaining('[form answers — discovery]'),
+        { platform: '' },
+        'auto',
+      );
     } finally {
       vi.useRealTimers();
     }
@@ -740,12 +744,14 @@ describe('QuestionFormView', () => {
       <QuestionFormView
         form={steppedForm}
         interactive
+        autoContinueAfterTimeout
         onInteraction={onInteraction}
         onSubmit={onSubmit}
       />,
     );
 
     expect(screen.getByText('1 / 3').closest('.question-form-head')).toBeTruthy();
+    expect(screen.getByLabelText(/Auto-continues when the timer ends 10:00/)).toBeTruthy();
     expect(screen.getByText('Who will see this deck?')).toBeTruthy();
     expect(screen.queryByText('How detailed should it be?')).toBeNull();
     const nextStep = screen.getByRole('button', { name: 'Next step' }) as HTMLButtonElement;
