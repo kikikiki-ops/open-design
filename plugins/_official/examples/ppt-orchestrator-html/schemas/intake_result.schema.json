@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PPT Intake Result Schema",
+  "type": "object",
+  "required": ["pages"],
+  "properties": {
+    "pages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["pageIndex", "sourceType", "contentInventoryStatus"],
+        "properties": {
+          "pageIndex": { "type": "integer" },
+          "sourceType": {
+            "type": "string",
+            "enum": ["editable_slide", "image_based_slide", "mixed_slide", "unknown_slide"]
+          },
+          "editableTextCount": { "type": "integer" },
+          "fullPageImageCount": { "type": "integer" },
+          "imageCoverageRatio": { "type": "number" },
+          "contentInventoryStatus": {
+            "type": "string",
+            "enum": ["ready", "review_required", "blocked"]
+          },
+          "contentInventory": { "type": "array" },
+          "editInstructionInventory": { "type": "array" },
+          "uncertainContentInventory": { "type": "array" },
+          "layoutInventory": { "type": "array" },
+          "reviewRequired": { "type": "boolean" },
+          "blockReason": { "type": "string" }
+        }
+      }
+    }
+  }
+}

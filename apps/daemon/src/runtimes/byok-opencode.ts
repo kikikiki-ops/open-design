@@ -206,14 +206,34 @@ function buildProviderEntry(
           ...apiKeyOption,
         },
       };
-    case 'openai':
+    case 'openai': {
+      // When the base URL points to a non-OpenAI endpoint (e.g. MoonShot,
+      // Groq, DeepSeek, or any other OpenAI-compatible provider), use
+      // @ai-sdk/openai-compatible which calls /v1/chat/completions.
+      // The native @ai-sdk/openai package defaults to the Responses API
+      // (/v1/responses) which only OpenAI itself supports; non-OpenAI
+      // providers return 404 for that path.
+      const isNativeOpenAI =
+        !baseUrl ||
+        baseUrl === 'https://api.openai.com' ||
+        baseUrl === 'https://api.openai.com/v1';
+      if (isNativeOpenAI) {
+        return {
+          npm: '@ai-sdk/openai',
+          options: {
+            ...apiKeyOption,
+            ...(baseUrl ? { baseURL: baseUrl } : {}),
+          },
+        };
+      }
       return {
-        npm: '@ai-sdk/openai',
+        npm: '@ai-sdk/openai-compatible',
         options: {
+          baseURL: baseUrl,
           ...apiKeyOption,
-          ...(baseUrl ? { baseURL: baseUrl } : {}),
         },
       };
+    }
     case 'senseaudio':
     case 'aihubmix':
       return {

@@ -92,6 +92,10 @@ const residualAllowedExactPaths = new Set([
   // compiled). It must ship as a browser-loadable `.js` asset, same as the
   // web notifications service worker above.
   "apps/landing-page/public/community/_site-nav.js",
+  // K-session is a self-contained static HTML deck plugin. Its navigation
+  // runtime must remain browser-loadable JavaScript because consumers copy
+  // the asset directly without a TypeScript build step.
+  "plugins/_official/examples/k-session/assets/k-session.js",
   // PostCSS loads Tailwind through a web-local .mjs compatibility config entry.
   "apps/web/postcss.config.mjs",
   "scripts/bake-html-ppt-examples.mjs",

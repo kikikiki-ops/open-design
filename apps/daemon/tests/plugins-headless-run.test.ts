@@ -623,6 +623,7 @@ process.exit(result.status ?? 0);
         od: {
           kind: 'skill',
           taskKind: 'new-generation',
+          mode: 'deck',
           useCase: { query: 'Generate a {{topic}} brief for {{audience}}.' },
           context: {
             skills: [{ path: './SKILL.md' }],
@@ -646,8 +647,11 @@ process.exit(result.status ?? 0);
         '# Headless Local Skill',
         '',
         'Follow this local skill during headless runs.',
+        'Read assets/seed.txt before writing the artifact.',
       ].join('\n'),
     );
+    await mkdir(path.join(fixture, 'assets'), { recursive: true });
+    await writeFile(path.join(fixture, 'assets', 'seed.txt'), 'seeded local asset');
 
     try {
       const install = await runCli(['plugin', 'install', fixture]);
@@ -685,9 +689,17 @@ process.stdin.setEncoding('utf8');
 process.stdin.on('data', (chunk) => { input += chunk; });
 process.stdin.on('end', () => {
   const capturePath = process.env.OD_PROMPT_CAPTURE;
+  const stagedAsset = fs.readdirSync('.od-skills', { withFileTypes: true })
+    .find((entry) => entry.isDirectory());
+  const stagedAssetPath = stagedAsset
+    ? '.od-skills/' + stagedAsset.name + '/assets/seed.txt'
+    : '';
+  const stagedAssetContents = stagedAssetPath && fs.existsSync(stagedAssetPath)
+    ? fs.readFileSync(stagedAssetPath, 'utf8')
+    : 'missing';
   fs.appendFileSync(capturePath + '.all', '--- prompt ---\\n' + input + '\\n');
   if (input.includes('# Headless Local Skill') || input.includes('## Active plugin')) {
-    fs.writeFileSync(capturePath, input);
+    fs.writeFileSync(capturePath, input + '\\n[staged asset] ' + stagedAssetContents);
   }
   console.log(JSON.stringify({ type: 'text', part: { text: 'headless-ok' } }));
 });
@@ -716,6 +728,10 @@ process.stdin.on('end', () => {
         const prompt = await readFile(capturePath, 'utf8');
         expect(prompt).toContain('# Headless Local Skill');
         expect(prompt).toContain('Follow this local skill during headless runs.');
+        expect(prompt).toContain('**Skill root (relative to project):** `.od-skills/');
+        expect(prompt).toContain('Known side files in this skill: `assets/seed.txt`.');
+        expect(prompt).toContain('[staged asset] seeded local asset');
+        expect(prompt).toContain('# Slide deck — fixed framework');
         expect(prompt).toContain('## Active plugin');
         expect(prompt).toContain('The plugin\'s example brief is: _Generate a {{topic}} brief for {{audience}}._');
         expect(prompt).toContain(`- **topic**: ${topic}`);

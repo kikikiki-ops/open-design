@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>超宽大屏商务增长 PPT — 示例</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  background: #1a1a1a;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 32px 24px;
+  font-family: "PingFang SC", "HarmonyOS Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  gap: 32px;
+}
+
+/* ============================================================
+   DESIGN TOKENS
+   ============================================================ */
+:root {
+  --bg-main: #FFFCF8;
+  --bg-warm: #FAF6EF;
+  --text-primary: #0B2D3A;
+  --text-secondary: #2D4650;
+  --text-body: #4C5A60;
+  --text-muted: #7C878B;
+  --gold-main: #D5AE79;
+  --gold-deep: #C89850;
+  --gold-light: #E5CDAE;
+  --teal-main: #4F9B90;
+  --teal-deep: #22796D;
+  --teal-light: #9FD1CB;
+  --teal-soft: #E6F3F0;
+  --white-card: #FFFFFF;
+  --line-light: rgba(11,45,58,.08);
+  --shadow-soft: rgba(11,45,58,.06);
+}
+
+/* ============================================================
+   SLIDE SHELL  3696 × 1008
+   ============================================================ */
+.slide {
+  position: relative;
+  width: 3696px;
+  height: 1008px;
+  overflow: hidden;
+  background: var(--bg-main);
+  /* Scale down to fit viewport */
+  transform-origin: top left;
+  flex-shrink: 0;
+}
+
+/* safe zone marker (dev only — remove in production) */
+.safe-zone {
+  position: absolute;
+  left: 220px; right: 220px;
+  top: 90px; bottom: 90px;
+  pointer-events: none;
+  z-index: 10;
+  /* outline: 1px dashed rgba(79,155,144,.2); */
+}
+
+/* ============================================================
+   BACKGROUND LAYERS
+   ============================================================ */
+.bg-silk {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center bottom;
+  background-repeat: no-repeat;
+  z-index: 0;
+}
+/* Uploaded fixed background assets */
+.bg-cover {
+  background-image: url("assets/bg-cover.png");
+}
+.bg-content {
+  background-image: url("assets/bg-content.png");
+}
+.bg-section,
+.bg-closing {
+  background-image: url("assets/bg-closing.png");
+}
+
+/* ============================================================
+   BRAND BAR
+   ============================================================ */
+.fixed-brand-logo {
+  position: absolute;
+  left: 96px;
+  top: 54px;
+  width: 170px;
+  height: auto;
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* ============================================================
+   TYPOGRAPHY
+   ============================================================ */
+.title-xl { font-size: 72px; font-weight: 600; color: var(--text-primary); line-height: 1.12; letter-spacing: -.02em; }
+.title-lg  { font-size: 60px; font-weight: 600; color: var(--text-primary); line-height: 1.15; letter-spacing: -.02em; }
+.title-md  { font-size: 48px; font-weight: 600; color: var(--text-primary); line-height: 1.2; }
+.subtitle  { font-size: 26px; font-weight: 400; color: var(--text-body); line-height: 1.5; }
+.body-text { font-size: 18px; font-weight: 400; color: var(--text-body); line-height: 1.6; }
+.caption   { font-size: 16px; font-weight: 400; color: var(--text-muted); line-height: 1.5; }
+.gold-text { color: var(--gold-deep); }
+.teal-text { color: var(--teal-deep); }
+
+/* Number display */
+.number-xl { font-size: 88px; font-weight: 300; color: var(--text-primary); line-height: 1; letter-spacing: -.04em; }
+.number-lg { font-size: 72px; font-weight: 300; color: var(--text-primary); line-height: 1; letter-spacing: -.04em; }
+.number-md { font-size: 56px; font-weight: 300; color: var(--text-primary); line-height: 1; letter-spacing: -.04em; }
+.number-unit { font-size: .45em; font-weight: 500; color: var(--text-muted); margin-left: 4px; vertical-align: baseline; }
+.number-label { font-size: 18px; color: var(--text-muted); margin-top: 10px; }
+
+/* ============================================================
+   CARDS
+   ============================================================ */
+.card {
+  background: var(--white-card);
+  border: 1px solid rgba(213,174,121,.30);
+  border-radius: 22px;
+  box-shadow: 0 10px 28px var(--shadow-soft);
+  padding: 28px 32px;
+}
+.card-sm {
+  background: var(--white-card);
+  border: 1px solid rgba(213,174,121,.25);
+  border-radius: 16px;
+  box-shadow: 0 6px 18px var(--shadow-soft);
+  padding: 20px 24px;
+}
+.card-teal {
+  background: var(--teal-soft);
+  border: 1px solid rgba(79,155,144,.25);
+  border-radius: 16px;
+  padding: 20px 24px;
+}
+.card-gold {
+  background: linear-gradient(120deg, rgba(213,174,121,.12), rgba(229,205,174,.18));
+  border: 1px solid rgba(213,174,121,.35);
+  border-radius: 16px;
+  padding: 20px 24px;
+}
+.card-header {
+  background: linear-gradient(90deg, var(--gold-main) 0%, var(--gold-light) 100%);
+  border-radius: 10px;
+  padding: 8px 20px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--text-primary);
+  letter-spacing: .02em;
+}
+
+/* Tags */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--white-card);
+  border: 1px solid rgba(213,174,121,.35);
+  color: var(--text-secondary);
+  font-size: 16px;
+  font-weight: 500;
+}
+.tag-teal {
+  background: var(--teal-soft);
+  border-color: rgba(79,155,144,.35);
+  color: var(--teal-deep);
+}
+.tag-gold {
+  background: linear-gradient(90deg, rgba(213,174,121,.15), rgba(229,205,174,.2));
+  border-color: rgba(213,174,121,.45);
+  color: var(--gold-deep);
+}
+
+/* Divider */
+.divider-gold {
+  height: 2px;
+  background: linear-gradient(90deg, var(--gold-main), var(--gold-light), transparent);
+  border-radius: 1px;
+}
+
+/* ============================================================
+   LAYOUT UTILITIES
+   ============================================================ */
+.flex-row { display: flex; flex-direction: row; }
+.flex-col { display: flex; flex-direction: column; }
+.items-center { align-items: center; }
+.items-start { align-items: flex-start; }
+.justify-center { justify-content: center; }
+.text-center { text-align: center; }
+.gap-8 { gap: 8px; }
+.gap-12 { gap: 12px; }
+.gap-16 { gap: 16px; }
+.gap-20 { gap: 20px; }
+.gap-24 { gap: 24px; }
+.gap-32 { gap: 32px; }
+.gap-40 { gap: 40px; }
+.gap-48 { gap: 48px; }
+.flex-1 { flex: 1; }
+
+/* ============================================================
+   SLIDE LABELS (outside slides, for this demo)
+   ============================================================ */
+.slide-label {
+  color: rgba(255,255,255,.4);
+  font-size: 18px;
+  font-family: monospace;
+  align-self: flex-start;
+  margin-bottom: -24px;
+}
+</style>
+<script>
+// Auto-scale slides to viewport width
+function scaleSlides() {
+  var slides = document.querySelectorAll('.slide');
+  var vw = window.innerWidth - 48;
+  var scale = Math.min(vw / 3696, 1);
+  slides.forEach(function(s) {
+    s.style.transform = 'scale(' + scale + ')';
+    s.style.marginBottom = (1008 * scale - 1008) + 'px';
+  });
+}
+window.addEventListener('resize', scaleSlides);
+window.addEventListener('load', scaleSlides);
+</script>
+</head>
+<body>
+
+<!-- ============================================================
+     SLIDE 1 · 封面页 — Cover
+     ============================================================ -->
+<div class="slide-label">封面页 · Cover</div>
+<div class="slide">
+  <div class="bg-silk bg-cover"></div>
+  <!-- Logo is an independent component, not baked into the background -->
+  <img class="fixed-brand-logo" src="assets/logo.svg" data-asset-role="fixed-brand-logo" alt="快手联盟" />
+  <!-- Content in safe zone, centered -->
+  <div class="safe-zone">
+    <div class="flex-col items-center justify-center text-center" style="height:100%;gap:32px;">
+      <div class="card-header">2026 品牌营销峰会</div>
+      <h1 class="title-xl" style="max-width:2200px;line-height:1.1;">
+        快手联盟<br>
+        <span class="gold-text">生意确定性</span>年度发布
+      </h1>
+      <p class="subtitle" style="max-width:1600px;color:var(--text-body);">
+        以真实用户为核心，用数据驱动生意增长
+      </p>
+      <div class="flex-row gap-16 items-center" style="margin-top:8px;">
+        <span class="tag">2026 · 北京</span>
+        <span class="tag-teal">内容电商</span>
+        <span class="tag-gold">生意增长</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     SLIDE 2 · 数据结论页 — Data Highlights
+     ============================================================ -->
+<div class="slide-label">数据结论页 · Data</div>
+<div class="slide">
+  <div class="bg-silk bg-content"></div>
+  <!-- Logo is an independent component, not baked into the background -->
+  <img class="fixed-brand-logo" src="assets/logo.svg" data-asset-role="fixed-brand-logo" alt="快手联盟" />
+  <div class="safe-zone">
+    <div class="flex-col" style="height:100%;gap:40px;">
+      <!-- Title -->
+      <div class="flex-col items-center text-center gap-12">
+        <span class="tag-teal" style="font-size:18px;height:38px;padding:0 20px;">年度核心成果 · 2025</span>
+        <h2 class="title-lg">三个数字，说清楚<span class="gold-text">一年</span>做了什么</h2>
+      </div>
+      <!-- 3 big numbers -->
+      <div class="flex-row gap-32 flex-1 items-stretch">
+        <div class="card flex-col items-center text-center justify-center flex-1" style="gap:16px;">
+          <div class="number-xl" style="color:var(--gold-deep);">3,800<span class="number-unit">亿</span></div>
+          <div class="divider-gold" style="width:80px;"></div>
+          <div class="flex-col items-center gap-6">
+            <span style="font-size:20px;font-weight:500;color:var(--text-secondary);">全年联盟 GMV</span>
+            <span class="tag-gold" style="font-size:16px;height:30px;">同比 +52%</span>
+          </div>
+        </div>
+        <div class="card flex-col items-center text-center justify-center flex-1" style="gap:16px;border-color:rgba(79,155,144,.3);">
+          <div class="number-xl" style="color:var(--teal-deep);">120<span class="number-unit">万</span></div>
+          <div style="height:2px;background:linear-gradient(90deg,var(--teal-main),var(--teal-light),transparent);border-radius:1px;width:80px;"></div>
+          <div class="flex-col items-center gap-6">
+            <span style="font-size:20px;font-weight:500;color:var(--text-secondary);">合作商家规模</span>
+            <span class="tag-teal" style="font-size:16px;height:30px;">同比 +38%</span>
+          </div>
+        </div>
+        <div class="card flex-col items-center text-center justify-center flex-1" style="gap:16px;">
+          <div class="number-xl">46<span class="number-unit">亿</span></div>
+          <div class="divider-gold" style="width:80px;"></div>
+          <div class="flex-col items-center gap-6">
+            <span style="font-size:20px;font-weight:500;color:var(--text-secondary);">达人分佣收益</span>
+            <span class="tag-gold" style="font-size:16px;height:30px;">同比 +67%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     SLIDE 3 · 案例成果页 — Case Study
+     ============================================================ -->
+<div class="slide-label">案例成果页 · Case Study</div>
+<div class="slide">
+  <div class="bg-silk bg-content"></div>
+  <!-- Logo is an independent component, not baked into the background -->
+  <img class="fixed-brand-logo" src="assets/logo.svg" data-asset-role="fixed-brand-logo" alt="快手联盟" />
+  <div class="safe-zone">
+    <div class="flex-col" style="height:100%;gap:32px;">
+      <!-- Title -->
+      <div class="flex-col items-center text-center gap-12">
+        <span class="tag-gold" style="font-size:17px;height:38px;padding:0 20px;">案例复盘 · 云南白药</span>
+        <h2 class="title-md">突破历史资源触点，GMV <span class="gold-text">确定达成</span>，新客同步提升</h2>
+      </div>
+      <!-- 3-col case layout -->
+      <div class="flex-row gap-28 flex-1 items-stretch">
+        <!-- Background -->
+        <div class="card flex-col gap-20 flex-1" style="border-color:rgba(11,45,58,.1);">
+          <div class="card-header" style="align-self:flex-start;">背景挑战</div>
+          <div class="flex-col gap-12">
+            <p class="body-text">缺少品牌投放历史数据，过去资源触点有限，不确定新增触点能否带来 GMV 增长。</p>
+            <div class="flex-row gap-10" style="flex-wrap:wrap;">
+              <span class="tag">数据缺失</span>
+              <span class="tag">触点局限</span>
+            </div>
+          </div>
+        </div>
+        <!-- Strategy -->
+        <div class="card flex-col gap-20 flex-1" style="border-color:rgba(79,155,144,.3);">
+          <div style="background:linear-gradient(90deg,var(--teal-main),var(--teal-light));border-radius:10px;padding:8px 20px;display:inline-flex;align-items:center;font-size:18px;font-weight:500;color:var(--white-card);align-self:flex-start;">策略方法</div>
+          <div class="flex-col gap-12">
+            <p class="body-text">结合行业投放数据，采用 GTRTM 策略，科学提升触点组合，统筹效果+开屏+信息流+搜索。</p>
+            <div class="flex-row gap-10" style="flex-wrap:wrap;">
+              <span class="tag-teal">GTRTM 策略</span>
+              <span class="tag-teal">全触点组合</span>
+            </div>
+          </div>
+        </div>
+        <!-- Results -->
+        <div class="card flex-col gap-16 flex-1" style="border-color:rgba(213,174,121,.4);background:linear-gradient(135deg,#FFFCF8,#FBF5EA);">
+          <div class="card-header" style="align-self:flex-start;">成果结果</div>
+          <div class="flex-row gap-32" style="flex:1;align-items:center;">
+            <div class="flex-col items-center text-center flex-1" style="gap:8px;">
+              <span class="number-md" style="color:var(--gold-deep);">170<span class="number-unit">%</span></span>
+              <span class="caption">GMV 达成率</span>
+            </div>
+            <div style="width:1px;height:80px;background:rgba(213,174,121,.3);"></div>
+            <div class="flex-col items-center text-center flex-1" style="gap:8px;">
+              <span class="number-md" style="color:var(--teal-deep);">90<span class="number-unit">%</span></span>
+              <span class="caption">新客 GMV 占比</span>
+            </div>
+            <div style="width:1px;height:80px;background:rgba(213,174,121,.3);"></div>
+            <div class="flex-col items-center text-center flex-1" style="gap:8px;">
+              <span class="number-md">160<span class="number-unit">%</span></span>
+              <span class="caption">项目 ROI 提升</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     SLIDE 4 · 策略分析页 — Strategy
+     ============================================================ -->
+<div class="slide-label">策略分析页 · Strategy</div>
+<div class="slide">
+  <div class="bg-silk bg-section"></div>
+  <!-- Logo is an independent component, not baked into the background -->
+  <img class="fixed-brand-logo" src="assets/logo.svg" data-asset-role="fixed-brand-logo" alt="快手联盟" />
+  <div class="safe-zone">
+    <div class="flex-col" style="height:100%;gap:36px;">
+      <div class="flex-col items-center text-center gap-12">
+        <h2 class="title-md">人群有价值 + 策略大升级<br><span class="teal-text">每个痛点都有解法</span></h2>
+      </div>
+      <!-- Problem → Solution matrix -->
+      <div class="flex-row gap-28 flex-1 items-stretch">
+        <!-- Problem col -->
+        <div class="flex-col gap-16 flex-1">
+          <div style="display:inline-flex;align-items:center;height:36px;padding:0 18px;border-radius:999px;background:rgba(11,45,58,.06);font-size:17px;font-weight:500;color:var(--text-secondary);">三大痛点</div>
+          <div class="card-sm flex-col gap-10">
+            <span style="font-size:17px;font-weight:500;color:var(--text-primary);">💰 钱花不对</span>
+            <span class="caption">投放预算缺乏科学分配依据，ROI 不稳定</span>
+          </div>
+          <div class="card-sm flex-col gap-10">
+            <span style="font-size:17px;font-weight:500;color:var(--text-primary);">👥 人找不对</span>
+            <span class="caption">目标人群定向不精准，流量与转化脱节</span>
+          </div>
+          <div class="card-sm flex-col gap-10">
+            <span style="font-size:17px;font-weight:500;color:var(--text-primary);">📦 资源选不对</span>
+            <span class="caption">广告位与业务目标匹配度低，效果难预测</span>
+          </div>
+        </div>
+        <!-- Arrow -->
+        <div class="flex-col items-center justify-center" style="width:80px;gap:12px;">
+          <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
+            <path d="M10 30 H48 M36 18 L48 30 L36 42" stroke="var(--gold-main)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span style="font-size:15px;color:var(--text-muted);text-align:center;line-height:1.4;">策略<br>升级</span>
+        </div>
+        <!-- Solution col -->
+        <div class="flex-col gap-16 flex-1">
+          <div style="display:inline-flex;align-items:center;height:36px;padding:0 18px;border-radius:999px;background:var(--teal-soft);font-size:17px;font-weight:500;color:var(--teal-deep);">三大解法</div>
+          <div class="card-teal flex-col gap-10">
+            <span style="font-size:17px;font-weight:500;color:var(--teal-deep);">智能分钱</span>
+            <span class="caption">磁力引擎 AI 预算分配，动态 ROI 最优化</span>
+          </div>
+          <div class="card-teal flex-col gap-10">
+            <span style="font-size:17px;font-weight:500;color:var(--teal-deep);">品牌易感人群</span>
+            <span class="caption">基于 R3 模型找到最易转化的目标用户群</span>
+          </div>
+          <div class="card-teal flex-col gap-10">
+            <span style="font-size:17px;font-weight:500;color:var(--teal-deep);">创新互动资源</span>
+            <span class="caption">开屏 + 搜索 + 联盟组合，全场景渗透</span>
+          </div>
+        </div>
+        <!-- Key metric -->
+        <div class="card flex-col items-center text-center justify-center flex-1" style="gap:20px;border-color:rgba(213,174,121,.4);background:linear-gradient(135deg,#FFFCF8,#FBF5EA);">
+          <span class="caption">R3 与 GMV 相关性</span>
+          <div class="number-xl" style="color:var(--gold-deep);">0.8</div>
+          <div class="divider-gold" style="width:60px;"></div>
+          <p class="caption" style="max-width:300px;line-height:1.5;">品牌易感人群具有<br>明确生意影响度</p>
+          <div class="flex-row gap-10" style="flex-wrap:wrap;justify-content:center;">
+            <span class="tag-teal" style="font-size:14px;height:28px;">大盘均值 65%</span>
+            <span class="tag-gold" style="font-size:14px;height:28px;">R3 相关性 70%+</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     SLIDE 5 · 章节过渡页 — Section
+     ============================================================ -->
+<div class="slide-label">章节过渡页 · Section</div>
+<div class="slide">
+  <div class="bg-silk bg-section"></div>
+  <!-- Logo is an independent component, not baked into the background -->
+  <img class="fixed-brand-logo" src="assets/logo.svg" data-asset-role="fixed-brand-logo" alt="快手联盟" />
+  <div class="safe-zone">
+    <div class="flex-col items-center justify-content:center text-center" style="height:100%;justify-content:center;gap:32px;">
+      <div class="card-header" style="font-size:20px;padding:10px 28px;">PART 02</div>
+      <h1 class="title-xl">增长策略升级</h1>
+      <p class="subtitle" style="max-width:1800px;color:var(--text-body);">
+        基于真实用户洞察，重构从触点到转化的完整链路
+      </p>
+      <div class="flex-row gap-16 items-center">
+        <span class="tag-teal">智能分钱</span>
+        <span class="tag-gold">品牌易感人群</span>
+        <span class="tag">创新互动资源</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

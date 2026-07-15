@@ -2054,7 +2054,7 @@ export function HomeView({
         pluginInputTemplate={active?.queryTemplate ?? null}
         onPluginInputValuesChange={updateActiveInputs}
         inlineEditableInputNames={active?.editableInputNames ?? []}
-        footerInputNames={footerInputNamesForChip(active?.chipId ?? null)}
+        footerInputNames={scenarioPluginFooterInputNames(active, footerInputNamesForChip(active?.chipId ?? null))}
         designSystems={designSystemPickerSystems}
         selectedDesignSystemId={designSystemId}
         onDesignSystemChange={handleDesignSystemChange}
@@ -2455,6 +2455,45 @@ function footerInputNamesForChip(_chipId: string | null): string[] {
   // other setting is surfaced inline: the agent asks for fidelity / ratio /
   // duration / model / audio kind via the first-turn question-form flow.
   return [];
+}
+
+/**
+ * For scenario-type plugins that declare required text/string input fields
+ * (e.g. od-web-effect-extractor's `url`), surface those fields in the
+ * composer footer so the user can fill them before sending. Without visible
+ * inputs the send button stays permanently disabled and the user has no
+ * indication of what to fill in.
+ *
+ * Only applies to fields that:
+ *   - are `required: true`
+ *   - have no default value
+ *   - are not already handled by the standard artifact footer (fidelity, model, …)
+ *   - have type 'string', 'number', or no explicit type (string fallback)
+ *   - are not `select` fields (those already work via FooterSelectOption)
+ */
+function scenarioPluginFooterInputNames(
+  active: ActivePlugin | null,
+  chipFooterNames: string[],
+): string[] {
+  if (!active) return chipFooterNames;
+  const scenarioExtraNames = active.inputFields
+    .filter((field) => {
+      if (!field.required) return false;
+      if (field.default !== undefined && field.default !== null && field.default !== '') return false;
+      if (ARTIFACT_FOOTER_FIELD_NAMES.has(field.name)) return false;
+      // `select` fields with options are handled already; skip to avoid duplicates.
+      const type = (field as { type?: unknown }).type;
+      if (type === 'select') return false;
+      // Only text-like fields — string, number, or unspecified.
+      if (type !== undefined && type !== 'string' && type !== 'number') return false;
+      return true;
+    })
+    .map((field) => field.name);
+  if (scenarioExtraNames.length === 0) return chipFooterNames;
+  // Deduplicate: chip names first, then scenario extras.
+  const seen = new Set(chipFooterNames);
+  const extras = scenarioExtraNames.filter((name) => !seen.has(name));
+  return [...chipFooterNames, ...extras];
 }
 
 function homeCreateProjectMetadata(

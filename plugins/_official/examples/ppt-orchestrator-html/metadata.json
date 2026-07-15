@@ -1,0 +1,26 @@
+{
+  "name": "ppt_orchestrator_html_skill",
+  "displayName": "PPT Orchestrator HTML Skill",
+  "version": "1.2.0",
+  "description": "HTML 型 PPT 总控生成 Skill。负责内容保真、页面类型路由、拆页、组件能力选择、风格绑定和质量检查。",
+  "defaultOutput": "HTML 型 PPT",
+  "defaultCanvas": {
+    "width": 3696,
+    "height": 1008,
+    "physicalSize": "11m × 3m"
+  },
+  "defaultStyleSkill": "ultrawide_business_growth",
+  "contentPolicy": {
+    "preserveOfficialContent": true,
+    "excludeEditInstructionsFromFinalBody": true,
+    "doNotRewriteUnlessAsked": true
+  },
+  "createdFor": "AutoBoard / OpenDesign HTML PPT generation workflow",
+  "updated_at": "2026-07-15",
+  "background_system_update": "增加页面角色与背景路由规则",
+  "updates": [
+    "新增 PPT 输入诊断规则：editable_slide / image_based_slide / mixed_slide / unknown_slide",
+    "新增图片型 PPT 解析流程：OCR、视觉分区、内容账本、置信度、人工确认",
+    "新增内容账本前置检查，blocked 页面禁止直接生成 HTML"
+  ]
+}

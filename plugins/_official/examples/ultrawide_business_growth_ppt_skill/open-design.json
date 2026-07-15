@@ -1,0 +1,142 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "ultrawide-business-growth-ppt",
+  "title": "超宽大屏商务增长 PPT",
+  "title_i18n": {
+    "zh-CN": "超宽大屏商务增长 PPT",
+    "en": "Ultrawide Business Growth PPT"
+  },
+  "version": "1.0.0",
+  "description": "Generate ultrawide 3696×1008 venue-screen PPT decks in a business growth style — warm-white background, teal and champagne-gold silk flows, white large-radius cards, center-focused layout, low information density. Optimized for 11m×3m conference main screens.",
+  "description_i18n": {
+    "zh-CN": "生成超宽会场大屏 PPT（3696×1008，适配 11m×3m 主屏）。浅暖白底，青绿+香槟金柔光流线，白色大圆角卡片，中心聚焦布局，低信息密度，适合品牌营销大会、商业化汇报、数据增长发布、案例复盘。",
+    "en": "Generate ultrawide venue-screen PPT decks at 3696×1008px (11m×3m physical). Warm-white background, teal and champagne-gold silk flows, white large-radius cards, center-focused layout, low density. Ideal for brand marketing summits, business reviews, data growth presentations, and case study recaps."
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Open Design",
+    "url": "https://github.com/nexu-io"
+  },
+  "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/ultrawide_business_growth_ppt_skill",
+  "tags": [
+    "example",
+    "first-party",
+    "deck",
+    "slides",
+    "ppt",
+    "presentation",
+    "ultrawide",
+    "business",
+    "growth",
+    "marketing",
+    "kuaishou",
+    "venue-screen",
+    "超宽大屏",
+    "商务增长"
+  ],
+  "compat": {
+    "agentSkills": [
+      {
+        "path": "./SKILL.md"
+      }
+    ]
+  },
+  "od": {
+    "kind": "skill",
+    "taskKind": "new-generation",
+    "mode": "deck",
+    "scenario": "marketing",
+    "surface": "web",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html",
+      "motion": "deck"
+    },
+    "useCase": {
+      "query": {
+        "zh-CN": "使用超宽大屏商务增长 PPT 风格，为 {{audience}} 将「{{topic}}」制作成一套 3696×1008 超宽大屏 PPT（适配 11m×3m 会场主屏）。浅暖白背景，底部与两侧加入低透明度青绿色与香槟金柔和流线，主标题居中，内容集中在中央安全区，白色大圆角卡片，远距离可读，低信息密度。页数由内容量决定，必须包含封面和结尾页。",
+        "en": "Use the Ultrawide Business Growth PPT style to create a 3696×1008 venue-screen deck about {{topic}} for {{audience}} (fits 11m×3m conference main screen). Warm-white background with teal and champagne-gold silk flows, centered title, white large-radius cards, content concentrated in the central safe zone, low information density, readable from a distance. Slide count determined by content; must include cover and closing."
+      },
+      "exampleOutputs": [
+        {
+          "path": "./example.html",
+          "title": "超宽大屏商务增长 PPT 示例"
+        }
+      ]
+    },
+    "inputs": [
+      {
+        "name": "topic",
+        "label": "主题",
+        "type": "string",
+        "required": true,
+        "placeholder": "品牌营销增长战略",
+        "default": "用户提供的主题"
+      },
+      {
+        "name": "audience",
+        "label": "受众",
+        "type": "string",
+        "required": true,
+        "placeholder": "品牌商家与运营负责人",
+        "default": "会场观众"
+      },
+      {
+        "name": "source_content",
+        "label": "补充素材（可选）",
+        "type": "text",
+        "required": false,
+        "placeholder": "粘贴需要提炼成演示的素材"
+      }
+    ],
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        }
+      ],
+      "assets": [
+        "./example.html",
+        "./assets/bg-cover.png",
+        "./assets/bg-content.png",
+        "./assets/bg-closing.png",
+        "./assets/logo.svg",
+        "./assets/logo_source_url.txt",
+        "./background_system.md",
+        "./logo_system.md",
+        "./asset_manifest.json",
+        "./style.md",
+        "./components.md",
+        "./checklist.md",
+        "./examples/example_prompt.md"
+      ]
+    },
+    "pipeline": {
+      "stages": [
+        {
+          "id": "plan",
+          "atoms": ["todo-write"]
+        },
+        {
+          "id": "generate",
+          "atoms": ["file-write", "live-artifact"]
+        },
+        {
+          "id": "critique",
+          "atoms": ["critique-theater"],
+          "repeat": true,
+          "until": "critique.score>=4 || iterations>=3"
+        },
+        {
+          "id": "handoff",
+          "atoms": ["handoff"]
+        }
+      ]
+    },
+    "capabilities": [
+      "prompt:inject",
+      "fs:write"
+    ]
+  }
+}

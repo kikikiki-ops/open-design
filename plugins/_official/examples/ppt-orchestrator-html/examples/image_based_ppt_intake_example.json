@@ -1,0 +1,40 @@
+{
+  "pages": [
+    {
+      "pageIndex": 1,
+      "sourceType": "image_based_slide",
+      "editableTextCount": 0,
+      "fullPageImageCount": 1,
+      "imageCoverageRatio": 0.98,
+      "contentInventoryStatus": "review_required",
+      "contentInventory": [
+        {
+          "id": "source-001",
+          "type": "title",
+          "value": "联盟预算：稳健步入深转时代、布局新增长",
+          "confidence": 0.96,
+          "source": "image_ocr"
+        },
+        {
+          "id": "source-002",
+          "type": "metric",
+          "value": "3,580 万/天",
+          "confidence": 0.91,
+          "source": "image_ocr",
+          "reviewRequired": true
+        }
+      ],
+      "editInstructionInventory": [],
+      "uncertainContentInventory": [],
+      "layoutInventory": [
+        {
+          "regionId": "region-001",
+          "role": "title_area",
+          "bbox": [320, 92, 1800, 80],
+          "contentRefs": ["source-001"]
+        }
+      ],
+      "reviewRequired": true
+    }
+  ]
+}

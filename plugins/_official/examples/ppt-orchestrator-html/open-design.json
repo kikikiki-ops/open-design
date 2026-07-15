@@ -1,0 +1,155 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "ppt-orchestrator-html",
+  "title": "PPT Orchestrator HTML 总控",
+  "title_i18n": {
+    "zh-CN": "PPT Orchestrator HTML 总控",
+    "en": "PPT Orchestrator HTML"
+  },
+  "version": "1.2.0",
+  "description": "HTML PPT orchestrator skill for AutoBoard/OpenDesign. It preserves source content, performs PPT input intake for editable/image/mixed slides, routes page types, binds ultrawide visual style, and outputs previewable editable HTML PPT decks.",
+  "description_i18n": {
+    "zh-CN": "AutoBoard / OpenDesign HTML 型 PPT 总控 Skill：保留正式内容，执行 PPT 输入诊断（可编辑/图片型/混合型）、图片型页面解析、内容账本前置检查、页面类型路由、绑定超宽视觉风格，并输出可预览可编辑 HTML PPT。",
+    "en": "HTML PPT orchestrator skill for AutoBoard/OpenDesign. It preserves source content, performs PPT input intake for editable/image/mixed slides, routes page types, binds ultrawide visual style, and outputs previewable editable HTML PPT decks."
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Open Design",
+    "url": "https://github.com/nexu-io"
+  },
+  "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/ppt-orchestrator-html",
+  "tags": [
+    "example",
+    "first-party",
+    "deck",
+    "slides",
+    "ppt",
+    "presentation",
+    "html-ppt",
+    "orchestrator",
+    "content-preservation",
+    "business",
+    "ultrawide"
+  ],
+  "compat": {
+    "agentSkills": [
+      {
+        "path": "./SKILL.md"
+      }
+    ]
+  },
+  "od": {
+    "kind": "skill",
+    "taskKind": "new-generation",
+    "mode": "deck",
+    "scenario": "business",
+    "surface": "web",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html",
+      "motion": "deck"
+    },
+    "useCase": {
+      "query": {
+        "zh-CN": "请使用 PPT Orchestrator Skill，把我上传或粘贴的 PPT / 文档素材生成 HTML 型 PPT。先执行 PPT 输入诊断：区分 editable_slide、image_based_slide、mixed_slide、unknown_slide；图片型 PPT 需要先做 OCR/视觉分区/内容账本/置信度判断，blocked 页面不得直接生成最终 HTML。页面类型从源内容中自动总结，不强行套通用模板；默认绑定 ultrawide_business_growth_ppt_skill；保持 3696×1008 超宽大屏尺寸；正式 PPT 信息不得改写、不得遗漏、不得新增；明显编辑指令、占位符、待修改备注不作为最终页面正文展示；内容装不下时优先拆页，不允许缩小字号硬塞；必须在项目根目录输出可预览的 index.html，并同级写入 index.html.artifact.json（kind=html、entry=index.html、renderer=html、status=complete）；同时附 intake_result.json、content_inventory.json、edit_instruction_inventory.json、page_plan.json 和 quality_report.json。",
+        "en": "Use the PPT Orchestrator Skill to turn my uploaded or pasted PPT/document material into an HTML PPT deck. First run PPT input intake: classify editable_slide, image_based_slide, mixed_slide, and unknown_slide; image-based PPT pages require OCR/visual-region parsing/content inventory/confidence checks, and blocked pages must not be rendered directly as final HTML. Infer page types from the source instead of forcing a generic template; bind ultrawide_business_growth_ppt_skill by default; keep the 3696×1008 ultrawide canvas; preserve all formal PPT information without rewriting, omitting, or inventing content; do not render edit instructions/placeholders as final body text; split pages instead of shrinking text when content overflows; you must write a previewable index.html at the project root and a sibling index.html.artifact.json (kind=html, entry=index.html, renderer=html, status=complete); also output intake_result.json, content_inventory.json, edit_instruction_inventory.json, page_plan.json, and quality_report.json."
+      },
+      "exampleOutputs": [
+        {
+          "path": "./example.html",
+          "title": "PPT Orchestrator HTML 总控示例"
+        }
+      ]
+    },
+    "inputs": [
+      {
+        "name": "source_content",
+        "label": "PPT / 文档素材",
+        "type": "text",
+        "required": false,
+        "placeholder": "粘贴或概述需要生成 HTML PPT 的正式内容",
+        "default": "使用主输入框文本和已上传文件作为正式内容来源"
+      },
+      {
+        "name": "style_skill",
+        "label": "风格 Skill",
+        "type": "string",
+        "required": false,
+        "default": "ultrawide_business_growth_ppt_skill"
+      },
+      {
+        "name": "canvas_size",
+        "label": "画布尺寸",
+        "type": "string",
+        "required": false,
+        "default": "3696 × 1008"
+      }
+    ],
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        }
+      ],
+      "assets": [
+        "./example.html",
+        "./metadata.json",
+        "./README.md",
+        "./rules/page_type_router.md",
+        "./rules/content_preservation.md",
+        "./rules/placeholder_rules.md",
+        "./rules/html_output_contract.md",
+        "./rules/component_interface.md",
+        "./rules/quality_check.md",
+        "./rules/style_binding.md",
+        "./rules/test_plan.md",
+        "./rules/page_background_routing.md",
+        "./rules/ppt_input_intake.md",
+        "./rules/image_slide_parsing.md",
+        "./rules/content_inventory_precheck.md",
+        "./schemas/content_inventory.schema.json",
+        "./schemas/page_plan.schema.json",
+        "./schemas/intake_result.schema.json",
+        "./examples/example_prompt.md",
+        "./examples/page_plan_sample.json",
+        "./examples/image_based_ppt_intake_example.json"
+      ]
+    },
+    "pipeline": {
+      "stages": [
+        {
+          "id": "plan",
+          "atoms": [
+            "todo-write"
+          ]
+        },
+        {
+          "id": "generate",
+          "atoms": [
+            "file-write",
+            "live-artifact"
+          ]
+        },
+        {
+          "id": "critique",
+          "atoms": [
+            "critique-theater"
+          ],
+          "repeat": true,
+          "until": "critique.score>=4 || iterations>=3"
+        },
+        {
+          "id": "handoff",
+          "atoms": [
+            "handoff"
+          ]
+        }
+      ]
+    },
+    "capabilities": [
+      "prompt:inject",
+      "fs:write"
+    ]
+  }
+}

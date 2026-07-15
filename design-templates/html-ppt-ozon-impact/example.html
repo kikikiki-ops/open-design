@@ -1,0 +1,1094 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ozon Impact — 示例 Deck</title>
+<style>
+/* ============================================================
+   DESIGN TOKENS
+   ============================================================ */
+:root {
+  --oi-bg-deep:       #061158;
+  --oi-bg-mid:        #1230D4;
+  --oi-bg-bright:     #2B5FF5;
+  --oi-bg-teal:       #0D3B8E;
+
+  --oi-lime:          #7AE03D;
+  --oi-lime-dark:     #5ABF25;
+  --oi-pink:          #FF3D8A;
+  --oi-sky:           #5BE5FF;
+  --oi-gold:          #F5D76E;
+  --oi-silver:        #C8D4E8;
+
+  --oi-white:         #FFFFFF;
+  --oi-white-80:      rgba(255,255,255,.80);
+  --oi-white-55:      rgba(255,255,255,.55);
+  --oi-white-30:      rgba(255,255,255,.30);
+  --oi-white-12:      rgba(255,255,255,.12);
+  --oi-white-06:      rgba(255,255,255,.06);
+
+  --oi-card-bg:       rgba(255,255,255,.09);
+  --oi-card-border:   rgba(255,255,255,.18);
+
+  /* Typography */
+  --oi-font: "Inter","SF Pro Display",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  --oi-fw-black:  900;
+  --oi-fw-heavy:  800;
+  --oi-fw-bold:   700;
+  --oi-fw-semi:   600;
+  --oi-fw-medium: 500;
+  --oi-fw-reg:    400;
+
+  --oi-fs-display: clamp(44px,6vw,84px);
+  --oi-fs-h1:      clamp(32px,4vw,56px);
+  --oi-fs-h2:      clamp(24px,2.8vw,38px);
+  --oi-fs-h3:      clamp(18px,2vw,26px);
+  --oi-fs-body:    clamp(13px,1.2vw,17px);
+  --oi-fs-sm:      clamp(11px,1vw,13px);
+  --oi-fs-metric:  clamp(36px,5vw,68px);
+  --oi-fs-tag:     clamp(11px,.9vw,13px);
+
+  --oi-lh-tight:  1.05;
+  --oi-lh-title:  1.15;
+  --oi-lh-body:   1.55;
+  --oi-ls-tight:  -0.03em;
+  --oi-ls-norm:    0;
+
+  /* Radii */
+  --oi-r-btn:    999px;
+  --oi-r-card:   28px;
+  --oi-r-chip:   999px;
+  --oi-r-sm:     12px;
+}
+
+/* ============================================================
+   RESET
+   ============================================================ */
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html,body { width:100%; height:100%; overflow:hidden; background:#040e45; }
+body { font-family:var(--oi-font); -webkit-font-smoothing:antialiased; }
+
+/* ============================================================
+   DECK SHELL
+   ============================================================ */
+.deck {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ============================================================
+   SLIDE BASE
+   ============================================================ */
+.slide {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 120% 100% at 60% 50%, var(--oi-bg-bright) 0%, var(--oi-bg-mid) 40%, var(--oi-bg-deep) 100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .38s ease, transform .38s cubic-bezier(.23,1,.32,1);
+  transform: translateX(48px);
+  overflow: hidden;
+}
+.slide.active { opacity:1; pointer-events:all; transform:translateX(0); }
+.slide.prev   { opacity:0; transform:translateX(-48px); }
+
+/* Per-slide gradient overrides */
+.slide--v2 { background: radial-gradient(ellipse 130% 110% at 70% 60%, #1a3fd4 0%, #0e24a8 45%, #061158 100%); }
+.slide--v3 { background: radial-gradient(ellipse 110% 100% at 55% 45%, #2560f8 0%, #0e30c0 50%, #040e45 100%); }
+
+.slide__inner {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 56px 80px 56px 80px;
+}
+
+/* ============================================================
+   BRAND TOP BAR
+   ============================================================ */
+.oi-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--oi-fs-sm);
+  font-weight: var(--oi-fw-semi);
+  color: var(--oi-white-80);
+  letter-spacing: .02em;
+  margin-bottom: auto;
+  flex-shrink: 0;
+}
+.oi-brand__logo {
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  background: var(--oi-sky);
+  display: flex; align-items:center; justify-content:center;
+}
+.oi-brand__logo svg { width:18px; height:18px; }
+
+/* ============================================================
+   HERO CONTENT AREA (left column)
+   ============================================================ */
+.oi-hero {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 24px;
+  max-width: 55%;
+}
+.oi-eyebrow {
+  font-size: var(--oi-fs-sm);
+  font-weight: var(--oi-fw-semi);
+  color: var(--oi-sky);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.oi-title {
+  font-size: var(--oi-fs-display);
+  font-weight: var(--oi-fw-black);
+  color: var(--oi-white);
+  line-height: var(--oi-lh-tight);
+  letter-spacing: var(--oi-ls-tight);
+}
+.oi-title em {
+  font-style: normal;
+  color: var(--oi-lime);
+}
+.oi-title span.pink { color: var(--oi-pink); }
+.oi-title span.sky  { color: var(--oi-sky); }
+
+.oi-subtitle {
+  font-size: var(--oi-fs-h3);
+  font-weight: var(--oi-fw-medium);
+  color: var(--oi-white-80);
+  line-height: var(--oi-lh-body);
+  max-width: 540px;
+}
+.oi-body {
+  font-size: var(--oi-fs-body);
+  color: var(--oi-white-55);
+  line-height: var(--oi-lh-body);
+  max-width: 480px;
+}
+
+/* CTA button */
+.oi-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 28px;
+  border-radius: var(--oi-r-btn);
+  background: var(--oi-white);
+  color: var(--oi-bg-mid);
+  font-family: var(--oi-font);
+  font-size: var(--oi-fs-body);
+  font-weight: var(--oi-fw-bold);
+  border: none;
+  cursor: pointer;
+  letter-spacing: -.01em;
+  transition: transform .15s, box-shadow .15s;
+}
+.oi-btn:hover { transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,.25); }
+.oi-btn--lime { background:var(--oi-lime); color:#0a2010; }
+.oi-btn--outline {
+  background: transparent;
+  color: var(--oi-white);
+  border: 2px solid var(--oi-white-30);
+}
+.oi-btn__icon {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--oi-white-12);
+  display: flex; align-items:center; justify-content:center;
+  flex-shrink: 0;
+}
+.oi-btn__icon svg { width:14px; height:14px; }
+
+.oi-btn-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Chip / tag */
+.oi-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--oi-r-chip);
+  background: var(--oi-white-12);
+  border: 1px solid var(--oi-white-30);
+  color: var(--oi-white-80);
+  font-size: var(--oi-fs-tag);
+  font-weight: var(--oi-fw-medium);
+  letter-spacing: .01em;
+}
+.oi-chip--lime  { background:rgba(122,224,61,.15); border-color:rgba(122,224,61,.4); color:var(--oi-lime); }
+.oi-chip--pink  { background:rgba(255,61,138,.15); border-color:rgba(255,61,138,.4); color:var(--oi-pink); }
+.oi-chip--sky   { background:rgba(91,229,255,.12); border-color:rgba(91,229,255,.35); color:var(--oi-sky); }
+
+/* ============================================================
+   ORNAMENT STAGE (right side absolute layer)
+   ============================================================ */
+.oi-stage {
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  width: 52%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ============================================================
+   3D ORNAMENTS (pure CSS)
+   ============================================================ */
+
+/* --- Blue ribbed sphere --- */
+.oi-sphere {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #5B8EFF, #1230D4 50%, #061158 100%);
+  box-shadow: inset -6px -6px 16px rgba(0,0,0,.4), inset 4px 4px 12px rgba(91,229,255,.2), 0 20px 60px rgba(6,17,88,.6);
+  overflow: hidden;
+}
+/* Ribbing via repeating stripes */
+.oi-sphere::before {
+  content:'';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: repeating-linear-gradient(
+    160deg,
+    transparent 0px,
+    transparent 6px,
+    rgba(0,0,0,.18) 6px,
+    rgba(0,0,0,.18) 8px
+  );
+}
+.oi-sphere::after {
+  content:'';
+  position: absolute;
+  top: 12%; left: 15%;
+  width: 30%; height: 20%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(255,255,255,.45) 0%, transparent 80%);
+}
+
+/* --- Metallic coin --- */
+.oi-coin {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 30%, #E8EDF8, #9BAACB 50%, #6B7A99 100%);
+  box-shadow: 0 8px 24px rgba(0,0,0,.4), inset -3px -3px 8px rgba(0,0,0,.3), inset 2px 2px 8px rgba(255,255,255,.5);
+  display: flex; align-items:center; justify-content:center;
+}
+.oi-coin::before {
+  content: '₽';
+  position: absolute;
+  font-size: .48em;
+  font-weight: 900;
+  color: rgba(40,60,120,.7);
+  letter-spacing: -.02em;
+}
+.oi-coin--small::before { font-size: .42em; }
+
+/* --- Pink / white cube --- */
+.oi-cube {
+  position: absolute;
+  transform-style: preserve-3d;
+  transform: rotateX(30deg) rotateZ(45deg);
+}
+.oi-cube__face {
+  position: absolute;
+  border-radius: 6px;
+}
+
+/* Simplified CSS cube using 3 visible faces */
+.oi-cube-wrap {
+  position: absolute;
+  perspective: 600px;
+}
+.oi-cube-inner {
+  width: 100%; height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transform: rotateX(28deg) rotateY(-32deg);
+  animation: cube-spin 18s linear infinite;
+}
+@keyframes cube-spin {
+  0%  { transform: rotateX(28deg) rotateY(-32deg); }
+  100%{ transform: rotateX(28deg) rotateY(328deg); }
+}
+.oi-cube-face {
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+}
+.oi-cube-face--front {
+  transform: translateZ(calc(var(--sz)/2));
+  background: linear-gradient(135deg, var(--face-c1), var(--face-c2));
+  box-shadow: inset 0 0 20px rgba(0,0,0,.15);
+}
+.oi-cube-face--right {
+  transform: rotateY(90deg) translateZ(calc(var(--sz)/2));
+  background: linear-gradient(135deg, var(--face-c3), var(--face-c4));
+}
+.oi-cube-face--top {
+  transform: rotateX(90deg) translateZ(calc(var(--sz)/2));
+  background: linear-gradient(135deg, var(--face-c5), var(--face-c1));
+}
+
+/* Pink cube */
+.oi-cube-pink {
+  --sz: 100%;
+  --face-c1: #FF6BAA;
+  --face-c2: #E0206A;
+  --face-c3: #B51B52;
+  --face-c4: #8A1040;
+  --face-c5: #FF9CC8;
+}
+
+/* White/grey cube */
+.oi-cube-white {
+  --sz: 100%;
+  --face-c1: #E8EDF5;
+  --face-c2: #B0BDD4;
+  --face-c3: #8899B8;
+  --face-c4: #6A7A99;
+  --face-c5: #FFFFFF;
+}
+
+/* --- Glass gem / teardrop --- */
+.oi-gem {
+  position: absolute;
+  background: linear-gradient(135deg, rgba(180,100,255,.7) 0%, rgba(255,61,138,.5) 50%, rgba(91,229,255,.6) 100%);
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 8px 32px rgba(180,100,255,.4), inset 2px 2px 8px rgba(255,255,255,.3);
+  transform: rotate(-30deg);
+}
+
+/* --- Green blob --- */
+.oi-blob {
+  position: absolute;
+  background: radial-gradient(circle at 40% 35%, var(--oi-lime) 0%, var(--oi-lime-dark) 60%, #2a6010 100%);
+  border-radius: 60% 40% 55% 45% / 45% 55% 45% 55%;
+  box-shadow: 0 12px 40px rgba(90,191,37,.35), inset -4px -4px 12px rgba(0,0,0,.2);
+  animation: blob-wobble 8s ease-in-out infinite;
+}
+@keyframes blob-wobble {
+  0%,100% { border-radius: 60% 40% 55% 45% / 45% 55% 45% 55%; }
+  33%      { border-radius: 50% 50% 45% 55% / 55% 45% 55% 45%; }
+  66%      { border-radius: 40% 60% 60% 40% / 50% 50% 50% 50%; }
+}
+
+/* --- Pinwheel / spiral --- */
+.oi-pinwheel {
+  position: absolute;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(200,212,232,.9) 0deg 30deg,
+    rgba(140,160,200,.5) 30deg 60deg,
+    rgba(200,212,232,.9) 60deg 90deg,
+    rgba(140,160,200,.5) 90deg 120deg,
+    rgba(200,212,232,.9) 120deg 150deg,
+    rgba(140,160,200,.5) 150deg 180deg,
+    rgba(200,212,232,.9) 180deg 210deg,
+    rgba(140,160,200,.5) 210deg 240deg,
+    rgba(200,212,232,.9) 240deg 270deg,
+    rgba(140,160,200,.5) 270deg 300deg,
+    rgba(200,212,232,.9) 300deg 330deg,
+    rgba(140,160,200,.5) 330deg 360deg
+  );
+  box-shadow: 0 12px 40px rgba(0,0,0,.4);
+  animation: spin-slow 20s linear infinite;
+}
+@keyframes spin-slow { to { transform: rotate(360deg); } }
+
+/* --- Orbit ring --- */
+.oi-orbit {
+  position: absolute;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255,255,255,.35);
+  pointer-events: none;
+  animation: orbit-rotate var(--dur,12s) linear infinite var(--dir, normal);
+}
+.oi-orbit::before {
+  content:'';
+  position: absolute;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--dot-c, rgba(255,255,255,.6));
+  top: 50%; left: -5px;
+  transform: translateY(-50%);
+  box-shadow: 0 0 8px var(--dot-c, rgba(255,255,255,.4));
+}
+@keyframes orbit-rotate { to { transform: rotate(360deg); } }
+
+/* --- Star sparkle (+) --- */
+.oi-star {
+  position: absolute;
+  pointer-events: none;
+  color: rgba(255,255,255,.5);
+  font-size: var(--s, 20px);
+  line-height: 1;
+  user-select: none;
+  animation: star-pulse 3s ease-in-out infinite;
+  animation-delay: var(--d, 0s);
+}
+@keyframes star-pulse {
+  0%,100% { opacity:.4; transform:scale(1); }
+  50%      { opacity:1;  transform:scale(1.3); }
+}
+
+/* --- Small coin dot --- */
+.oi-dot-coin {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 30%, #C8D4E8, #7A8EAA 60%, #4A5A7A);
+  box-shadow: 0 4px 12px rgba(0,0,0,.35);
+  display: flex; align-items:center; justify-content:center;
+  font-size: .42em;
+  font-weight: 900;
+  color: rgba(40,60,120,.6);
+}
+
+/* ============================================================
+   INFO CARDS (dark cards with glass effect)
+   ============================================================ */
+.oi-card {
+  background: var(--oi-card-bg);
+  border: 1px solid var(--oi-card-border);
+  border-radius: var(--oi-r-card);
+  padding: 28px 32px;
+  backdrop-filter: blur(8px);
+}
+.oi-card__num {
+  font-size: var(--oi-fs-metric);
+  font-weight: var(--oi-fw-black);
+  color: var(--oi-white);
+  line-height: 1;
+  letter-spacing: var(--oi-ls-tight);
+}
+.oi-card__num em { font-style:normal; color:var(--oi-lime); }
+.oi-card__label {
+  font-size: var(--oi-fs-sm);
+  color: var(--oi-white-55);
+  margin-top: 8px;
+  line-height: 1.4;
+}
+.oi-card__title {
+  font-size: var(--oi-fs-h3);
+  font-weight: var(--oi-fw-bold);
+  color: var(--oi-white);
+  line-height: var(--oi-lh-title);
+}
+.oi-card__desc {
+  font-size: var(--oi-fs-body);
+  color: var(--oi-white-55);
+  line-height: var(--oi-lh-body);
+  margin-top: 10px;
+}
+.oi-card--lime { border-color: rgba(122,224,61,.3); }
+.oi-card--pink { border-color: rgba(255,61,138,.3); }
+
+/* Divider */
+.oi-divider {
+  height: 1px;
+  background: var(--oi-white-12);
+  border: none;
+}
+
+/* Layout utils */
+.row  { display:flex; align-items:stretch; gap:20px; }
+.col  { display:flex; flex-direction:column; gap:16px; }
+.flex-1 { flex:1; }
+.flex-2 { flex:2; }
+.flex-3 { flex:3; }
+.grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+.grid-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
+.items-end { align-items:flex-end; }
+.items-center { align-items:center; }
+.mt-auto { margin-top:auto; }
+.gap-12 { gap:12px; }
+.gap-24 { gap:24px; }
+
+/* ============================================================
+   SLIDE TYPE: full-bleed split (hero left, stage right)
+   ============================================================ */
+.layout-split .slide__inner {
+  flex-direction: column;
+}
+.layout-split .oi-hero {
+  position: relative;
+  z-index: 2;
+  max-width: 52%;
+}
+
+/* ============================================================
+   SLIDE TYPE: data cards full width
+   ============================================================ */
+.layout-cards .oi-hero { max-width: 100%; }
+.layout-cards .oi-stage { display:none; }
+
+/* ============================================================
+   SLIDE: closing / CTA
+   ============================================================ */
+.slide--closing {
+  background: radial-gradient(ellipse 150% 130% at 50% 50%, #1a40e8 0%, #0b1e8a 50%, #040e45 100%);
+}
+.slide--closing .slide__inner {
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+/* ============================================================
+   NAVIGATION DOTS
+   ============================================================ */
+.nav-dots {
+  position: fixed;
+  bottom: 22px; left: 50%;
+  transform: translateX(-50%);
+  display: flex; gap:8px;
+  z-index: 100;
+}
+.nav-dot {
+  width:8px; height:8px;
+  border-radius:50%;
+  border:none;
+  background: rgba(255,255,255,.25);
+  cursor:pointer; padding:0;
+  transition: background .2s, transform .2s;
+}
+.nav-dot.active { background:var(--oi-lime); transform:scale(1.3); }
+
+.slide-counter {
+  position: fixed;
+  bottom:18px; right:32px;
+  font-size:11px; color:rgba(255,255,255,.3);
+  font-family:var(--oi-font);
+  z-index:100; pointer-events:none;
+}
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+
+<!-- =====================================================
+     SLIDE 1 · 封面 — 大球 + 硬币 + 绿色叠碟
+     ===================================================== -->
+<section class="slide layout-split active" id="s1">
+  <!-- Orbit rings -->
+  <div class="oi-orbit" style="width:320px;height:320px;top:calc(50% - 160px);right:12%;transform-origin:center;--dur:14s;--dot-c:rgba(255,255,255,.5);"></div>
+  <div class="oi-orbit" style="width:240px;height:140px;top:calc(50% - 70px);right:18%;transform:rotate(-30deg);--dur:9s;--dir:reverse;--dot-c:var(--oi-lime);"></div>
+  <div class="oi-orbit" style="width:180px;height:100px;top:calc(50% - 50px);right:22%;transform:rotate(20deg);--dur:7s;--dot-c:rgba(91,229,255,.7);"></div>
+
+  <!-- Ribbed sphere (main) -->
+  <div class="oi-sphere" style="width:200px;height:200px;top:calc(50% - 180px);right:14%;"></div>
+
+  <!-- Silver coin (big) -->
+  <div class="oi-coin" style="width:130px;height:130px;top:calc(50% - 30px);right:24%;font-size:130px;"></div>
+
+  <!-- Green blob disc stack -->
+  <div class="oi-blob" style="width:140px;height:55px;top:calc(50% + 60px);right:13%;border-radius:50%;animation-duration:6s;"></div>
+  <div class="oi-blob" style="width:130px;height:50px;top:calc(50% + 80px);right:14%;opacity:.8;animation-duration:7s;animation-delay:.5s;"></div>
+  <div class="oi-blob" style="width:115px;height:44px;top:calc(50% + 98px);right:15%;opacity:.6;animation-duration:8s;animation-delay:1s;"></div>
+
+  <!-- Small coin -->
+  <div class="oi-dot-coin" style="width:60px;height:60px;top:calc(50% - 220px);right:34%;font-size:60px;"></div>
+
+  <!-- Stars -->
+  <div class="oi-star" style="top:18%;right:52%;--s:22px;--d:0s;">✦</div>
+  <div class="oi-star" style="top:72%;right:42%;--s:14px;--d:1.2s;">✦</div>
+  <div class="oi-star" style="top:30%;right:38%;--s:18px;--d:2s;">+</div>
+
+  <div class="slide__inner">
+    <div class="oi-brand">
+      <div class="oi-brand__logo">
+        <svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 9a5 5 0 1 0 10 0A5 5 0 0 0 4 9z" stroke="#040e45" stroke-width="1.5"/><path d="M9 4v10M4 9h10" stroke="#040e45" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </div>
+      <span>ozon банк</span>
+    </div>
+    <div class="oi-hero">
+      <div class="col gap-12">
+        <span class="oi-eyebrow">2026 · PRODUCT LAUNCH</span>
+        <h1 class="oi-title">快手电商<br><em>2026</em><br>新能力发布</h1>
+        <p class="oi-subtitle">让每个商家找到最高效的增长路径</p>
+      </div>
+      <div class="oi-btn-row">
+        <button class="oi-btn">
+          <span>了解更多</span>
+          <span class="oi-btn__icon">
+            <svg viewBox="0 0 14 14" fill="none"><path d="M3 7h8M7 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </span>
+        </button>
+        <span class="oi-chip--sky oi-chip">内容电商</span>
+        <span class="oi-chip--lime oi-chip">2026 战略</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =====================================================
+     SLIDE 2 · 核心数据 — 3 大指标 + 装饰球
+     ===================================================== -->
+<section class="slide slide--v2" id="s2">
+  <div class="oi-orbit" style="width:260px;height:260px;top:calc(50% - 130px);right:6%;--dur:16s;--dot-c:var(--oi-lime);"></div>
+  <div class="oi-sphere" style="width:160px;height:160px;top:calc(50% - 200px);right:8%;opacity:.7;"></div>
+  <div class="oi-dot-coin" style="width:80px;height:80px;bottom:18%;right:16%;font-size:80px;"></div>
+  <div class="oi-star" style="top:15%;right:46%;--s:20px;--d:.5s;">✦</div>
+  <div class="oi-star" style="bottom:22%;right:32%;--s:14px;--d:1.8s;">+</div>
+
+  <div class="slide__inner">
+    <div class="oi-brand"><div class="oi-brand__logo"><svg viewBox="0 0 18 18" fill="none"><path d="M4 9a5 5 0 1 0 10 0A5 5 0 0 0 4 9z" stroke="#040e45" stroke-width="1.5"/><path d="M9 4v10M4 9h10" stroke="#040e45" stroke-width="1.5" stroke-linecap="round"/></svg></div><span>ozon банк</span></div>
+    <div class="oi-hero" style="max-width:58%;justify-content:center;">
+      <span class="oi-eyebrow">ANNUAL HIGHLIGHTS · 2025</span>
+      <h1 class="oi-title" style="font-size:clamp(28px,3.2vw,44px);">三个数字，<br>说清楚<em>一年</em>做了什么</h1>
+      <div class="grid-3" style="margin-top:8px;gap:16px;">
+        <div class="oi-card">
+          <div class="oi-card__num"><em>3,800</em><span style="font-size:.45em;color:var(--oi-white-55);">亿</span></div>
+          <div class="oi-card__label">全年联盟 GMV<br>同比 +52%</div>
+        </div>
+        <div class="oi-card oi-card--lime">
+          <div class="oi-card__num" style="color:var(--oi-lime);">120<span style="font-size:.45em;color:var(--oi-white-55);">万</span></div>
+          <div class="oi-card__label">合作商家规模<br>同比 +38%</div>
+        </div>
+        <div class="oi-card oi-card--pink">
+          <div class="oi-card__num" style="color:var(--oi-pink);">46<span style="font-size:.45em;color:var(--oi-white-55);">亿</span></div>
+          <div class="oi-card__label">达人分佣收益<br>同比 +67%</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =====================================================
+     SLIDE 3 · 三大产品方向 — 粉色方块 + 白色方块 + 宝石
+     ===================================================== -->
+<section class="slide" id="s3">
+  <!-- Pink rotating cube -->
+  <div class="oi-cube-wrap" style="position:absolute;width:110px;height:110px;top:12%;right:22%;">
+    <div class="oi-cube-inner oi-cube-pink">
+      <div class="oi-cube-face oi-cube-face--front"></div>
+      <div class="oi-cube-face oi-cube-face--right"></div>
+      <div class="oi-cube-face oi-cube-face--top"></div>
+    </div>
+  </div>
+  <!-- White cube -->
+  <div class="oi-cube-wrap" style="position:absolute;width:80px;height:80px;top:55%;right:12%;">
+    <div class="oi-cube-inner oi-cube-white" style="animation-duration:25s;animation-direction:reverse;">
+      <div class="oi-cube-face oi-cube-face--front"></div>
+      <div class="oi-cube-face oi-cube-face--right"></div>
+      <div class="oi-cube-face oi-cube-face--top"></div>
+    </div>
+  </div>
+  <!-- Blue sphere behind -->
+  <div class="oi-sphere" style="width:200px;height:200px;top:30%;right:6%;opacity:.6;"></div>
+  <!-- Glass gem -->
+  <div class="oi-gem" style="width:80px;height:100px;top:65%;right:28%;"></div>
+  <!-- Orbits -->
+  <div class="oi-orbit" style="width:280px;height:160px;top:25%;right:5%;transform:rotate(-20deg);--dur:11s;--dot-c:var(--oi-pink);"></div>
+  <div class="oi-orbit" style="width:200px;height:120px;top:38%;right:10%;transform:rotate(15deg);--dur:8s;--dir:reverse;--dot-c:rgba(255,255,255,.4);"></div>
+  <!-- Stars -->
+  <div class="oi-star" style="top:8%;right:48%;--s:16px;--d:0s;">+</div>
+  <div class="oi-star" style="top:82%;right:36%;--s:20px;--d:1s;">✦</div>
+
+  <div class="slide__inner">
+    <div class="oi-brand"><div class="oi-brand__logo"><svg viewBox="0 0 18 18" fill="none"><path d="M4 9a5 5 0 1 0 10 0A5 5 0 0 0 4 9z" stroke="#040e45" stroke-width="1.5"/><path d="M9 4v10M4 9h10" stroke="#040e45" stroke-width="1.5" stroke-linecap="round"/></svg></div><span>ozon банк</span></div>
+    <div class="oi-hero" style="max-width:50%;">
+      <span class="oi-eyebrow">PRODUCT DIRECTIONS · 2026</span>
+      <h1 class="oi-title" style="font-size:clamp(28px,3.4vw,48px);">三大新<br><em>产品方向</em></h1>
+      <div class="col gap-16" style="margin-top:4px;">
+        <div class="oi-card col gap-8" style="padding:20px 24px;">
+          <div class="oi-card__title">01 &nbsp; 智能选品引擎</div>
+          <div class="oi-card__desc">AI 驱动的联盟选品推荐，ROI 预测准确率 +35%</div>
+          <div><span class="oi-chip oi-chip--lime" style="font-size:11px;">AI 能力</span></div>
+        </div>
+        <div class="oi-card col gap-8" style="padding:20px 24px;">
+          <div class="oi-card__title">02 &nbsp; 达人矩阵匹配</div>
+          <div class="oi-card__desc">千人千面达人推荐，冷启动周期从 14 天降至 3 天</div>
+          <div><span class="oi-chip oi-chip--pink" style="font-size:11px;">效率提升</span></div>
+        </div>
+        <div class="oi-card col gap-8" style="padding:20px 24px;">
+          <div class="oi-card__title">03 &nbsp; 全链路归因</div>
+          <div class="oi-card__desc">从曝光到复购完整归因，ROAS 可视化提升决策速度</div>
+          <div><span class="oi-chip oi-chip--sky" style="font-size:11px;">数据透明</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =====================================================
+     SLIDE 4 · 产品一深入 — 绿色流体 + 宝石
+     ===================================================== -->
+<section class="slide slide--v3" id="s4">
+  <div class="oi-blob" style="width:220px;height:220px;top:calc(50% - 110px);right:10%;"></div>
+  <div class="oi-gem" style="width:70px;height:88px;top:20%;right:28%;"></div>
+  <div class="oi-dot-coin" style="width:55px;height:55px;top:70%;right:20%;font-size:55px;opacity:.7;"></div>
+  <div class="oi-orbit" style="width:300px;height:300px;top:calc(50% - 150px);right:6%;--dur:18s;--dot-c:var(--oi-lime);"></div>
+  <div class="oi-star" style="top:14%;right:50%;--s:18px;--d:0.3s;">✦</div>
+  <div class="oi-star" style="top:78%;right:38%;--s:12px;--d:1.5s;">+</div>
+  <div class="oi-star" style="top:40%;right:32%;--s:16px;--d:2.5s;">✦</div>
+
+  <div class="slide__inner">
+    <div class="oi-brand"><div class="oi-brand__logo"><svg viewBox="0 0 18 18" fill="none"><path d="M4 9a5 5 0 1 0 10 0A5 5 0 0 0 4 9z" stroke="#040e45" stroke-width="1.5"/><path d="M9 4v10M4 9h10" stroke="#040e45" stroke-width="1.5" stroke-linecap="round"/></svg></div><span>ozon банк</span></div>
+    <div class="oi-hero" style="max-width:50%;justify-content:center;">
+      <span class="oi-eyebrow">FEATURE DEEP DIVE · 智能选品</span>
+      <h1 class="oi-title"><em>AI</em> 知道<br>什么商品<br>能卖爆</h1>
+      <p class="oi-subtitle">不靠经验，靠数据。<br>智能选品引擎实时扫描全平台热点</p>
+      <div class="row gap-12" style="flex-wrap:wrap;">
+        <div class="oi-card" style="padding:16px 20px;flex:1;min-width:140px;">
+          <div class="oi-card__num" style="font-size:clamp(24px,3vw,40px);"><em>35%</em></div>
+          <div class="oi-card__label">ROI 预测精度提升</div>
+        </div>
+        <div class="oi-card" style="padding:16px 20px;flex:1;min-width:140px;">
+          <div class="oi-card__num" style="font-size:clamp(24px,3vw,40px);">200<span style="font-size:.5em;color:var(--oi-white-55);">万+</span></div>
+          <div class="oi-card__label">每日扫描 SKU 数</div>
+        </div>
+      </div>
+      <div class="oi-btn-row">
+        <button class="oi-btn oi-btn--lime">立即体验</button>
+        <button class="oi-btn oi-btn--outline">了解技术</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =====================================================
+     SLIDE 5 · 产品二深入 — 粉方块轨道 + 涟漪球
+     ===================================================== -->
+<section class="slide" id="s5">
+  <!-- Large sphere -->
+  <div class="oi-sphere" style="width:240px;height:240px;top:calc(50% - 180px);right:8%;"></div>
+  <!-- Small coins -->
+  <div class="oi-coin" style="width:90px;height:90px;top:calc(50% + 40px);right:28%;font-size:90px;"></div>
+  <div class="oi-dot-coin" style="width:50px;height:50px;top:calc(50% - 220px);right:38%;font-size:50px;"></div>
+  <!-- Pink cube orbiting -->
+  <div class="oi-cube-wrap" style="position:absolute;width:88px;height:88px;top:18%;right:22%;">
+    <div class="oi-cube-inner oi-cube-pink" style="animation-duration:14s;">
+      <div class="oi-cube-face oi-cube-face--front"></div>
+      <div class="oi-cube-face oi-cube-face--right"></div>
+      <div class="oi-cube-face oi-cube-face--top"></div>
+    </div>
+  </div>
+  <!-- Orbits -->
+  <div class="oi-orbit" style="width:340px;height:200px;top:calc(50% - 100px);right:4%;transform:rotate(-10deg);--dur:12s;--dot-c:var(--oi-pink);"></div>
+  <div class="oi-orbit" style="width:240px;height:140px;top:calc(50% - 70px);right:12%;transform:rotate(20deg);--dur:8s;--dir:reverse;--dot-c:rgba(255,255,255,.45);"></div>
+  <div class="oi-star" style="top:10%;right:44%;--s:20px;--d:0s;">✦</div>
+  <div class="oi-star" style="top:80%;right:34%;--s:14px;--d:1s;">+</div>
+
+  <div class="slide__inner">
+    <div class="oi-brand"><div class="oi-brand__logo"><svg viewBox="0 0 18 18" fill="none"><path d="M4 9a5 5 0 1 0 10 0A5 5 0 0 0 4 9z" stroke="#040e45" stroke-width="1.5"/><path d="M9 4v10M4 9h10" stroke="#040e45" stroke-width="1.5" stroke-linecap="round"/></svg></div><span>ozon банк</span></div>
+    <div class="oi-hero" style="max-width:50%;justify-content:center;">
+      <span class="oi-eyebrow">FEATURE DEEP DIVE · 达人匹配</span>
+      <h1 class="oi-title">3 天<br>完成<em>冷启动</em></h1>
+      <p class="oi-subtitle">千人千面达人推荐算法，<br>精准匹配商品与达人风格</p>
+      <div class="col gap-12" style="margin-top:4px;">
+        <div class="row gap-12">
+          <span class="oi-chip oi-chip--lime">腰部达人优先</span>
+          <span class="oi-chip oi-chip--sky">垂类精准匹配</span>
+        </div>
+        <div class="row gap-12">
+          <span class="oi-chip oi-chip--pink">3 天 vs 原 14 天</span>
+          <span class="oi-chip">效率 +367%</span>
+        </div>
+      </div>
+      <div class="oi-btn-row" style="margin-top:8px;">
+        <button class="oi-btn">查看演示</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- =====================================================
+     SLIDE 6 · 案例展示 — 美妆品牌 A 成功案例
+     ===================================================== -->
+<section class="slide slide--v2" id="s6">
+  <div class="oi-blob" style="width:180px;height:180px;top:calc(50% - 90px);right:8%;"></div>
+  <div class="oi-orbit" style="width:280px;height:280px;top:calc(50% - 140px);right:6%;--dur:20s;--dot-c:var(--oi-lime);"></div>
+  <div class="oi-dot-coin" style="width:65px;height:65px;top:18%;right:30%;font-size:65px;"></div>
+  <div class="oi-gem" style="width:55px;height:68px;bottom:20%;right:22%;"></div>
+  <div class="oi-star" style="top:12%;right:44%;--s:18px;--d:0s;">✦</div>
+  <div class="oi-star" style="bottom:16%;right:40%;--s:14px;--d:1.5s;">+</div>
+
+  <div class="slide__inner">
+    <div class="oi-brand"><div class="oi-brand__logo"><svg viewBox="0 0 18 18" fill="none"><path d="M4 9a5 5 0 1 0 10 0A5 5 0 0 0 4 9z" stroke="#040e45" stroke-width="1.5"/><path d="M9 4v10M4 9h10" stroke="#040e45" stroke-width="1.5" stroke-linecap="round"/></svg></div><span>ozon банк</span></div>
+    <div class="oi-hero" style="max-width:55%;justify-content:center;">
+      <span class="oi-eyebrow">CASE STUDY · 某美妆品牌</span>
+      <h1 class="oi-title" style="font-size:clamp(28px,3.4vw,48px);">从<em>月销百万</em><br>到<em>亿级爆品</em></h1>
+      <p class="oi-subtitle">用联盟+直播双引擎<br>在 90 天内实现 10× 增长</p>
+      <div class="grid-2" style="gap:14px;margin-top:4px;">
+        <div class="oi-card" style="padding:16px 20px;">
+          <div class="oi-card__num" style="font-size:clamp(20px,2.8vw,36px);color:var(--oi-lime);">+1,140<span style="font-size:.55em;color:var(--oi-white-55);">%</span></div>
+          <div class="oi-card__label">90 天 GMV 增幅</div>
+        </div>
+        <div class="oi-card" style="padding:16px 20px;">
+          <div class="oi-card__num" style="font-size:clamp(20px,2.8vw,36px);color:var(--oi-pink);">2,400<span style="font-size:.55em;color:var(--oi-white-55);">+</span></div>
+          <div class="oi-card__label">合作达人数量</div>
+        </div>
+        <div class="oi-card" style="padding:16px 20px;">
+          <div class="oi-card__num" style="font-size:clamp(20px,2.8vw,36px);color:var(--oi-sky);">4.8<span style="font-size:.55em;color:var(--oi-white-55);">×</span></div>
+          <div class="oi-card__label">ROAS 提升倍数</div>
+        </div>
+        <div class="oi-card" style="padding:16px 20px;">
+          <div class="oi-card__num" style="font-size:clamp(20px,2.8vw,36px);">Top<em> 3</em></div>
+          <div class="oi-card__label">品类销量排名</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =====================================================
+     SLIDE 7 · 行动号召 / 招募页 — 超大文字
+     ===================================================== -->
+<section class="slide" id="s7">
+  <!-- 大球 + 风车 -->
+  <div class="oi-sphere" style="width:300px;height:300px;top:calc(50% - 240px);right:4%;"></div>
+  <div class="oi-pinwheel" style="width:120px;height:120px;bottom:15%;right:22%;"></div>
+  <!-- Orbits -->
+  <div class="oi-orbit" style="width:380px;height:380px;top:calc(50% - 190px);right:2%;--dur:22s;--dot-c:rgba(255,255,255,.35);"></div>
+  <div class="oi-orbit" style="width:260px;height:160px;top:calc(50% - 80px);right:12%;transform:rotate(-25deg);--dur:9s;--dir:reverse;--dot-c:var(--oi-lime);"></div>
+  <!-- Green blob -->
+  <div class="oi-blob" style="width:100px;height:100px;top:12%;right:40%;"></div>
+  <!-- Coin -->
+  <div class="oi-coin" style="width:100px;height:100px;bottom:16%;right:12%;font-size:100px;"></div>
+  <!-- Stars -->
+  <div class="oi-star" style="top:16%;right:50%;--s:24px;--d:0s;">✦</div>
+  <div class="oi-star" style="bottom:24%;right:44%;--s:16px;--d:1.2s;">✦</div>
+  <div class="oi-star" style="top:50%;right:34%;--s:12px;--d:2.2s;">+</div>
+
+  <div class="slide__inner">
+    <div class="oi-brand"><div class="oi-brand__logo"><svg viewBox="0 0 18 18" fill="none"><path d="M4 9a5 5 0 1 0 10 0A5 5 0 0 0 4 9z" stroke="#040e45" stroke-width="1.5"/><path d="M9 4v10M4 9h10" stroke="#040e45" stroke-width="1.5" stroke-linecap="round"/></svg></div><span>ozon банк</span></div>
+    <div class="oi-hero" style="max-width:52%;justify-content:center;">
+      <span class="oi-eyebrow">JOIN US · 加入快手联盟</span>
+      <h1 class="oi-title"><span class="pink">好商品</span><br>值得被<br><em>更多人</em>看见</h1>
+      <p class="oi-subtitle">120 万商家的选择<br>现在轮到你了</p>
+      <div class="oi-btn-row">
+        <button class="oi-btn oi-btn--lime">
+          <span>立即入驻</span>
+          <span class="oi-btn__icon">
+            <svg viewBox="0 0 14 14" fill="none"><path d="M3 7h8M7 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </span>
+        </button>
+        <button class="oi-btn oi-btn--outline">联系 BD 团队</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =====================================================
+     SLIDE 8 · 合作伙伴 / 生态图谱
+     ===================================================== -->
+<section class="slide slide--v3" id="s8">
+  <div class="oi-cube-wrap" style="position:absolute;width:120px;height:120px;top:15%;right:16%;">
+    <div class="oi-cube-inner oi-cube-white" style="animation-duration:20s;">
+      <div class="oi-cube-face oi-cube-face--front"></div>
+      <div class="oi-cube-face oi-cube-face--right"></div>
+      <div class="oi-cube-face oi-cube-face--top"></div>
+    </div>
+  </div>
+  <div class="oi-sphere" style="width:180px;height:180px;top:50%;right:10%;transform:translateY(-50%);opacity:.75;"></div>
+  <div class="oi-orbit" style="width:320px;height:200px;top:calc(50% - 100px);right:4%;transform:rotate(-15deg);--dur:15s;--dot-c:var(--oi-sky);"></div>
+  <div class="oi-gem" style="width:64px;height:80px;bottom:22%;right:24%;"></div>
+  <div class="oi-star" style="top:10%;right:44%;--s:18px;--d:0s;">✦</div>
+  <div class="oi-star" style="top:84%;right:38%;--s:12px;--d:1.4s;">+</div>
+
+  <div class="slide__inner">
+    <div class="oi-brand"><div class="oi-brand__logo"><svg viewBox="0 0 18 18" fill="none"><path d="M4 9a5 5 0 1 0 10 0A5 5 0 0 0 4 9z" stroke="#040e45" stroke-width="1.5"/><path d="M9 4v10M4 9h10" stroke="#040e45" stroke-width="1.5" stroke-linecap="round"/></svg></div><span>ozon банк</span></div>
+    <div class="oi-hero" style="max-width:55%;justify-content:center;">
+      <span class="oi-eyebrow">ECOSYSTEM · 生态布局</span>
+      <h1 class="oi-title" style="font-size:clamp(28px,3.4vw,48px);">你的每一分钱<br>都在<em>高效流动</em></h1>
+      <div class="col gap-14" style="margin-top:8px;">
+        <div class="oi-card" style="padding:18px 22px;flex-direction:row;align-items:center;gap:16px;">
+          <span style="font-size:24px;font-weight:900;color:var(--oi-lime);width:32px;flex-shrink:0;">01</span>
+          <div>
+            <div class="oi-card__title" style="font-size:var(--oi-fs-body);">商家提报商品</div>
+            <div class="oi-card__desc" style="font-size:var(--oi-fs-sm);margin-top:4px;">设定佣金率 · 一键提报 · 无需审批</div>
+          </div>
+        </div>
+        <div class="oi-card" style="padding:18px 22px;flex-direction:row;align-items:center;gap:16px;">
+          <span style="font-size:24px;font-weight:900;color:var(--oi-sky);width:32px;flex-shrink:0;">02</span>
+          <div>
+            <div class="oi-card__title" style="font-size:var(--oi-fs-body);">达人选品带货</div>
+            <div class="oi-card__desc" style="font-size:var(--oi-fs-sm);margin-top:4px;">系统推荐 · 垂类匹配 · 高佣优先展示</div>
+          </div>
+        </div>
+        <div class="oi-card" style="padding:18px 22px;flex-direction:row;align-items:center;gap:16px;">
+          <span style="font-size:24px;font-weight:900;color:var(--oi-pink);width:32px;flex-shrink:0;">03</span>
+          <div>
+            <div class="oi-card__title" style="font-size:var(--oi-fs-body);">用户下单分佣结算</div>
+            <div class="oi-card__desc" style="font-size:var(--oi-fs-sm);margin-top:4px;">T+3 到账 · 全链路归因 · 争议自动仲裁</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =====================================================
+     SLIDE 9 · 团队 / 支持体系
+     ===================================================== -->
+<section class="slide" id="s9">
+  <div class="oi-blob" style="width:200px;height:200px;top:calc(50% - 100px);right:8%;"></div>
+  <div class="oi-coin" style="width:140px;height:140px;top:calc(50% - 180px);right:22%;font-size:140px;"></div>
+  <div class="oi-orbit" style="width:360px;height:240px;top:calc(50% - 120px);right:3%;transform:rotate(-12deg);--dur:17s;--dot-c:var(--oi-gold);"></div>
+  <div class="oi-dot-coin" style="width:50px;height:50px;bottom:20%;right:36%;font-size:50px;"></div>
+  <div class="oi-star" style="top:14%;right:48%;--s:22px;--d:0.4s;">✦</div>
+  <div class="oi-star" style="bottom:18%;right:30%;--s:16px;--d:1.6s;">✦</div>
+  <div class="oi-star" style="top:60%;right:42%;--s:12px;--d:2.8s;">+</div>
+
+  <div class="slide__inner">
+    <div class="oi-brand"><div class="oi-brand__logo"><svg viewBox="0 0 18 18" fill="none"><path d="M4 9a5 5 0 1 0 10 0A5 5 0 0 0 4 9z" stroke="#040e45" stroke-width="1.5"/><path d="M9 4v10M4 9h10" stroke="#040e45" stroke-width="1.5" stroke-linecap="round"/></svg></div><span>ozon банк</span></div>
+    <div class="oi-hero" style="max-width:52%;justify-content:center;">
+      <span class="oi-eyebrow">SUPPORT · 联盟支持体系</span>
+      <h1 class="oi-title" style="font-size:clamp(28px,3.2vw,46px);">我们不只<br>提供平台<br><em>还提供赢法</em></h1>
+      <div class="grid-2" style="gap:14px;margin-top:4px;">
+        <div class="oi-card col gap-6" style="padding:18px 20px;">
+          <span style="font-size:28px;">🛠</span>
+          <div class="oi-card__title" style="font-size:var(--oi-fs-body);">工具支持</div>
+          <div class="oi-card__desc" style="font-size:var(--oi-fs-sm);">磁力罗盘全套 · 数据实时</div>
+        </div>
+        <div class="oi-card col gap-6" style="padding:18px 20px;">
+          <span style="font-size:28px;">📣</span>
+          <div class="oi-card__title" style="font-size:var(--oi-fs-body);">流量扶持</div>
+          <div class="oi-card__desc" style="font-size:var(--oi-fs-sm);">新商家专项流量 · 前 30 天</div>
+        </div>
+        <div class="oi-card col gap-6" style="padding:18px 20px;">
+          <span style="font-size:28px;">🎓</span>
+          <div class="oi-card__title" style="font-size:var(--oi-fs-body);">培训赋能</div>
+          <div class="oi-card__desc" style="font-size:var(--oi-fs-sm);">联盟加速营 · 每月两期</div>
+        </div>
+        <div class="oi-card col gap-6" style="padding:18px 20px;">
+          <span style="font-size:28px;">🤝</span>
+          <div class="oi-card__title" style="font-size:var(--oi-fs-body);">专属 BD</div>
+          <div class="oi-card__desc" style="font-size:var(--oi-fs-sm);">1v1 陪跑 · 目标共定</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =====================================================
+     SLIDE 10 · 结语封底 — 全屏冲击
+     ===================================================== -->
+<section class="slide slide--closing" id="s10">
+  <!-- Background decorations -->
+  <div class="oi-sphere" style="width:320px;height:320px;top:-80px;right:-80px;opacity:.3;"></div>
+  <div class="oi-sphere" style="width:200px;height:200px;bottom:-60px;left:-60px;opacity:.2;"></div>
+  <div class="oi-blob" style="width:280px;height:280px;bottom:-60px;right:10%;opacity:.35;"></div>
+  <div class="oi-orbit" style="width:500px;height:500px;top:50%;left:50%;transform:translate(-50%,-50%);--dur:30s;--dot-c:rgba(255,255,255,.25);opacity:.5;"></div>
+  <div class="oi-orbit" style="width:350px;height:200px;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-30deg);--dur:15s;--dir:reverse;--dot-c:var(--oi-lime);opacity:.6;"></div>
+  <!-- Coin centerpiece -->
+  <div class="oi-coin" style="width:120px;height:120px;top:50%;left:50%;transform:translate(-50%,-50%) translateY(-140px);font-size:120px;opacity:.5;"></div>
+  <!-- Stars -->
+  <div class="oi-star" style="top:15%;left:20%;--s:24px;--d:0s;">✦</div>
+  <div class="oi-star" style="top:20%;right:18%;--s:18px;--d:.8s;">✦</div>
+  <div class="oi-star" style="bottom:20%;left:15%;--s:14px;--d:1.6s;">+</div>
+  <div class="oi-star" style="bottom:18%;right:22%;--s:20px;--d:2.4s;">✦</div>
+
+  <div class="slide__inner">
+    <h1 class="oi-title" style="font-size:clamp(44px,7vw,100px);text-align:center;margin-top:auto;line-height:1.0;">
+      <em>共同</em>创造<br>下一个亿级品牌
+    </h1>
+    <p class="oi-subtitle" style="text-align:center;margin:24px auto 0;max-width:560px;">
+      快手电商联盟 · 2026 战略发布<br>
+      <span style="color:var(--oi-white-55);font-size:var(--oi-fs-body);">alliance.kuaishou.com</span>
+    </p>
+    <div class="oi-btn-row" style="justify-content:center;margin-top:32px;margin-bottom:auto;">
+      <button class="oi-btn oi-btn--lime" style="height:60px;padding:0 36px;font-size:18px;">
+        <span>立即加入</span>
+        <span class="oi-btn__icon" style="width:32px;height:32px;">
+          <svg viewBox="0 0 14 14" fill="none"><path d="M3 7h8M7 3l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </span>
+      </button>
+    </div>
+  </div>
+</section>
+
+</div><!-- .deck -->
+
+<nav class="nav-dots" id="navDots" role="navigation" aria-label="幻灯片导航"></nav>
+<div class="slide-counter" id="counter">1 / 10</div>
+
+<script>
+(function(){
+  'use strict';
+  var deck   = document.getElementById('deck');
+  var dots   = document.getElementById('navDots');
+  var ctr    = document.getElementById('counter');
+  var slides = Array.from(deck.querySelectorAll('.slide'));
+  var total  = slides.length;
+  var cur    = 0;
+
+  slides.forEach(function(_, i){
+    var btn = document.createElement('button');
+    btn.className = 'nav-dot' + (i === 0 ? ' active' : '');
+    btn.setAttribute('aria-label', '第 ' + (i+1) + ' 页');
+    if(i===0) btn.setAttribute('aria-current','true');
+    btn.addEventListener('click', function(){ go(i); });
+    dots.appendChild(btn);
+  });
+
+  function go(n){
+    if(n===cur) return;
+    slides[cur].classList.remove('active');
+    slides[cur].classList.add('prev');
+    var prev = cur;
+    cur = ((n%total)+total)%total;
+    slides[cur].classList.remove('prev');
+    slides[cur].classList.add('active');
+    setTimeout(function(){ slides[prev].classList.remove('prev'); }, 420);
+    dots.querySelectorAll('.nav-dot').forEach(function(d,i){
+      d.classList.toggle('active', i===cur);
+      d.setAttribute('aria-current', i===cur ? 'true' : 'false');
+    });
+    ctr.textContent = (cur+1) + ' / ' + total;
+  }
+  function next(){ go(cur+1<total ? cur+1 : cur); }
+  function prev(){ go(cur-1>=0 ? cur-1 : cur); }
+
+  document.addEventListener('keydown', function(e){
+    var t = document.activeElement && document.activeElement.tagName;
+    if(['INPUT','TEXTAREA','SELECT'].indexOf(t)>=0) return;
+    if(e.key==='ArrowRight'||e.key==='ArrowDown'||e.key===' '||e.key==='PageDown'){ e.preventDefault(); next(); }
+    if(e.key==='ArrowLeft'||e.key==='ArrowUp'||e.key==='PageUp'){ e.preventDefault(); prev(); }
+    if(e.key==='Home'){ e.preventDefault(); go(0); }
+    if(e.key==='End') { e.preventDefault(); go(total-1); }
+  });
+
+  var wa=0, wt=null;
+  document.addEventListener('wheel', function(e){
+    e.preventDefault();
+    wa += Math.abs(e.deltaX)+Math.abs(e.deltaY);
+    if(wt) clearTimeout(wt);
+    wt = setTimeout(function(){ wa=0; }, 120);
+    if(wa>60){ wa=0; if(e.deltaX>0||e.deltaY>0) next(); else prev(); }
+  },{ passive:false });
+
+  var tx=0, ty=0;
+  document.addEventListener('touchstart',function(e){ tx=e.touches[0].clientX; ty=e.touches[0].clientY; },{ passive:true });
+  document.addEventListener('touchend',function(e){
+    var dx=e.changedTouches[0].clientX-tx;
+    var dy=e.changedTouches[0].clientY-ty;
+    if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)){ if(dx<0)next(); else prev(); }
+  },{ passive:true });
+
+  deck.setAttribute('tabindex','-1');
+  deck.focus({ preventScroll:true });
+})();
+</script>
+</body>
+</html>

@@ -3,6 +3,8 @@ import { agentCapabilities } from '../capabilities.js';
 import type { RuntimeAgentDef } from '../types.js';
 
 const SKIP_PERMISSIONS_FLAG = '--dangerously-skip-permissions';
+// opencode ≥1.17 replaced --dangerously-skip-permissions with --auto
+const AUTO_PERMISSIONS_FLAG = '--auto';
 
 export const opencodeAgentDef = {
     id: 'opencode',
@@ -12,6 +14,7 @@ export const opencodeAgentDef = {
     versionArgs: ['--version'],
     helpArgs: ['run', '--help'],
     capabilityFlags: {
+      [AUTO_PERMISSIONS_FLAG]: 'autoPermissions',
       [SKIP_PERMISSIONS_FLAG]: 'skipPermissions',
     },
     // `opencode models` prints `provider/model` per line. Real-world
@@ -50,7 +53,9 @@ export const opencodeAgentDef = {
         '--format',
         'json',
       ];
-      if (agentCapabilities.get('opencode')?.skipPermissions) {
+      if (agentCapabilities.get('opencode')?.autoPermissions) {
+        args.push(AUTO_PERMISSIONS_FLAG);
+      } else if (agentCapabilities.get('opencode')?.skipPermissions) {
         args.push(SKIP_PERMISSIONS_FLAG);
       }
       // Capture-style resume: OpenCode mints its own session id (reported on

@@ -1,0 +1,4 @@
+interface:
+  display_name: "K-session"
+  short_description: "Create a multi-slide 12:4 Dunhuang-style PPT deck."
+  default_prompt: "Use $k-session to turn my Chinese source material into a 6-slide 12:4 Dunhuang-style PPT deck."

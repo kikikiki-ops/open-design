@@ -1,0 +1,49 @@
+{
+  "slug": "html-ppt-ks-alliance",
+  "name": "快手联盟·轻奢数据叙事",
+  "tagline": "快手品牌营销内部提案风格：克制高级、轻奢品牌感、数据可信、自然科技。深青蓝 + 金系点缀 + 柔和渐变。",
+  "mood": [
+    "premium",
+    "restrained",
+    "trustworthy",
+    "brand-forward",
+    "data-driven"
+  ],
+  "occasion": [
+    "快手联盟闭门会",
+    "商业化提案",
+    "品牌合作案例汇报",
+    "电商增长数据复盘",
+    "行业峰会 Deck",
+    "内部营销策略分享"
+  ],
+  "tone": [
+    "polished",
+    "considered",
+    "warm-professional",
+    "brand-confident"
+  ],
+  "formality": "medium-high",
+  "density": "medium",
+  "palette": {
+    "bg": "#f8faf8",
+    "primary": "#052941",
+    "accent": "#d5ae79",
+    "accent2": "#20846f",
+    "accent3": "#ff2b5e",
+    "text": "#1f2d33",
+    "text_muted": "#6f7d86",
+    "description": "米白页面背景，深青蓝主色，金系线框点缀，绿色增长强调，快手粉红品牌色"
+  },
+  "typography": {
+    "display": "OPPOSans",
+    "body": "PingFang SC / Microsoft YaHei",
+    "style": "国产品牌黑体，轻奢等线，克制不炫技"
+  },
+  "scheme": "light",
+  "best_for": "快手品牌内部营销提案、闭门会 / 行业峰会 Deck、商业化数据汇报、品牌合作案例复盘、电商增长策略分享。需要兼顾品牌感与数据可信度的场合。",
+  "avoid_for": "蓝紫科技光效风格、赛博网格感、重拟物金属；纯消费者端轻松玩法内容请用小红书风格 PPT。",
+  "slide_count": 10,
+  "navigation": "inline keyboard handler, arrow keys, dot indicators",
+  "design_system": "ppt_style_system.md — kc- prefix tokens, 8 core components"
+}

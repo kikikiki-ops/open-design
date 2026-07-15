@@ -1,0 +1,1249 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>快手联盟·轻奢数据叙事 — 示例 Deck</title>
+<style>
+/* ============================================================
+   DESIGN TOKENS  (kc- prefix = Kuaishou Commerce)
+   ============================================================ */
+:root {
+  /* Color */
+  --kc-color-title:         #052941;
+  --kc-color-text-strong:   #295957;
+  --kc-color-text-mid:      #335452;
+  --kc-color-text-body:     #1f2d33;
+  --kc-color-text-muted:    #6f7d86;
+  --kc-color-text-inverse:  #ffffff;
+
+  --kc-color-bg-page:       #f8faf8;
+  --kc-color-bg-surface:    #ffffff;
+  --kc-color-bg-soft:       #eef2f3;
+  --kc-color-bg-tint:       #f3f6f4;
+
+  --kc-color-line-strong:   #052941;
+  --kc-color-line-soft:     #d9e2de;
+  --kc-color-line-gold:     #dcbb8b;
+  --kc-color-line-gold-deep:#ac8348;
+
+  --kc-color-gold:          #d5ae79;
+  --kc-color-gold-soft:     #e9d5b9;
+  --kc-color-accent-green:  #20846f;
+  --kc-color-accent-green-soft: #6d9f93;
+  --kc-color-accent-pink:   #ff2b5e;
+  --kc-color-accent-purple: #f238e2;
+  --kc-color-accent-lime:   #7fc236;
+
+  /* Gradient */
+  --kc-gradient-orb:  linear-gradient(135deg, #ff2b5e 0%, #f238e2 45%, #7fc236 100%);
+  --kc-gradient-gold: linear-gradient(135deg, #e9d5b9 0%, #d5ae79 60%, #ac8348 100%);
+  --kc-gradient-soft-bg: linear-gradient(180deg, #ffffff 0%, #f3f6f4 100%);
+  --kc-gradient-cover: linear-gradient(135deg, #052941 0%, #0d4a6e 55%, #145e76 100%);
+
+  /* Typography */
+  --kc-font: "OPPOSans","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --kc-fw-regular: 400;
+  --kc-fw-medium:  500;
+  --kc-fw-bold:    700;
+  --kc-fw-heavy:   800;
+
+  --kc-fs-display-xl: clamp(40px, 5.5vw, 72px);
+  --kc-fs-display-lg: clamp(32px, 4.5vw, 60px);
+  --kc-fs-h1:   clamp(22px, 2.8vw, 36px);
+  --kc-fs-h2:   clamp(18px, 2.1vw, 28px);
+  --kc-fs-h3:   clamp(15px, 1.7vw, 22px);
+  --kc-fs-title-sm: clamp(13px, 1.3vw, 18px);
+  --kc-fs-body:     clamp(11px, 1.05vw, 14px);
+  --kc-fs-body-sm:  clamp(10px, 0.9vw, 12px);
+  --kc-fs-caption:  clamp(9px, 0.75vw, 10px);
+  --kc-fs-metric:   clamp(28px, 4vw, 44px);
+  --kc-fs-metric-unit: clamp(16px, 2vw, 24px);
+
+  --kc-lh-tight:  1.08;
+  --kc-lh-title:  1.2;
+  --kc-lh-body:   1.5;
+  --kc-ls-tight:  -0.02em;
+  --kc-ls-wide:    0.04em;
+
+  /* Radius */
+  --kc-r-xl:   40px;
+  --kc-r-lg:   32px;
+  --kc-r-md:   24px;
+  --kc-r-sm:   16px;
+  --kc-r-pill: 999px;
+
+  /* Shadow */
+  --kc-shadow-card:  0 12px 32px rgba(5,41,65,.06);
+  --kc-shadow-float: 0 16px 40px rgba(5,41,65,.12);
+  --kc-shadow-orb:   0 12px 48px rgba(242,56,226,.18);
+
+  /* Spacing */
+  --kc-sp-4:4px; --kc-sp-8:8px; --kc-sp-12:12px; --kc-sp-16:16px;
+  --kc-sp-20:20px; --kc-sp-24:24px; --kc-sp-32:32px; --kc-sp-40:40px;
+  --kc-sp-48:48px; --kc-sp-56:56px; --kc-sp-64:64px; --kc-sp-72:72px;
+  --kc-sp-88:88px;
+
+  /* Slide layout */
+  --kc-slide-w: 1920px;
+  --kc-slide-h: 1080px;
+  --kc-pad-x: 72px;
+  --kc-pad-y: 56px;
+
+  /* Orb */
+  --kc-orb-sm:  64px;
+  --kc-orb-md: 120px;
+  --kc-orb-lg: 180px;
+  --kc-orb-blur: 12px;
+}
+
+/* ============================================================
+   RESET & BASE
+   ============================================================ */
+*,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+html,body { width:100%; height:100%; overflow:hidden; background:#111; }
+body {
+  font-family: var(--kc-font);
+  font-size: var(--kc-fs-body);
+  color: var(--kc-color-text-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============================================================
+   DECK SHELL
+   ============================================================ */
+.deck {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ============================================================
+   SLIDE BASE
+   ============================================================ */
+.slide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--kc-color-bg-page);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .35s ease, transform .35s ease;
+  transform: translateX(40px);
+  overflow: hidden;
+}
+.slide.active {
+  opacity: 1;
+  pointer-events: all;
+  transform: translateX(0);
+}
+.slide.prev {
+  opacity: 0;
+  transform: translateX(-40px);
+}
+
+/* slide inner padding */
+.slide__inner {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: var(--kc-pad-y) var(--kc-pad-x);
+  gap: var(--kc-sp-32);
+  position: relative;
+  z-index: 1;
+}
+
+/* ============================================================
+   COMPONENTS
+   ============================================================ */
+
+/* Hero title */
+.kc-hero-title {
+  max-width: min(1120px, 76%);
+  font-family: var(--kc-font);
+  font-size: var(--kc-fs-h1);
+  line-height: var(--kc-lh-title);
+  font-weight: var(--kc-fw-bold);
+  color: var(--kc-color-title);
+  letter-spacing: var(--kc-ls-tight);
+}
+.kc-hero-title--xl {
+  font-size: var(--kc-fs-display-xl);
+  line-height: var(--kc-lh-tight);
+}
+.kc-hero-title--lg {
+  font-size: var(--kc-fs-display-lg);
+  line-height: var(--kc-lh-tight);
+}
+
+/* Brand header strap */
+.kc-header-strap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 18px;
+  border-radius: var(--kc-r-pill);
+  border: 1px solid var(--kc-color-line-soft);
+  background: rgba(255,255,255,.72);
+  color: var(--kc-color-text-body);
+  font-size: var(--kc-fs-body-sm);
+  font-weight: var(--kc-fw-medium);
+  backdrop-filter: blur(8px);
+  width: fit-content;
+}
+.kc-header-strap .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--kc-color-gold);
+  flex-shrink: 0;
+}
+
+/* Strategy card */
+.kc-card {
+  background: var(--kc-color-bg-surface);
+  border-radius: var(--kc-r-lg);
+  border: 1px solid var(--kc-color-line-gold);
+  box-shadow: var(--kc-shadow-card);
+  padding: var(--kc-sp-32);
+  display: flex;
+  flex-direction: column;
+  gap: var(--kc-sp-12);
+}
+.kc-card--soft {
+  background: var(--kc-gradient-soft-bg);
+  border: 1px solid var(--kc-color-line-soft);
+  box-shadow: none;
+}
+.kc-card--tint {
+  background: var(--kc-color-bg-tint);
+  border: 1px solid var(--kc-color-line-soft);
+}
+.kc-card__eyebrow {
+  font-size: var(--kc-fs-caption);
+  font-weight: var(--kc-fw-medium);
+  color: var(--kc-color-accent-green);
+  letter-spacing: var(--kc-ls-wide);
+  text-transform: uppercase;
+}
+.kc-card__title {
+  font-size: var(--kc-fs-title-sm);
+  font-weight: var(--kc-fw-medium);
+  color: var(--kc-color-title);
+  line-height: var(--kc-lh-title);
+}
+.kc-card__desc {
+  font-size: var(--kc-fs-body-sm);
+  line-height: var(--kc-lh-body);
+  color: var(--kc-color-text-body);
+}
+.kc-card__footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--kc-sp-8);
+  margin-top: auto;
+  padding-top: var(--kc-sp-16);
+  border-top: 1px solid var(--kc-color-line-soft);
+}
+
+/* Metric card */
+.kc-metric {
+  display: flex;
+  flex-direction: column;
+  gap: var(--kc-sp-8);
+  padding: var(--kc-sp-32);
+  background: var(--kc-color-bg-surface);
+  border-radius: var(--kc-r-lg);
+  border: 1px solid var(--kc-color-line-gold);
+  box-shadow: var(--kc-shadow-card);
+}
+.kc-metric__label {
+  font-size: var(--kc-fs-body-sm);
+  color: var(--kc-color-text-muted);
+  font-weight: var(--kc-fw-medium);
+}
+.kc-metric__value {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  color: var(--kc-color-title);
+  line-height: 1;
+}
+.kc-metric__number {
+  font-size: var(--kc-fs-metric);
+  font-weight: var(--kc-fw-bold);
+  letter-spacing: var(--kc-ls-tight);
+  line-height: 1;
+}
+.kc-metric__unit {
+  font-size: var(--kc-fs-metric-unit);
+  font-weight: var(--kc-fw-heavy);
+  padding-bottom: 4px;
+}
+.kc-metric__change {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--kc-fs-body-sm);
+  color: var(--kc-color-accent-green);
+  font-weight: var(--kc-fw-medium);
+}
+.kc-metric__change::before { content: "↑"; }
+.kc-metric__tag {
+  align-self: flex-start;
+  padding: 5px 12px;
+  border-radius: var(--kc-r-pill);
+  background: rgba(32,132,111,.1);
+  color: var(--kc-color-text-strong);
+  font-size: var(--kc-fs-body-sm);
+  font-weight: var(--kc-fw-medium);
+}
+
+/* Pill tag */
+.kc-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: var(--kc-r-pill);
+  border: 1px solid var(--kc-color-line-gold);
+  color: var(--kc-color-text-body);
+  background: #fffdf9;
+  font-size: var(--kc-fs-body-sm);
+  font-weight: var(--kc-fw-medium);
+  white-space: nowrap;
+}
+.kc-pill--solid {
+  background: var(--kc-color-accent-green);
+  color: #fff;
+  border: none;
+}
+.kc-pill--pink {
+  background: rgba(255,43,94,.08);
+  color: var(--kc-color-accent-pink);
+  border-color: rgba(255,43,94,.25);
+}
+.kc-pill--dark {
+  background: var(--kc-color-title);
+  color: #fff;
+  border: none;
+}
+
+/* Connector nodes */
+.kc-node-dot {
+  width:10px; height:10px;
+  border-radius:50%;
+  background: var(--kc-color-gold);
+  flex-shrink: 0;
+}
+.kc-node-diamond {
+  width:14px; height:14px;
+  background: var(--kc-color-gold-soft);
+  border: 1px solid var(--kc-color-line-gold);
+  transform: rotate(45deg);
+  flex-shrink: 0;
+}
+.kc-node-line {
+  flex: 1; height:1px;
+  background: var(--kc-color-line-gold);
+}
+.kc-connector {
+  display: flex;
+  align-items: center;
+  gap: var(--kc-sp-8);
+}
+
+/* Gradient orb */
+.kc-orb {
+  position: absolute;
+  border-radius: var(--kc-r-pill);
+  background: var(--kc-gradient-orb);
+  filter: blur(var(--kc-orb-blur));
+  opacity: .85;
+  pointer-events: none;
+  z-index: 0;
+}
+.kc-orb--sm { width:var(--kc-orb-sm); height:var(--kc-orb-sm); }
+.kc-orb--md { width:var(--kc-orb-md); height:var(--kc-orb-md); }
+.kc-orb--lg { width:var(--kc-orb-lg); height:var(--kc-orb-lg); }
+.kc-orb--gold {
+  background: var(--kc-gradient-gold);
+  filter: blur(18px);
+  opacity: .6;
+}
+
+/* Gold divider line */
+.kc-divider {
+  height: 1px;
+  background: var(--kc-gradient-gold);
+  opacity: .6;
+  border: none;
+}
+.kc-divider--v {
+  width: 1px;
+  height: auto;
+  align-self: stretch;
+}
+
+/* Section number */
+.kc-section-no {
+  font-size: var(--kc-fs-display-xl);
+  font-weight: var(--kc-fw-heavy);
+  color: rgba(5,41,65,.07);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  user-select: none;
+  position: absolute;
+}
+
+/* Quote block */
+.kc-quote {
+  padding: var(--kc-sp-24) var(--kc-sp-32);
+  border-left: 3px solid var(--kc-color-gold);
+  background: rgba(213,174,121,.06);
+  border-radius: 0 var(--kc-r-sm) var(--kc-r-sm) 0;
+}
+.kc-quote__text {
+  font-size: var(--kc-fs-h3);
+  font-weight: var(--kc-fw-medium);
+  color: var(--kc-color-title);
+  line-height: var(--kc-lh-title);
+  font-style: italic;
+}
+.kc-quote__source {
+  margin-top: var(--kc-sp-12);
+  font-size: var(--kc-fs-body-sm);
+  color: var(--kc-color-text-muted);
+}
+
+/* Timeline row */
+.kc-timeline {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+}
+.kc-timeline__item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--kc-sp-12);
+  position: relative;
+}
+.kc-timeline__item:not(:last-child)::after {
+  content:'';
+  position: absolute;
+  top: 12px;
+  left: calc(50% + 12px);
+  right: calc(-50% + 12px);
+  height: 1px;
+  background: var(--kc-color-line-gold);
+}
+.kc-timeline__dot {
+  width:24px; height:24px;
+  border-radius:50%;
+  border: 2px solid var(--kc-color-gold);
+  background: var(--kc-color-bg-surface);
+  display: flex; align-items:center; justify-content:center;
+  flex-shrink:0;
+  z-index: 1;
+}
+.kc-timeline__dot-inner {
+  width:8px; height:8px;
+  border-radius:50%;
+  background: var(--kc-color-gold);
+}
+.kc-timeline__label {
+  font-size: var(--kc-fs-body-sm);
+  color: var(--kc-color-text-muted);
+  text-align: center;
+}
+.kc-timeline__title {
+  font-size: var(--kc-fs-body);
+  font-weight: var(--kc-fw-medium);
+  color: var(--kc-color-title);
+  text-align: center;
+  line-height: var(--kc-lh-title);
+}
+
+/* ============================================================
+   LAYOUT UTILITIES
+   ============================================================ */
+.row { display: flex; align-items: stretch; gap: var(--kc-sp-24); }
+.col  { display: flex; flex-direction: column; gap: var(--kc-sp-16); }
+.flex-1 { flex: 1; }
+.flex-2 { flex: 2; }
+.flex-3 { flex: 3; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--kc-sp-24); }
+.grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: var(--kc-sp-24); }
+.grid-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: var(--kc-sp-20); }
+.mt-auto { margin-top: auto; }
+.items-center { align-items: center; }
+.items-end { align-items: flex-end; }
+.justify-between { justify-content: space-between; }
+.text-muted { color: var(--kc-color-text-muted); font-size: var(--kc-fs-body-sm); }
+.gap-8  { gap: var(--kc-sp-8); }
+.gap-12 { gap: var(--kc-sp-12); }
+.gap-16 { gap: var(--kc-sp-16); }
+.gap-24 { gap: var(--kc-sp-24); }
+
+/* ============================================================
+   NAVIGATION DOTS
+   ============================================================ */
+.nav-dots {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 100;
+}
+.nav-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(5,41,65,.2);
+  cursor: pointer;
+  padding: 0;
+  transition: background .2s, transform .2s;
+}
+.nav-dot.active {
+  background: var(--kc-color-gold);
+  transform: scale(1.3);
+}
+
+/* Slide counter */
+.slide-counter {
+  position: fixed;
+  bottom: 20px;
+  right: 36px;
+  font-size: 11px;
+  color: rgba(5,41,65,.35);
+  font-family: var(--kc-font);
+  z-index: 100;
+  pointer-events: none;
+}
+
+/* ============================================================
+   COVER SLIDE (slide--cover)
+   ============================================================ */
+.slide--cover {
+  background: var(--kc-gradient-cover);
+  color: #fff;
+}
+.slide--cover .kc-hero-title,
+.slide--cover .kc-hero-title--xl {
+  color: #fff;
+}
+.slide--cover .slide__inner {
+  justify-content: flex-end;
+  padding-bottom: calc(var(--kc-pad-y) + 24px);
+}
+.cover-eyebrow {
+  font-size: var(--kc-fs-body-sm);
+  font-weight: var(--kc-fw-medium);
+  color: rgba(255,255,255,.55);
+  letter-spacing: var(--kc-ls-wide);
+  text-transform: uppercase;
+}
+.cover-subtitle {
+  font-size: var(--kc-fs-h3);
+  color: rgba(255,255,255,.72);
+  line-height: var(--kc-lh-body);
+  max-width: 680px;
+}
+.cover-meta {
+  font-size: var(--kc-fs-body-sm);
+  color: rgba(255,255,255,.45);
+}
+.cover-brand {
+  position: absolute;
+  top: var(--kc-pad-y);
+  left: var(--kc-pad-x);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 2;
+}
+.cover-brand__logo {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  background: var(--kc-color-accent-pink);
+  display: flex; align-items:center; justify-content:center;
+}
+.cover-brand__logo svg { width:20px; height:20px; fill:#fff; }
+.cover-brand__name {
+  font-size: var(--kc-fs-body);
+  font-weight: var(--kc-fw-bold);
+  color: rgba(255,255,255,.9);
+  letter-spacing: var(--kc-ls-wide);
+}
+.cover-brand__sep {
+  width:1px; height:16px;
+  background: rgba(255,255,255,.25);
+}
+.cover-brand__sub {
+  font-size: var(--kc-fs-body-sm);
+  color: rgba(255,255,255,.45);
+}
+
+/* gold accent line on cover */
+.cover-gold-line {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--kc-gradient-gold);
+  opacity: .7;
+}
+
+/* ============================================================
+   SECTION DIVIDER SLIDE
+   ============================================================ */
+.slide--section {
+  background: var(--kc-color-bg-soft);
+}
+.slide--section .slide__inner {
+  justify-content: center;
+  align-items: flex-start;
+}
+.section-number {
+  font-size: 120px;
+  font-weight: var(--kc-fw-heavy);
+  color: rgba(5,41,65,.06);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  user-select: none;
+}
+.section-title {
+  font-size: var(--kc-fs-display-lg);
+  font-weight: var(--kc-fw-bold);
+  color: var(--kc-color-title);
+  line-height: var(--kc-lh-tight);
+  letter-spacing: var(--kc-ls-tight);
+  max-width: 820px;
+}
+
+/* ============================================================
+   CLOSING SLIDE
+   ============================================================ */
+.slide--closing {
+  background: var(--kc-color-title);
+}
+.slide--closing .slide__inner {
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+.closing-title {
+  font-size: var(--kc-fs-display-xl);
+  font-weight: var(--kc-fw-heavy);
+  color: #fff;
+  line-height: var(--kc-lh-tight);
+}
+.closing-sub {
+  font-size: var(--kc-fs-h3);
+  color: rgba(255,255,255,.55);
+  margin-top: var(--kc-sp-16);
+}
+.closing-brand {
+  margin-top: var(--kc-sp-48);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: center;
+}
+.closing-brand__dot {
+  width: 10px; height: 10px;
+  border-radius:50%;
+  background: var(--kc-color-accent-pink);
+}
+.closing-brand__name {
+  font-size: var(--kc-fs-body);
+  color: rgba(255,255,255,.45);
+  font-weight: var(--kc-fw-medium);
+  letter-spacing: var(--kc-ls-wide);
+}
+</style>
+</head>
+<body>
+
+<div class="deck" id="deck">
+
+  <!-- SLIDE 1 · 封面 -->
+  <section class="slide slide--cover active" id="s1">
+    <div class="cover-brand">
+      <div class="cover-brand__logo">
+        <svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="10" r="8" fill="none" stroke="#fff" stroke-width="1.5"/><path d="M7 7l6 3-6 3V7z" fill="#fff"/></svg>
+      </div>
+      <span class="cover-brand__name">快手联盟</span>
+      <div class="cover-brand__sep"></div>
+      <span class="cover-brand__sub">闭门峰会 2026</span>
+    </div>
+    <div class="kc-orb kc-orb--lg" style="top:-60px;right:-60px;opacity:.6;"></div>
+    <div class="kc-orb kc-orb--md kc-orb--gold" style="bottom:120px;right:200px;"></div>
+    <div class="kc-orb kc-orb--sm" style="top:220px;right:340px;opacity:.4;"></div>
+    <div class="slide__inner">
+      <div class="col" style="gap:var(--kc-sp-20);max-width:900px;">
+        <span class="cover-eyebrow">2026 快手联盟 · 年度品牌营销峰会</span>
+        <h1 class="kc-hero-title kc-hero-title--xl">
+          快手联盟<br>
+          <span style="color:rgba(255,255,255,.6);font-size:.68em;font-weight:700;">轻奢数据叙事体系</span>
+        </h1>
+        <p class="cover-subtitle">克制 · 高级 · 品牌感 · 数据可信<br>让每一页 Slide 都说一件真正重要的事</p>
+        <div class="row items-center gap-16" style="margin-top:var(--kc-sp-8);">
+          <span class="kc-pill kc-pill--dark" style="font-size:11px;">设计规范 v2.0</span>
+          <span class="kc-pill kc-pill--pink" style="font-size:11px;">快手商业化</span>
+          <span class="cover-meta">2026 年 7 月 &nbsp;·&nbsp; 快手联盟运营团队</span>
+        </div>
+      </div>
+    </div>
+    <div class="cover-gold-line"></div>
+  </section>
+
+  <!-- SLIDE 2 · 年度核心成果 -->
+  <section class="slide" id="s2">
+    <div class="kc-orb kc-orb--lg kc-orb--gold" style="top:-40px;right:-40px;opacity:.3;"></div>
+    <div class="kc-orb kc-orb--sm" style="bottom:70px;left:90px;opacity:.28;"></div>
+    <div class="slide__inner">
+      <div class="col gap-8">
+        <div class="kc-header-strap"><span class="dot"></span>年度成果 · 2025 Full Year</div>
+        <h2 class="kc-hero-title">联盟生态三大核心成果</h2>
+      </div>
+      <div class="grid-3" style="flex:1;align-items:stretch;">
+        <div class="kc-metric">
+          <span class="kc-metric__label">联盟商家总规模</span>
+          <div class="kc-metric__value"><span class="kc-metric__number">120</span><span class="kc-metric__unit">万+</span></div>
+          <span class="kc-metric__change">同比 +38%</span>
+          <span class="kc-metric__tag">新突破</span>
+          <div class="kc-divider" style="margin-top:auto;"></div>
+          <p class="text-muted">覆盖电商、本地生活、品牌合作全品类联盟商家体系</p>
+        </div>
+        <div class="kc-metric">
+          <span class="kc-metric__label">全年联盟 GMV</span>
+          <div class="kc-metric__value"><span class="kc-metric__number">3,800</span><span class="kc-metric__unit">亿</span></div>
+          <span class="kc-metric__change">同比 +52%</span>
+          <span class="kc-metric__tag">新成绩</span>
+          <div class="kc-divider" style="margin-top:auto;"></div>
+          <p class="text-muted">快手联盟成为平台增量最快的商业化增长极</p>
+        </div>
+        <div class="kc-metric">
+          <span class="kc-metric__label">创作者分佣总收益</span>
+          <div class="kc-metric__value"><span class="kc-metric__number">46</span><span class="kc-metric__unit">亿</span></div>
+          <span class="kc-metric__change">同比 +67%</span>
+          <span class="kc-metric__tag">新亮点</span>
+          <div class="kc-divider" style="margin-top:auto;"></div>
+          <p class="text-muted">内容电商创作者留存率提升至 78%，生态健康度显著提升</p>
+        </div>
+      </div>
+      <div class="kc-connector" style="padding:0 40px;">
+        <div class="kc-node-diamond"></div>
+        <div class="kc-node-line"></div>
+        <span class="text-muted" style="white-space:nowrap;">商家规模 × GMV × 创作者 · 三轮驱动</span>
+        <div class="kc-node-line"></div>
+        <div class="kc-node-diamond"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE 3 · 三大增长策略 -->
+  <section class="slide" id="s3">
+    <div class="kc-orb kc-orb--md" style="top:-30px;right:80px;opacity:.38;"></div>
+    <div class="slide__inner">
+      <div class="col gap-8">
+        <div class="kc-header-strap"><span class="dot"></span>增长策略 · Growth Strategy</div>
+        <h2 class="kc-hero-title">三大核心增长飞轮</h2>
+      </div>
+      <div class="row" style="flex:1;align-items:stretch;">
+        <div class="col flex-2" style="gap:var(--kc-sp-16);">
+          <div class="kc-card" style="flex:1;">
+            <span class="kc-card__eyebrow">飞轮一</span>
+            <p class="kc-card__title">优质内容驱动自然转化</p>
+            <p class="kc-card__desc">以达人短视频、直播带货为核心，通过「内容质量分」机制筛选高转化内容，建立平台内容与 GMV 的正向增强循环。</p>
+            <div class="kc-card__footer"><span class="kc-pill">短视频带货</span><span class="kc-pill">直播联盟</span><span class="kc-pill">内容质量分</span></div>
+          </div>
+          <div class="kc-card kc-card--soft" style="flex:1;">
+            <span class="kc-card__eyebrow">飞轮二</span>
+            <p class="kc-card__title">精准人群包 × ROI 分层投放</p>
+            <p class="kc-card__desc">基于快手磁力引擎的人群标签体系，对联盟商家提供分层 ROI 策略建议，将平均 ROAS 从 2.1 提升至 3.6。</p>
+            <div class="kc-card__footer"><span class="kc-pill">磁力引擎</span><span class="kc-pill kc-pill--solid">ROAS 3.6</span></div>
+          </div>
+        </div>
+        <div class="kc-divider kc-divider--v" style="margin:0 8px;"></div>
+        <div class="col flex-3" style="gap:var(--kc-sp-16);">
+          <div class="kc-card" style="flex:2;">
+            <span class="kc-card__eyebrow">飞轮三</span>
+            <p class="kc-card__title">品牌自播 + 联盟协同双轮并转</p>
+            <p class="kc-card__desc">品牌自播账号与联盟达人矩阵协同排期，形成流量互补而非竞争关系。品牌自播场均 UV 提升 44%，联盟贡献 GMV 占比从 28% 上升至 41%。</p>
+            <div class="kc-card__footer"><span class="kc-pill">品牌自播</span><span class="kc-pill">达人矩阵</span><span class="kc-pill kc-pill--pink">联盟占比 +41%</span></div>
+          </div>
+          <div class="kc-quote" style="flex:1;">
+            <p class="kc-quote__text">「三轮驱动不是资源堆叠，是系统设计。」</p>
+            <p class="kc-quote__source">— 快手联盟 2026 运营方法论</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE 4 · 品牌案例复盘 -->
+  <section class="slide" id="s4">
+    <div class="kc-orb kc-orb--md kc-orb--gold" style="bottom:-20px;right:-20px;opacity:.4;"></div>
+    <div class="slide__inner">
+      <div class="row items-center justify-between">
+        <div class="col gap-8">
+          <div class="kc-header-strap"><span class="dot"></span>案例复盘 · Case Review</div>
+          <h2 class="kc-hero-title">美妆品类联盟爆款复盘</h2>
+        </div>
+        <div class="row gap-12"><span class="kc-pill kc-pill--solid">美妆</span><span class="kc-pill">618 大促</span><span class="kc-pill">25 天</span></div>
+      </div>
+      <div class="row" style="flex:1;align-items:stretch;gap:var(--kc-sp-20);">
+        <div class="col flex-2" style="gap:var(--kc-sp-20);">
+          <p style="font-size:var(--kc-fs-body-sm);font-weight:500;color:var(--kc-color-text-mid);">执行路径</p>
+          <div class="kc-timeline">
+            <div class="kc-timeline__item"><div class="kc-timeline__dot"><div class="kc-timeline__dot-inner"></div></div><span class="kc-timeline__label">D1–5</span><span class="kc-timeline__title">种草内容<br>预热蓄水</span></div>
+            <div class="kc-timeline__item"><div class="kc-timeline__dot"><div class="kc-timeline__dot-inner"></div></div><span class="kc-timeline__label">D6–10</span><span class="kc-timeline__title">达人矩阵<br>集中爆发</span></div>
+            <div class="kc-timeline__item"><div class="kc-timeline__dot"><div class="kc-timeline__dot-inner"></div></div><span class="kc-timeline__label">D11–20</span><span class="kc-timeline__title">品牌自播<br>收割长尾</span></div>
+            <div class="kc-timeline__item"><div class="kc-timeline__dot"><div class="kc-timeline__dot-inner"></div></div><span class="kc-timeline__label">D21–25</span><span class="kc-timeline__title">复购唤回<br>锁定用户</span></div>
+          </div>
+          <div class="kc-card kc-card--tint" style="margin-top:auto;">
+            <p class="kc-card__title">关键决策：D6 加码联盟佣金 +5%</p>
+            <p class="kc-card__desc">监测到 D5 转化率低于预期后，快速提升佣金吸引腰部达人入场，48 小时内新增 230+ 个联盟视频，当日 GMV 环比提升 3.2×。</p>
+          </div>
+        </div>
+        <div class="col flex-1" style="gap:var(--kc-sp-16);">
+          <p style="font-size:var(--kc-fs-body-sm);font-weight:500;color:var(--kc-color-text-mid);">核心结果</p>
+          <div class="kc-metric" style="flex:1;"><span class="kc-metric__label">活动期 GMV</span><div class="kc-metric__value"><span class="kc-metric__number">2.3</span><span class="kc-metric__unit">亿</span></div><span class="kc-metric__change">超目标 58%</span></div>
+          <div class="kc-metric" style="flex:1;"><span class="kc-metric__label">联盟贡献占比</span><div class="kc-metric__value"><span class="kc-metric__number">63</span><span class="kc-metric__unit">%</span></div><span class="kc-metric__change">行业均值 2.1×</span></div>
+          <div class="kc-metric" style="flex:1;"><span class="kc-metric__label">新品牌粉丝增长</span><div class="kc-metric__value"><span class="kc-metric__number">48</span><span class="kc-metric__unit">万</span></div><span class="kc-metric__change">粉丝留存率 72%</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE 5 · 资源配置 -->
+  <section class="slide" id="s5">
+    <div class="kc-orb kc-orb--sm" style="top:80px;right:200px;opacity:.3;"></div>
+    <div class="kc-orb kc-orb--md kc-orb--gold" style="bottom:-40px;left:80px;opacity:.28;"></div>
+    <div class="slide__inner">
+      <div class="col gap-8">
+        <div class="kc-header-strap"><span class="dot"></span>资源配置 · Resource Allocation</div>
+        <h2 class="kc-hero-title">联盟四大核心资源包</h2>
+      </div>
+      <div class="grid-4" style="flex:1;align-items:stretch;">
+        <div class="kc-card" style="gap:var(--kc-sp-16);">
+          <span class="kc-card__eyebrow">资源 01</span>
+          <p class="kc-card__title">流量扶持</p>
+          <p class="kc-card__desc">信息流加权推荐、搜索词资源位、直播间流量包，定向覆盖联盟合作商家。</p>
+          <div class="kc-card__footer"><span class="kc-pill kc-pill--solid">优先分发</span></div>
+        </div>
+        <div class="kc-card kc-card--soft" style="gap:var(--kc-sp-16);">
+          <span class="kc-card__eyebrow">资源 02</span>
+          <p class="kc-card__title">佣金激励</p>
+          <p class="kc-card__desc">活动期佣金补贴上限 10%，阶梯返佣机制，保底线下不跌穿。</p>
+          <div class="kc-card__footer"><span class="kc-pill">阶梯返佣</span></div>
+        </div>
+        <div class="kc-card" style="gap:var(--kc-sp-16);">
+          <span class="kc-card__eyebrow">资源 03</span>
+          <p class="kc-card__title">数据工具</p>
+          <p class="kc-card__desc">快手磁力罗盘联盟专版：达人效率看板、选品热力图、竞品监控。</p>
+          <div class="kc-card__footer"><span class="kc-pill">磁力罗盘</span></div>
+        </div>
+        <div class="kc-card kc-card--soft" style="gap:var(--kc-sp-16);">
+          <span class="kc-card__eyebrow">资源 04</span>
+          <p class="kc-card__title">运营陪跑</p>
+          <p class="kc-card__desc">专属 BD 1v1 服务，48h 响应 SLA，月度健康度诊断报告。</p>
+          <div class="kc-card__footer"><span class="kc-pill kc-pill--pink">1v1 专属</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- SLIDE 6 · 行动计划 — 时间轴 + 责任矩阵 -->
+  <section class="slide" id="s6">
+    <div class="kc-orb kc-orb--sm" style="top:60px;left:200px;opacity:.3;"></div>
+    <div class="kc-orb kc-orb--md" style="bottom:-50px;right:120px;opacity:.32;"></div>
+    <div class="slide__inner">
+      <div class="row items-center justify-between">
+        <div class="col gap-8">
+          <div class="kc-header-strap"><span class="dot"></span>行动计划 · Action Plan</div>
+          <h2 class="kc-hero-title">Q3 联盟增长行动计划</h2>
+        </div>
+        <div class="row gap-12">
+          <span class="kc-pill">2026 Q3</span>
+          <span class="kc-pill kc-pill--solid">90 天冲刺</span>
+        </div>
+      </div>
+
+      <div class="row" style="flex:1;align-items:stretch;gap:var(--kc-sp-24);">
+        <!-- Left: action cards -->
+        <div class="col flex-3" style="gap:var(--kc-sp-16);">
+          <!-- Action 1 -->
+          <div class="kc-card" style="flex-direction:row;align-items:flex-start;gap:var(--kc-sp-20);padding:var(--kc-sp-24);">
+            <div style="min-width:52px;height:52px;border-radius:var(--kc-r-md);background:rgba(5,41,65,.06);display:flex;align-items:center;justify-content:center;font-size:var(--kc-fs-h2);font-weight:var(--kc-fw-heavy);color:var(--kc-color-title);">01</div>
+            <div class="col gap-8" style="flex:1;">
+              <p class="kc-card__title">新商家招募冲刺 · 目标 +15 万</p>
+              <p class="kc-card__desc">聚焦食饮、3C、家居三大品类，启动「联盟加速营」专项，降低新商家入门门槛，首月免技术服务费。</p>
+              <div class="row gap-8"><span class="kc-pill">7月启动</span><span class="kc-pill">BD 全员</span><span class="kc-pill kc-pill--solid">+15万商家</span></div>
+            </div>
+          </div>
+          <!-- Action 2 -->
+          <div class="kc-card kc-card--soft" style="flex-direction:row;align-items:flex-start;gap:var(--kc-sp-20);padding:var(--kc-sp-24);">
+            <div style="min-width:52px;height:52px;border-radius:var(--kc-r-md);background:rgba(32,132,111,.08);display:flex;align-items:center;justify-content:center;font-size:var(--kc-fs-h2);font-weight:var(--kc-fw-heavy);color:var(--kc-color-accent-green);">02</div>
+            <div class="col gap-8" style="flex:1;">
+              <p class="kc-card__title">「超级达人」联盟矩阵扩建</p>
+              <p class="kc-card__desc">签约腰部达人 500+，搭建垂类矩阵，通过「达人健康度评分」系统筛选高质量合作对象，提升 GMV 转化稳定性。</p>
+              <div class="row gap-8"><span class="kc-pill">8月收官</span><span class="kc-pill kc-pill--pink">腰部达人</span></div>
+            </div>
+          </div>
+          <!-- Action 3 -->
+          <div class="kc-card" style="flex-direction:row;align-items:flex-start;gap:var(--kc-sp-20);padding:var(--kc-sp-24);">
+            <div style="min-width:52px;height:52px;border-radius:var(--kc-r-md);background:rgba(213,174,121,.12);display:flex;align-items:center;justify-content:center;font-size:var(--kc-fs-h2);font-weight:var(--kc-fw-heavy);color:var(--kc-color-gold);">03</div>
+            <div class="col gap-8" style="flex:1;">
+              <p class="kc-card__title">磁力罗盘 2.0 工具升级上线</p>
+              <p class="kc-card__desc">新增「联盟选品雷达」「竞品监控看板」功能模块，覆盖 TOP1000 商家，目标工具日活渗透率达 60%。</p>
+              <div class="row gap-8"><span class="kc-pill">9月上线</span><span class="kc-pill">工具侧</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: milestone summary -->
+        <div class="col flex-1" style="gap:var(--kc-sp-16);">
+          <p style="font-size:var(--kc-fs-body-sm);font-weight:500;color:var(--kc-color-text-mid);">关键里程碑</p>
+          <div class="kc-card kc-card--tint" style="flex:1;gap:var(--kc-sp-20);">
+            <div class="col gap-4">
+              <span style="font-size:var(--kc-fs-caption);color:var(--kc-color-text-muted);font-weight:500;letter-spacing:.04em;text-transform:uppercase;">7月 15日</span>
+              <span style="font-size:var(--kc-fs-body);font-weight:500;color:var(--kc-color-title);">加速营首期开班</span>
+            </div>
+            <div class="kc-divider"></div>
+            <div class="col gap-4">
+              <span style="font-size:var(--kc-fs-caption);color:var(--kc-color-text-muted);font-weight:500;letter-spacing:.04em;text-transform:uppercase;">8月 31日</span>
+              <span style="font-size:var(--kc-fs-body);font-weight:500;color:var(--kc-color-title);">达人矩阵完成签约</span>
+            </div>
+            <div class="kc-divider"></div>
+            <div class="col gap-4">
+              <span style="font-size:var(--kc-fs-caption);color:var(--kc-color-text-muted);font-weight:500;letter-spacing:.04em;text-transform:uppercase;">9月 10日</span>
+              <span style="font-size:var(--kc-fs-body);font-weight:500;color:var(--kc-color-title);">罗盘 2.0 灰度上线</span>
+            </div>
+            <div class="kc-divider"></div>
+            <div class="col gap-4">
+              <span style="font-size:var(--kc-fs-caption);color:var(--kc-color-text-muted);font-weight:500;letter-spacing:.04em;text-transform:uppercase;">9月 30日</span>
+              <span style="font-size:var(--kc-fs-body);font-weight:500;color:var(--kc-color-title);">Q3 目标核查</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE 7 · 章节分隔页 -->
+  <section class="slide slide--section" id="s7">
+    <div class="kc-orb kc-orb--lg" style="top:-80px;right:-80px;opacity:.25;"></div>
+    <div class="kc-orb kc-orb--md kc-orb--gold" style="bottom:80px;right:200px;opacity:.35;"></div>
+    <div class="slide__inner" style="justify-content:center;gap:var(--kc-sp-24);">
+      <span class="section-number">04</span>
+      <div class="col gap-16" style="margin-top:var(--kc-sp-12);">
+        <div class="kc-header-strap"><span class="dot"></span>生态洞察 · Ecosystem Insight</div>
+        <h2 class="section-title">快手联盟<br>下一阶段的增长在哪里？</h2>
+        <p style="font-size:var(--kc-fs-h3);color:var(--kc-color-text-muted);max-width:640px;line-height:var(--kc-lh-body);">
+          存量商家提效 × 新兴品类爆发 × 本地生活渗透<br>
+          三个方向同步拉动，生态进入第二曲线
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE 8 · 数据洞察 — 三栏对比 -->
+  <section class="slide" id="s8">
+    <div class="kc-orb kc-orb--md" style="top:-20px;left:80px;opacity:.3;"></div>
+    <div class="kc-orb kc-orb--sm kc-orb--gold" style="bottom:60px;right:80px;opacity:.4;"></div>
+    <div class="slide__inner">
+      <div class="col gap-8">
+        <div class="kc-header-strap"><span class="dot"></span>生态洞察 · Ecosystem Insight</div>
+        <h2 class="kc-hero-title">三个新增长方向</h2>
+      </div>
+
+      <div class="grid-3" style="flex:1;align-items:stretch;">
+        <!-- Direction 1 -->
+        <div class="col gap-16">
+          <div class="kc-card" style="flex:2;">
+            <span class="kc-card__eyebrow">方向一</span>
+            <p class="kc-card__title">存量商家精细化提效</p>
+            <p class="kc-card__desc">
+              TOP 20% 商家贡献 78% GMV，但其中 43% 仍处于粗放运营状态。
+              通过工具 + 陪跑双驱，将人均 GMV 再提升 30%，是最稳健的增量空间。
+            </p>
+            <div class="kc-card__footer">
+              <span class="kc-pill">精细化运营</span>
+              <span class="kc-pill kc-pill--solid">+30% GMV</span>
+            </div>
+          </div>
+          <div class="kc-metric">
+            <span class="kc-metric__label">存量可挖掘空间</span>
+            <div class="kc-metric__value">
+              <span class="kc-metric__number">43</span>
+              <span class="kc-metric__unit">%</span>
+            </div>
+            <span class="kc-metric__change">粗放商家占比</span>
+          </div>
+        </div>
+
+        <!-- Direction 2 -->
+        <div class="col gap-16">
+          <div class="kc-card kc-card--soft" style="flex:2;">
+            <span class="kc-card__eyebrow">方向二</span>
+            <p class="kc-card__title">新兴品类：宠物 / 运动 / 银发</p>
+            <p class="kc-card__desc">
+              快手用户中 35+ 占比已达 44%，宠物经济 YoY +220%，运动健身 YoY +180%。
+              三大新兴品类联盟商家数量仅为美妆的 1/8，竞争烈度极低。
+            </p>
+            <div class="kc-card__footer">
+              <span class="kc-pill">宠物</span>
+              <span class="kc-pill">运动健身</span>
+              <span class="kc-pill kc-pill--pink">银发经济</span>
+            </div>
+          </div>
+          <div class="kc-metric">
+            <span class="kc-metric__label">新兴品类平均增速</span>
+            <div class="kc-metric__value">
+              <span class="kc-metric__number">190</span>
+              <span class="kc-metric__unit">%</span>
+            </div>
+            <span class="kc-metric__change">YoY 三品类均值</span>
+          </div>
+        </div>
+
+        <!-- Direction 3 -->
+        <div class="col gap-16">
+          <div class="kc-card" style="flex:2;">
+            <span class="kc-card__eyebrow">方向三</span>
+            <p class="kc-card__title">本地生活联盟渗透</p>
+            <p class="kc-card__desc">
+              本地生活 GTV 已突破 800 亿，但联盟模式渗透率仅 12%，
+              远低于电商品类的 41%。探索「到店到家」联盟佣金体系，
+              是 2026 下半年最大的蓝海机会。
+            </p>
+            <div class="kc-card__footer">
+              <span class="kc-pill">到店到家</span>
+              <span class="kc-pill kc-pill--solid">蓝海机会</span>
+            </div>
+          </div>
+          <div class="kc-metric">
+            <span class="kc-metric__label">本地生活联盟渗透率</span>
+            <div class="kc-metric__value">
+              <span class="kc-metric__number">12</span>
+              <span class="kc-metric__unit">%</span>
+            </div>
+            <span class="kc-metric__change">提升空间 +29pt</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- SLIDE 9 · 联盟价值主张 — 品牌封底前页 -->
+  <section class="slide" id="s9">
+    <div class="kc-orb kc-orb--lg kc-orb--gold" style="top:-60px;right:-60px;opacity:.28;"></div>
+    <div class="kc-orb kc-orb--md" style="bottom:-30px;left:60px;opacity:.3;"></div>
+    <div class="slide__inner">
+      <div class="col gap-8">
+        <div class="kc-header-strap"><span class="dot"></span>联盟价值 · Alliance Value</div>
+        <h2 class="kc-hero-title">为什么选择快手联盟？</h2>
+      </div>
+
+      <div class="row" style="flex:1;align-items:stretch;gap:var(--kc-sp-24);">
+        <!-- Left: big quote -->
+        <div class="col flex-2 justify-between" style="gap:var(--kc-sp-24);">
+          <div class="kc-quote" style="flex:1;display:flex;flex-direction:column;justify-content:center;">
+            <p class="kc-quote__text" style="font-size:var(--kc-fs-h2);font-style:normal;font-weight:var(--kc-fw-bold);">
+              「快手是最接近<br>
+              真实消费者的地方。<br>
+              联盟是最高效的<br>
+              商业化路径。」
+            </p>
+            <p class="kc-quote__source" style="margin-top:var(--kc-sp-20);">— 快手电商 2026 年度战略发布</p>
+          </div>
+
+          <div class="row gap-16">
+            <div class="col gap-4" style="flex:1;padding:var(--kc-sp-20);background:var(--kc-color-bg-tint);border-radius:var(--kc-r-md);">
+              <span style="font-size:var(--kc-fs-metric);font-weight:var(--kc-fw-heavy);color:var(--kc-color-title);line-height:1;letter-spacing:var(--kc-ls-tight);">7.2亿</span>
+              <span style="font-size:var(--kc-fs-body-sm);color:var(--kc-color-text-muted);">月活用户</span>
+            </div>
+            <div class="col gap-4" style="flex:1;padding:var(--kc-sp-20);background:var(--kc-color-bg-tint);border-radius:var(--kc-r-md);">
+              <span style="font-size:var(--kc-fs-metric);font-weight:var(--kc-fw-heavy);color:var(--kc-color-accent-green);line-height:1;letter-spacing:var(--kc-ls-tight);">120万</span>
+              <span style="font-size:var(--kc-fs-body-sm);color:var(--kc-color-text-muted);">联盟商家</span>
+            </div>
+            <div class="col gap-4" style="flex:1;padding:var(--kc-sp-20);background:var(--kc-color-bg-tint);border-radius:var(--kc-r-md);">
+              <span style="font-size:var(--kc-fs-metric);font-weight:var(--kc-fw-heavy);color:var(--kc-color-accent-pink);line-height:1;letter-spacing:var(--kc-ls-tight);">46亿</span>
+              <span style="font-size:var(--kc-fs-body-sm);color:var(--kc-color-text-muted);">达人收益</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: value pillars -->
+        <div class="col flex-1" style="gap:var(--kc-sp-16);">
+          <div class="kc-card" style="flex:1;gap:var(--kc-sp-12);">
+            <div class="row items-center gap-12">
+              <div class="kc-node-diamond"></div>
+              <p class="kc-card__title">真实用户，真实转化</p>
+            </div>
+            <p class="kc-card__desc">快手用户高频、高黏性、强购买意愿，联盟内容在信任背书下转化率高于行业均值 2.3×。</p>
+          </div>
+          <div class="kc-card kc-card--soft" style="flex:1;gap:var(--kc-sp-12);">
+            <div class="row items-center gap-12">
+              <div class="kc-node-diamond"></div>
+              <p class="kc-card__title">生态闭环，可持续增长</p>
+            </div>
+            <p class="kc-card__desc">商家 × 达人 × 用户三角生态，通过分佣机制实现利益正向对齐，增长无需持续推拉。</p>
+          </div>
+          <div class="kc-card" style="flex:1;gap:var(--kc-sp-12);">
+            <div class="row items-center gap-12">
+              <div class="kc-node-diamond"></div>
+              <p class="kc-card__title">数据透明，可量化</p>
+            </div>
+            <p class="kc-card__desc">磁力罗盘全链路归因，每分钱投入有据可查，ROAS 全程可见、可干预。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SLIDE 10 · 结语封底 -->
+  <section class="slide slide--closing" id="s10">
+    <!-- background orbs for depth -->
+    <div class="kc-orb kc-orb--lg" style="top:-80px;left:-80px;opacity:.35;"></div>
+    <div class="kc-orb kc-orb--lg kc-orb--gold" style="bottom:-80px;right:-80px;opacity:.3;filter:blur(30px);"></div>
+    <div class="kc-orb kc-orb--md" style="top:30%;right:15%;opacity:.25;"></div>
+
+    <div class="slide__inner">
+      <div class="closing-brand" style="position:absolute;top:var(--kc-pad-y);left:var(--kc-pad-x);">
+        <div class="closing-brand__dot"></div>
+        <span class="closing-brand__name">快手联盟 · 2026 闭门峰会</span>
+      </div>
+
+      <div class="col items-center" style="text-align:center;gap:var(--kc-sp-32);">
+        <div class="col gap-16 items-center">
+          <h2 class="closing-title">共建 · 共生 · 共赢</h2>
+          <p class="closing-sub">快手联盟，让每一个好商品找到真正需要它的人</p>
+        </div>
+
+        <div class="kc-divider" style="width:120px;opacity:.35;"></div>
+
+        <div class="row gap-24 items-center">
+          <div class="col gap-4 items-center">
+            <span style="font-size:var(--kc-fs-metric);font-weight:var(--kc-fw-heavy);color:#fff;line-height:1;">联盟 BD</span>
+            <span style="font-size:var(--kc-fs-body-sm);color:rgba(255,255,255,.45);">入驻咨询</span>
+          </div>
+          <div style="width:1px;height:40px;background:rgba(255,255,255,.15);"></div>
+          <div class="col gap-4 items-center">
+            <span style="font-size:var(--kc-fs-metric);font-weight:var(--kc-fw-heavy);color:#fff;line-height:1;">磁力引擎</span>
+            <span style="font-size:var(--kc-fs-body-sm);color:rgba(255,255,255,.45);">投放支持</span>
+          </div>
+          <div style="width:1px;height:40px;background:rgba(255,255,255,.15);"></div>
+          <div class="col gap-4 items-center">
+            <span style="font-size:var(--kc-fs-metric);font-weight:var(--kc-fw-heavy);color:#fff;line-height:1;">达人矩阵</span>
+            <span style="font-size:var(--kc-fs-body-sm);color:rgba(255,255,255,.45);">合作对接</span>
+          </div>
+        </div>
+
+        <div class="row gap-12 items-center" style="margin-top:var(--kc-sp-12);">
+          <span class="kc-pill kc-pill--dark" style="background:rgba(255,255,255,.1);color:rgba(255,255,255,.6);border-color:rgba(255,255,255,.15);">快手联盟官方</span>
+          <span class="kc-pill kc-pill--dark" style="background:rgba(255,255,255,.1);color:rgba(255,255,255,.6);border-color:rgba(255,255,255,.15);">alliance.kuaishou.com</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div><!-- .deck -->
+
+<!-- NAV DOTS -->
+<nav class="nav-dots" id="navDots" role="navigation" aria-label="幻灯片导航"></nav>
+<div class="slide-counter" id="counter">1 / 10</div>
+
+<script>
+(function(){
+  'use strict';
+  var deck   = document.getElementById('deck');
+  var dots   = document.getElementById('navDots');
+  var ctr    = document.getElementById('counter');
+  var slides = Array.from(deck.querySelectorAll('.slide'));
+  var total  = slides.length;
+  var cur    = 0;
+
+  // Build dots
+  slides.forEach(function(_, i){
+    var btn = document.createElement('button');
+    btn.className = 'nav-dot' + (i === 0 ? ' active' : '');
+    btn.setAttribute('aria-label', '第 ' + (i+1) + ' 页');
+    if(i === 0) btn.setAttribute('aria-current','true');
+    btn.addEventListener('click', function(){ go(i); });
+    dots.appendChild(btn);
+  });
+
+  function go(n){
+    if(n === cur) return;
+    slides[cur].classList.remove('active');
+    slides[cur].classList.add('prev');
+    var prevIdx = cur;
+    cur = ((n % total) + total) % total;
+    slides[cur].classList.remove('prev');
+    slides[cur].classList.add('active');
+    setTimeout(function(){ slides[prevIdx].classList.remove('prev'); }, 400);
+    // update dots
+    var allDots = dots.querySelectorAll('.nav-dot');
+    allDots.forEach(function(d, i){
+      d.classList.toggle('active', i === cur);
+      d.setAttribute('aria-current', i === cur ? 'true' : 'false');
+    });
+    // counter
+    ctr.textContent = (cur+1) + ' / ' + total;
+  }
+
+  function next(){ go(cur + 1 < total ? cur + 1 : cur); }
+  function prev(){ go(cur - 1 >= 0 ? cur - 1 : cur); }
+
+  // Keyboard
+  document.addEventListener('keydown', function(e){
+    var tag = document.activeElement && document.activeElement.tagName;
+    if(['INPUT','TEXTAREA','SELECT'].indexOf(tag) >= 0) return;
+    if(e.key==='ArrowRight'||e.key==='ArrowDown'||e.key===' '||e.key==='PageDown') { e.preventDefault(); next(); }
+    if(e.key==='ArrowLeft'||e.key==='ArrowUp'||e.key==='PageUp') { e.preventDefault(); prev(); }
+    if(e.key==='Home') { e.preventDefault(); go(0); }
+    if(e.key==='End')  { e.preventDefault(); go(total-1); }
+  });
+
+  // Wheel
+  var wheelAcc = 0, wheelTimer = null;
+  document.addEventListener('wheel', function(e){
+    e.preventDefault();
+    wheelAcc += Math.abs(e.deltaX) + Math.abs(e.deltaY);
+    if(wheelTimer) clearTimeout(wheelTimer);
+    wheelTimer = setTimeout(function(){ wheelAcc = 0; }, 120);
+    if(wheelAcc > 60){
+      wheelAcc = 0;
+      if(e.deltaX > 0 || e.deltaY > 0) next(); else prev();
+    }
+  }, { passive: false });
+
+  // Touch
+  var tx0 = 0, ty0 = 0;
+  document.addEventListener('touchstart', function(e){ tx0 = e.touches[0].clientX; ty0 = e.touches[0].clientY; }, { passive: true });
+  document.addEventListener('touchend', function(e){
+    var dx = e.changedTouches[0].clientX - tx0;
+    var dy = e.changedTouches[0].clientY - ty0;
+    if(Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)){
+      if(dx < 0) next(); else prev();
+    }
+  }, { passive: true });
+
+  // Focus deck on load for keyboard to work in iframe
+  deck.setAttribute('tabindex','-1');
+  deck.focus({ preventScroll: true });
+})();
+</script>
+</body>
+</html>

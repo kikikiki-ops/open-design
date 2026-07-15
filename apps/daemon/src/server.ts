@@ -363,6 +363,7 @@ import { classifyRunFailure, isResumableFailure } from './run-failure-classifica
 import { decideSafeRunRetry } from './run-retry-policy.js';
 import {
   amrUserIdForRunAnalytics,
+  scanRunEventsForUsageAnalytics,
 } from './run-analytics-observability.js';
 import {
   createRunArtifactBaselines,
@@ -3565,6 +3566,22 @@ export async function startServer({
             if (local) {
               skillBody = local.body + composedSkillBlocks;
               skillName = local.name;
+              // A plugin-local SKILL.md replaces the global skill body, but the
+              // manifest still owns its delivery surface. Preserve it here so
+              // deck plugins keep the slide framework instead of falling back
+              // to a generic one-page HTML generation prompt.
+              const localPluginMode = plugin.manifest.od?.mode;
+              if (
+                localPluginMode === 'prototype'
+                || localPluginMode === 'deck'
+                || localPluginMode === 'template'
+                || localPluginMode === 'design-system'
+                || localPluginMode === 'image'
+                || localPluginMode === 'video'
+                || localPluginMode === 'audio'
+              ) {
+                registerPrimarySkillMode(localPluginMode);
+              }
               activeSkillDir = local.dir;
               registerSkillDir(local.dir);
             }

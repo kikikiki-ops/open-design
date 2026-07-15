@@ -1,0 +1,41 @@
+{
+  "pageIndex": 1,
+  "pageType": "MetricOverviewPage",
+  "variant": "FourMetrics",
+  "styleSkill": "ultrawide_business_growth",
+  "canvas": {
+    "width": 3696,
+    "height": 1008
+  },
+  "contentInventoryRefs": [
+    "source-001",
+    "source-002",
+    "source-003"
+  ],
+  "editInstructionRefs": [
+    "edit-001"
+  ],
+  "requiredCapabilities": [
+    "PageTitle",
+    "MetricGroup",
+    "MetricCard",
+    "TrendIcon",
+    "SummaryNote"
+  ],
+  "splitDecision": {
+    "needSplit": false,
+    "reason": "内容容量在当前页面组件范围内"
+  },
+  "qualityCheck": {
+    "contentComplete": true,
+    "htmlEditable": true,
+    "needsHumanReview": false
+  },
+  "fixedBrandLogo": {
+    "enabled": true,
+    "assetRole": "fixed-brand-logo",
+    "sourceUrl": "https://p5-ad.adkwai.com/udata/pkg/ks-ad-fe/md-tools/quick-cut/6689:5117.b90a9c9d53932e9b.svg",
+    "localPath": null,
+    "show": true
+  }
+}

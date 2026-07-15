@@ -415,7 +415,11 @@ export function splitDerivedSkillId(id: unknown): DerivedSkillIdParts | null {
 //
 // Authoring guidance lives in the preamble itself so an agent can pick
 // the right form on its own without daemon-side feature detection.
-function withSkillRootPreamble(body: string, dir: string): string {
+// Plugin-local skills take the same staging route as globally registered
+// skills. Export the preamble so their prompt body names that staged root as
+// well; otherwise the daemon copies side files into `.od-skills/` but gives
+// the agent no path it can actually use.
+export function withSkillRootPreamble(body: string, dir: string): string {
   const referencedFiles = collectReferencedSideFiles(body);
   const folder = skillCwdAliasSegment(dir);
   const skillRootRel = `${SKILLS_CWD_ALIAS}/${folder}`;

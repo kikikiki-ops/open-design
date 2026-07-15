@@ -1,0 +1,40 @@
+{
+  "slug": "html-ppt-ozon-impact",
+  "name": "Ozon Impact",
+  "tagline": "Electric blue gradient with floating 3D objects, orbit rings, heavy white type, lime-green and hot-pink accents. Maximum visual impact.",
+  "mood": ["bold", "energetic", "tech-forward", "confident", "modern"],
+  "occasion": [
+    "product launch",
+    "job fair",
+    "company introduction",
+    "tech conference",
+    "recruitment campaign",
+    "science & innovation deck",
+    "发布会",
+    "招聘宣传",
+    "科技大会"
+  ],
+  "tone": ["impactful", "confident", "electric", "vibrant"],
+  "formality": "medium",
+  "density": "low",
+  "palette": {
+    "bg": "#0A1566",
+    "primary": "#2B5FF5",
+    "accent": "#7AE03D",
+    "accent2": "#FF3D8A",
+    "accent3": "#5BE5FF",
+    "text": "#FFFFFF",
+    "description": "deep navy to electric blue gradient background; lime-green and hot-pink 3D ornaments; pure white heavy type"
+  },
+  "typography": {
+    "display": "Inter / SF Pro Display / system-ui",
+    "body": "Inter / system-ui",
+    "style": "ultra-heavy display sans; stark white on dark; maximum contrast"
+  },
+  "scheme": "dark",
+  "best_for": "Product launches, recruitment campaigns, tech conferences, company introductions. Any deck that needs to command attention and project brand confidence.",
+  "avoid_for": "Dense data tables, academic papers, soft consumer content that needs lightness.",
+  "slide_count": 10,
+  "navigation": "inline keyboard handler, dot indicators, touch + wheel",
+  "ornaments": ["3D sphere", "metallic coin", "orbit rings", "pink cube", "green blob", "glass gem", "star sparkles"]
+}

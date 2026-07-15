@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PPT Page Plan",
+  "type": "object",
+  "required": [
+    "pageIndex",
+    "pageType",
+    "styleSkill",
+    "canvas",
+    "contentInventoryRefs",
+    "requiredCapabilities",
+    "splitDecision"
+  ],
+  "properties": {
+    "pageIndex": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "pageType": {
+      "type": "string",
+      "enum": [
+        "CoverPage",
+        "AgendaPage",
+        "MetricOverviewPage",
+        "MultiColumnComparisonPage",
+        "EcosystemRelationshipPage",
+        "StrategyPanoramaPage",
+        "StageEvolutionPage",
+        "DualCoreArchitecturePage",
+        "FormulaDecompositionPage",
+        "CaseStudyPage",
+        "ProcessFlowPage",
+        "CentralModelPage",
+        "ShowcaseGalleryPage",
+        "TransformationPage",
+        "CapabilityRoadmapPage",
+        "CapabilityMatrixPage",
+        "GeneralStructuredPage"
+      ]
+    },
+    "variant": {
+      "type": "string"
+    },
+    "styleSkill": {
+      "type": "string"
+    },
+    "canvas": {
+      "type": "object",
+      "required": [
+        "width",
+        "height"
+      ],
+      "properties": {
+        "width": {
+          "type": "integer"
+        },
+        "height": {
+          "type": "integer"
+        }
+      }
+    },
+    "contentInventoryRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^source-[0-9]{3,}$"
+      }
+    },
+    "editInstructionRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^edit-[0-9]{3,}$"
+      }
+    },
+    "uncertainContentRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^uncertain-[0-9]{3,}$"
+      }
+    },
+    "requiredCapabilities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "splitDecision": {
+      "type": "object",
+      "required": [
+        "needSplit",
+        "reason"
+      ],
+      "properties": {
+        "needSplit": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "splitInto": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "qualityCheck": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "pageRole": {
+      "type": "string",
+      "enum": [
+        "cover",
+        "content",
+        "closing"
+      ]
+    },
+    "backgroundVariant": {
+      "type": "string",
+      "enum": [
+        "cover",
+        "content",
+        "closing"
+      ]
+    },
+    "fixedBrandLogo": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "assetRole": {
+          "type": "string"
+        },
+        "sourceUrl": {
+          "type": "string"
+        },
+        "localPath": {
+          "type": "string"
+        },
+        "show": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}

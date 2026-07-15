@@ -18,6 +18,7 @@ import path from 'node:path';
 import { promises as fsp } from 'node:fs';
 import type { InstalledPluginRecord } from '@open-design/contracts';
 import { pickFirstLocalSkillPath } from './apply.js';
+import { withSkillRootPreamble } from '../skills.js';
 
 export interface PluginLocalSkill {
   body: string;
@@ -52,7 +53,11 @@ export async function loadPluginLocalSkill(
   if (!body) return null;
   const name = (manifest.title ?? manifest.name ?? plugin.id).toString();
   return {
-    body,
+    // `startChatRun` stages this directory beneath the project cwd before
+    // the agent starts. A plugin-local body used to omit the same root
+    // preamble global skills receive, so agents could not locate bundled
+    // templates, logos, or backgrounds and recreated them instead.
+    body: withSkillRootPreamble(body, path.dirname(abs)),
     name,
     dir: path.dirname(abs),
     relpath: safeRel,

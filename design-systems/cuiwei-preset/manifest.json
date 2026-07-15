@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "od-design-system-project/v1",
+  "id": "cuiwei-preset",
+  "name": "Cuiwei Preset · Modern Chinese Editorial",
+  "category": "Presentation & Editorial",
+  "description": "面向 PPT / 单页 / 网页三合一的中性偏东方编辑风设计系统。",
+  "source": {
+    "type": "user",
+    "origin": "cuiwei03 personal preset"
+  },
+  "files": {
+    "design": "DESIGN.md",
+    "tokens": "tokens.css"
+  },
+  "importMode": "normalized",
+  "aspects": {
+    "presets": [
+      { "id": "deck-16x9",   "label": "PPT · 16:9",       "width": 1920, "height": 1080 },
+      { "id": "deck-4x3",    "label": "PPT · 4:3",        "width": 1600, "height": 1200 },
+      { "id": "single-9x16", "label": "竖版单页 · 9:16",  "width": 1080, "height": 1920 },
+      { "id": "poster-a4",   "label": "A4 打印海报",       "width": 794,  "height": 1123 },
+      { "id": "web-1440",    "label": "网页落地 · 1440",  "width": 1440, "height": 900 }
+    ],
+    "default": "deck-16x9"
+  },
+  "accents": ["indigo", "jade", "ember"],
+  "defaultAccent": "indigo",
+  "themes": ["light", "dark"],
+  "defaultTheme": "light",
+  "tags": ["chinese", "editorial", "swiss-grid", "presentation", "poster", "landing"]
+}

@@ -1,0 +1,32 @@
+{
+  "name": "ultrawide_business_growth_ppt_skill",
+  "display_name": "超宽大屏商务增长风格 PPT Skill",
+  "version": "1.0.0",
+  "canvas": {
+    "physical_size": "11m x 3m",
+    "pixel_resolution": "3696 x 1008",
+    "aspect_ratio": "11:3"
+  },
+  "use_cases": [
+    "会场主屏",
+    "品牌营销大会",
+    "商业化业务汇报",
+    "品牌案例展示",
+    "数据策略发布",
+    "增长成果展示"
+  ],
+  "style_keywords": [
+    "高级",
+    "明亮",
+    "克制",
+    "商务",
+    "轻科技",
+    "柔光感",
+    "品牌感",
+    "数据可信",
+    "生意增长",
+    "中心聚焦"
+  ],
+  "updated_at": "2026-07-15",
+  "background_system_update": "增加封面/内容页/封尾固定背景图系统"
+}

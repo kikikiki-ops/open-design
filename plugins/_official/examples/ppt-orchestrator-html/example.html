@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PPT Orchestrator Skill - HTML 型 PPT 总控</title>
+<style>
+  :root {
+    --bg: #fffcf8;
+    --ink: #0b2d3a;
+    --muted: #66737a;
+    --gold: #d5ae79;
+    --gold-soft: #f1e6d8;
+    --teal: #4f9b90;
+    --teal-soft: #e6f3f0;
+    --card: rgba(255,255,255,.86);
+    --line: rgba(11,45,58,.1);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    background: #181818;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .stage {
+    width: min(96vw, 1466px);
+    aspect-ratio: 11 / 3;
+    position: relative;
+    overflow: hidden;
+    border-radius: 22px;
+    background:
+      radial-gradient(70% 40% at 12% 95%, rgba(213,174,121,.26), transparent 68%),
+      radial-gradient(55% 35% at 88% 92%, rgba(79,155,144,.22), transparent 64%),
+      linear-gradient(180deg, var(--bg), #f8f5ee);
+    box-shadow: 0 24px 80px rgba(0,0,0,.32);
+    color: var(--ink);
+  }
+  .stage::before,
+  .stage::after {
+    content: "";
+    position: absolute;
+    left: -8%;
+    right: -8%;
+    height: 34%;
+    bottom: -10%;
+    border-radius: 50%;
+    transform: rotate(-2deg);
+    background: linear-gradient(90deg, transparent, rgba(213,174,121,.38), rgba(79,155,144,.20), transparent);
+    filter: blur(10px);
+  }
+  .stage::after {
+    bottom: -4%;
+    transform: rotate(3deg);
+    background: linear-gradient(90deg, transparent, rgba(79,155,144,.22), rgba(213,174,121,.32), transparent);
+    opacity: .8;
+  }
+  .content {
+    position: absolute;
+    inset: 9% 6%;
+    display: grid;
+    grid-template-columns: 1.06fr 1.4fr;
+    gap: 34px;
+    z-index: 1;
+  }
+  .hero {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 18px;
+  }
+  .eyebrow {
+    display: inline-flex;
+    width: fit-content;
+    padding: 8px 16px;
+    border-radius: 999px;
+    border: 1px solid rgba(213,174,121,.38);
+    background: rgba(255,255,255,.62);
+    color: #8b6a3d;
+    font-weight: 700;
+    font-size: clamp(12px, 1.1vw, 18px);
+  }
+  h1 {
+    margin: 0;
+    font-size: clamp(30px, 4vw, 70px);
+    line-height: 1.06;
+    letter-spacing: -.04em;
+  }
+  p {
+    margin: 0;
+    color: var(--muted);
+    font-size: clamp(13px, 1.2vw, 21px);
+    line-height: 1.55;
+  }
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    align-content: center;
+  }
+  .card {
+    padding: 18px 20px;
+    border-radius: 18px;
+    border: 1px solid var(--line);
+    background: var(--card);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 12px 32px rgba(11,45,58,.055);
+  }
+  .card strong {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--ink);
+    font-size: clamp(14px, 1.25vw, 22px);
+  }
+  .card span {
+    display: block;
+    color: var(--muted);
+    font-size: clamp(11px, 1vw, 16px);
+    line-height: 1.45;
+  }
+  .card.gold { background: linear-gradient(135deg, rgba(255,255,255,.92), rgba(241,230,216,.88)); border-color: rgba(213,174,121,.35); }
+  .card.teal { background: linear-gradient(135deg, rgba(255,255,255,.92), rgba(230,243,240,.9)); border-color: rgba(79,155,144,.26); }
+</style>
+</head>
+<body>
+  <main class="stage">
+    <section class="content">
+      <div class="hero">
+        <div class="eyebrow">HTML 型 PPT 总控 · Orchestrator</div>
+        <h1>内容保真<br/>先于视觉重排</h1>
+        <p>建立内容账本、识别页面类型、绑定风格 Skill，并输出可编辑的 3696×1008 超宽大屏 HTML PPT。</p>
+      </div>
+      <div class="cards">
+        <div class="card gold"><strong>content_inventory</strong><span>正式内容默认不可改写、不遗漏、不伪造。</span></div>
+        <div class="card teal"><strong>page_plan</strong><span>自动识别封面、章节、数据、策略、案例等页面类型。</span></div>
+        <div class="card"><strong>component_plan</strong><span>以抽象组件能力规划卡片、指标、图表与结构。</span></div>
+        <div class="card gold"><strong>quality_report</strong><span>检查内容完整性、占位符清理、溢出与风格一致性。</span></div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

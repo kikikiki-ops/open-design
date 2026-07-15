@@ -1,0 +1,153 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "k-session",
+  "title": "K-session",
+  "title_i18n": {
+    "zh-CN": "K-session",
+    "en": "K-session"
+  },
+  "version": "0.2.0",
+  "description": "A multi-slide 12:4 Chinese Dunhuang-inspired PPT deck skill with dual corner logos, abstract silk-light backgrounds, concise cards, and business-ready layouts.",
+  "description_i18n": {
+    "zh-CN": "生成多页 12:4 敦煌风 PPT 演示，内置双角 Logo、丝绸光感背景、信息卡与业务叙事版式。",
+    "en": "Generate a multi-slide 12:4 Chinese Dunhuang-inspired PPT deck with corner logos, silk-light backgrounds, and concise business layouts."
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Open Design",
+    "url": "https://github.com/nexu-io"
+  },
+  "homepage": "https://github.com/nexu-io/open-design/tree/main/plugins/_official/examples/k-session",
+  "tags": [
+    "example",
+    "first-party",
+    "deck",
+    "slides",
+    "ppt",
+    "presentation",
+    "chinese",
+    "dunhuang",
+    "business"
+  ],
+  "compat": {
+    "agentSkills": [
+      {
+        "path": "./SKILL.md"
+      }
+    ]
+  },
+  "od": {
+    "kind": "skill",
+    "taskKind": "new-generation",
+    "mode": "deck",
+    "scenario": "business",
+    "surface": "web",
+    "preview": {
+      "type": "html",
+      "entry": "./example.html",
+      "motion": "deck"
+    },
+    "useCase": {
+      "query": {
+        "zh-CN": "使用 K-session，为 {{audience}} 将“{{topic}}”制作成一套页数由内容量与叙事需要决定的 12:4 敦煌风 PPT 演示。必须输出多页可翻页 deck（含封面和结束页），不可生成单页长图或单页网页。以用户在主输入框提供的内容为主要材料；补充素材（如有）：{{source_content}}。保留双 Logo、亮色抽象丝绸光感背景和可自由组合的混合边框信息卡；标题与副标题均保持一行。",
+        "en": "Use K-session to make a 12:4 Chinese Dunhuang-inspired PPT deck about {{topic}} for {{audience}}, choosing its slide count from the amount of material and the narrative needs. It must be a navigable multi-slide deck including cover and closing, never a one-page image or webpage. Use the user's main-composer prompt as the primary source and this optional supplemental material: {{source_content}}. Keep the dual logos, bright abstract silk-light backgrounds, and freely composable framed/borderless information cards."
+      },
+      "exampleOutputs": [
+        {
+          "path": "./example.html",
+          "title": "K-session Dunhuang Banner Deck"
+        }
+      ]
+    },
+    "inputs": [
+      {
+        "name": "topic",
+        "label": "主题",
+        "type": "string",
+        "required": true,
+        "placeholder": "品牌增长战略",
+        "default": "用户提供的主题"
+      },
+      {
+        "name": "audience",
+        "label": "受众",
+        "type": "string",
+        "required": true,
+        "placeholder": "管理层与业务团队",
+        "default": "业务决策者"
+      },
+      {
+        "name": "source_content",
+        "label": "补充素材（可选）",
+        "type": "text",
+        "required": false,
+        "placeholder": "粘贴需要提炼成演示的中文素材"
+      },
+      {
+        "name": "cover_background",
+        "label": "封面 / 尾页背景（可选）",
+        "type": "file",
+        "required": false
+      },
+      {
+        "name": "content_background",
+        "label": "内容页背景（可选）",
+        "type": "file",
+        "required": false
+      }
+    ],
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        }
+      ],
+      "assets": [
+        "./example.html",
+        "./assets/template.html",
+        "./assets/k-session.css",
+        "./assets/k-session.js",
+        "./assets/logo-left.svg",
+        "./assets/logo-right.svg",
+        "./assets/backgrounds/dunhuang-cover.png",
+        "./assets/backgrounds/dunhuang-content.png"
+      ]
+    },
+    "pipeline": {
+      "stages": [
+        {
+          "id": "plan",
+          "atoms": [
+            "todo-write"
+          ]
+        },
+        {
+          "id": "generate",
+          "atoms": [
+            "file-write",
+            "live-artifact"
+          ]
+        },
+        {
+          "id": "critique",
+          "atoms": [
+            "critique-theater"
+          ],
+          "repeat": true,
+          "until": "critique.score>=4 || iterations>=3"
+        },
+        {
+          "id": "handoff",
+          "atoms": [
+            "handoff"
+          ]
+        }
+      ]
+    },
+    "capabilities": [
+      "prompt:inject",
+      "fs:write"
+    ]
+  }
+}
