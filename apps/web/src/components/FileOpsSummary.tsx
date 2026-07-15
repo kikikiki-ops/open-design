@@ -1,10 +1,10 @@
 /**
  * "Files this turn" disclosure pinned to the top of an assistant message.
  *
- * The row appears as a compact summary with operation counters
- * (Write 1 · Edit 2 · Read 3). File-level detail is available on demand,
- * with per-file op badges and an "Open" button that lifts the basename up
- * to ProjectView so FileWorkspace focuses the matching tab.
+ * The row stays compact with live counters (Write 1 · Edit 2 · Read 3).
+ * Opening its disclosure reveals the full file list with per-file op badges;
+ * a changed result file gets one direct "Open" action that lifts the basename
+ * up to ProjectView so FileWorkspace focuses the matching tab.
  *
  * The component is read-only over `events` — derivation lives in
  * `runtime/file-ops.ts` so the same logic is reachable from tests and
@@ -23,8 +23,7 @@ import { Icon } from './Icon';
 
 interface Props {
   entries: FileOpEntry[];
-  /** True while the parent run is still streaming. Drives the live-pulse
-   *  styling; file-level detail stays behind the disclosure in both states. */
+  /** True while the parent run is still streaming. Drives live-pulse styling. */
   streaming: boolean;
   /** Names that exist in the project folder. When set, the open button
    *  only shows for entries whose basename is in the set. Pass undefined
@@ -54,10 +53,9 @@ export function FileOpsSummary({
   onRequestOpenFile,
 }: Props) {
   const t = useT();
-  // The header is the durable result summary. Keep the per-file operation
-  // list collapsed by default both while running and after completion, so a
-  // long task does not leave a second, competing result card in the chat.
-  // It remains one click away for review and manual toggles always win.
+  // File details are review material, not the result itself. Keep them
+  // collapsed in every terminal state so a completed task reads as answer →
+  // delivery, while preserving a single disclosure for audit.
   const [open, setOpen] = useState(false);
 
   if (entries.length === 0) return null;
@@ -69,30 +67,55 @@ export function FileOpsSummary({
   if (counts.delete > 0) summaryParts.push(`${t('tool.delete')} ${counts.delete}`);
   if (counts.read > 0) summaryParts.push(`${t('tool.read')} ${counts.read}`);
 
+  // Prefer the latest changed file as the result entry point. Read-only turns
+  // intentionally have no primary action: opening an arbitrary input would
+  // make the execution record look like a delivery card.
+  const primaryEntry = [...entries]
+    .reverse()
+    .find((entry) =>
+      !entry.ops.includes('delete') &&
+      (entry.ops.includes('write') || entry.ops.includes('edit')),
+    );
+  const canOpenPrimary =
+    !!primaryEntry &&
+    !!onRequestOpenFile &&
+    (projectFileNames ? projectFileNames.has(primaryEntry.path) : true);
+
   return (
     <div
       className={`file-ops${streaming ? ' is-streaming' : ''}`}
       data-testid="file-ops-summary"
     >
-      <button
-        type="button"
-        className="file-ops-toggle"
-        onClick={() => {
-          setOpen((value) => !value);
-        }}
-        aria-expanded={open}
-        data-testid="file-ops-toggle"
-      >
-        <span className="file-ops-icon" aria-hidden>
-          <Icon name="file" size={13} />
-        </span>
-        <span className="file-ops-label">{t('assistant.producedFiles')}</span>
-        <span className="file-ops-summary-line">{summaryParts.join(' · ')}</span>
-        <span className="file-ops-count">{entries.length}</span>
-        <span className="file-ops-chev" aria-hidden>
-          <Icon name={open ? 'chevron-down' : 'chevron-right'} size={11} />
-        </span>
-      </button>
+      <div className="file-ops-head">
+        <button
+          type="button"
+          className="file-ops-toggle"
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+          data-testid="file-ops-toggle"
+        >
+          <span className="file-ops-icon" aria-hidden>
+            <Icon name="file" size={13} />
+          </span>
+          <span className="file-ops-label">{t('assistant.producedFiles')}</span>
+          <span className="file-ops-summary-line">{summaryParts.join(' · ')}</span>
+          <span className="file-ops-count">{entries.length}</span>
+          <span className="file-ops-chev" aria-hidden>
+            <Icon name={open ? 'chevron-down' : 'chevron-right'} size={11} />
+          </span>
+        </button>
+        {canOpenPrimary && primaryEntry ? (
+          <button
+            type="button"
+            className="file-ops-primary-action"
+            onClick={() => onRequestOpenFile?.(primaryEntry.path)}
+            title={t('tool.openInTab', { name: primaryEntry.path })}
+            data-testid={`file-ops-primary-open-${primaryEntry.path}`}
+          >
+            {t('assistant.openFile')}
+          </button>
+        ) : null}
+      </div>
       {open ? (
         <ul className="file-ops-list" role="list">
           {entries.map((entry) => (

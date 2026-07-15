@@ -1583,6 +1583,20 @@
   flex: 1; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.task-activity-count {
+  flex: 0 0 auto;
+  min-width: 18px;
+  padding: 1px 5px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-pill);
+  color: var(--text-faint);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.task-activity .action-card-body {
+  padding-top: 4px;
+}
 .action-card-toggle .chev { color: var(--text-faint); font-size: 10px; flex-shrink: 0; transition: transform 120ms var(--ease-out); }
 .action-card-body {
   padding: 8px 0 8px 32px;

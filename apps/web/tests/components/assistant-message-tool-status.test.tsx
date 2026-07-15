@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AssistantMessage } from '../../src/components/AssistantMessage';
 import type { AgentEvent, ChatMessage } from '../../src/types';
@@ -125,14 +125,40 @@ describe('AssistantMessage tool status', () => {
       />,
     );
 
-    const toggle = container.querySelector<HTMLButtonElement>('.action-card-toggle');
-    expect(toggle).not.toBeNull();
-    expect(toggle?.getAttribute('aria-expanded')).toBe('false');
-    expect(container.querySelector('.action-card .accordion-collapsible')?.className).not.toContain('open');
-    if (toggle) fireEvent.click(toggle);
-    expect(container.querySelector('.action-card .accordion-collapsible')?.className).toContain('open');
+    const activity = screen.getByTestId('task-activity-toggle');
+    expect(activity).toBeTruthy();
+    expect(activity.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(activity);
+    expect(activity.getAttribute('aria-expanded')).toBe('true');
+    expect(container.querySelectorAll('.op-card.op-file')).toHaveLength(1);
     expect(container.querySelector('[data-testid="file-ops-toggle"]')?.textContent).toContain('Write 1');
     expect(container.textContent).not.toContain('×2');
+  });
+
+  it('collapses mixed tool families into one execution record', () => {
+    const { container } = render(
+      <AssistantMessage
+        projectKind="prototype"
+        conversationId="conv-1"
+        message={messageWithEvents([
+          { kind: 'tool_use', id: 'tool-1', name: 'Read', input: { file_path: '/repo/source.ts' } },
+          { kind: 'tool_result', toolUseId: 'tool-1', content: 'source', isError: false },
+          { kind: 'tool_use', id: 'tool-2', name: 'Write', input: { file_path: '/repo/result.ts', content: 'export {}' } },
+          { kind: 'tool_result', toolUseId: 'tool-2', content: 'ok', isError: false },
+          { kind: 'tool_use', id: 'tool-3', name: 'Bash', input: { command: 'pnpm typecheck' } },
+          { kind: 'tool_result', toolUseId: 'tool-3', content: 'ok', isError: false },
+        ])}
+        streaming={false}
+        projectId="project-1"
+      />,
+    );
+
+    const activity = screen.getByTestId('task-activity-toggle');
+    expect(activity).toBeTruthy();
+    expect(activity.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(activity);
+    expect(activity.getAttribute('aria-expanded')).toBe('true');
+    expect(container.querySelectorAll('.op-card')).toHaveLength(3);
   });
 
   it('does not show Done when a failed run is missing a tool result', () => {

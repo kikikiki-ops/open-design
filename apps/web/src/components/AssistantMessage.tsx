@@ -565,6 +565,16 @@ function AssistantMessageImpl({
       },
     );
   }, [displayEvents, liveCodeBlocks, showConversationTodoCard, conversationTodoInput]);
+  // A task gets one execution-record disclosure. This keeps answer prose
+  // readable when an agent has alternated between many tools, while retaining
+  // every command, file operation, and streaming code preview for review.
+  // TodoWrite is deliberately left in place: ChatPane owns its single
+  // conversation-level progress card, which is a different user-facing
+  // contract from the per-turn execution record.
+  const { contentBlocks, taskActivity } = useMemo(
+    () => splitTaskActivity(blocks),
+    [blocks],
+  );
   const fileOps = useMemo(() => deriveFileOps(displayEvents), [displayEvents]);
   const produced = message.producedFiles ?? [];
   const displayedProduced = useMemo(
@@ -800,7 +810,10 @@ function AssistantMessageImpl({
   // files) the footer shimmers "Preparing…"; the moment content lands it
   // flips to "Working". The elapsed clock stays anchored to the persisted run
   // start so switching project tabs or remounting the message cannot restart it.
-  const hasContent = blocks.some((b) => b.kind !== "status") || turnFileOps.length > 0;
+  const hasContent =
+    contentBlocks.some((b) => b.kind !== "status") ||
+    taskActivity !== null ||
+    turnFileOps.length > 0;
   const preparing = streaming && !hasContent;
   const preparingStatus = preparing && events.some((e) => e.kind === "status" && e.label === "thinking")
     ? "thinking"
@@ -823,7 +836,7 @@ function AssistantMessageImpl({
         <span className="role-name">{roleName}</span>
       </div>
       <div className="assistant-flow">
-        {blocks.map((b, i) => {
+        {contentBlocks.map((b, i) => {
           if (b.kind === "text")
             return (
               <ProseBlock
@@ -871,7 +884,10 @@ function AssistantMessageImpl({
             );
           }
           if (b.kind === "live-tool") {
-            return <LiveCodeBox key={b.id} name={b.name} raw={b.raw} />;
+            // splitTaskActivity moves live code into the same execution
+            // disclosure as settled tools. Keep this branch defensive in
+            // case a future block type opts out of that collection.
+            return null;
           }
           if (b.kind === "plugin-candidate") {
             return (
@@ -897,6 +913,16 @@ function AssistantMessageImpl({
           }
           return null;
         })}
+        {taskActivity ? (
+          <TaskActivityCard
+            items={taskActivity.items}
+            liveTools={taskActivity.liveTools}
+            runStreaming={streaming}
+            runSucceeded={runSucceeded}
+            projectFileNames={projectFileNames}
+            onRequestOpenFile={onRequestOpenFile}
+          />
+        ) : null}
         {brandBrowserAssistFallbackCard ? (
           <OdCardView
             card={brandBrowserAssistFallbackCard}
@@ -3067,6 +3093,97 @@ function ToolGroupCard({
   );
 }
 
+/**
+ * One compact, per-turn audit trail for every non-progress tool. The default
+ * view intentionally says what happened without making individual tool cards
+ * compete with the answer or the result card; opening it restores the full
+ * chronological evidence, including code that was still streaming.
+ */
+function TaskActivityCard({
+  items,
+  liveTools,
+  runStreaming,
+  runSucceeded,
+  projectFileNames,
+  onRequestOpenFile,
+}: {
+  items: ToolItem[];
+  liveTools: Array<Extract<Block, { kind: "live-tool" }>>;
+  runStreaming: boolean;
+  runSucceeded: boolean;
+  projectFileNames?: Set<string>;
+  onRequestOpenFile?: (name: string) => void;
+}) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const settledItems = dedupeSnapshotToolRetries(items);
+  const running =
+    runStreaming &&
+    (liveTools.length > 0 || settledItems.some((item) => !item.result));
+  const hasError = settledItems.some(
+    (item) => item.result?.isError || (!item.result && !runStreaming && !runSucceeded),
+  );
+  const summary =
+    settledItems.length > 0
+      ? summarizeTaskActivity(settledItems, t, running, runSucceeded)
+      : t("assistant.verbRunning");
+  const count = settledItems.length + liveTools.length;
+
+  return (
+    <div className="action-card task-activity">
+      <button
+        type="button"
+        className={`action-card-toggle ${running ? "running" : ""}`}
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        data-testid="task-activity-toggle"
+      >
+        <span
+          className={`action-card-status ${
+            running ? "op-status-running" : hasError ? "op-status-error" : "op-status-ok"
+          }`}
+          aria-hidden
+        >
+          {running ? (
+            <Icon name="spinner" size={14} />
+          ) : hasError ? (
+            <Icon name="close" size={14} />
+          ) : (
+            <Icon name="check" size={14} />
+          )}
+        </span>
+        <span className={`summary${running ? " shimmer-text" : ""}`}>{summary}</span>
+        <span className="task-activity-count" aria-hidden>
+          {count}
+        </span>
+        <span className="chev" aria-hidden>
+          <Icon name={open ? "chevron-down" : "chevron-right"} size={11} />
+        </span>
+      </button>
+      <div className={`accordion-collapsible${open ? " open" : ""}`}>
+        <div className="accordion-collapsible-inner">
+          <div className="action-card-body">
+            {settledItems.map((item, index) => (
+              <ToolCard
+                key={item.use.id || index}
+                use={item.use}
+                result={item.result}
+                runStreaming={runStreaming}
+                runSucceeded={runSucceeded}
+                projectFileNames={projectFileNames}
+                onRequestOpenFile={onRequestOpenFile}
+              />
+            ))}
+            {liveTools.map((tool) => (
+              <LiveCodeBox key={tool.id} name={tool.name} raw={tool.raw} />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function summarizeGroup(
   items: ToolItem[],
   t: (k: keyof Dict, vars?: Record<string, string | number>) => string,
@@ -3086,6 +3203,28 @@ function summarizeGroup(
   const head = countLabel(family, items.length, t);
   const tail = lastStateLabel(verbs, t);
   return { label: tail ? `${head}, ${tail}` : head, icon };
+}
+
+function summarizeTaskActivity(
+  items: ToolItem[],
+  t: (k: keyof Dict, vars?: Record<string, string | number>) => string,
+  running: boolean,
+  runSucceeded: boolean,
+): string {
+  const familyCounts = new Map<string, number>();
+  for (const item of items) {
+    const family = toolFamily(item.use.name);
+    familyCounts.set(family, (familyCounts.get(family) ?? 0) + 1);
+  }
+  const families = [...familyCounts.entries()];
+  const labels = families.slice(0, 3).map(([family, count]) => countLabel(family, count, t));
+  if (families.length > labels.length) labels.push(`+${families.length - labels.length}`);
+
+  const state = lastStateLabel(
+    items.map((item) => verbForState(item, t, running, runSucceeded)),
+    t,
+  );
+  return [...labels, ...(state ? [state] : [])].join(" · ");
 }
 
 function toolFamily(name: string): string {
@@ -3171,6 +3310,44 @@ type Block =
       draftPath?: string | null | undefined;
     }
   | { kind: "status"; label: string; detail?: string | undefined };
+
+type TaskActivity = {
+  items: ToolItem[];
+  liveTools: Array<Extract<Block, { kind: "live-tool" }>>;
+};
+
+function splitTaskActivity(blocks: Block[]): {
+  contentBlocks: Block[];
+  taskActivity: TaskActivity | null;
+} {
+  const contentBlocks: Block[] = [];
+  const items: ToolItem[] = [];
+  const liveTools: TaskActivity["liveTools"] = [];
+
+  for (const block of blocks) {
+    if (block.kind === "live-tool") {
+      liveTools.push(block);
+      continue;
+    }
+    if (block.kind === "tool-group") {
+      // The canonical TodoWrite display is kept in its anchored chat row. It
+      // remains the one task-progress surface, rather than becoming another
+      // item inside the execution audit trail.
+      if (block.items.every((item) => isTodoWriteToolName(item.use.name))) {
+        contentBlocks.push(block);
+      } else {
+        items.push(...block.items);
+      }
+      continue;
+    }
+    contentBlocks.push(block);
+  }
+
+  return {
+    contentBlocks,
+    taskActivity: items.length > 0 || liveTools.length > 0 ? { items, liveTools } : null,
+  };
+}
 
 /**
  * Walk the event stream and build the rendering layout list. We additionally
