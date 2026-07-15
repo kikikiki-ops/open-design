@@ -14,6 +14,7 @@ import {
 import {
   CollabPublishScheduler,
   type CollabPublishSchedulerOptions,
+  type PublishedResourceVersion,
   type ResourcePublishAdapter,
 } from './publish-scheduler.js';
 import {
@@ -74,7 +75,7 @@ export interface CollabRuntime {
   requestTeamShare(
     projectId: string,
     share?: string | ResourceHubPrincipal,
-  ): Promise<{ version: number | null }>;
+  ): Promise<{ version: number | null; versionId?: string }>;
   /** Move a project out of the team space. */
   requestTeamUnshare(projectId: string, principal?: ResourceHubPrincipal | null): Promise<void>;
   /** Restore a persisted team share into runtime bookkeeping without publishing. */
@@ -104,6 +105,7 @@ export interface CreateCollabRuntimeOptions {
   onPublished?: (result: {
     projectId: string;
     version: number;
+    versionId?: string;
     reason: string;
     principal: ResourceHubPrincipal | null;
   }) => void;
@@ -133,12 +135,16 @@ function selectResourcePublishAdapter(
 export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): CollabRuntime {
   const workspaceContext = options.workspaceContext ?? createWorkspaceContextProviderFromEnv();
   const sharePrincipals = new Map<string, Map<string, ResourceHubPrincipal>>();
+  const knownScopedPrincipals = new Map<string, ResourceHubPrincipal>();
   const scopedOwners = new Map<string, string>();
   const published = new Map<string, number>();
   const syncStates = new Map<string, ProjectSyncState>();
   const owners = new Map<string, string>();
   const unshared = new Set<string>();
-  const barePublishResults = new Map<string, Map<string, number>>();
+  const barePublishResults = new Map<
+    string,
+    Map<string, PublishedResourceVersion>
+  >();
   const SCOPED_PROJECT_SEPARATOR = '\u0000';
 
   const scopedProjectKey = (projectId: string, principal: ResourceHubPrincipal) =>
@@ -151,9 +157,8 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
   function parseScopedProjectKey(key: string) {
     const separatorIndex = key.indexOf(SCOPED_PROJECT_SEPARATOR);
     if (separatorIndex < 0) return { projectId: key, principal: null };
-    const teamId = key.slice(0, separatorIndex);
     const projectId = key.slice(separatorIndex + SCOPED_PROJECT_SEPARATOR.length);
-    return { projectId, principal: sharePrincipals.get(projectId)?.get(teamId) ?? null };
+    return { projectId, principal: knownScopedPrincipals.get(key) ?? null };
   }
 
   const getProjectPrincipal = async (projectId?: string) => {
@@ -179,6 +184,7 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
     share: ResourceHubPrincipal,
     syncState?: ProjectSyncState,
   ) {
+    knownScopedPrincipals.set(scopedProjectKey(projectId, share), share);
     owners.set(projectId, share.memberId);
     scopedOwners.set(scopedProjectKey(projectId, share), share.memberId);
     let principals = sharePrincipals.get(projectId);
@@ -193,10 +199,41 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
     }
   }
 
+  function refreshProjectAggregate(projectId: string) {
+    const principals = principalsForProject(projectId);
+    if (principals.length === 0) {
+      owners.delete(projectId);
+      published.delete(projectId);
+      syncStates.set(projectId, 'local_only');
+      return;
+    }
+
+    owners.set(projectId, principals[0]!.memberId);
+    const remainingVersions = principals
+      .map((candidate) => published.get(scopedProjectKey(projectId, candidate)))
+      .filter((version): version is number => version != null);
+    const aggregateVersion = remainingVersions.at(-1);
+    if (aggregateVersion == null) published.delete(projectId);
+    else published.set(projectId, aggregateVersion);
+
+    const remainingStates = principals.map(
+      (candidate) => syncStates.get(scopedProjectKey(projectId, candidate)) ?? 'local_only',
+    );
+    const aggregateState = remainingStates.includes('pending_upload')
+      ? 'pending_upload'
+      : remainingStates.includes('sync_failed')
+        ? 'sync_failed'
+        : remainingStates.includes('synced')
+          ? 'synced'
+          : 'local_only';
+    syncStates.set(projectId, aggregateState);
+  }
+
   async function markTeamProject(
     projectId: string,
     syncState: TeamProjectCatalogSyncState,
     principal?: ResourceHubPrincipal | null,
+    lastSyncedVersionId?: string,
   ) {
     const descriptor = await options.describeProject?.(projectId) ?? null;
     const displayName = typeof descriptor?.name === 'string'
@@ -216,6 +253,7 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
           resourceId: projectResourceIdFor(projectId, target),
           ...(displayName ? { displayName } : {}),
           syncState,
+          ...(lastSyncedVersionId ? { lastSyncedVersionId } : {}),
           ...(descriptor ? { metadata: descriptor } : {}),
         },
         target,
@@ -227,8 +265,14 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
     projectId: string,
     syncState: TeamProjectCatalogSyncState,
     principal?: ResourceHubPrincipal | null,
+    lastSyncedVersionId?: string,
   ) {
-    void markTeamProject(projectId, syncState, principal).catch((error) => {
+    void markTeamProject(
+      projectId,
+      syncState,
+      principal,
+      lastSyncedVersionId,
+    ).catch((error) => {
       const principals = principal ? [principal] : principalsForProject(projectId);
       if (principals.length === 0) {
         options.onError?.({ projectId, error, principal: null });
@@ -246,17 +290,20 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
       if (!principal) {
         const principals = principalsForProject(projectId);
         if (principals.length > 0) {
-          const versions = new Map<string, number>();
+          const versions = new Map<string, PublishedResourceVersion>();
           for (const scopedPrincipal of principals) {
             const result = await baseAdapter.publish({
               projectId,
               reason,
               principal: scopedPrincipal,
             });
-            if (result) versions.set(scopedPrincipal.teamId, result.version);
+            if (result) versions.set(scopedPrincipal.teamId, result);
           }
           barePublishResults.set(projectId, versions);
-          return versions.size > 0 ? { version: Math.max(...versions.values()) } : null;
+          if (versions.size === 0) return null;
+          return [...versions.values()].reduce((highest, candidate) =>
+            candidate.version > highest.version ? candidate : highest,
+          );
         }
       }
       return baseAdapter.publish({
@@ -298,8 +345,9 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
     projectId: string,
     reason: string,
     principal?: ResourceHubPrincipal | null,
-  ): Promise<{ version: number | null }> {
+  ): Promise<{ version: number | null; versionId?: string }> {
     const key = principal ? scopedProjectKey(projectId, principal) : projectId;
+    let publishedResult: PublishedResourceVersion | null = null;
     try {
       const result = await baseAdapter.publish({
         projectId,
@@ -307,15 +355,19 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
         ...(principal ? { principal } : {}),
       });
       if (!result) return { version: null };
+      publishedResult = result;
       if (unshared.has(key) || unshared.has(projectId)) {
         await baseAdapter.unpublish?.({
           projectId,
           ...(principal ? { principal } : {}),
         });
-        published.delete(projectId);
         published.delete(key);
-        syncStates.set(projectId, 'local_only');
         syncStates.set(key, 'local_only');
+        if (principal) refreshProjectAggregate(projectId);
+        else {
+          published.delete(projectId);
+          syncStates.set(projectId, 'local_only');
+        }
         return { version: null };
       }
       published.set(projectId, result.version);
@@ -324,10 +376,34 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
         published.set(key, result.version);
         syncStates.set(key, 'synced');
       }
-      markTeamProjectSoon(projectId, 'synced', principal);
-      options.onPublished?.({ projectId, version: result.version, reason, principal: principal ?? null });
-      return { version: result.version };
+      await markTeamProject(
+        projectId,
+        'synced',
+        principal,
+        result.versionId,
+      );
+      options.onPublished?.({
+        projectId,
+        version: result.version,
+        ...(result.versionId ? { versionId: result.versionId } : {}),
+        reason,
+        principal: principal ?? null,
+      });
+      return {
+        version: result.version,
+        ...(result.versionId ? { versionId: result.versionId } : {}),
+      };
     } catch (error) {
+      if (publishedResult) {
+        await baseAdapter.unpublish?.({
+          projectId,
+          ...(principal ? { principal } : {}),
+        }).catch(() => undefined);
+        await options.teamProjectCatalog?.remove?.(
+          projectId,
+          principal,
+        ).catch(() => undefined);
+      }
       syncStates.set(projectId, 'sync_failed');
       if (principal) syncStates.set(key, 'sync_failed');
       options.onError?.({ projectId, error, principal: principal ?? null });
@@ -340,14 +416,17 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
     onPublished: (result) => {
       const { projectId, principal } = parseScopedProjectKey(result.projectId);
       const key = principal ? scopedProjectKey(projectId, principal) : projectId;
-      if (unshared.has(key) || unshared.has(projectId)) {
+      if (unshared.has(result.projectId) || unshared.has(key) || unshared.has(projectId)) {
         void schedulerAdapter.unpublish?.({ projectId: result.projectId }).catch((error: unknown) => {
           options.onError?.({ projectId, error, principal });
         });
-        published.delete(projectId);
         published.delete(key);
-        syncStates.set(projectId, 'local_only');
         syncStates.set(key, 'local_only');
+        if (principal) refreshProjectAggregate(projectId);
+        else {
+          published.delete(projectId);
+          syncStates.set(projectId, 'local_only');
+        }
         return;
       }
       published.set(projectId, result.version);
@@ -355,19 +434,40 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
       if (principal) {
         published.set(key, result.version);
         syncStates.set(key, 'synced');
-        markTeamProjectSoon(projectId, 'synced', principal);
+        markTeamProjectSoon(
+          projectId,
+          'synced',
+          principal,
+          result.versionId,
+        );
         options.onPublished?.({ ...result, projectId, principal });
         return;
       }
       const versions = barePublishResults.get(projectId);
       if (versions) {
         for (const scopedPrincipal of principalsForProject(projectId)) {
-          const version = versions.get(scopedPrincipal.teamId);
-          if (version === undefined) continue;
-          published.set(scopedProjectKey(projectId, scopedPrincipal), version);
+          const publishedResult = versions.get(scopedPrincipal.teamId);
+          if (!publishedResult) continue;
+          published.set(
+            scopedProjectKey(projectId, scopedPrincipal),
+            publishedResult.version,
+          );
           syncStates.set(scopedProjectKey(projectId, scopedPrincipal), 'synced');
-          markTeamProjectSoon(projectId, 'synced', scopedPrincipal);
-          options.onPublished?.({ projectId, version, reason: result.reason, principal: scopedPrincipal });
+          markTeamProjectSoon(
+            projectId,
+            'synced',
+            scopedPrincipal,
+            publishedResult.versionId,
+          );
+          options.onPublished?.({
+            projectId,
+            version: publishedResult.version,
+            ...(publishedResult.versionId
+              ? { versionId: publishedResult.versionId }
+              : {}),
+            reason: result.reason,
+            principal: scopedPrincipal,
+          });
         }
         barePublishResults.delete(projectId);
         return;
@@ -378,9 +478,10 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
     onError: (result) => {
       const { projectId, principal } = parseScopedProjectKey(result.projectId);
       const key = principal ? scopedProjectKey(projectId, principal) : projectId;
-      if (unshared.has(key) || unshared.has(projectId)) {
-        syncStates.set(projectId, 'local_only');
+      if (unshared.has(result.projectId) || unshared.has(key) || unshared.has(projectId)) {
         syncStates.set(key, 'local_only');
+        if (principal) refreshProjectAggregate(projectId);
+        else syncStates.set(projectId, 'local_only');
         return;
       }
       syncStates.set(projectId, 'sync_failed');
@@ -424,7 +525,7 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
     },
     projectSyncState: (projectId, principal) => {
       if (principal) {
-        return syncStates.get(scopedProjectKey(projectId, principal)) ?? syncStates.get(projectId) ?? 'local_only';
+        return syncStates.get(scopedProjectKey(projectId, principal)) ?? 'local_only';
       }
       const states = principalsForProject(projectId)
         .map((candidate) => syncStates.get(scopedProjectKey(projectId, candidate)))
@@ -447,13 +548,13 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
       return publishNow(projectId, 'share', principal);
     },
     async requestTeamUnshare(projectId, principal) {
-      unshared.add(projectId);
       const targets = principal
         ? [principal]
         : principalsForProject(projectId).length > 0
           ? principalsForProject(projectId)
           : [await getProjectPrincipal(projectId)].filter((candidate): candidate is ResourceHubPrincipal => Boolean(candidate));
       if (targets.length === 0) {
+        unshared.add(projectId);
         await baseAdapter.unpublish?.({ projectId });
       }
       for (const target of targets) {
@@ -464,14 +565,25 @@ export function createCollabRuntime(options: CreateCollabRuntimeOptions = {}): C
         published.delete(key);
         syncStates.set(key, 'local_only');
         scopedOwners.delete(key);
+        sharePrincipals.get(projectId)?.delete(target.teamId);
       }
+      if (principal) {
+        if (sharePrincipals.get(projectId)?.size === 0) {
+          sharePrincipals.delete(projectId);
+          unshared.add(projectId);
+        }
+        refreshProjectAggregate(projectId);
+        return;
+      }
+
+      unshared.add(projectId);
       owners.delete(projectId);
       published.delete(projectId);
       syncStates.set(projectId, 'local_only');
       sharePrincipals.delete(projectId);
     },
     projectOwnerMemberId: (projectId, principal) => {
-      if (principal) return scopedOwners.get(scopedProjectKey(projectId, principal)) ?? owners.get(projectId) ?? null;
+      if (principal) return scopedOwners.get(scopedProjectKey(projectId, principal)) ?? null;
       return owners.get(projectId) ?? null;
     },
     rememberTeamShare,

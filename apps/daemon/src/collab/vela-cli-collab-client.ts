@@ -4,12 +4,19 @@ import type {
   CollabMemberRole,
   CollabPresenceMember,
 } from '@open-design/contracts';
-import { runVelaCommand } from '../integrations/vela-command.js';
+import {
+  runVelaCommand,
+  velaWorkspaceCommandOptions,
+} from '../integrations/vela-command.js';
 
-export type RunVelaCollab = (args: string[]) => Promise<string>;
+export type RunVelaCollab = (
+  args: string[],
+  workspaceId?: string,
+) => Promise<string>;
 
 export interface VelaCliCollabClientOptions {
   run?: RunVelaCollab;
+  getWorkspaceId?: () => string | null | undefined;
 }
 
 type MemberWire = {
@@ -47,8 +54,10 @@ type PresenceActivity = Exclude<CollabPresenceMember['activity'], undefined>;
 export function createVelaCliCollabClient(options: VelaCliCollabClientOptions = {}) {
   const run = options.run ?? defaultRunVelaCollab;
 
-  async function runJson<T>(args: string[]): Promise<T> {
-    const stdout = await run(args);
+  async function runJson<T>(args: string[], workspaceId?: string): Promise<T> {
+    const requestedWorkspaceId =
+      workspaceId?.trim() || options.getWorkspaceId?.()?.trim() || undefined;
+    const stdout = await run(args, requestedWorkspaceId);
     const trimmed = stdout.trim();
     if (!trimmed) return {} as T;
     return JSON.parse(trimmed) as T;
@@ -65,12 +74,15 @@ export function createVelaCliCollabClient(options: VelaCliCollabClientOptions = 
       input: { displayName: string; role: CollabMemberRole },
     ): Promise<CollabCloudMemberDirectoryEntry> {
       const args = ['member', 'register', '--display-name', input.displayName, '--role', input.role];
-      const payload = await runJson<{ member?: MemberWire }>(args);
+      const payload = await runJson<{ member?: MemberWire }>(args, _teamId);
       return toDirectoryEntry(payload.member);
     },
 
     async listMembers(_teamId: string): Promise<CollabCloudMemberDirectoryEntry[]> {
-      const payload = await runJson<{ members?: MemberWire[] }>(['member', 'list']);
+      const payload = await runJson<{ members?: MemberWire[] }>(
+        ['member', 'list'],
+        _teamId,
+      );
       return Array.isArray(payload.members) ? payload.members.map(toDirectoryEntry) : [];
     },
 
@@ -85,7 +97,7 @@ export function createVelaCliCollabClient(options: VelaCliCollabClientOptions = 
         projectId,
         '--comment-json',
         JSON.stringify(comment),
-      ]);
+      ], _teamId);
       return { seq: typeof payload.seq === 'number' ? payload.seq : 0 };
     },
 
@@ -105,7 +117,7 @@ export function createVelaCliCollabClient(options: VelaCliCollabClientOptions = 
         projectId,
         '--since-seq',
         String(sinceSeq),
-      ]);
+      ], _teamId);
       const comments = Array.isArray(payload.comments)
         ? (payload.comments as CollabCloudComment[])
         : [];
@@ -202,8 +214,11 @@ function isRole(value: unknown): value is CollabMemberRole {
   return value === 'owner' || value === 'admin' || value === 'member';
 }
 
-const defaultRunVelaCollab: RunVelaCollab = (args) =>
-  runVelaCommand(['collab', ...args]);
+const defaultRunVelaCollab: RunVelaCollab = (args, workspaceId) =>
+  runVelaCommand(
+    ['collab', ...args],
+    velaWorkspaceCommandOptions(workspaceId),
+  );
 
 export function shouldUseVelaCliCollabTransport(
   env: NodeJS.ProcessEnv = process.env,
@@ -218,6 +233,9 @@ export function shouldUseVelaCliCollabTransport(
 
 export function createVelaCliCollabClientFromEnv(
   env: NodeJS.ProcessEnv = process.env,
+  options: Omit<VelaCliCollabClientOptions, 'run'> = {},
 ): VelaCliCollabClient | null {
-  return shouldUseVelaCliCollabTransport(env) ? createVelaCliCollabClient() : null;
+  return shouldUseVelaCliCollabTransport(env)
+    ? createVelaCliCollabClient(options)
+    : null;
 }

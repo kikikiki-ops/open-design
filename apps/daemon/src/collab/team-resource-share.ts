@@ -26,6 +26,8 @@ export interface TeamResourceShareRecord {
   description?: string;
   ownerMemberId?: string;
   canUnshare?: boolean;
+  versionId?: string;
+  version?: number;
 }
 
 export interface TeamResourceShareService {
@@ -64,7 +66,7 @@ export interface CreateTeamResourceShareOptions {
   /** Optional resource-index metadata shown in teammate team lists. */
   describeResource?: (resourceId: string) => Record<string, unknown> | null | Promise<Record<string, unknown> | null>;
   /** Injectable Vela resource runner for tests. */
-  run?: (args: string[]) => Promise<string>;
+  run?: (args: string[], workspaceId?: string) => Promise<string>;
   env?: NodeJS.ProcessEnv;
 }
 
@@ -96,6 +98,12 @@ export function createTeamResourceShareService(
   // the hub; this is the fast local view the team collection reads until a hub
   // listing query lands.
   const shared = new Set<string>();
+  let sharedWorkspaceId: string | null = null;
+  const activateWorkspace = (workspaceId: string) => {
+    if (sharedWorkspaceId === workspaceId) return;
+    sharedWorkspaceId = workspaceId;
+    shared.clear();
+  };
 
   const adapter: ResourcePublishAdapter = createVelaCliResourceAdapter({
     resolveProjectDir: options.resolveDir,
@@ -116,18 +124,26 @@ export function createTeamResourceShareService(
         if (await options.getPrincipal()) throw new TeamResourceShareForbiddenError();
         return null;
       }
-      const result = await adapter.publish({ projectId: resourceId, reason: 'share' });
+      const principal = await options.getPrincipal();
+      if (!principal) return null;
+      activateWorkspace(principal.teamId);
+      const result = await adapter.publish({
+        projectId: resourceId,
+        principal,
+        reason: 'share',
+      });
       if (result) shared.add(resourceId);
       return result;
     },
     async unshare(resourceId) {
       const principal = await options.getPrincipal();
       if (!principal) return false;
+      activateWorkspace(principal.teamId);
       const sharedResource = (await this.sharedResources()).find((resource) => resource.id === resourceId);
       if (sharedResource && !sharedResource.canUnshare) {
         throw new TeamResourceShareForbiddenError();
       }
-      await adapter.unpublish?.({ projectId: resourceId });
+      await adapter.unpublish?.({ projectId: resourceId, principal });
       shared.delete(resourceId);
       return true;
     },
@@ -137,8 +153,12 @@ export function createTeamResourceShareService(
     async sharedResources() {
       const principal = await options.getPrincipal();
       if (!principal) return [];
+      activateWorkspace(principal.teamId);
       try {
-        const out = await (options.run ?? defaultRun)(['shared', '--json']);
+        const out = await (options.run ?? defaultRun)(
+          ['shared', '--json'],
+          principal.teamId,
+        );
         const scopedResources = parseSharedResourceRecords(out, options.kind, scopedIdPrefixFor(principal));
         const legacyResources = principal.workspaceType === 'personal'
           ? []
@@ -150,10 +170,14 @@ export function createTeamResourceShareService(
         shared.clear();
         for (const resource of resources) shared.add(resource.id);
         return resources
-          .map((resource) => ({
-            ...resource,
-            canUnshare: canManageSharedResource(principal, resource),
-          }))
+          .map((resource) => {
+            // Keep the non-enumerable hubResourceId attached for the local
+            // materializer. Spreading into a new object drops that descriptor
+            // and makes workspace-scoped resources fall back to the legacy,
+            // unscoped id when a teammate pulls them.
+            resource.canUnshare = canManageSharedResource(principal, resource);
+            return resource;
+          })
           .sort((a, b) => a.id.localeCompare(b.id));
       } catch {
         return [...shared].sort().map((id) => ({ id, canUnshare: true }));
@@ -164,9 +188,9 @@ export function createTeamResourceShareService(
   };
 }
 
-async function defaultRun(args: string[]): Promise<string> {
+async function defaultRun(args: string[], workspaceId?: string): Promise<string> {
   const { runVelaResourceCommand } = await import('./vela-cli-resource-adapter.js');
-  return runVelaResourceCommand(args);
+  return runVelaResourceCommand(args, workspaceId);
 }
 
 interface SharedResourceListPayload {
@@ -176,6 +200,7 @@ interface SharedResourceListPayload {
     deletedAt?: unknown;
     metadata?: unknown;
     ownerMemberId?: unknown;
+    publishedVersion?: unknown;
   }>;
 }
 
@@ -214,11 +239,20 @@ export function parseSharedResourceRecords(
     const title = stringValue(metadata.title) || stringValue(metadata.name);
     const description = stringValue(metadata.description);
     const ownerMemberId = stringValue(resource.ownerMemberId);
+    const publishedVersion = isObjectRecord(resource.publishedVersion)
+      ? resource.publishedVersion
+      : null;
+    const versionId = stringValue(publishedVersion?.id);
+    const version = typeof publishedVersion?.version === 'number'
+      ? publishedVersion.version
+      : undefined;
     const record: TeamResourceShareRecord = {
       id: localId,
       ...(title ? { title } : {}),
       ...(description ? { description } : {}),
       ...(ownerMemberId ? { ownerMemberId } : {}),
+      ...(versionId ? { versionId } : {}),
+      ...(version !== undefined ? { version } : {}),
     };
     Object.defineProperty(record, 'hubResourceId', {
       value: resource.id,

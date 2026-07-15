@@ -476,9 +476,12 @@ describe('VelaCliCollabClient', () => {
 
   it('uses vela collab commands for comments, directory, and presence', async () => {
     const calls: string[][] = [];
+    const workspaces: Array<string | undefined> = [];
     const client = createVelaCliCollabClient({
-      run: async (args) => {
+      getWorkspaceId: () => 'team-1',
+      run: async (args, workspaceId) => {
         calls.push(args);
+        workspaces.push(workspaceId);
         if (args[0] === 'member' && args[1] === 'register') {
           return JSON.stringify({ member: { memberId: 'm-self', displayName: '麻薯', role: 'owner' } });
         }
@@ -548,5 +551,6 @@ describe('VelaCliCollabClient', () => {
       '--activity-json',
       JSON.stringify({ label: '正在评论 Typography' }),
     ]);
+    expect(workspaces).toEqual(['team-1', 'team-1', 'team-1', 'team-1']);
   });
 });

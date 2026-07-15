@@ -220,6 +220,62 @@ describe('collab sync routes', () => {
     expect(runtime.publishedVersion(projectId, workspaceB)).toBe(22);
   });
 
+  it('unshares only the requested workspace and keeps other workspace state live', async () => {
+    const publish = vi.fn(async (input: { principal?: { memberId?: string } }) => ({
+      version: input.principal?.memberId === 'member-a' ? 11 : 22,
+    }));
+    const unpublish = vi.fn(async () => undefined);
+    const teamProjectCatalog = {
+      upsert: vi.fn(async () => undefined),
+      remove: vi.fn(async () => undefined),
+    };
+    runtime = createCollabRuntime({
+      adapter: { publish, unpublish },
+      teamProjectCatalog,
+    });
+    const projectId = 'shared-project';
+    const workspaceA = {
+      memberId: 'member-a',
+      teamId: 'workspace-a',
+      role: 'admin' as const,
+      lifecycleState: 'active' as const,
+    };
+    const workspaceB = {
+      memberId: 'member-b',
+      teamId: 'workspace-b',
+      role: 'admin' as const,
+      lifecycleState: 'active' as const,
+    };
+
+    await runtime.requestTeamShare(projectId, workspaceA);
+    await runtime.requestTeamShare(projectId, workspaceB);
+    await runtime.requestTeamUnshare(projectId, workspaceA);
+
+    expect(unpublish).toHaveBeenCalledWith({ projectId, principal: workspaceA });
+    expect(teamProjectCatalog.remove).toHaveBeenCalledWith(projectId, workspaceA);
+    expect(runtime.publishedVersion(projectId, workspaceA)).toBeNull();
+    expect(runtime.projectSyncState(projectId, workspaceA)).toBe('local_only');
+    expect(runtime.projectOwnerMemberId(projectId, workspaceA)).toBeNull();
+    expect(runtime.publishedVersion(projectId, workspaceB)).toBe(22);
+    expect(runtime.projectSyncState(projectId, workspaceB)).toBe('synced');
+    expect(runtime.projectOwnerMemberId(projectId, workspaceB)).toBe('member-b');
+    expect(runtime.publishedVersion(projectId)).toBe(22);
+    expect(runtime.projectSyncState(projectId)).toBe('synced');
+
+    publish.mockClear();
+    runtime.scheduler.notifyChanged(projectId, 'save');
+    runtime.scheduler.runBoundary(projectId);
+    for (let i = 0; i < 40 && publish.mock.calls.length < 1; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(publish).toHaveBeenCalledWith({
+      projectId,
+      reason: 'save',
+      principal: workspaceB,
+    });
+  });
+
   it('reports ordinary publish failures to every workspace sharing the same project', async () => {
     let failPublish = false;
     const onError = vi.fn();
@@ -592,12 +648,6 @@ describe('collab sync routes', () => {
           sharedAt: new Date(1).toISOString(),
           name: 'Owner Project',
         }),
-        teamProjectCatalog: {
-          upsert: async () => {
-            throw new Error('catalog should not be written');
-          },
-          remove: async () => {},
-        },
       },
       {
         adapter: {
@@ -623,7 +673,6 @@ describe('collab sync routes', () => {
   });
 
   it('refuses to unshare a project owned by another member', async () => {
-    const removes: string[] = [];
     const api = await startSyncServer(fixedShareContextProvider(true), {
       resolveSharedProject: async () => ({
         projectId: 'p1',
@@ -631,12 +680,6 @@ describe('collab sync routes', () => {
         sharedAt: new Date(1).toISOString(),
         name: 'Owner Project',
       }),
-      teamProjectCatalog: {
-        upsert: async () => {},
-        remove: async (projectId) => {
-          removes.push(projectId);
-        },
-      },
     });
 
     const res = await api.json('/api/projects/p1/collab/sync-intent', {
@@ -646,7 +689,6 @@ describe('collab sync routes', () => {
 
     expect(res.status).toBe(403);
     expect(res.body.error).toBe('WORKSPACE_PROJECT_UNSHARE_DENIED');
-    expect(removes).toEqual([]);
   });
 
   it('refuses public file publishing for a shared project owned by another member', async () => {
@@ -853,23 +895,31 @@ describe('collab sync routes', () => {
   it('writes and removes the Vela team-project catalog around share intents', async () => {
     const writes: unknown[] = [];
     const removes: string[] = [];
-    const api = await startSyncServer(fixedShareContextProvider(true), {
-      describeProject: () => ({
-        name: 'Electric Studio 2',
-        skillId: null,
-        designSystemId: null,
-        createdAt: 1,
-        updatedAt: 2,
-      }),
-      teamProjectCatalog: {
-        upsert: async (input) => {
-          writes.push(input);
+    const api = await startSyncServer(
+      fixedShareContextProvider(true),
+      undefined,
+      {
+        adapter: {
+          publish: async () => ({ version: 1, versionId: 'version-1' }),
+          unpublish: async () => {},
         },
-        remove: async (projectId) => {
-          removes.push(projectId);
+        describeProject: () => ({
+          name: 'Electric Studio 2',
+          skillId: null,
+          designSystemId: null,
+          createdAt: 1,
+          updatedAt: 2,
+        }),
+        teamProjectCatalog: {
+          upsert: async (input) => {
+            writes.push(input);
+          },
+          remove: async (projectId) => {
+            removes.push(projectId);
+          },
         },
       },
-    });
+    );
 
     const share = await api.json('/api/projects/p1/collab/sync-intent', {
       method: 'POST',
@@ -887,6 +937,7 @@ describe('collab sync routes', () => {
         }),
         displayName: 'Electric Studio 2',
         syncState: 'synced',
+        lastSyncedVersionId: 'version-1',
         metadata: {
           name: 'Electric Studio 2',
           skillId: null,
@@ -906,28 +957,39 @@ describe('collab sync routes', () => {
   });
 
   it('does not pretend a project is shared when the Vela catalog write fails', async () => {
-    const api = await startSyncServer(fixedShareContextProvider(true), {
-      teamProjectCatalog: {
-        upsert: async () => {
-          throw new Error('catalog unavailable');
+    const unpublish = vi.fn(async () => undefined);
+    const api = await startSyncServer(
+      fixedShareContextProvider(true),
+      undefined,
+      {
+        adapter: {
+          publish: async () => ({ version: 1, versionId: 'version-1' }),
+          unpublish,
         },
-        remove: async () => {},
+        teamProjectCatalog: {
+          upsert: async () => {
+            throw new Error('catalog unavailable');
+          },
+          remove: async () => {},
+        },
       },
-    });
+    );
 
     const res = await api.json('/api/projects/p1/collab/sync-intent', {
       method: 'POST',
       body: { event: 'project_team_share_requested', projectId: 'p1' },
     });
     expect(res.status).toBe(502);
-    expect(res.body.error).toBe('TEAM_PROJECT_CATALOG_UNAVAILABLE');
-    expect((await api.json('/api/projects/p1/collab/status')).body.syncState).toBe('local_only');
+    expect(res.body.error).toBe('TEAM_PROJECT_PUBLISH_UNAVAILABLE');
+    expect(unpublish).toHaveBeenCalledTimes(1);
+    expect((await api.json('/api/projects/p1/collab/status')).body.syncState).toBe('sync_failed');
   });
 
   it('does not write the team catalog when resource publishing fails', async () => {
     const writes: unknown[] = [];
     const api = await startSyncServer(
       fixedShareContextProvider(true),
+      undefined,
       {
         teamProjectCatalog: {
           upsert: async (input) => {
@@ -935,8 +997,6 @@ describe('collab sync routes', () => {
           },
           remove: async () => {},
         },
-      },
-      {
         adapter: {
           publish: async () => {
             throw new Error('resource hub unavailable');

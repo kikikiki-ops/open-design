@@ -1,5 +1,8 @@
 import type { WorkspaceCollabContext } from '@open-design/contracts';
-import { runVelaCommand } from '../integrations/vela-command.js';
+import {
+  runVelaCommand,
+  velaWorkspaceCommandOptions,
+} from '../integrations/vela-command.js';
 import { projectResourceIdFor } from '../integrations/vela-team-projects.js';
 import type { ResourcePublishAdapter } from './publish-scheduler.js';
 import type { ResourceHubPrincipal } from './resource-principal.js';
@@ -20,10 +23,32 @@ const MEMBER_MIRROR_EXCLUDED_ENTRIES = [
   '.file-versions',
   '.live-artifacts',
   '.od-skills',
+  '.git',
+  'node_modules',
+  '.npmrc',
+  '.yarnrc',
+  '.yarnrc.yml',
+  '.aws',
+  '.ssh',
+  '.azure',
+  '.docker',
+  '.gnupg',
+  '.kube',
+  '.pulumi',
+  '.terraform',
+  '.git-credentials',
+  '.netrc',
+  '.pypirc',
+  'terraform.tfstate',
+  'terraform.tfstate.backup',
 ] as const;
+const MEMBER_MIRROR_EXCLUDED_PREFIXES = ['.env'] as const;
 
 /** Run `vela resource <args>` and resolve its stdout. */
-export type RunVelaResource = (args: string[]) => Promise<string>;
+export type RunVelaResource = (
+  args: string[],
+  workspaceId?: string,
+) => Promise<string>;
 
 export interface VelaCliResourceAdapterOptions {
   /** The project's source directory to publish (managed-project root). */
@@ -48,6 +73,7 @@ export interface VelaCliResourceAdapterOptions {
 }
 
 interface VelaVersionRecord {
+  id?: string;
   version?: number;
 }
 
@@ -86,6 +112,9 @@ export function createVelaCliResourceAdapter(
         for (const name of MEMBER_MIRROR_EXCLUDED_ENTRIES) {
           args.push('--exclude', name);
         }
+        for (const prefix of MEMBER_MIRROR_EXCLUDED_PREFIXES) {
+          args.push('--exclude-prefix', prefix);
+        }
         const metadata = await options.describeProject?.(projectId);
         const resourceMetadata = kind === PROJECT_KIND
           ? { projectId, ...(metadata ?? {}) }
@@ -93,9 +122,8 @@ export function createVelaCliResourceAdapter(
         if (resourceMetadata && Object.keys(resourceMetadata).length > 0) {
           args.push('--metadata-json', JSON.stringify(resourceMetadata));
         }
-        const out = await run(args);
-        const version = parseVersion(out);
-        return version == null ? null : { version };
+        const out = await run(args, principal?.teamId);
+        return parseVersion(out);
       }, null);
     },
 
@@ -104,9 +132,12 @@ export function createVelaCliResourceAdapter(
         // `head` reports the published version without downloading — a null
         // version means nothing is published yet.
         for (const resourceId of resourceIdsFor(projectId, principal)) {
-          const out = await run(['head', resourceId, '--ref', PUBLISHED_REF, '--json']);
+          const out = await run(
+            ['head', resourceId, '--ref', PUBLISHED_REF, '--json'],
+            principal?.teamId,
+          );
           const version = parseVersion(out);
-          if (version != null) return { version };
+          if (version != null) return version;
         }
         return null;
       }, null);
@@ -116,12 +147,20 @@ export function createVelaCliResourceAdapter(
       await gated(async () => {
         const dir = await resolvePullDir(projectId);
         let lastError: unknown;
-        for (const resourceId of resourceIdsFor(projectId, principal)) {
+        const resourceIds = resourceIdsFor(projectId, principal);
+        for (const [index, resourceId] of resourceIds.entries()) {
           try {
-            await run(['pull', kind, resourceId, dir, '--ref', PUBLISHED_REF, '--json']);
+            await run(
+              ['pull', kind, resourceId, dir, '--ref', PUBLISHED_REF, '--json'],
+              principal?.teamId,
+            );
             return;
           } catch (error) {
             lastError = error;
+            if (
+              index === resourceIds.length - 1 ||
+              !isMissingResourceError(error)
+            ) throw error;
           }
         }
         throw lastError;
@@ -130,24 +169,39 @@ export function createVelaCliResourceAdapter(
 
     async unpublish({ projectId, principal }) {
       await gated(async () => {
-        await run(['remove', resourceIdFor(projectId, principal), '--json']);
+        await run(
+          ['remove', resourceIdFor(projectId, principal), '--json'],
+          principal?.teamId,
+        );
       }, undefined);
     },
   };
 }
 
+function isMissingResourceError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /resource_not_found|status\s+404|ref_not_found/u.test(message);
+}
+
 /** Parse the `version` field out of a `vela resource` --json line. Returns null
  *  when the field is absent or explicitly null (e.g. `head` on an unpublished
  *  resource), so callers treat "nothing published" as a clean empty result. */
-function parseVersion(stdout: string): number | null {
+function parseVersion(
+  stdout: string,
+): { version: number; versionId?: string } | null {
   const trimmed = stdout.trim();
   if (!trimmed) return null;
-  try {
-    const parsed = JSON.parse(trimmed) as VelaVersionRecord;
-    return typeof parsed.version === 'number' ? parsed.version : null;
-  } catch {
-    return null;
+  const parsed = JSON.parse(trimmed) as VelaVersionRecord;
+  if (parsed.version == null) return null;
+  if (typeof parsed.version !== 'number') {
+    throw new Error('vela resource response has an invalid version');
   }
+  return {
+    version: parsed.version,
+    ...(typeof parsed.id === 'string' && parsed.id.trim()
+      ? { versionId: parsed.id.trim() }
+      : {}),
+  };
 }
 
 export function parseVelaResourceSnapshot(stdout: string): VelaResourceSnapshotRecord | null {
@@ -169,8 +223,11 @@ export function parseVelaResourceSnapshot(stdout: string): VelaResourceSnapshotR
   }
 }
 
-export const runVelaResourceCommand: RunVelaResource = (args) =>
-  runVelaCommand(['resource', ...args]);
+export const runVelaResourceCommand: RunVelaResource = (args, workspaceId) =>
+  runVelaCommand(
+    ['resource', ...args],
+    velaWorkspaceCommandOptions(workspaceId),
+  );
 
 const defaultRunVelaResource: RunVelaResource = runVelaResourceCommand;
 
@@ -191,5 +248,9 @@ export function shouldUseVelaCliResourceTransport(env: NodeJS.ProcessEnv = proce
 
 /** Derive the resource-identity gate from the one workspace context. */
 export function contextHasTeamIdentity(context: WorkspaceCollabContext | null): boolean {
-  return Boolean(context?.workspaceId && context.workspaceMemberId);
+  return Boolean(
+    context?.workspaceType === 'team' &&
+    context.workspaceId &&
+    context.workspaceMemberId,
+  );
 }
