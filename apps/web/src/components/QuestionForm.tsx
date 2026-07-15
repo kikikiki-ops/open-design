@@ -1257,7 +1257,7 @@ function VisualStyleCardView({
         aria-label={card.title}
         onChange={onSelect}
       />
-      <VisualStylePreview context={context} variant={card.variant} />
+      <VisualStylePreview context={context} variant={card.variant} preview={card.preview} />
       {selected ? (
         <span className="qf-visual-card-check" aria-hidden>
           <Icon name="check" size={12} />
@@ -1271,10 +1271,19 @@ function VisualStyleCardView({
 function VisualStylePreview({
   context,
   variant,
+  preview,
 }: {
   context: VisualStyleContext;
   variant: VisualStyleCard['variant'];
+  preview?: VisualStyleCard['preview'];
 }) {
+  if (preview) {
+    return (
+      <span className="qf-visual-preview" data-style={variant}>
+        <img className="qf-visual-preview-image" src={preview.src} alt={preview.alt} loading="lazy" />
+      </span>
+    );
+  }
   if (context === 'deck') {
     return (
       <span className="qf-visual-preview qf-visual-preview-deck" data-style={variant} aria-hidden>

@@ -907,6 +907,16 @@ describe('QuestionFormView', () => {
     expect(screen.getByText('Editorial narrative')).toBeTruthy();
     expect(screen.getByText('Product keynote')).toBeTruthy();
     expect(screen.getByText('Soft gradients')).toBeTruthy();
+    expect(
+      (screen.getByAltText(
+        'Three editorial narrative deck slides with warm paper and burnt orange accents.',
+      ) as HTMLImageElement).getAttribute('src'),
+    ).toBe('/style-catalog/v1/deck-editorial-narrative-v1.jpg');
+    expect(
+      (screen.getByAltText(
+        'Three minimal product keynote slides with white surfaces and cobalt accents.',
+      ) as HTMLImageElement).getAttribute('src'),
+    ).toBe('/style-catalog/v1/deck-product-keynote-v1.jpg');
     expect(document.querySelector('[data-artifact-type="deck"]')).toBeTruthy();
 
     fireEvent.click(screen.getByLabelText('Editorial narrative'));
@@ -983,6 +993,9 @@ describe('QuestionFormView', () => {
     });
     const dialog = screen.getByRole('dialog', { name: 'Visual direction' });
     expect(dialog.querySelectorAll('.qf-visual-card input')).toHaveLength(6);
+    expect(
+      dialog.querySelector('img[src="/style-catalog/v1/deck-editorial-narrative-v1.jpg"]'),
+    ).toBeTruthy();
     expect(visibleLabels()).toHaveLength(4);
     const customInput = screen.getByLabelText('Custom answer') as HTMLInputElement;
     fireEvent.change(customInput, { target: { value: 'Warm Japanese editorial' } });

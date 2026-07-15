@@ -12,12 +12,18 @@ export type VisualStyleVariant =
   | 'brutalist'
   | 'human';
 
+export interface VisualStylePreviewAsset {
+  src: string;
+  alt: string;
+}
+
 export interface VisualStyleCard {
   value: string;
   title: string;
   description: string;
   variant: VisualStyleVariant;
   category: VisualStyleCategory;
+  preview?: VisualStylePreviewAsset;
   recommended?: boolean;
 }
 
@@ -26,6 +32,7 @@ interface VisualStylePreset {
   variant: VisualStyleVariant;
   title: string;
   description: string;
+  preview?: VisualStylePreviewAsset;
   recommended?: boolean;
 }
 
@@ -35,12 +42,20 @@ const DECK_PRESETS: VisualStylePreset[] = [
     variant: 'editorial',
     title: 'Editorial narrative',
     description: 'Strong hierarchy, considered pacing, confident typography.',
+    preview: {
+      src: '/style-catalog/v1/deck-editorial-narrative-v1.jpg',
+      alt: 'Three editorial narrative deck slides with warm paper and burnt orange accents.',
+    },
   },
   {
     match: /modern|minimal/i,
     variant: 'minimal',
     title: 'Product keynote',
     description: 'Quiet layouts, generous space, one clear idea per slide.',
+    preview: {
+      src: '/style-catalog/v1/deck-product-keynote-v1.jpg',
+      alt: 'Three minimal product keynote slides with white surfaces and cobalt accents.',
+    },
     recommended: true,
   },
   {
@@ -54,6 +69,10 @@ const DECK_PRESETS: VisualStylePreset[] = [
     variant: 'utility',
     title: 'Data briefing',
     description: 'Dense but legible systems for metrics, diagrams, and decisions.',
+    preview: {
+      src: '/style-catalog/v1/deck-data-briefing-v1.jpg',
+      alt: 'Three data briefing slides with charts on graphite and sage surfaces.',
+    },
   },
   {
     match: /luxury|refined/i,
@@ -87,6 +106,10 @@ const PROTOTYPE_PRESETS: VisualStylePreset[] = [
     variant: 'minimal',
     title: 'Quiet SaaS',
     description: 'Precise spacing, calm controls, and a focused product hierarchy.',
+    preview: {
+      src: '/style-catalog/v1/prototype-quiet-saas-v1.jpg',
+      alt: 'Three quiet SaaS desktop screens with calm white surfaces and cobalt accents.',
+    },
     recommended: true,
   },
   {
@@ -94,6 +117,10 @@ const PROTOTYPE_PRESETS: VisualStylePreset[] = [
     variant: 'playful',
     title: 'Expressive consumer',
     description: 'Friendly color, rounded interactions, and moments of delight.',
+    preview: {
+      src: '/style-catalog/v1/prototype-expressive-consumer-v1.jpg',
+      alt: 'Three expressive consumer mobile screens with coral, violet, and rounded cards.',
+    },
   },
   {
     match: /tech|utility/i,
@@ -106,6 +133,10 @@ const PROTOTYPE_PRESETS: VisualStylePreset[] = [
     variant: 'luxury',
     title: 'Premium commerce',
     description: 'Image-led layouts, refined details, and deliberate restraint.',
+    preview: {
+      src: '/style-catalog/v1/prototype-premium-commerce-v1.jpg',
+      alt: 'Three premium commerce screens with charcoal, cream, and muted gold product displays.',
+    },
   },
   {
     match: /brutalist|experimental/i,
@@ -142,6 +173,7 @@ export function visualStyleCardsForOptions(
           : 'A distinct interface system for this product.'),
       variant,
       category: categoryForVariant(variant),
+      preview: preset?.preview,
       recommended: preset?.recommended,
     };
   });
