@@ -738,12 +738,20 @@ export function registerCollabSyncRoutes(app: Express, deps: RegisterCollabSyncR
         /* directory unavailable: omit the name */
       }
     }
-    // Only a shared project has a hub-published head worth looking up — and only
-    // then do we need the resource principal that routes the head at the hub. A
-    // confirmed local-only, unowned project reads its (null) version from local
-    // state, skipping both the extra principal resolution and the head round-trip.
-    const projectIsShared = syncState !== 'local_only' || ownerMemberId != null;
-    const head = projectIsShared
+    // Only a NON-OWNER member of a shared project needs the hub-published head: it
+    // drives their auto-pull cursor. The owner is the single writer — their local
+    // copy is newest and they never pull — and a local-only project has no hub
+    // head at all. In both cases we answer the version from local state and skip
+    // the uncached ~3s publishedHead round-trip (and the resource-principal
+    // resolution that routes it). This stops the owner's OWN shared project from
+    // waiting seconds on a head lookup they never use before /collab/status
+    // confirms their ownership — the front end fails closed until then, so a slow
+    // status kept the "shared read-only" affordances (history/share, composer)
+    // disabled for the owner far too long.
+    const callerIsOwner =
+      ownerMemberId != null && principal?.memberId != null && ownerMemberId === principal.memberId;
+    const needsHubHead = (syncState !== 'local_only' || ownerMemberId != null) && !callerIsOwner;
+    const head = needsHubHead
       ? await (async () => {
           const resourcePrincipal = await resourcePrincipalForSharedProject(projectId, req);
           try {
