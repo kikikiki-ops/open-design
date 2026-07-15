@@ -1,0 +1,36 @@
+{
+  "name": "ppt_orchestrator_html_skill",
+  "displayName": "PPT Orchestrator Skill V2 - 内容识别与结构路由总控",
+  "version": "2.0.0",
+  "description": "HTML 型 PPT 总控 Skill。通过内容账本、页面角色硬门槛、语义页面路由、结构冻结、组件映射和双重质量检查，避免内容页被误生成为封面/章节页，并保证正式内容可追踪、可编辑、无遗漏。",
+  "defaultOutput": "HTML 型 PPT",
+  "defaultMode": "full",
+  "supportedModes": [
+    "plan",
+    "render",
+    "full",
+    "audit"
+  ],
+  "defaultCanvas": {
+    "width": 3696,
+    "height": 1008,
+    "physicalSize": "11m × 3m",
+    "ratio": "11:3"
+  },
+  "defaultStyleSkill": "ultrawide_business_growth_ppt_skill",
+  "contentPolicy": {
+    "preserveOfficialContent": true,
+    "excludeEditInstructionsFromFinalBody": true,
+    "doNotRewriteUnlessAsked": true,
+    "requireSourceBinding": true,
+    "requireRelationPreservation": true
+  },
+  "routingPolicy": {
+    "coverAndSectionAreOptIn": true,
+    "fallbackPageType": "StructuredContentPage",
+    "freezeStructureBeforeStyle": true,
+    "referenceImagesDoNotDeterminePageType": true
+  },
+  "createdFor": "AutoBoard / OpenDesign HTML PPT generation workflow",
+  "updated_at": "2026-07-15"
+}

@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PPT Orchestrator V2 Quality Report",
+  "type": "object",
+  "required": [
+    "contentIntegrity",
+    "routing",
+    "layout",
+    "style",
+    "editableHtml",
+    "pass"
+  ],
+  "properties": {
+    "contentIntegrity": {
+      "type": "object",
+      "required": [
+        "mustRenderCount",
+        "renderedUniqueCount",
+        "missing",
+        "unauthorizedChanges",
+        "inventedContent",
+        "relationViolations",
+        "pass"
+      ],
+      "properties": {
+        "mustRenderCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "renderedUniqueCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missing": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unauthorizedChanges": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "inventedContent": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "relationViolations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "pass": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": true
+    },
+    "routing": {
+      "type": "object",
+      "required": [
+        "roleGatePass",
+        "typeMatchPass",
+        "heroMisuse",
+        "pass"
+      ],
+      "properties": {
+        "roleGatePass": {
+          "type": "boolean"
+        },
+        "typeMatchPass": {
+          "type": "boolean"
+        },
+        "heroMisuse": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "pass": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": true
+    },
+    "layout": {
+      "type": "object",
+      "required": [
+        "overflow",
+        "safeAreaPass",
+        "readabilityPass",
+        "pass"
+      ],
+      "additionalProperties": true
+    },
+    "style": {
+      "type": "object",
+      "required": [
+        "styleSkillApplied",
+        "structureMutation",
+        "logoIndependent",
+        "pass"
+      ],
+      "additionalProperties": true
+    },
+    "editableHtml": {
+      "type": "object",
+      "required": [
+        "allFormalTextEditable",
+        "wholeSlideRasterized",
+        "pass"
+      ],
+      "additionalProperties": true
+    },
+    "pass": {
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": true
+}

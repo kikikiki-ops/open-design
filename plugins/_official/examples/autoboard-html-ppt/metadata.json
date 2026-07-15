@@ -1,0 +1,25 @@
+{
+  "name": "autoboard_html_ppt_combined_skill_v2_all_svg",
+  "display_name": "AutoBoard HTML PPT 总控与超宽大屏风格合并 Skill V2",
+  "version": "2.0.0",
+  "output": "editable HTML PPT",
+  "canvas": {
+    "width": 3696,
+    "height": 1008,
+    "physical_size": "11m x 3m",
+    "aspect_ratio": "11:3"
+  },
+  "modules": {
+    "orchestrator": "orchestrator/",
+    "style": "style/"
+  },
+  "assets": {
+    "cover_background": "style/assets/bg-cover.svg",
+    "content_background": "style/assets/bg-content.svg",
+    "closing_background": "style/assets/bg-closing.svg",
+    "logo": "style/assets/logo.svg"
+  },
+  "content_preservation": true,
+  "editable_html": true,
+  "updated_at": "2026-07-15"
+}

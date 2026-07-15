@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PPT Orchestrator V2 Document Analysis",
+  "type": "object",
+  "required": [
+    "pageProfiles"
+  ],
+  "properties": {
+    "pageProfiles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "sourcePage",
+          "mustRenderItemCount",
+          "metricCount",
+          "peerGroupCount",
+          "processNodeCount",
+          "chartCount",
+          "imageCount",
+          "relationCount",
+          "semanticPatterns",
+          "inferredGoal"
+        ],
+        "properties": {
+          "sourcePage": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "mustRenderItemCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "bodyCharCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "metricCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "peerGroupCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "processNodeCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "chartCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "imageCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "relationCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "hasSectionNumber": {
+            "type": "boolean"
+          },
+          "hasSpeakerInfo": {
+            "type": "boolean"
+          },
+          "semanticPatterns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "inferredGoal": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": false
+}

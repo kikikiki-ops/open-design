@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PPT Orchestrator V2 Content Inventory",
+  "type": "object",
+  "required": [
+    "sourceItems",
+    "editInstructionItems",
+    "uncertainItems"
+  ],
+  "properties": {
+    "sourceItems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "sourcePage",
+          "sourceOrder",
+          "type",
+          "rawText",
+          "renderPolicy",
+          "editable"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^source-[0-9]{3,}$"
+          },
+          "sourcePage": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sourceOrder": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "title",
+              "subtitle",
+              "body",
+              "metric",
+              "metric_value",
+              "metric_label",
+              "unit",
+              "trend",
+              "label",
+              "chart",
+              "chart_label",
+              "image",
+              "image_caption",
+              "relation",
+              "flow_node",
+              "note"
+            ]
+          },
+          "rawText": {
+            "type": "string"
+          },
+          "displayText": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "trend": {
+            "type": "string"
+          },
+          "groupId": {
+            "type": "string"
+          },
+          "parentId": {
+            "type": "string"
+          },
+          "relationTargets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "relationType": {
+            "type": "string"
+          },
+          "sourceBox": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              },
+              "width": {
+                "type": "number"
+              },
+              "height": {
+                "type": "number"
+              },
+              "normalized": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "renderPolicy": {
+            "type": "string",
+            "enum": [
+              "must-render",
+              "optional",
+              "do-not-render",
+              "pending-confirmation"
+            ]
+          },
+          "editable": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "editInstructionItems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "sourcePage",
+          "rawText",
+          "classification",
+          "status",
+          "renderedInSlide"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^edit-[0-9]{3,}$"
+          },
+          "sourcePage": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "rawText": {
+            "type": "string"
+          },
+          "classification": {
+            "type": "string",
+            "enum": [
+              "placeholder",
+              "edit-instruction",
+              "internal-note"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "applied",
+              "pending-confirmation",
+              "excluded"
+            ]
+          },
+          "renderedInSlide": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "uncertainItems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "sourcePage",
+          "rawText",
+          "reason",
+          "renderPolicy"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^uncertain-[0-9]{3,}$"
+          },
+          "sourcePage": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "rawText": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "renderPolicy": {
+            "type": "string",
+            "const": "pending-confirmation"
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": false
+}

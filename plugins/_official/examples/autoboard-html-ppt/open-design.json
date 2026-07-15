@@ -1,0 +1,129 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "autoboard-html-ppt",
+  "title": "AutoBoard HTML PPT",
+  "title_i18n": {
+    "zh-CN": "AutoBoard HTML PPT",
+    "en": "AutoBoard HTML PPT"
+  },
+  "version": "2.0.0",
+  "description": "全流程 HTML PPT 生成器（总控 + 超宽大屏风格）。内容账本驱动、页面角色硬门槛路由、SVG 背景资产，输出 3696×1008 可编辑 HTML 演示文稿。",
+  "description_i18n": {
+    "zh-CN": "全流程 HTML PPT 生成器（总控 + 超宽大屏风格）。内容账本驱动、页面角色硬门槛路由、SVG 背景资产，输出 3696×1008 可编辑 HTML 演示文稿。",
+    "en": "Full-pipeline HTML PPT generator (orchestrator + ultrawide business style). Content-ledger driven, hard page-role routing, SVG background assets. Outputs 3696×1008 editable HTML decks."
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Open Design",
+    "url": "https://github.com/nexu-io"
+  },
+  "tags": [
+    "example",
+    "first-party",
+    "deck",
+    "slides",
+    "ppt",
+    "presentation",
+    "ultrawide",
+    "business",
+    "autoboard",
+    "orchestrator",
+    "venue-screen",
+    "超宽大屏",
+    "商务增长",
+    "全流程"
+  ],
+  "compat": {
+    "agentSkills": [
+      { "path": "./SKILL.md" },
+      { "path": "./orchestrator/SKILL.md" },
+      { "path": "./style/SKILL.md" }
+    ]
+  },
+  "od": {
+    "kind": "skill",
+    "taskKind": "new-generation",
+    "mode": "deck",
+    "scenario": "marketing",
+    "surface": "web",
+    "preview": {
+      "type": "html",
+      "entry": "./style/example.html",
+      "motion": "deck"
+    },
+    "useCase": {
+      "query": {
+        "zh-CN": "使用 AutoBoard HTML PPT（超宽大屏风格），为 {{audience}} 将「{{topic}}」制作成一套 3696×1008 超宽大屏 PPT（适配 11m×3m 会场主屏）。通过内容账本与页面角色路由，确保内容完整可追踪；浅暖白背景，SVG 柔光流线，白色大圆角卡片，中心聚焦布局，低信息密度。页数由内容量决定，必须包含封面和结尾页。补充素材：{{source_content}}",
+        "en": "Use AutoBoard HTML PPT (ultrawide business style) to create a 3696×1008 venue-screen deck about {{topic}} for {{audience}} (fits 11m×3m main screen). Content-ledger with hard page-role routing ensures all material is tracked; warm-white background, SVG silk flows, white large-radius cards, centered layout, low density. Slide count from content. Must include cover and closing. Extra material: {{source_content}}"
+      },
+      "exampleOutputs": [
+        {
+          "path": "./style/example.html",
+          "title": "AutoBoard HTML PPT — 示例"
+        }
+      ]
+    },
+    "inputs": [
+      {
+        "name": "topic",
+        "label": "主题",
+        "type": "string",
+        "required": true,
+        "placeholder": "品牌营销增长战略",
+        "default": "用户提供的主题"
+      },
+      {
+        "name": "audience",
+        "label": "受众",
+        "type": "string",
+        "required": true,
+        "placeholder": "品牌商家与运营负责人",
+        "default": "会场观众"
+      },
+      {
+        "name": "source_content",
+        "label": "补充素材（可选）",
+        "type": "text",
+        "required": false,
+        "placeholder": "粘贴需要提炼成演示的素材"
+      }
+    ],
+    "context": {
+      "skills": [
+        { "path": "./SKILL.md" },
+        { "path": "./orchestrator/SKILL.md" },
+        { "path": "./style/SKILL.md" }
+      ],
+      "assets": [
+        "./style/example.html",
+        "./style/assets/bg-cover.svg",
+        "./style/assets/bg-content.svg",
+        "./style/assets/bg-closing.svg",
+        "./style/assets/logo.svg",
+        "./style/background_system.md",
+        "./style/logo_system.md",
+        "./style/asset_manifest.json",
+        "./style/style.md",
+        "./style/components.md",
+        "./style/checklist.md",
+        "./style/examples/example_prompt.md",
+        "./orchestrator/rules/orchestration_pipeline.md",
+        "./orchestrator/rules/page_role_router.md",
+        "./orchestrator/rules/content_preservation.md",
+        "./orchestrator/rules/html_output_contract.md",
+        "./orchestrator/rules/quality_check.md",
+        "./BINDING.md"
+      ]
+    },
+    "pipeline": {
+      "stages": [
+        { "id": "plan", "atoms": ["todo-write"] },
+        { "id": "generate", "atoms": ["file-write", "live-artifact"] },
+        { "id": "critique", "atoms": ["critique-theater"], "repeat": true, "until": "critique.score>=4 || iterations>=3" },
+        { "id": "handoff", "atoms": ["handoff"] }
+      ]
+    },
+    "capabilities": ["prompt:inject", "fs:write"]
+  }
+}

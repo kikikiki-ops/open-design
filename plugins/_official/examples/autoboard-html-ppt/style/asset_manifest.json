@@ -1,0 +1,81 @@
+{
+  "skill": "ultrawide_business_growth_ppt_skill",
+  "canvas": {
+    "width": 3696,
+    "height": 1008,
+    "physicalSize": "11m x 3m"
+  },
+  "backgroundVariants": {
+    "cover": {
+      "path": "assets/bg-cover.svg",
+      "role": "封面页背景",
+      "required": true,
+      "provided": true,
+      "note": "封面背景已替换为用户本次上传的 SVG 资产",
+      "logoBakedIn": false,
+      "format": "svg"
+    },
+    "content": {
+      "path": "assets/bg-content.svg",
+      "role": "内容页背景",
+      "required": true,
+      "provided": true,
+      "note": "内容页背景已替换为用户本次上传的 SVG 资产",
+      "logoBakedIn": false,
+      "format": "svg"
+    },
+    "closing": {
+      "path": "assets/bg-closing.svg",
+      "role": "封尾页背景",
+      "required": true,
+      "provided": true,
+      "note": "封尾背景已替换为用户本次上传的 SVG 资产",
+      "logoBakedIn": false,
+      "format": "svg"
+    }
+  },
+  "mappingAssumption": "按用户上传顺序映射：第 1 张为封面，第 2 张为内容页，第 3 张为封尾。",
+  "rules": [
+    "background image is visual atmosphere only",
+    "editable information must remain HTML text or independent editable components",
+    "orchestrator passes backgroundVariant; component skill renders the background"
+  ],
+  "brandOverlayPolicy": {
+    "autoRenderBrandText": false,
+    "autoRenderLogoFromBackground": false,
+    "renderIndependentLogoComponent": true,
+    "forbiddenExamples": [
+      "背景图内置 Logo",
+      "第二个快手联盟文本",
+      "重复 Logo",
+      "顶部常驻品牌副标题"
+    ]
+  },
+  "logo": {
+    "assetRole": "fixed-brand-logo",
+    "sourceUrl": "https://p5-ad.adkwai.com/udata/pkg/ks-ad-fe/md-tools/quick-cut/6689:5117.b90a9c9d53932e9b.svg",
+    "localPath": "assets/logo.svg",
+    "providedAsUrl": true,
+    "display": {
+      "cover": true,
+      "content": true,
+      "closing": true
+    },
+    "defaultPosition": {
+      "left": 96,
+      "top": 54,
+      "width": 170
+    },
+    "renderPolicy": "independent_component",
+    "doNotBakeIntoBackground": true,
+    "providedAsLocalFile": true,
+    "recommendedLocalPath": "assets/logo.svg"
+  },
+  "backgroundAssetUpdate": {
+    "status": "all_replaced_to_latest",
+    "cover": "assets/bg-cover.svg",
+    "content": "assets/bg-content.svg",
+    "closing": "assets/bg-closing.svg",
+    "note": "封面、内容页、封尾三张背景图均已更新；其中封面/内容页/封尾当前都使用最新资产映射"
+  }
+}

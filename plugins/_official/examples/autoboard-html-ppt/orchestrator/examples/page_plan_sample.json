@@ -1,0 +1,82 @@
+{
+  "slides": [
+    {
+      "outputSlideIndex": 6,
+      "sourcePageRefs": [
+        6
+      ],
+      "pageRole": "content",
+      "pageType": "MultiColumnComparisonPage",
+      "layoutComponent": "ColumnGridLayout",
+      "variant": "ThreeColumnsWithMetrics",
+      "routingEvidence": {
+        "positive": [
+          "存在 3 个同级预算类型",
+          "每组均包含说明和指标",
+          "页面目标是比较预算结构与增长状态"
+        ],
+        "negative": [
+          "存在正式指标，不满足章节页门槛",
+          "must-render 内容超过 4 项"
+        ],
+        "rejectedTypes": [
+          "CoverPage",
+          "SectionDividerPage",
+          "MetricOverviewPage"
+        ],
+        "confidence": 0.94
+      },
+      "contentRefs": [
+        "source-031",
+        "source-032",
+        "source-033",
+        "source-034",
+        "source-035",
+        "source-036"
+      ],
+      "contentMapping": [
+        {
+          "region": "title",
+          "contentRefs": [
+            "source-031"
+          ]
+        },
+        {
+          "region": "column-1",
+          "contentRefs": [
+            "source-032",
+            "source-033"
+          ]
+        },
+        {
+          "region": "column-2",
+          "contentRefs": [
+            "source-034"
+          ]
+        },
+        {
+          "region": "column-3",
+          "contentRefs": [
+            "source-035",
+            "source-036"
+          ]
+        }
+      ],
+      "requiredCapabilities": [
+        "PageTitle",
+        "MetricCard",
+        "StageCard",
+        "SummaryBar"
+      ],
+      "splitDecision": {
+        "needSplit": false,
+        "reason": "3 组内容处于组件容量范围内"
+      },
+      "styleSkill": "ultrawide_business_growth_ppt_skill",
+      "backgroundVariant": "content",
+      "showLogo": true,
+      "logoVariant": "auto",
+      "structureFrozen": true
+    }
+  ]
+}

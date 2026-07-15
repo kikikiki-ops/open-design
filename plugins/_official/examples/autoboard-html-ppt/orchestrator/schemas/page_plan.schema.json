@@ -1,0 +1,201 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PPT Orchestrator V2 Page Plan",
+  "type": "object",
+  "required": [
+    "slides"
+  ],
+  "properties": {
+    "slides": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "outputSlideIndex",
+          "sourcePageRefs",
+          "pageRole",
+          "pageType",
+          "layoutComponent",
+          "variant",
+          "routingEvidence",
+          "contentRefs",
+          "contentMapping",
+          "splitDecision",
+          "styleSkill",
+          "backgroundVariant",
+          "structureFrozen"
+        ],
+        "properties": {
+          "outputSlideIndex": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sourcePageRefs": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "pageRole": {
+            "type": "string",
+            "enum": [
+              "cover",
+              "section",
+              "content",
+              "closing"
+            ]
+          },
+          "pageType": {
+            "type": "string",
+            "enum": [
+              "CoverPage",
+              "SectionDividerPage",
+              "ClosingPage",
+              "AgendaPage",
+              "MetricOverviewPage",
+              "MultiColumnComparisonPage",
+              "EcosystemRelationshipPage",
+              "StrategyPanoramaPage",
+              "StageEvolutionPage",
+              "DualCoreArchitecturePage",
+              "FormulaDecompositionPage",
+              "CaseStudyPage",
+              "ProcessFlowPage",
+              "CentralModelPage",
+              "ShowcaseGalleryPage",
+              "TransformationPage",
+              "CapabilityRoadmapPage",
+              "CapabilityMatrixPage",
+              "ChartAnalysisPage",
+              "StructuredContentPage"
+            ]
+          },
+          "layoutComponent": {
+            "type": "string"
+          },
+          "variant": {
+            "type": "string"
+          },
+          "routingEvidence": {
+            "type": "object",
+            "required": [
+              "positive",
+              "negative",
+              "rejectedTypes",
+              "confidence"
+            ],
+            "properties": {
+              "positive": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "negative": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "rejectedTypes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "additionalProperties": false
+          },
+          "contentRefs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^source-[0-9]{3,}$"
+            }
+          },
+          "contentMapping": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "region",
+                "contentRefs"
+              ],
+              "properties": {
+                "region": {
+                  "type": "string"
+                },
+                "contentRefs": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^source-[0-9]{3,}$"
+                  }
+                },
+                "intentionalDuplicate": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "requiredCapabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "splitDecision": {
+            "type": "object",
+            "required": [
+              "needSplit",
+              "reason"
+            ],
+            "properties": {
+              "needSplit": {
+                "type": "boolean"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "splitGroupId": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          },
+          "styleSkill": {
+            "type": "string"
+          },
+          "backgroundVariant": {
+            "type": "string",
+            "enum": [
+              "cover",
+              "content",
+              "closing"
+            ]
+          },
+          "showLogo": {
+            "type": "boolean"
+          },
+          "logoVariant": {
+            "type": "string"
+          },
+          "structureFrozen": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": false
+}
