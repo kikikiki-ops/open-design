@@ -1992,6 +1992,20 @@ export function setRunTelemetryAcceptedAnchor(
     opts.assistantMessageId,
     opts.conversationId,
   );
+  // Delayed terminal_fallback can accept after the user already deleted the
+  // conversation/project. Delete hooks have already run; a null owner cannot
+  // cascade, so never insert an unowned accepted-body / Vela-identity row.
+  if (!conversationId) {
+    db.prepare(
+      `DELETE FROM run_telemetry_accepted_anchors
+        WHERE run_id = ?
+          AND (
+            conversation_id IS NULL
+            OR conversation_id NOT IN (SELECT id FROM conversations)
+          )`,
+    ).run(runId);
+    return false;
+  }
 
   const now = Date.now();
   db.prepare(

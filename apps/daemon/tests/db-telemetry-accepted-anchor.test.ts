@@ -951,4 +951,34 @@ describe('persisted telemetry accepted anchor', () => {
         .get(oldRunId) as { n: number },
     ).toEqual({ n: 0 });
   });
+
+  it('skips accepted-anchor writes when the conversation owner is already gone', () => {
+    const runId = 'run-late-accept-after-delete';
+    const bodyId = scopedTelemetryBodyId(runId, 'final', 'terminal_fallback');
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+    seedFailedAssistant(db, runId);
+
+    // Owner deleted while terminal_fallback was still delayed.
+    deleteConversation(db, 'conv-1');
+
+    expect(
+      setRunTelemetryAcceptedAnchor(db, {
+        runId,
+        assistantMessageId: 'assistant-1',
+        conversationId: 'conv-1',
+        bodyId,
+        reportTrigger: 'terminal_fallback',
+        deliveryChannel: 'vela',
+        velaIdentity: 'prod:abcdef0123456789',
+      }),
+    ).toBe(false);
+    expect(
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM run_telemetry_accepted_anchors WHERE run_id = ?`,
+        )
+        .get(runId) as { n: number },
+    ).toEqual({ n: 0 });
+    expect(getRunFeedbackTelemetryAnchor(db, runId)).toBeNull();
+  });
 });
