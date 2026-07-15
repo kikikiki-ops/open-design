@@ -630,6 +630,43 @@ describe('AssistantMessage question forms', () => {
     expect(screen.getByText('mood.png')).toBeTruthy();
   });
 
+  it('keeps selected visual style previews in the answered summary', () => {
+    const form = [
+      '<question-form id="discovery" title="Quick brief">',
+      JSON.stringify({
+        questions: [
+          {
+            id: 'tone',
+            label: 'Visual tone',
+            type: 'checkbox',
+            options: ['Editorial / magazine', 'Modern minimal'],
+          },
+        ],
+      }),
+      '</question-form>',
+    ].join('\n');
+
+    render(
+      <AssistantMessage
+        message={baseMessage({
+          content: form,
+          events: [{ kind: 'text', text: form } as ChatMessage['events'][number]],
+        })}
+        streaming={false}
+        projectId="proj-1"
+        projectKind="slide_deck"
+        nextUserContent={'[form answers for discovery]\n- Visual tone: Editorial / magazine'}
+      />,
+    );
+
+    expect(screen.getByText('Visual tone')).toBeTruthy();
+    expect(screen.getByText('Editorial narrative')).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Visual tone: Editorial narrative' })).toHaveAttribute(
+      'src',
+      '/style-catalog/v1/deck-editorial-narrative-v1.jpg',
+    );
+  });
+
   it('does not recommend next steps on the same turn as an inline question form', () => {
     const form = [
       '<question-form id="discovery" title="Quick brief — tailored">',

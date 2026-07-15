@@ -1355,7 +1355,6 @@ button.qf-chip-other:disabled { cursor: default; opacity: 0.6; }
   align-items: center;
   gap: 4px;
   overflow-x: auto;
-  border-bottom: 1px solid var(--border);
 }
 .qf-visual-dialog-tab {
   position: relative;
@@ -1368,7 +1367,7 @@ button.qf-chip-other:disabled { cursor: default; opacity: 0.6; }
 .qf-visual-dialog-tab::after {
   position: absolute;
   right: 8px;
-  bottom: -1px;
+  bottom: 0;
   left: 8px;
   height: 2px;
   border-radius: 2px 2px 0 0;
@@ -1767,6 +1766,45 @@ button.qf-chip-other:disabled { cursor: default; opacity: 0.6; }
   color: var(--text);
   font-size: 12px;
   font-weight: 600;
+}
+/* Answered inline-form summaries keep visual choices recognizable in chat history. */
+.question-form-summary-visuals {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+.question-form-summary-visual-label {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 550;
+}
+.question-form-summary-visual-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.question-form-summary-visual-card {
+  display: grid;
+  width: 112px;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+}
+.question-form-summary-visual-card img {
+  width: 100%;
+  height: 52px;
+  object-fit: cover;
+}
+.question-form-summary-visual-card figcaption {
+  overflow: hidden;
+  padding: 4px 5px 5px;
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .question-form-summary-items {
   display: flex;

@@ -831,7 +831,7 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
                 </Button>
               </span>
             </>
-          ) : (
+          ) : autoContinueEnabled || canSkipAll ? (
             <span
               className={autoContinueEnabled ? 'qf-auto-continue' : 'qf-hint'}
               title={autoContinueEnabled ? t('questions.autoSkipHint') : undefined}
@@ -843,7 +843,7 @@ export const QuestionFormView = forwardRef<QuestionFormHandle, Props>(function Q
             >
               {autoContinueEnabled ? autoContinueCountdown : t('qf.hint')}
             </span>
-          )}
+          ) : null}
           {!locked && !stepped ? (
             <span className="qf-submit-actions">
               {canSkipAll ? (

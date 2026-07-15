@@ -59,7 +59,10 @@ import {
   type QuestionFormFileSubmission,
   type QuestionFormInteraction,
 } from "./QuestionForm";
-import type { VisualStyleContext } from "../runtime/visual-style-catalog";
+import {
+  visualStyleCardsForOptions,
+  type VisualStyleContext,
+} from "../runtime/visual-style-catalog";
 import { splitStreamingArtifact, stripArtifact, stripRecoveredHtmlFallbackForDisplay } from "../artifacts/strip";
 import { BRAND_BROWSER_TAB_ID } from "../runtime/brand-browser-bridge";
 import {
@@ -2640,17 +2643,40 @@ function FormBlock({
     () => (nextUserContent ? parseSubmittedAnswers(form, nextUserContent) : null),
     [form, nextUserContent],
   );
-  const summaryItems = useMemo(() => {
-    if (!submittedFromHistory) return [];
-    return form.questions.flatMap((question) => {
+  const submittedSummary = useMemo(() => {
+    const items: Array<{ label: string; value: string }> = [];
+    const visualItems: Array<{
+      label: string;
+      cards: Array<{ title: string; src: string }>;
+    }> = [];
+    if (!submittedFromHistory) return { items, visualItems };
+    for (const question of form.questions) {
       const raw = submittedFromHistory[question.id];
       const values = Array.isArray(raw) ? raw : typeof raw === "string" ? [raw] : [];
       const labels = values
         .filter((value) => value.trim().length > 0)
         .map((value) => formOptionLabelForValue(question, value));
-      return labels.length > 0 ? [{ label: question.label, value: labels.join(", ") }] : [];
-    });
-  }, [form, submittedFromHistory]);
+      if (labels.length === 0) continue;
+
+      const visualCards =
+        visualStyleContext &&
+        question.id === "tone" &&
+        (question.type === "checkbox" || question.type === "radio") &&
+        question.options
+          ? visualStyleCardsForOptions(visualStyleContext, question.options).flatMap((card) =>
+              values.includes(card.value) && card.preview
+                ? [{ title: card.title, src: card.preview.src }]
+                : [],
+            )
+          : [];
+      if (visualCards.length > 0) {
+        visualItems.push({ label: question.label, cards: visualCards });
+        continue;
+      }
+      items.push({ label: question.label, value: labels.join(", ") });
+    }
+    return { items, visualItems };
+  }, [form, submittedFromHistory, visualStyleContext]);
   useEffect(() => {
     setDraftAnswers(readInlineQuestionFormDraft(formKey));
     setUploadError(null);
@@ -2855,15 +2881,32 @@ function FormBlock({
         </span>
         <div className="question-form-summary-body">
           <div className="question-form-summary-title">{t("questions.bannerAnswered")}</div>
-          {summaryItems.length > 0 ? (
-            <div className="question-form-summary-items">
-              {summaryItems.map((item) => (
-                <span key={item.label} className="question-form-summary-item">
-                  <span>{item.label}</span>
-                  <strong>{item.value}</strong>
-                </span>
+          {submittedSummary.items.length > 0 || submittedSummary.visualItems.length > 0 ? (
+            <>
+              {submittedSummary.visualItems.map((item) => (
+                <div key={item.label} className="question-form-summary-visuals">
+                  <span className="question-form-summary-visual-label">{item.label}</span>
+                  <div className="question-form-summary-visual-cards">
+                    {item.cards.map((card) => (
+                      <figure key={card.src} className="question-form-summary-visual-card">
+                        <img src={card.src} alt={`${item.label}: ${card.title}`} />
+                        <figcaption>{card.title}</figcaption>
+                      </figure>
+                    ))}
+                  </div>
+                </div>
               ))}
-            </div>
+              {submittedSummary.items.length > 0 ? (
+                <div className="question-form-summary-items">
+                  {submittedSummary.items.map((item) => (
+                    <span key={item.label} className="question-form-summary-item">
+                      <span>{item.label}</span>
+                      <strong>{item.value}</strong>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </>
           ) : (
             <div className="question-form-summary-empty">{t("qf.lockedSubmitted")}</div>
           )}

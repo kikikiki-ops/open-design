@@ -621,6 +621,7 @@ describe('QuestionFormView', () => {
       true,
     );
     expect(screen.queryByRole('button', { name: 'Skip all' })).toBeNull();
+    expect(screen.queryByText('Pick what fits. Skip optional fields you don\'t care about — the agent will use sensible defaults.')).toBeNull();
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
