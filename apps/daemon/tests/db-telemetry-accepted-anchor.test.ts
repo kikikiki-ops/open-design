@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -12,10 +12,12 @@ import {
   getRunFeedbackTelemetryAnchor,
   insertConversation,
   insertProject,
+  listMessages,
   openDatabase,
   setRunTelemetryAcceptedAnchor,
   upsertMessage,
 } from '../src/db.js';
+import { reportRunCompletedFromDaemon } from '../src/langfuse-bridge.js';
 import {
   resolveFeedbackTraceId,
   resetAcceptedFinalTraceBodyIdsForTests,
@@ -431,9 +433,17 @@ describe('persisted telemetry accepted anchor', () => {
     // must clear it (otherwise a fresh running retry stays delivery_failed).
     db.prepare(
       `UPDATE messages
-          SET result_delivery_state = ?, started_at = ?, ended_at = ?
+          SET result_delivery_state = ?, started_at = ?, ended_at = ?,
+              produced_files_json = ?, trace_object_files_json = ?
         WHERE id = ?`,
-    ).run('delivery_failed', 1_700_000_000_000, 1_700_000_001_000, 'assistant-1');
+    ).run(
+      'delivery_failed',
+      1_700_000_000_000,
+      1_700_000_001_000,
+      JSON.stringify([{ name: 'stale-a.html', kind: 'html', size: 12 }]),
+      JSON.stringify([{ name: 'stale-a.html', kind: 'html', size: 12 }]),
+      'assistant-1',
+    );
     expect(
       setRunTelemetryAcceptedAnchor(db, {
         runId: oldRunId,
@@ -487,18 +497,29 @@ describe('persisted telemetry accepted anchor', () => {
         .prepare(
           `SELECT result_delivery_state AS resultDeliveryState,
                   started_at AS startedAt,
-                  ended_at AS endedAt
+                  ended_at AS endedAt,
+                  content,
+                  produced_files_json AS producedFilesJson,
+                  trace_object_files_json AS traceObjectFilesJson
              FROM messages WHERE id = ?`,
         )
         .get('assistant-1') as {
         resultDeliveryState: string | null;
         startedAt: number | null;
         endedAt: number | null;
+        content: string;
+        producedFilesJson: string | null;
+        traceObjectFilesJson: string | null;
       },
     ).toEqual({
       resultDeliveryState: null,
       startedAt: retryCreatedAt,
       endedAt: null,
+      // Ownership change must drop prior payload so fail-before-upsert for B
+      // cannot publish A's content/manifests under B's run_id.
+      content: '',
+      producedFilesJson: null,
+      traceObjectFilesJson: null,
     });
     expect(getMessageTelemetryFinalizationState(db, 'assistant-1')).toEqual({
       exists: true,
@@ -525,6 +546,18 @@ describe('persisted telemetry accepted anchor', () => {
         reportTrigger: 'final_message',
       }),
     ).toBe(true);
+    // Same-run re-pin must also preserve any in-flight payload written after
+    // the ownership change (not wipe content again).
+    upsertMessage(db, 'conv-1', {
+      id: 'assistant-1',
+      role: 'assistant',
+      content: 'retry partial B',
+      runId: newRunId,
+      runStatus: 'running',
+      startedAt: retryCreatedAt,
+      producedFiles: [{ name: 'b-partial.html', kind: 'html', size: 3 }],
+      traceObjectFiles: [{ name: 'b-partial.html', kind: 'html', size: 3 }],
+    });
     pinAssistantMessageOnRunCreate(db, {
       id: newRunId,
       conversationId: 'conv-1',
@@ -541,25 +574,149 @@ describe('persisted telemetry accepted anchor', () => {
       acceptedVelaIdentity: null,
     });
     // Same-run re-pin must keep the ownership-change started_at (COALESCE)
-    // and leave ended_at / result_delivery_state cleared.
+    // and leave ended_at / result_delivery_state cleared, and keep payload.
     expect(
       db
         .prepare(
           `SELECT result_delivery_state AS resultDeliveryState,
                   started_at AS startedAt,
-                  ended_at AS endedAt
+                  ended_at AS endedAt,
+                  content,
+                  produced_files_json AS producedFilesJson,
+                  trace_object_files_json AS traceObjectFilesJson
              FROM messages WHERE id = ?`,
         )
         .get('assistant-1') as {
         resultDeliveryState: string | null;
         startedAt: number | null;
         endedAt: number | null;
+        content: string;
+        producedFilesJson: string | null;
+        traceObjectFilesJson: string | null;
       },
     ).toEqual({
       resultDeliveryState: null,
       startedAt: retryCreatedAt,
       endedAt: null,
+      content: 'retry partial B',
+      producedFilesJson: JSON.stringify([
+        { name: 'b-partial.html', kind: 'html', size: 3 },
+      ]),
+      traceObjectFilesJson: JSON.stringify([
+        { name: 'b-partial.html', kind: 'html', size: 3 },
+      ]),
     });
+  });
+
+  it('pin ownership change clears payload so early B telemetry cannot publish A', async () => {
+    // Review regression: side-chat retry reuses assistant id under a new
+    // run_id via pinAssistantMessageOnRunCreate. reportRunCompletedFromDaemon
+    // trusts any row with runId === run.id and reloads content/manifests from
+    // listMessages. If B fails before the next message upsert, B must not
+    // inherit A's stale body.
+    const oldRunId = 'run-a-stale-payload';
+    const newRunId = 'run-b-fail-before-upsert';
+    const db = openDatabase(tempDir, { dataDir: tempDir });
+    const now = Date.now();
+    insertProject(db, {
+      id: 'proj-1',
+      name: 'Telemetry project',
+      createdAt: now,
+      updatedAt: now,
+    });
+    insertConversation(db, {
+      id: 'conv-1',
+      projectId: 'proj-1',
+      title: 'Telemetry run',
+      createdAt: now,
+      updatedAt: now,
+    });
+    upsertMessage(db, 'conv-1', {
+      id: 'assistant-1',
+      role: 'assistant',
+      content: 'final A — must not appear on run B',
+      runId: oldRunId,
+      runStatus: 'failed',
+      telemetryFinalized: true,
+      endedAt: now,
+      producedFiles: [{ name: 'a-only.html', kind: 'html', size: 42 }],
+      traceObjectFiles: [{ name: 'a-only.html', kind: 'html', size: 42 }],
+    });
+
+    pinAssistantMessageOnRunCreate(db, {
+      id: newRunId,
+      conversationId: 'conv-1',
+      assistantMessageId: 'assistant-1',
+      status: 'running',
+      createdAt: now + 1,
+    });
+
+    const pinned = listMessages(db, 'conv-1').find((m) => m.id === 'assistant-1') as {
+      content?: string;
+      runId?: string | null;
+      producedFiles?: unknown;
+      traceObjectFiles?: unknown;
+    };
+    expect(pinned.runId).toBe(newRunId);
+    expect(pinned.content).toBe('');
+    expect(pinned.producedFiles ?? null).toBeNull();
+    expect(pinned.traceObjectFiles ?? null).toBeNull();
+
+    writeFileSync(
+      path.join(tempDir, 'app-config.json'),
+      JSON.stringify({
+        installationId: 'install-pin-payload',
+        telemetry: { metrics: true, content: true, artifactManifest: true },
+      }),
+    );
+    process.env.LANGFUSE_PUBLIC_KEY = 'pk';
+    process.env.LANGFUSE_SECRET_KEY = 'sk';
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue(new Response('{}', { status: 207 }));
+    try {
+      // Immediate report after repin — no intervening upsert for B.
+      await reportRunCompletedFromDaemon({
+        db,
+        dataDir: tempDir,
+        run: {
+          id: newRunId,
+          projectId: 'proj-1',
+          conversationId: 'conv-1',
+          assistantMessageId: 'assistant-1',
+          agentId: 'claude',
+          status: 'failed',
+          createdAt: now + 1,
+          updatedAt: now + 2,
+          events: [],
+          userPrompt: 'prompt for run B',
+        } as any,
+        persistedRunStatus: 'failed',
+        reportTrigger: 'terminal_fallback',
+        fetchImpl: fetchSpy as any,
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const batch = JSON.parse(
+        (fetchSpy.mock.calls[0]![1] as RequestInit).body as string,
+      ).batch as Array<{ type: string; body: Record<string, any> }>;
+      const trace = batch.find((item) => item.type === 'trace-create')?.body;
+      expect(trace?.id).toBe(`${newRunId}:tf`);
+      expect(trace?.input).toBe('prompt for run B');
+      expect(trace?.output ?? '').toBe('');
+      expect(String(trace?.output ?? '')).not.toContain('final A');
+      const artifacts = batch.find(
+        (item) =>
+          item.type === 'event-create' && item.body?.name === 'artifact-summary',
+      )?.body;
+      expect(artifacts?.output?.artifacts ?? []).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ slug: 'a-only.html' }),
+        ]),
+      );
+    } finally {
+      delete process.env.LANGFUSE_PUBLIC_KEY;
+      delete process.env.LANGFUSE_SECRET_KEY;
+    }
   });
 
   it('A fails → row reused by B → A fallback accepted → restart still resolves A:tf', () => {

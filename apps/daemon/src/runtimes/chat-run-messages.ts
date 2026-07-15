@@ -303,7 +303,11 @@ export function pinAssistantMessageOnRunCreate(db: SqliteDb, run: ChatRunMessage
     // or started_at/ended_at from run A would mark run B as already
     // delivery_failed/no_result and leak stale duration into conversation
     // summaries (conversationRunSummaryFromRow trusts any finite pair).
-    // Same-run re-pins still preserve terminal status and timestamps.
+    // Also clear assistant payload columns (content / produced_files /
+    // trace_object_files): reportRunCompletedFromDaemon trusts any row whose
+    // runId === run.id, so a fail-before-upsert for run B would otherwise
+    // publish run A's stale output and manifests under B's trace.
+    // Same-run re-pins still preserve terminal status, timestamps, and payload.
     db.prepare(
       `UPDATE messages
           SET run_id = ?,
@@ -315,6 +319,18 @@ export function pinAssistantMessageOnRunCreate(db: SqliteDb, run: ChatRunMessage
               result_delivery_state = CASE
                 WHEN ? THEN NULL
                 ELSE result_delivery_state
+              END,
+              content = CASE
+                WHEN ? THEN ''
+                ELSE content
+              END,
+              produced_files_json = CASE
+                WHEN ? THEN NULL
+                ELSE produced_files_json
+              END,
+              trace_object_files_json = CASE
+                WHEN ? THEN NULL
+                ELSE trace_object_files_json
               END,
               session_mode = ?,
               run_context_json = ?,
@@ -348,6 +364,9 @@ export function pinAssistantMessageOnRunCreate(db: SqliteDb, run: ChatRunMessage
       clearAcceptedTelemetryAnchor ? 1 : 0,
       run.status,
       run.status,
+      clearAcceptedTelemetryAnchor ? 1 : 0,
+      clearAcceptedTelemetryAnchor ? 1 : 0,
+      clearAcceptedTelemetryAnchor ? 1 : 0,
       clearAcceptedTelemetryAnchor ? 1 : 0,
       run.sessionMode ?? null,
       run.context ? JSON.stringify(run.context) : null,
