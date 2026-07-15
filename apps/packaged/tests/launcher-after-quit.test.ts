@@ -35,8 +35,9 @@ describe("waitForLauncherAfterQuit", () => {
     try {
       const paths = fakePaths(root);
 
-      await waitForLauncherAfterQuit({ targetPid: 999999, timeoutMs: 1000 }, paths);
+      const exited = await waitForLauncherAfterQuit({ targetPid: 999999, timeoutMs: 1000 }, paths);
 
+      expect(exited).toBe(true);
       const log = await readFile(join(root, "logs", "launcher", "after-quit.log"), "utf8");
       expect(log).toContain("armed targetPid=999999 timeoutMs=1000");
       expect(log).toContain("observed-exit targetPid=999999");
@@ -51,8 +52,9 @@ describe("waitForLauncherAfterQuit", () => {
     try {
       const paths = fakePaths(root);
 
-      await waitForLauncherAfterQuit({ targetPid: process.pid, timeoutMs: 1 }, paths, logger);
+      const exited = await waitForLauncherAfterQuit({ targetPid: process.pid, timeoutMs: 1 }, paths, logger);
 
+      expect(exited).toBe(false);
       const log = await readFile(join(root, "logs", "launcher", "after-quit.log"), "utf8");
       expect(log).toContain(`armed targetPid=${process.pid} timeoutMs=1`);
       expect(log).toContain(`timed-out targetPid=${process.pid}`);

@@ -34,17 +34,18 @@ export async function waitForLauncherAfterQuit(
   request: LauncherAfterQuitRequest | null,
   paths: PackagedNamespacePaths,
   logger: LauncherAfterQuitLogger = console,
-): Promise<void> {
-  if (request == null) return;
+): Promise<boolean> {
+  if (request == null) return true;
   await writeLauncherAfterQuitLog(paths, `armed targetPid=${request.targetPid} timeoutMs=${request.timeoutMs}`);
   const exited = await waitForProcessExit(request.targetPid, request.timeoutMs);
   if (exited) {
     await writeLauncherAfterQuitLog(paths, `observed-exit targetPid=${request.targetPid}`);
-    return;
+    return true;
   }
   const message = `timed-out targetPid=${request.targetPid}`;
   await writeLauncherAfterQuitLog(paths, message);
   logger.warn(`[open-design launcher] ${message}`);
+  return false;
 }
 
 export async function inspectExistingDesktopForLauncher(

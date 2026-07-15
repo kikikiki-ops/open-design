@@ -31,10 +31,12 @@ import {
   compareLauncherVersions,
   resolveLauncherPaths,
   resolveLauncherVersionPaths,
+  validateLauncherAttemptDescriptor,
   validateLauncherCleanupDescriptor,
   validateLauncherRuntimeDescriptor,
   type LauncherCleanupDescriptor,
   type LauncherCleanupEntry,
+  type LauncherAttemptDescriptor,
   type LauncherRuntimeDescriptor,
 } from "@open-design/launcher-proto";
 import {
@@ -1243,7 +1245,7 @@ async function assertPreparedLauncherPayloadRelease(input: {
   config: DesktopUpdaterConfig;
   root: string;
   version: string;
-}): Promise<void> {
+}): Promise<string> {
   const manifest = validateLauncherPayloadManifest(await readJsonStrict<unknown>(join(input.root, "manifest.json")), {
     channel: input.config.channel,
     namespace: input.config.namespace ?? "",
@@ -1269,6 +1271,7 @@ async function assertPreparedLauncherPayloadRelease(input: {
     throw new Error("launcher payload root must be a plain directory");
   }
   await assertLauncherPayloadBootConfig({ manifest, payloadRoot, stagingRoot: input.root });
+  return entryExecutable;
 }
 
 async function prepareLauncherPayloadRelease(input: {
@@ -1355,7 +1358,7 @@ async function activatePreparedLauncherPayloadRelease(input: {
   activeRelease: LoadedRelease;
   config: DesktopUpdaterConfig;
   now: () => Date;
-}): Promise<LauncherRuntimeDescriptor> {
+}): Promise<{ launchPath: string; runtime: LauncherRuntimeDescriptor }> {
   if (input.config.launcherRoot == null || input.config.launcherRuntimePath == null || input.config.namespace == null) {
     throw new Error("launcher payload activate requires launcher root, runtime path, and namespace");
   }
@@ -1370,14 +1373,29 @@ async function activatePreparedLauncherPayloadRelease(input: {
     root: input.config.launcherRoot,
     version: input.activeRelease.ref.version,
   });
-  await assertPreparedLauncherPayloadRelease({
+  const launchPath = await assertPreparedLauncherPayloadRelease({
     config: input.config,
     root: versionPaths.versionRoot,
     version: input.activeRelease.ref.version,
   });
+  const launcherPaths = resolveLauncherPaths({
+    channel: input.config.channel,
+    namespace: input.config.namespace,
+    root: input.config.launcherRoot,
+  });
+  const currentAttempt = await readJsonStrict<LauncherAttemptDescriptor>(launcherPaths.attemptsPath)
+    .then((value) => validateLauncherAttemptDescriptor(value, {
+      channel: input.config.channel,
+      namespace: input.config.namespace ?? "",
+    }))
+    .catch(() => null);
   const activeRuntimeVersion = currentRuntime.active;
   const alreadyActive = activeRuntimeVersion?.version === input.activeRelease.ref.version;
-  const nextActive = alreadyActive && activeRuntimeVersion != null
+  const retryFailedGeneration = alreadyActive &&
+    activeRuntimeVersion != null &&
+    currentAttempt?.version === activeRuntimeVersion.version &&
+    currentAttempt.generation === activeRuntimeVersion.generation;
+  const nextActive = alreadyActive && activeRuntimeVersion != null && !retryFailedGeneration
     ? activeRuntimeVersion
     : {
         generation: Math.max(
@@ -1395,13 +1413,16 @@ async function activatePreparedLauncherPayloadRelease(input: {
     updatedAt: input.now().toISOString(),
   };
   await writeJson(input.config.launcherRuntimePath, nextRuntime);
+  if (retryFailedGeneration) {
+    await rm(launcherPaths.handoffPath, { force: true });
+  }
   await cleanupLauncherPayloadRoots(versionPaths, new Set([
     nextActive.version,
     ...(currentRuntime.active == null ? [] : [currentRuntime.active.version]),
     ...(currentRuntime.lastSuccessful == null ? [] : [currentRuntime.lastSuccessful.version]),
     ...(nextRuntime.lastSuccessful == null ? [] : [nextRuntime.lastSuccessful.version]),
   ]));
-  return nextRuntime;
+  return { launchPath, runtime: nextRuntime };
 }
 
 async function cleanupLauncherPayloadRoots(versionPaths: ReturnType<typeof resolveLauncherVersionPaths>, keepVersions: ReadonlySet<string>): Promise<void> {
@@ -1640,7 +1661,7 @@ async function launchWindowsInstallerAfterQuit(
   }
 }
 
-async function launchWindowsAppAfterQuit(
+async function launchPayloadAppAfterQuit(
   input: DeferredAppLaunchInput,
   deps: { now: () => Date; spawnDetached: SpawnInstallerHelper },
 ): Promise<DeferredLaunchResult> {
@@ -2398,12 +2419,7 @@ export function createDesktopUpdater(
       : launchMacInstallerAfterQuit(input, { now, spawnDetached })
   ));
   const launchAppAfterQuit = deps.launchAppAfterQuit ?? (async (input) => {
-    if (config.platform === "win32") return await launchWindowsAppAfterQuit(input, { now, spawnDetached });
-    const error = await launchMacInstallerAfterQuit(
-      { appPid: input.appPid, installerPath: input.launchPath, root: input.root, timeoutMs: input.timeoutMs },
-      { now, spawnDetached },
-    );
-    return error.length > 0 ? { error } : {};
+    return await launchPayloadAppAfterQuit(input, { now, spawnDetached });
   });
   const listeners = new Set<() => void>();
   let candidate: UpdateCandidate | null = null;
@@ -2970,18 +2986,17 @@ export function createDesktopUpdater(
     });
   }
 
-  async function requestPayloadRelaunch(updateRoot: string): Promise<DeferredLaunchResult & { launchPath?: string }> {
+  async function requestPayloadRelaunch(
+    updateRoot: string,
+    launchPath: string,
+  ): Promise<DeferredLaunchResult & { launchPath?: string }> {
     if (config.openDryRun) return {};
     if (config.platform !== "darwin" && config.platform !== "win32") return {};
-    const launchPath = config.launcherLaunchPath;
-    if (launchPath == null || launchPath.length === 0) {
-      return { error: "launcher payload relaunch requires a stable launcher launch path" };
-    }
     try {
       await access(launchPath);
       const launcherTarget = await lstat(launchPath);
-      if (launcherTarget.isSymbolicLink() || (!launcherTarget.isFile() && !launcherTarget.isDirectory())) {
-        return { error: `launcher launch path is not a plain file or directory: ${launchPath}` };
+      if (launcherTarget.isSymbolicLink() || !launcherTarget.isFile()) {
+        return { error: `launcher payload executable is not a plain file: ${launchPath}` };
       }
     } catch (launchPathError) {
       return { error: launchPathError instanceof Error ? launchPathError.message : String(launchPathError) };
@@ -3040,12 +3055,12 @@ export function createDesktopUpdater(
     if (activeRelease.ref.artifact.type === "payload") {
       try {
         const appliedAt = now().toISOString();
-        await activatePreparedLauncherPayloadRelease({
+        const activation = await activatePreparedLauncherPayloadRelease({
           activeRelease,
           config,
           now,
         });
-        const relaunch = await requestPayloadRelaunch(opened.root.realRoot);
+        const relaunch = await requestPayloadRelaunch(opened.root.realRoot, activation.launchPath);
         if (relaunch.error != null && relaunch.error.length > 0) {
           return setState(DESKTOP_UPDATE_STATES.ERROR, createError("payload-relaunch-failed", relaunch.error));
         }
