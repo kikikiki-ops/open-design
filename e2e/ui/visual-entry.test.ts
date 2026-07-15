@@ -142,7 +142,13 @@ test('[P2] captures the home plugin use staged surface', async ({ page }) => {
   await configureVisualPage(page);
   const plugins = await openVisualPluginsCatalog(page);
 
-  await pluginMarketplaceCard(plugins, 'Prototype Starter').getByRole('button', { name: 'Try it' }).click();
+  const home = page.getByTestId('entry-view-home');
+  await home.getByTestId('plugins-home-pill-category-prototype').click();
+  const card = home.locator('article.plugins-home__card[data-plugin-id="visual-prototype-starter"]');
+  await expect(card).toBeVisible();
+  await home.getByTestId('plugins-home-details-visual-prototype-starter').click({ force: true });
+  await expect(page.getByRole('dialog', { name: /Prototype Starter details/i })).toBeVisible();
+  await page.getByTestId('plugin-details-use-visual-prototype-starter').click();
   await expect(page.getByTestId('home-hero-active-plugin')).toContainText('Prototype Starter');
   await expect(page.getByTestId('home-hero-input')).toBeVisible();
 
@@ -164,6 +170,8 @@ test('[P2] captures the home plugin use with query surface', async ({ page }) =>
 });
 
 test('[P2] captures the new project modal surface', async ({ page }) => {
+  test.setTimeout(T.xlong);
+
   await configureVisualPage(page);
   await gotoVisualHome(page);
 

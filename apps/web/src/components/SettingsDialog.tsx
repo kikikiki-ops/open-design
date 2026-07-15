@@ -60,8 +60,10 @@ import {
 import { isVisibleLocalCliAgent } from '../utils/visibleAgents';
 import { ExportDiagnosticsRow } from './ExportDiagnosticsButton';
 import { Icon } from './Icon';
+import { defaultAgentModelId, effectiveAgentModelChoice } from './agentModelSelection';
 import {
   CUSTOM_MODEL_SENTINEL,
+  orderModelOptionsByAvailability,
   SearchableModelSelect,
 } from './modelOptions';
 import {
@@ -407,6 +409,7 @@ interface Props {
    * incremental save, not a final commit.
    */
   onPersist: (cfg: AppConfig, options?: { forceMediaProviderSync?: boolean }) => Promise<void> | void;
+  onDraftChange?: (cfg: AppConfig) => void;
   /**
    * Persist the Composio API key separately from the broader autosave
    * loop. Composio secrets need an explicit user gesture so half-typed
@@ -439,6 +442,15 @@ interface Props {
   onDesignSystemsChanged?: (affectedDesignSystemId?: string) => void;
   onDesignSystemImportRebuildJob?: (designSystemId: string, job: DesignSystemGenerationJob) => void;
   onProviderModelsCacheChange?: Dispatch<SetStateAction<ProviderModelsCache>>;
+}
+
+function telemetryPrefsEqual(
+  a: AppConfig['telemetry'],
+  b: AppConfig['telemetry'],
+): boolean {
+  return a?.metrics === b?.metrics
+    && a?.content === b?.content
+    && a?.artifactManifest === b?.artifactManifest;
 }
 
 export interface AgentRefreshOptions {
@@ -1351,6 +1363,7 @@ export function SettingsDialog({
   onDesignSystemImportRebuildJob,
   providerModelsCache: sharedProviderModelsCache,
   onProviderModelsCacheChange,
+  onDraftChange,
 }: Props) {
   const { t, locale, setLocale } = useI18n();
   const analytics = useAnalytics();
@@ -1373,6 +1386,10 @@ export function SettingsDialog({
     accentColor: resolveAccentColor(initial.accentColor),
   });
 
+  useEffect(() => {
+    onDraftChange?.(cfg);
+  }, [cfg, onDraftChange]);
+
   // settings_view — fire on dialog open and on every section switch so the
   // configuration funnel can see which section the user spent time in.
   // The fire is keyed on section so a section bounce (open → switch →
@@ -1388,12 +1405,17 @@ export function SettingsDialog({
 
   useEffect(() => {
     const previousInitial = previousInitialRef.current;
+    const parentPrivacyChanged =
+      previousInitial.installationId !== initial.installationId ||
+      previousInitial.privacyDecisionAt !== initial.privacyDecisionAt ||
+      !telemetryPrefsEqual(previousInitial.telemetry, initial.telemetry);
     setCfg((current) => {
       const nextAgentCliEnv = reconcileAmrProfileEnv(current.agentCliEnv, initial.agentCliEnv);
       const nextAgentModels = reconcileAmrModelChoice(current.agentModels, previousInitial, initial);
       if (
         nextAgentCliEnv === current.agentCliEnv
         && nextAgentModels === current.agentModels
+        && !parentPrivacyChanged
       ) {
         return current;
       }
@@ -1401,6 +1423,13 @@ export function SettingsDialog({
         ...current,
         agentCliEnv: nextAgentCliEnv,
         agentModels: nextAgentModels,
+        ...(parentPrivacyChanged
+          ? {
+              installationId: initial.installationId,
+              privacyDecisionAt: initial.privacyDecisionAt,
+              telemetry: initial.telemetry ? { ...initial.telemetry } : undefined,
+            }
+          : {}),
       };
     });
     autosaveLastSavedRef.current = {
@@ -1414,6 +1443,13 @@ export function SettingsDialog({
         previousInitial,
         initial,
       ),
+      ...(parentPrivacyChanged
+        ? {
+            installationId: initial.installationId,
+            privacyDecisionAt: initial.privacyDecisionAt,
+            telemetry: initial.telemetry ? { ...initial.telemetry } : undefined,
+          }
+        : {}),
     };
     previousInitialRef.current = initial;
   }, [initial]);
@@ -1567,7 +1603,7 @@ export function SettingsDialog({
     // login, ping-pongs the action between "Signing in…" and "Authorize".
     const resyncAmrStatus = () => {
       if (document.visibilityState === 'hidden') return;
-      void fetchVelaLoginStatus().then((next) => {
+      void fetchVelaLoginStatus({ refresh: true }).then((next) => {
         if (cancelled || !next) return;
         setAmrCardStatus(next);
         if (next.loggedIn) void refreshAmrWalletSnapshot({ refresh: true });
@@ -2698,7 +2734,7 @@ export function SettingsDialog({
   };
 
   const apiProtocol = cfg.apiProtocol ?? 'anthropic';
-  const apiKeyConsoleLink = API_KEY_CONSOLE_LINKS[apiProtocol];
+  const defaultApiKeyConsoleLink = API_KEY_CONSOLE_LINKS[apiProtocol];
   const byokProviderPresets: ReadonlyArray<ByokProviderPreset> = [
     {
       id: 'anthropic',
@@ -2713,6 +2749,13 @@ export function SettingsDialog({
       protocol: 'openai',
       baseUrl: 'https://api.openai.com/v1',
       model: 'gpt-4o',
+    },
+    {
+      id: 'atlascloud',
+      title: 'Atlas Cloud',
+      protocol: 'openai',
+      baseUrl: 'https://api.atlascloud.ai/v1',
+      model: 'qwen/qwen3.5-flash',
     },
     {
       id: 'google-ai-studio',
@@ -3183,6 +3226,8 @@ export function SettingsDialog({
           (p) => p.baseUrl === cfg.apiProviderBaseUrl && p.baseUrl === cfg.baseUrl,
         );
   const selectedProvider = selectedProviderIndex >= 0 ? protocolProviders[selectedProviderIndex] : undefined;
+  const apiKeyConsoleLink =
+    selectedProvider?.apiKeyConsoleLink ?? defaultApiKeyConsoleLink;
   const showProviderPreset =
     protocolProviders.length > 0 && !isFixedOriginGateway(apiProtocol);
   // Fixed-origin gateways resolve their Base URL automatically; nothing for the
@@ -3290,8 +3335,14 @@ export function SettingsDialog({
     ),
     [apiProtocol, cfg.baseUrl, cfg.apiKey, cfg.apiVersion],
   );
+  const providerModelDiscoveryUnavailable =
+    apiProtocol !== 'azure' &&
+    apiProtocol !== 'ollama' &&
+    isProviderModelDiscoveryUnsupported(apiProtocol, cfg.baseUrl);
   const fetchedApiModelOptions =
-    activeProviderModelsCache[providerModelsKey] ?? [];
+    providerModelDiscoveryUnavailable
+      ? []
+      : activeProviderModelsCache[providerModelsKey] ?? [];
   const commitProviderModelsInputs = () => {
     if (
       byokFirstPartyBaseUrl?.hostTypo ||
@@ -3439,12 +3490,19 @@ export function SettingsDialog({
       )
       : null;
   const suggestedApiModelIds = useMemo(
-    () => Array.from(new Set(
-      selectedProvider?.models?.length
-        ? selectedProvider.models
-        : SUGGESTED_MODELS_BY_PROTOCOL[apiProtocol],
-    )),
-    [apiProtocol, selectedProvider],
+    () => {
+      if (providerModelDiscoveryUnavailable) {
+        return selectedProvider?.models?.length
+          ? Array.from(new Set(selectedProvider.models))
+          : [];
+      }
+      return Array.from(new Set(
+        selectedProvider?.models?.length
+          ? selectedProvider.models
+          : SUGGESTED_MODELS_BY_PROTOCOL[apiProtocol],
+      ));
+    },
+    [apiProtocol, selectedProvider, providerModelDiscoveryUnavailable],
   );
   const apiModelOptions = useMemo(
     () => mergeProviderModelOptions(
@@ -3591,8 +3649,8 @@ export function SettingsDialog({
   };
   const agentModelSummary = (agent: AgentInfo) => {
     if (!Array.isArray(agent.models) || agent.models.length === 0) return null;
-    const choice = cfg.agentModels?.[agent.id] ?? {};
-    const modelValue = choice.model ?? agent.models[0]?.id ?? '';
+    const choice = effectiveAgentModelChoice(agent, cfg.agentModels?.[agent.id]) ?? cfg.agentModels?.[agent.id] ?? {};
+    const modelValue = choice.model ?? defaultAgentModelId(agent) ?? '';
     if (!modelValue) return t('settings.modelCustom');
     return agentModelOptionLabel(
       agent.models.find((m) => m.id === modelValue),
@@ -3642,6 +3700,11 @@ export function SettingsDialog({
     }
     if (!hasModels && !hasReasoning) return null;
     const choice = cfg.agentModels?.[selected.id] ?? {};
+    const effectiveChoice = effectiveAgentModelChoice(selected, choice) ?? choice;
+    const modelsForSelect =
+      selected.id === 'amr' && selected.models
+        ? orderModelOptionsByAvailability(selected.models)
+        : selected.models;
     const knownModelIds = selected.models?.map((m) => m.id) ?? [];
     // Adapters opt out via `supportsCustomModel: false` on their
     // RuntimeAgentDef when their CLI has no `--model` flag (Antigravity,
@@ -3650,8 +3713,8 @@ export function SettingsDialog({
     // a live catalog). Undefined === allow, matching today's UX.
     const allowCustomModel = selected.supportsCustomModel !== false;
     const configuredModel =
-      typeof choice.model === 'string' && choice.model
-        ? choice.model
+      typeof effectiveChoice.model === 'string' && effectiveChoice.model
+        ? effectiveChoice.model
         : null;
     const setChoice = (
       next: { model?: string; reasoning?: string },
@@ -3671,9 +3734,10 @@ export function SettingsDialog({
       selected.id === 'amr' &&
       configuredModel &&
       !knownModelIds.includes(configuredModel)
-        ? selected.models?.[0]?.id ?? ''
-        : configuredModel ?? selected.models?.[0]?.id ?? '';
+        ? defaultAgentModelId(selected) ?? ''
+        : configuredModel ?? defaultAgentModelId(selected) ?? '';
     const reasoningValue =
+      effectiveChoice.reasoning ??
       choice.reasoning ??
       selected.reasoningOptions?.[0]?.id ?? '';
     const customActive =
@@ -3722,7 +3786,7 @@ export function SettingsDialog({
                   popoverTestId={`settings-agent-model-popover-${selected.id}`}
                   minSearchableOptions={5}
                   popoverMinWidth={340}
-                  models={selected.models!}
+                  models={modelsForSelect!}
                   onChange={(nextValue) => {
                     if (nextValue === CUSTOM_MODEL_SENTINEL) {
                       setAgentCustomModelIds((prev) => {
@@ -3749,6 +3813,25 @@ export function SettingsDialog({
                             label: t('settings.modelCustom'),
                           },
                         ]
+                      : undefined
+                  }
+                  disabledOptionHint={
+                    selected.id === 'amr'
+                      ? (option) =>
+                          option.enabled === false
+                            ? t('settings.amrModelUpgradeHint')
+                            : null
+                      : undefined
+                  }
+                  onDisabledOptionUpgrade={
+                    selected.id === 'amr'
+                      ? () =>
+                          void openExternalUrl(
+                            attributedAmrSettingsUrl(
+                              amrPlansUrlForProfile(amrCardStatus?.profile),
+                              'settings_amr_upgrade',
+                            ),
+                          )
                       : undefined
                   }
                 />
@@ -5153,7 +5236,7 @@ export function SettingsDialog({
                 model={cfg.model}
                 modelSelectRef={modelSelectRef}
                 models={apiModelOptions.map((m) => ({
-                  id: m.id,
+                  ...m,
                   label: apiModelOptionLabel(
                     m,
                     !hidesAccountModelSourceLabel(apiProtocol) &&
@@ -5596,6 +5679,30 @@ export function SettingsDialog({
               ) : (
                 <div className="empty-card">{t('settings.versionUnavailable')}</div>
               )}
+              <div className="settings-about-diagnostics settings-about-silent-updates">
+                <label className="settings-about-toggle">
+                  <input
+                    checked={cfg.allowSilentUpdates === true}
+                    data-testid="settings-allow-silent-updates"
+                    type="checkbox"
+                    onChange={(event) => {
+                      // Capture before setState: React clears event.currentTarget
+                      // after the handler returns, and the functional updater can
+                      // run later when SettingsDialog already has pending lanes
+                      // (about-updater status, autosave indicator, etc.).
+                      const allowSilentUpdates = event.currentTarget.checked;
+                      setCfg((current) => ({
+                        ...current,
+                        allowSilentUpdates,
+                      }));
+                    }}
+                  />
+                  <span className="settings-about-toggle-copy">
+                    <span>{t('settings.allowSilentUpdates')}</span>
+                    <span className="hint">{t('settings.allowSilentUpdatesDesc')}</span>
+                  </span>
+                </label>
+              </div>
               <div className="settings-about-diagnostics">
                 <div className="settings-about-diagnostics-text">
                   <h4>{t('diagnostics.exportTitle')}</h4>

@@ -194,7 +194,7 @@ describe('FileViewer image export', () => {
     await clickSave();
 
     await waitFor(() => {
-      expect(requestPreviewSnapshotMock).toHaveBeenCalledWith(activeFrame, 1500);
+      expect(requestPreviewSnapshotMock).toHaveBeenCalledWith(activeFrame, 1500, undefined);
       expect(imageDataUrlToBlobMock).toHaveBeenCalledWith('data:image/png;base64,ok', 'jpeg');
       expect(prepareImageExportTargetMock).toHaveBeenCalledWith('workspace', 'jpeg', { useNativePicker: false });
     });
@@ -245,8 +245,8 @@ describe('FileViewer image export', () => {
     await clickSave();
 
     await waitFor(() => {
-      expect(requestPreviewSnapshotMock).toHaveBeenCalledWith(srcDocFrame, 1500);
-      expect(requestPreviewSnapshotMock).toHaveBeenCalledWith(srcDocFrame, 3000);
+      expect(requestPreviewSnapshotMock).toHaveBeenCalledWith(srcDocFrame, 1500, undefined);
+      expect(requestPreviewSnapshotMock).toHaveBeenCalledWith(srcDocFrame, 3000, undefined);
       expect(imageDataUrlToBlobMock).toHaveBeenCalledWith('data:image/png;base64,recovered', 'png');
     }, { timeout: 4000 });
   });
@@ -270,10 +270,10 @@ describe('FileViewer image export', () => {
     await clickSave();
 
     await waitFor(() => {
-      expect(requestPreviewSnapshotMock).toHaveBeenCalledWith(activeFrame, 1500);
+      expect(requestPreviewSnapshotMock).toHaveBeenCalledWith(activeFrame, 1500, undefined);
       expect(imageDataUrlToBlobMock).toHaveBeenCalledWith('data:image/png;base64,visible', 'png');
     });
-    expect(requestPreviewSnapshotMock).not.toHaveBeenCalledWith(srcDocFrame, 1500);
+    expect(requestPreviewSnapshotMock).not.toHaveBeenCalledWith(srcDocFrame, 1500, undefined);
     expect(screen.queryByRole('alert')).toBeNull();
   });
 

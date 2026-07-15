@@ -146,6 +146,7 @@ export function EntryNavRail({
   onNewProject,
   newProjectDisabled,
   open,
+  onClose,
   context,
   billing,
   onOpenSettings,
@@ -471,15 +472,30 @@ export function EntryNavRail({
             ) : null}
           </div>
         ) : (
-          <button
-            type="button"
-            className="entry-nav-rail__local-logo"
+          <div className="entry-nav-rail__brand">
+            <button
+              type="button"
+              className="entry-nav-rail__local-logo"
             onClick={() => selectView('home')}
             aria-label={brandLabel}
             data-testid="entry-nav-logo"
           >
-            <img src="/brand-icon.svg" alt="" aria-hidden draggable={false} />
+            <span
+              className="entry-nav-rail__logo-img od-brand-glyph"
+              aria-hidden="true"
+            />
           </button>
+          <button
+            type="button"
+            className="entry-nav-rail__collapse"
+            onClick={onClose}
+            aria-label={t('entry.navCollapse')}
+            title={t('entry.navCollapse')}
+            data-testid="entry-nav-collapse"
+          >
+            <Icon name="panel-left" size={20} />
+          </button>
+          </div>
         )}
 
         <div className="entry-nav-rail__search" aria-hidden>

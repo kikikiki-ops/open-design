@@ -79,22 +79,30 @@ describe('HomeView community filter decoupling', () => {
           pendingApplyId={null}
           onUse={() => undefined}
           onOpenDetails={() => undefined}
-          preferDefaultFacet={false}
+          preferDefaultFacet
+          cardLayout="gallery"
         />
       </I18nProvider>,
     );
 
-    // The gallery surface owns its facet state; it should boot unfiltered
-    // even though Home's hero chip rail has its own default selection.
+    // The Community gallery owns its own facet state: it leads with the first
+    // real category (deck/Slides) via resolveDefaultSelection and drops the
+    // generic All bucket (gallery layout), independent of Home's hero chip rail
+    // default selection.
     await waitFor(() => {
-      expect(screen.getByTestId('plugins-home-pill-category-deck')).toBeTruthy();
+      expect(ariaSelected('plugins-home-pill-category-deck')).toBe('true');
     });
-    expect(ariaSelected('plugins-home-pill-category-all')).toBe('true');
+    expect(screen.queryByTestId('plugins-home-pill-category-all')).toBeNull();
+    expect(ariaSelected('plugins-home-pill-category-deck')).toBe('true');
     expect(ariaSelected('plugins-home-pill-category-prototype')).toBe('false');
 
-    // The gallery's own pills still work locally.
+    // The gallery's own pills still work locally, independent of any hero chip.
     fireEvent.click(screen.getByTestId('plugins-home-pill-category-deck'));
     expect(ariaSelected('plugins-home-pill-category-deck')).toBe('true');
+
+    // And switching to a different gallery pill selects it locally.
+    fireEvent.click(screen.getByTestId('plugins-home-pill-category-prototype'));
+    expect(ariaSelected('plugins-home-pill-category-prototype')).toBe('true');
   });
 
   it('opens duplicated gallery examples at the copied entry file', async () => {

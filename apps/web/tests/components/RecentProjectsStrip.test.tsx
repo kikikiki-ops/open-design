@@ -207,7 +207,8 @@ describe('RecentProjectsStrip', () => {
       expect(designSystemCard?.querySelector('img')?.getAttribute('src')).toBe(
         '/api/projects/project-ds/files/imagery/cover-0.png',
       );
-      expect(container.querySelector('.recent-projects__card-thumb-html iframe')).toBeTruthy();
+      expect(container.querySelector('.recent-projects__card-thumb-html iframe')).toBeNull();
+      expect(container.querySelector('.recent-projects__card-thumb-html .recent-projects__card-glyph')).toBeTruthy();
     });
   });
 
@@ -261,25 +262,9 @@ describe('RecentProjectsStrip', () => {
     });
   });
 
-  it('renders deck project covers without deck navigation controls', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => ({
-        ok: true,
-        text: async () => `
-          <!doctype html>
-          <html>
-            <head><title>Deck</title></head>
-            <body>
-              <section class="slide active">First slide</section>
-              <section class="slide">Second slide</section>
-              <div class="deck-counter"><button id="deck-prev">‹</button><span>1 / 10</span><button id="deck-next">›</button></div>
-              <nav class="page-flip-controls" aria-label="Pagination">01 / 10</nav>
-            </body>
-          </html>
-        `,
-      })),
-    );
+  it('does not run HTML or deck previews inside recent project cards', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
 
     const { container } = render(
       <RecentProjectsStrip
@@ -305,16 +290,27 @@ describe('RecentProjectsStrip', () => {
     const htmlCard = container.querySelector('[data-project-id="project-html"]');
 
     await waitFor(() => {
-      const deckIframe = deckCard?.querySelector('iframe') as HTMLIFrameElement | null;
-      expect(deckIframe?.getAttribute('srcdoc')).toContain('First slide');
-      expect(deckIframe?.getAttribute('srcdoc')).toContain('od-recent-deck-real-preview');
-      expect(deckIframe?.getAttribute('srcdoc')).toContain('.page-flip-controls');
-      expect(deckIframe?.getAttribute('srcdoc')).toContain('[aria-label="Pagination"]');
-      expect(deckIframe?.getAttribute('srcdoc')).not.toContain('<script');
-      expect(deckIframe?.getAttribute('src')).toBeNull();
-      expect(htmlCard?.querySelector('iframe')?.getAttribute('src')).toBe(
-        '/api/projects/project-html/files/index.html',
-      );
+      expect(deckCard?.querySelector('iframe')).toBeNull();
+      expect(htmlCard?.querySelector('iframe')).toBeNull();
+      expect(deckCard?.querySelector('.recent-projects__card-glyph')).toBeTruthy();
+      expect(htmlCard?.querySelector('.recent-projects__card-glyph')).toBeTruthy();
     });
+    // The card grid must never spin up a live HTML/deck preview — that would
+    // fetch the project's raw content under /api/projects/. The workspace
+    // nav/collab hooks (team members + workspace context) still fetch on mount,
+    // so guard the real intent (no preview fetch) rather than a blanket "never
+    // fetched".
+    const previewFetches = fetchMock.mock.calls.filter(([input]) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input instanceof Request
+              ? input.url
+              : String(input);
+      return url.includes('/api/projects/');
+    });
+    expect(previewFetches).toEqual([]);
   });
 });

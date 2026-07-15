@@ -108,6 +108,8 @@ export interface KnownProvider {
   model: string;
   /** Optional provider-specific model choices shown in Settings. */
   models?: string[];
+  /** Optional provider-specific key console link shown in Settings. */
+  apiKeyConsoleLink?: { host: string; url: string };
   /** Some local/self-hosted endpoints do not require bearer credentials. */
   requiresApiKey?: boolean;
 }
@@ -163,6 +165,24 @@ export const KNOWN_PROVIDERS: KnownProvider[] = [
     baseUrl: 'https://api.openai.com/v1',
     model: 'gpt-4o',
     models: ['gpt-4o', 'gpt-4o-mini', 'o3', 'o4-mini'],
+  },
+  {
+    label: 'Atlas Cloud',
+    protocol: 'openai',
+    baseUrl: 'https://api.atlascloud.ai/v1',
+    model: 'qwen/qwen3.5-flash',
+    models: [
+      'qwen/qwen3.5-flash',
+      'qwen/qwen3.5-plus',
+      'qwen/qwen3.7-plus',
+      'deepseek-ai/deepseek-v4-flash',
+      'deepseek-ai/deepseek-v4-pro',
+      'google/gemini-3.5-flash',
+    ],
+    apiKeyConsoleLink: {
+      host: 'atlascloud.ai',
+      url: 'https://atlascloud.ai/?utm_source=open_design&utm_medium=provider_preset&utm_campaign=atlascloud_byok',
+    },
   },
   {
     label: 'OpenRouter',
@@ -824,6 +844,7 @@ const DAEMON_OWNED_KEYS = new Set<keyof AppConfig>([
   'installationId',
   'telemetry',
   'privacyDecisionAt',
+  'allowSilentUpdates',
 ]);
 
 const AGENT_CLI_SECRET_ENV_KEYS = new Set([
@@ -916,8 +937,9 @@ export function mergeDaemonConfig(
   // never mints an id), which the Settings → Privacy field rendered as
   // "Opted out" even though the user never declined. We mint the id and
   // keep the default channels on so the displayed state matches the product
-  // default — the same metrics+content surface the first-run banner's "I
-  // get it" opt-in enables (artifactManifest stays off, as it does there).
+  // default — the same metrics+content surface the first-run banner's
+  // "Share" choice enables (artifactManifest stays off, as it
+  // does there).
   // This does NOT override an explicit opt-out: metrics === false short-
   // circuits the whole block, and any channel the user already turned off
   // is preserved via the nullish-coalesce.
@@ -929,6 +951,11 @@ export function mergeDaemonConfig(
       content: next.telemetry?.content ?? true,
       artifactManifest: next.telemetry?.artifactManifest ?? false,
     };
+  }
+  if (daemonConfig.allowSilentUpdates !== undefined) {
+    next.allowSilentUpdates = daemonConfig.allowSilentUpdates;
+  } else {
+    delete next.allowSilentUpdates;
   }
   if (daemonConfig.customInstructions !== undefined) {
     next.customInstructions = daemonConfig.customInstructions ?? undefined;
@@ -1053,6 +1080,7 @@ export async function syncConfigToDaemon(
     installationId: config.installationId,
     telemetry: config.telemetry,
     privacyDecisionAt: config.privacyDecisionAt,
+    allowSilentUpdates: config.allowSilentUpdates,
     customInstructions: config.customInstructions ?? null,
     projectLocations: config.projectLocations ?? [],
     defaultProjectLocationId: config.defaultProjectLocationId ?? 'default',

@@ -347,6 +347,12 @@ describe('FileWorkspace design-system project surface', () => {
     const events: string[] = [];
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
+      if (url === '/api/plugins') {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
       if (url.includes('/raw/fonts/') || url.includes('/raw/system/tokens.')) {
         return new Response(null, { status: 404 });
       }
@@ -466,6 +472,12 @@ describe('FileWorkspace design-system project surface', () => {
     const events: string[] = [];
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
+      if (url === '/api/plugins') {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
       if (url.includes('/raw/fonts/') || url.includes('/raw/system/tokens.')) {
         return new Response(null, { status: 404 });
       }
@@ -554,6 +566,12 @@ describe('FileWorkspace design-system project surface', () => {
     });
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
+      if (url === '/api/plugins') {
+        return new Response(JSON.stringify([]), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
       if (url.includes('/raw/fonts/') || url.includes('/raw/system/tokens.')) {
         return new Response(null, { status: 404 });
       }
