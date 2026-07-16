@@ -240,7 +240,7 @@ StoryCardC
 
 - 高度：70~90 px
 - 左右边距：220 px
-- 字号：18~24 px
+- 字号：参见 `style/examples/example_prompt.md §3`（TopBrandBar 约 18–24 px）
 - 颜色：深青黑 / 中性灰
 
 规则：
@@ -257,8 +257,7 @@ StoryCardC
 
 规格：
 
-- 字号：72~88 px → 封面主标题 148px，目录页 82px，常规页 72px
-- 字重：600
+- 字号 / 字重：参见 `style/examples/example_prompt.md §3.2–§3.3`
 - 颜色：#0B2D3A
 - 行数：不超过 2 行
 
@@ -266,7 +265,7 @@ StoryCardC
 
 - 必须结论化表达。
 - 不要写成泛泛标题。
-- 标题下方可有 36px 副标题。
+- 标题下方可有副标题（字号约为主标题的 30–40%，见 `example_prompt.md §3.4`）。
 
 ---
 
@@ -305,10 +304,9 @@ padding: 28px 32px;
 
 规格：
 
-- 数字字号：48px / 64px / 72px / 100px / 200px（按 `--font-number-*` 选用）
-- 单位字号：36~48 px
+- 字号：参见 `style/examples/example_prompt.md §3.2`（数字用 `--font-number-*`，单位约 36–48 px）
 - 颜色：香槟金或深青黑
-- 字重：300~400
+- 字重：参见 `example_prompt.md §3.3`（数字 300–400）
 
 结构：
 
@@ -330,7 +328,7 @@ padding: 28px 32px;
 - 高度：34~44 px
 - 圆角：999 px
 - 横向内边距：16~22 px
-- 字号：14~18 px
+- 字号：参见 `style/examples/example_prompt.md §9.4`（Pill 约 20 px，font-weight: 500）
 
 普通状态：白底 + 浅金边。
 

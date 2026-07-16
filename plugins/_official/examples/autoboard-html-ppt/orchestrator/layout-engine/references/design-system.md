@@ -874,43 +874,20 @@ visual_tokens:
     divider: "rgba(11,45,58,.06)"                                     # 分隔线
 
   typography:
-    font_family_primary: "OPPOSans, HarmonyOS Sans, PingFang SC, sans-serif"
-    page_title_size: "148px"       # L0 封面主标题
-    toc_title_size: "82px"         # L0 目录/章节导航
-    title_xl_size: "72px"          # L0 主标题（内容页）
-    section_title_size: "44px"     # L1 章节标题
-    subtitle_size: "36px"          # L2 副标题
-    core_number_size: "200px"      # L3 最大指标数字
-    core_number_m: "100px"         # L3 中号指标
-    core_number_s: "72px"          # L3 小号指标
-    metric_size: "64px"            # L3 卡片数字
-    body_size: "28px"              # L4 正文
-    label_size: "24px"             # L5 标签
-    caption_size: "22px"           # L5 注释/说明
+    # 字体规则唯一来源：style/examples/example_prompt.md §3.1–§3.4
+    # 子级禁止在此处覆盖，渲染时由父级注入 Token
+    font_family_primary: "→ 见 example_prompt.md §3.1"
+    size_scale:         "→ 见 example_prompt.md §3.2（L0 148px … L5 22px）"
+    weight_scale:       "→ 见 example_prompt.md §3.3"
 
   line_height:
-    L0_heading: 1.0
-    L1_conclusion: 1.1
-    L2_module_title: 1.2
-    L3_data: 1.0
-    L4_body: 1.6
-    L5_caption: 1.3
-
-  line_height:
-    L0_heading: 1.0       # 页面主标题：零行距，单行/双行都紧凑
-    L1_conclusion: 1.1    # 核心结论：微宽松，保持简洁有力
-    L2_module_title: 1.2  # 模块标题：适度呼吸感
-    L3_data: 1.0          # 核心数据：独立数字/百分比，无包装场景
-    L4_body: 1.6          # 正文说明：超宽画布需要大行高防跳行
-    L5_caption: 1.3       # 注释/辅助：小字号，太松反而不利落
+    # 行高规则唯一来源：style/examples/example_prompt.md §3.4 及 design-system §12 注释
+    L0_heading:    "→ 见 example_prompt.md §3.4（line-height:1）"
+    L4_body:       "→ 见 example_prompt.md §3.4（line-height:1.6）"
 
   paragraph_spacing:
-    after_L0: 0em         # 标题后无间距（标题区独立）
-    after_L2: 0.5em       # 模块标题与正文之间
-    after_L3: 0.3em       # 核心数据与说明之间
-    after_L4: 0.8em       # 正文段落之间的自然间距
-    after_L5: 0.3em       # 注释之间
-    before_footer: 1.2em  # 主体区与 footer 之间
+    # 段落间距唯一来源：style/examples/example_prompt.md §3.4
+    reference: "→ 见 example_prompt.md §3.4"
 
   shape:
     card_radius: TBD              # 用 % 表达

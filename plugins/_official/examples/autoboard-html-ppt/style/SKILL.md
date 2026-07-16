@@ -192,7 +192,7 @@
 - 使用 `position:absolute` 绝对布局，`transform-origin: 0 0`
 - 所有核心内容位于安全区内（左右各 220px，上下各 90px）
 - 背景流线为装饰层，不影响内容层
-- 字号：主标题 72px（封面 148px，目录页 82px），正文不得小于 24px
+- 字号：遵循 `style/examples/example_prompt.md §3.2`（正文不得小于 24px）
 - 不要出现页面滚动
 - 不要出现内容溢出
 - 所有正式内容保留 `data-source-id`，页面保留 slide index、角色和背景变体
@@ -675,7 +675,7 @@ Step 6  输出结构    → 输出全百分比 YAML 页面结构
 - **卡片溢出**：所有卡片必须遵守父级 `layout_overflow_protocol.md §8` 的卡片防溢出规则
 - **超宽画布**：父级 SKILL.md "超宽画布规则"节的约束优先于子级自适应建议
 - **分栏约束**：子级 column_ratio 建议必须符合父级 `style.md §5.6`（避免机械 6:6 贯穿全 deck）
-- **字体层级**：子级输出的层级（L0–L5）映射到父级字号时，以父级 `style.md §3` 字体系统为准
+- **字体层级**：子级输出的层级（L0–L5）映射到父级字号时，以 `style/examples/example_prompt.md §3` 字体系统为准
 - **视觉 Token**：子级 `design-system.md §12` 的 Token 来自父级，禁止子级覆盖或自行定义颜色/字体
 
 ### 快速参考路径
