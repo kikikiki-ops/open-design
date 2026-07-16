@@ -335,6 +335,50 @@ background: linear-gradient(90deg, #D5AE79 0%, #E5CDAE 100%);
 
 ---
 
+### 5.6 12 栏网格系统
+
+页面内容排版基于 **12 栏网格**，通过栏宽变量控制分栏比例。
+
+**常用分栏比例**：
+
+| 分栏 | 适用场景 |
+|------|---------|
+| `8:4` | 主内容 + 侧栏说明；图片主导型页面 |
+| `7:5` | 叙述文本 + 辅助图表；信息不对称对比 |
+| `4:4:4` | 三项等权能力/步骤/指标 |
+| `3:6:3` | 两侧辅助 + 中心主区；对称枢纽布局 |
+
+**规则**：
+- **避免机械 6:6 贯穿全 deck**；若所有页面都 6:6 等分，会丧失节奏感和主次关系；
+- 同一 deck 中不同页面应使用不同分栏比例，形成视觉节奏；
+- **图片可以跨越栏线一次**（编辑突破），制造有意的构图张力；其他文字/数字/卡片元素仍须对齐栏线；
+- 分栏边界用 Grid 轨道变量实现，禁止逐元素用 `margin` 或 `left` 手动拼凑对齐。
+
+```css
+:root {
+  --col: calc((100% - 11 * var(--col-gap)) / 12);
+  --col-gap: 24px;
+}
+
+/* 常用分栏 */
+.grid-8-4 { grid-template-columns: calc(8 * var(--col) + 7 * var(--col-gap))
+                                   calc(4 * var(--col) + 3 * var(--col-gap)); }
+.grid-7-5 { grid-template-columns: calc(7 * var(--col) + 6 * var(--col-gap))
+                                   calc(5 * var(--col) + 4 * var(--col-gap)); }
+.grid-4-4-4 { grid-template-columns: repeat(3, calc(4 * var(--col) + 3 * var(--col-gap))); }
+.grid-3-6-3 { grid-template-columns: calc(3 * var(--col) + 2 * var(--col-gap))
+                                     calc(6 * var(--col) + 5 * var(--col-gap))
+                                     calc(3 * var(--col) + 2 * var(--col-gap)); }
+```
+
+### 5.7 基线节奏与 margin 使用约束
+
+- **正文基线节奏统一**：相邻文本块使用相同的行高（`line-height`）和间距变量（`--space-*`），不得用随意 `margin` 微调到"差不多齐"；
+- 同级文本块的 `margin-top` / `margin-bottom` 必须来自同一变量或同一数值，不得出现一处 `18px`、另一处 `19px` 的手动补偿；
+- 跨模块的基线对齐通过**共同父级 Grid 行轨道**实现，而非逐元素 `margin` 偏移；
+- 允许在明确的间距台阶（`--space-8`、`--space-12`、`--space-16`、`--space-24`、`--space-32`、`--space-40`、`--space-48`）中选取，不得使用非台阶数值（如 `17px`、`21px`、`35px`）。
+
+
 ## 6. 卡片系统
 
 ### 6.1 基础卡片
