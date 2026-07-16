@@ -1,0 +1,42 @@
+# page-template.yaml — 空白页面骨架
+
+# 用于 AI 填充的起始模板
+# 所有百分比基于内容区域
+
+page:
+  id: page_XX
+  canvas_ratio: 3.67
+
+  type: ""                    # 必填：见 templates.md 中的模板类型
+  purpose: ""                 # 必填：一句话页面目的
+
+  title:
+    text: ""
+    level: L0
+    zone: header
+
+  subtitle:
+    text: ""
+    level: L1
+    zone: header
+
+  layout:
+    direction: horizontal
+    columns: 3                # 根据模块数量调整
+    column_ratio: "1:1:1"     # 根据内容关系调整
+    column_gap: 1.5%          # 默认
+    vertical_alignment: center
+
+  modules: []                 # 填充模块列表
+
+  footer:
+    type: conclusion_bar
+    position:
+      x: 0%
+      y: 0%
+      width: 100%
+      height: 100%
+    text: ""
+
+  style_tokens:
+    inherit_from: global_style

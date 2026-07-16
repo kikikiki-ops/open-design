@@ -638,3 +638,58 @@ https://p5-ad.adkwai.com/udata/pkg/ks-ad-fe/md-tools/quick-cut/6689:5117.b90a9c9
 ```
 
 默认组件能力：`FixedBrandLogo`。
+
+---
+
+## 布局引擎（子级规则）
+
+本 skill 内嵌了一套独立的页面布局引擎，路径为 `orchestrator/layout-engine/`。
+
+**职责分工**：
+
+| 层级 | Skill | 负责内容 |
+|------|-------|---------|
+| **父级**（本文件） | `autoboard-html-ppt` | 视觉风格、HTML 输出规范、组件规范、色彩/字体/动效、生成检查 |
+| **子级** | `layout-engine` | 内容解析、信息层级建立、关系判断、模板选择、布局决策、结构输出 |
+
+**工作顺序**：生成一页 PPT 时，先走子级布局引擎的 Step 1–6，得到页面结构（YAML），再由父级规则将结构渲染为 HTML（应用品牌色、字体、组件 CSS）。
+
+### 子级工作流简述
+
+```text
+Step 1  内容拆解    → 标注每条内容的 type / weight / format / relation
+Step 2  层级建立    → 分配 L0–L5，驱动视觉权重
+Step 3  关系判断    → 确定页面主关系（并列/流程/对比/聚合/叙述）
+Step 4  灵活布局    → 选择模板 T01–T10，确定列数和列宽比例
+Step 5  组件排布    → 选择容器类型（A/B/C）和组件组合（C01–C10）
+Step 6  输出结构    → 输出全百分比 YAML 页面结构
+```
+
+详细规则见 `orchestrator/layout-engine/SKILL.md`。
+
+### 父子级约束
+
+布局引擎输出的 YAML 结构必须严格遵守父级以下约束，**布局引擎的结构决策不得与父级硬约束冲突**：
+
+- **画布比例**：3.67:1（3696×1008px），所有模块百分比宽度不得超出安全区
+- **卡片溢出**：所有卡片必须遵守父级 `layout_overflow_protocol.md §8` 的卡片防溢出规则
+- **超宽画布**：父级 SKILL.md "超宽画布规则"节的约束优先于子级自适应建议
+- **分栏约束**：子级 column_ratio 建议必须符合父级 `style.md §5.6`（避免机械 6:6 贯穿全 deck）
+- **字体层级**：子级输出的层级（L0–L5）映射到父级字号时，以父级 `style.md §3` 字体系统为准
+- **视觉 Token**：子级 `design-system.md §12` 的 Token 来自父级，禁止子级覆盖或自行定义颜色/字体
+
+### 快速参考路径
+
+| 内容 | 文件 |
+|------|------|
+| 内容拆解规则 | `layout-engine/references/content-parsing.md` |
+| 层级与关系 | `layout-engine/references/design-system.md §5-6` |
+| 模板库（T01–T10） | `layout-engine/references/templates.md` |
+| 容器系统（A/B/C） | `layout-engine/references/container-system.md` |
+| 组件库（C01–C10） | `layout-engine/references/components.md` |
+| 组件组合模式 | `layout-engine/references/component-combinations.md` |
+| 图片布局 | `layout-engine/references/image-layout.md` |
+| 图标规则 | `layout-engine/references/icons.md` |
+| 输出 YAML 格式 | `layout-engine/references/output-format.md` |
+| 双卡+中轴模式 | `layout-engine/references/pattern-dual-cards-center-description.md` |
+| 三段流程模式 | `layout-engine/references/pattern-triple-process-with-connectors.md` |
