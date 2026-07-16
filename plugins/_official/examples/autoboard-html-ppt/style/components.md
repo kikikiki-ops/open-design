@@ -363,6 +363,270 @@ padding: 28px 32px;
 - 低透明、柔焦、横向延展。
 - 不遮挡文字和卡片。
 
+
+### 3.8 MetricGrowthCard 指标增长型数据卡（硬约束）
+
+**用途**：展示经营指标、增长结果、转化效率、用户规模、GMV、ROI、渗透率等核心数据。强调"核心指标 + 趋势证明 + 结论表达"。不得做成普通文字卡或复杂仪表盘。
+
+#### 单卡结构（自上而下）
+
+```text
+metric-card
+├── metric-tag       顶部状态标签（胶囊，居中，自适应宽度，不得铺满卡片宽度）
+├── metric-title     指标名称（1–2 行，深色，简洁）
+├── metric-value     核心数字区
+│   ├── metric-prefix  统计口径（YoY/MoM/同比，小字号，基线对齐）
+│   ├── metric-number  核心数字（第一视觉重点，最大字号）
+│   └── metric-unit    单位（次级，基线对齐）
+├── metric-chart     趋势图表区（折线/面积/柱状/环形进度）
+├── metric-time      时间或维度标识（小字，弱色，左右对齐节点）
+└── metric-summary   底部结论（1–2 行，居中或左对齐）
+```
+
+**视觉比例（卡片高度）**：
+
+| 区域 | 占比 |
+|------|------|
+| 顶部标签 + 标题区 | 18%–24% |
+| 核心数字区 | 20%–26% |
+| 趋势图表区 | 28%–36% |
+| 时间标识 + 结论区 | 16%–22% |
+
+视觉层级必须满足：**核心数字 > 指标名称 > 状态标签 > 图表 > 辅助说明**。
+
+#### 单卡外框规则
+
+- 宽高比约 **0.78:1–0.9:1**（竖向圆角矩形）
+- 必须设置 `max-width`（建议 560px–760px），**禁止因超宽画布横向空间充足而无限拉宽**
+- 圆角：`22px`；边框：`1px solid rgba(213,174,121,.30)`；阴影：`0 10px 28px rgba(11,45,58,.06)`
+- 内部 padding：`32px 40px`；布局：纵向 Grid，统一垂直中心轴，上下留白均衡
+
+#### 图表规则
+
+- 仅保留趋势线、关键节点、基线、起止时间、必要面积渐变
+- 可使用空心圆点、低透明虚线、终点箭头强化增长过程
+- **禁止**：复杂网格线、多条折线、密集刻度、完整图例、无关标注
+- 图表高度约占卡片总高度 **28%–36%**，不得抢占核心数字的视觉地位
+- 图表完整填充自身绘图区，不得触碰卡片边缘
+- 位图/图标使用 `object-fit: cover`，根据主体位置调整 `object-position`；**禁止 `contain` 导致漂浮空白**
+
+#### 内容量控制规则
+
+- 内容较少时：适度放大核心数字和图表，或缩小卡片整体尺寸
+- 内容较多时：精简文字，**不得压缩字号或扩大卡片宽度**
+- **禁止**通过增加无意义 padding、拉高卡片或放大空白制造高级感
+
+#### 多卡复用规则（硬约束）
+
+同一页面复用多张数据卡时，所有卡片必须共享以下固定属性：
+
+- 相同外框宽度和高度
+- 相同圆角、边框、阴影和背景规则
+- 相同内部 padding
+- 相同纵向结构和区域比例
+- 相同标签高度与顶部坐标
+- 相同指标名称区域高度
+- 相同核心数字区域高度
+- 相同图表区域高度
+- 相同时间标识基线
+- 相同底部结论基线
+- 相同卡片间距
+
+**对齐硬约束**：
+
+```
+top(card_i)    = top(card_j)
+bottom(card_i) = bottom(card_j)
+height(card_i) = height(card_j)
+```
+
+**不同指标只允许替换**：状态标签文案、指标名称、核心数字与单位、趋势图形、起止时间、底部结论、局部强调色。
+
+不得因为某张卡文字更多、数字更长或图表不同而改变外框尺寸。文字长度差异必须在组件内部消化；必要时对较长文案做提炼，**不得缩小整体字号体系**。
+
+#### 排列规则
+
+- 同一行优先使用 `grid-template-columns: repeat(N, minmax(0, 1fr))`
+- 父容器使用 `align-items: stretch`
+- 超宽画布中必须设置卡片组 `max-width`，**禁止卡片为了填满整页而无限拉宽**
+- 卡片数量较少时：增加组间距或调整整体居中，**不得扩大单卡宽度**
+- 卡片数量较多时：增加列数或分组，**不得压缩卡片内部结构**
+- 重点卡片可轻微放大核心数字、增强边框或提高背景对比，**不得破坏整组顶部/底部/高度对齐**
+
+#### 推荐 CSS 结构
+
+```css
+.metric-card {
+  width: 100%;
+  max-width: var(--metric-card-max-width, 720px);
+  height: 100%;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows:
+    auto            /* metric-tag     */
+    auto            /* metric-title   */
+    auto            /* metric-value   */
+    minmax(0, 1fr)  /* metric-chart   */
+    auto            /* metric-time    */
+    auto;           /* metric-summary */
+  justify-items: center;
+  align-items: start;
+  padding: 32px 40px;
+  background: var(--white-card);
+  border: 1px solid rgba(213, 174, 121, .30);
+  border-radius: 22px;
+  box-shadow: 0 10px 28px rgba(11, 45, 58, .06);
+  overflow: hidden;
+}
+
+.metric-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 18px;
+  border-radius: 999px;
+  font-size: 22px;
+  font-weight: 500;
+  margin-bottom: 16px;
+  /* 不得 width: 100% —— 必须自适应内容宽度 */
+}
+
+.metric-title {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: center;
+  line-height: 1.3;
+  max-height: 2.6em;      /* 最多 2 行 */
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.metric-value {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.metric-prefix {
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.metric-number {
+  font-size: 100px;    /* 按需选用 64px / 72px / 100px */
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: -.04em;
+  color: var(--gold-deep);  /* 或 var(--teal-deep)、var(--text-primary) */
+}
+
+.metric-unit {
+  font-size: 36px;
+  font-weight: 400;
+  color: var(--text-muted);
+  align-self: flex-end;
+  margin-bottom: .1em;
+}
+
+.metric-chart {
+  width: 100%;
+  min-height: 0;         /* 允许 grid 1fr 正常收缩 */
+  overflow: hidden;
+}
+
+.metric-chart svg,
+.metric-chart canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.metric-time {
+  font-size: 22px;
+  color: var(--text-muted);
+  text-align: center;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.metric-summary {
+  font-size: 24px;
+  color: var(--text-body);
+  text-align: center;
+  line-height: 1.4;
+  max-height: 2.8em;
+  overflow: hidden;
+  margin-top: 12px;
+  width: 100%;
+}
+
+/* 多卡组容器 */
+.metric-card-group {
+  display: grid;
+  grid-template-columns: repeat(var(--card-count, 3), minmax(0, 1fr));
+  align-items: stretch;
+  gap: var(--metric-card-gap, 32px);
+  width: min(100%, var(--metric-group-max-width, 3200px));
+  margin-inline: auto;
+}
+```
+
+#### HTML 示例（单卡）
+
+```html
+<div class="metric-card">
+  <span class="metric-tag tag-gold">规模持续增长</span>
+  <div class="metric-title">联盟日均消耗</div>
+  <div class="metric-value">
+    <span class="metric-prefix">YoY</span>
+    <span class="metric-number">+20%</span>
+    <span class="metric-unit">+</span>
+  </div>
+  <div class="metric-chart">
+    <!-- SVG 折线趋势图，仅保留趋势线 + 关键节点 -->
+    <svg viewBox="0 0 400 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- 面积填充 -->
+      <path d="M0 100 L80 80 L160 60 L240 40 L320 20 L400 0 L400 120 L0 120Z"
+            fill="url(#grad-gold)" opacity=".15"/>
+      <!-- 趋势线 -->
+      <path d="M0 100 L80 80 L160 60 L240 40 L320 20 L400 0"
+            stroke="var(--gold-main)" stroke-width="2.5" stroke-linecap="round"/>
+      <!-- 终点节点 -->
+      <circle cx="400" cy="0" r="5" fill="var(--gold-deep)"/>
+      <defs>
+        <linearGradient id="grad-gold" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="var(--gold-main)"/>
+          <stop offset="100%" stop-color="transparent"/>
+        </linearGradient>
+      </defs>
+    </svg>
+  </div>
+  <div class="metric-time">上一年 → 今年</div>
+  <div class="metric-summary">规模持续放大，保持强劲增长节奏</div>
+</div>
+```
+
+#### 生成后必须检查
+
+```text
+[ ] 单张卡片是否存在大面积无功能留白
+[ ] 核心数字是否为第一视觉重点（最大字号 + 最强颜色）
+[ ] 状态标签是否自适应宽度（未铺满卡片）
+[ ] 图表是否简洁且能表达趋势（无复杂坐标系、无多条折线）
+[ ] 图表和图片是否完整填充容器（无漂浮空白、无拉伸变形）
+[ ] 同组卡片是否严格等宽、等高（top/bottom/height 误差 ≤ 2px）
+[ ] 标签、标题、数字、图表、时间和结论是否分别位于统一基线
+[ ] 是否因超宽画布将卡片拉得过宽（超过 max-width）
+[ ] 是否因文字长度差异破坏组件外框尺寸
+[ ] 是否存在单张卡片通过 margin/top/translate/独立高度进行补偿
+[ ] 卡片间距是否统一
+[ ] 多卡重点指标是否在不破坏对齐的前提下进行了轻微强调
+```
+
 ---
 
 ## 4. 组合规则
