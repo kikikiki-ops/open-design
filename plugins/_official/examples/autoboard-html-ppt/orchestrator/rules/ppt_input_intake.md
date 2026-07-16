@@ -1,0 +1,120 @@
+# PPTX Input Intake for Optimization
+
+## 1. Trigger and scope
+
+This rule applies whenever the user says “optimize PPT”, “beautify this deck”,
+“rebuild this PPT”, or provides a `.pptx` in the current project or conversation.
+In this mode, AutoBoard is an optimization pipeline, not a blank-deck generator.
+
+Before any page routing or template selection, locate the supplied `.pptx` and
+record it as the source deck. If no PPTX or source material is available, do not
+invent an optimization target; ask for the source file or use the user's pasted
+content only when they explicitly request a new deck.
+
+## 2. Required intake sequence
+
+```text
+Locate uploaded/current-project PPTX
+-> enumerate slides and embedded media
+-> classify every slide
+-> extract or visually parse formal content
+-> build content inventory
+-> verify content inventory readiness
+-> route page types and AutoBoard templates
+-> render a new editable HTML deck
+```
+
+Each source slide must be classified as exactly one of:
+
+- `editable_slide`: text, charts, tables, and shapes can be extracted as editable structure.
+- `image_based_slide`: a full-slide image, screenshot, or flattened visual is the primary source.
+- `mixed_slide`: editable text and shape content coexist with visual evidence.
+- `unknown_slide`: the source is unreadable or cannot be classified safely.
+
+## 3. Extraction and fidelity rules
+
+### Editable slides
+
+- Extract titles, body text, labels, numbers, units, chart labels, table headers,
+  source notes, grouping, reading order, and explicit relationships.
+- Preserve the source facts in `content_inventory`; the source layout is evidence,
+  not a template to stretch into 11:3.
+
+### Image-based slides
+
+- Render or inspect the source slide before routing.
+- Perform OCR and visual-region parsing for title, body, numbers, charts, logos,
+  screenshots, and relationship lines.
+- Set `contentInventoryStatus` to `review_required` if a critical value, label,
+  or relationship is uncertain. Do not turn an unparsed slide screenshot into the
+  final HTML page.
+
+### Mixed slides
+
+- Extract editable content first, then use the visual layer to recover screenshots,
+  chart structure, grouping, and spatial relationships.
+- Preserve supplied screenshots or media as evidence assets; do not redraw or
+  invent product UI.
+
+### Unknown slides
+
+- Mark the source slide as `blocked` with the reason.
+- Do not silently omit it, replace it with a generic Hero page, or create facts
+  that are not visible in the source.
+
+## 4. Minimum intake result
+
+Write `intake_result.json` before rendering. It must include one record per
+source slide:
+
+```json
+{
+  "sourceDeck": "source.pptx",
+  "slides": [
+    {
+      "sourcePageRef": 1,
+      "sourceType": "editable_slide",
+      "contentInventoryStatus": "ready",
+      "nextAction": "route_page_type",
+      "confidence": 0.94
+    }
+  ]
+}
+```
+
+Allowed `contentInventoryStatus` values are `ready`, `review_required`, and
+`blocked`. Only `ready` slides can proceed to final HTML rendering without an
+explicit user decision. A `review_required` slide may retain an evidence image
+and clearly marked uncertainty, but may not invent unreadable formal content.
+
+## 5. AutoBoard mapping
+
+After intake, use the existing pipeline without changing source facts:
+
+```text
+content inventory
+-> page role
+-> page type
+-> templateId
+-> 3696 x 1008 ultrawide variant
+-> editable HTML output
+```
+
+The current source PPTX is a content source, not a design-system override. Its
+theme, page ratio, or screenshot dimensions never authorize stretching an old
+layout into the 11:3 delivery canvas. Use the template library's ultrawide
+adaptation rules instead.
+
+## 6. Optimization delivery
+
+The optimized deck must be a new editable HTML artifact in the active project:
+
+- `index.html`: all independently navigable `3696 x 1008` slides.
+- `index.html.artifact.json`: Open Design HTML artifact metadata.
+- `intake_result.json`: per-slide source diagnosis.
+- `content_inventory.json`: traceable source facts and relationships.
+- `page_plan.json`: roles, page types, templates, alignment contracts, and source mapping.
+- `quality_report.json`: fidelity, overflow, 11:3, and geometry checks.
+
+Do not overwrite the source `.pptx`. The source file remains intact; `index.html`
+is the optimized, previewable result.

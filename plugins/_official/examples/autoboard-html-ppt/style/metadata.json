@@ -1,7 +1,7 @@
 {
   "name": "ultrawide_business_growth_ppt_skill",
   "display_name": "超宽大屏商务增长风格 PPT Skill",
-  "version": "1.0.0",
+  "version": "1.2.1",
   "canvas": {
     "physical_size": "11m x 3m",
     "pixel_resolution": "3696 x 1008",
@@ -28,7 +28,15 @@
     "中心聚焦"
   ],
   "updated_at": "2026-07-15",
-  "background_system_update": "增加封面/内容页/封尾固定背景图系统",
+  "background_system_update": "封面、内容页和封尾使用用户提供的背景，并统一保留独立快手联盟 Logo",
+  "template_component_categories": [
+    "Metrics",
+    "Charts",
+    "FlowAndRelationship",
+    "CaseAndEvidence",
+    "TaxonomyAndMatrix",
+    "PageChrome"
+  ],
   "background_assets_replaced": true,
   "background_assets": {
     "cover": "assets/bg-cover.svg",

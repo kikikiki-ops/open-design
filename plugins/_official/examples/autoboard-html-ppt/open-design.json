@@ -7,11 +7,11 @@
     "zh-CN": "AutoBoard HTML PPT",
     "en": "AutoBoard HTML PPT"
   },
-  "version": "2.0.0",
-  "description": "全流程 HTML PPT 生成器（总控 + 超宽大屏风格）。内容账本驱动、页面角色硬门槛路由、SVG 背景资产，输出 3696×1008 可编辑 HTML 演示文稿。",
+  "version": "2.6.0",
+  "description": "面向闭门会与品牌大会主屏的全流程 HTML PPT 生成与优化器。可接收当前项目或对话中的 PPTX，先完成逐页输入诊断与内容账本，再路由页面模板，输出 3696×1008 / 11m×3m 可编辑、可预览的超宽 HTML 演示文稿。",
   "description_i18n": {
-    "zh-CN": "全流程 HTML PPT 生成器（总控 + 超宽大屏风格）。内容账本驱动、页面角色硬门槛路由、SVG 背景资产，输出 3696×1008 可编辑 HTML 演示文稿。",
-    "en": "Full-pipeline HTML PPT generator (orchestrator + ultrawide business style). Content-ledger driven, hard page-role routing, SVG background assets. Outputs 3696×1008 editable HTML decks."
+    "zh-CN": "面向闭门会与品牌大会主屏的全流程 HTML PPT 生成与优化器。可接收当前项目或对话中的 PPTX，先完成逐页输入诊断与内容账本，再路由页面模板，输出 3696×1008 / 11m×3m 可编辑、可预览的超宽 HTML 演示文稿。",
+    "en": "A full-pipeline HTML PPT generator and optimizer for closed-door events and brand-conference main screens. It intakes PPTX files from the current project or conversation, builds a content ledger, routes page templates, and outputs previewable editable 3696×1008 / 11m×3m ultrawide HTML decks."
   },
   "license": "MIT",
   "author": {
@@ -30,6 +30,10 @@
     "autoboard",
     "orchestrator",
     "venue-screen",
+    "conference",
+    "closed-door-event",
+    "11m-3m",
+    "3696x1008",
     "超宽大屏",
     "商务增长",
     "全流程"
@@ -54,8 +58,8 @@
     },
     "useCase": {
       "query": {
-        "zh-CN": "使用 AutoBoard HTML PPT（超宽大屏风格），为 {{audience}} 将「{{topic}}」制作成一套 3696×1008 超宽大屏 PPT（适配 11m×3m 会场主屏）。通过内容账本与页面角色路由，确保内容完整可追踪；浅暖白背景，SVG 柔光流线，白色大圆角卡片，中心聚焦布局，低信息密度。页数由内容量决定，必须包含封面和结尾页。补充素材：{{source_content}}",
-        "en": "Use AutoBoard HTML PPT (ultrawide business style) to create a 3696×1008 venue-screen deck about {{topic}} for {{audience}} (fits 11m×3m main screen). Content-ledger with hard page-role routing ensures all material is tracked; warm-white background, SVG silk flows, white large-radius cards, centered layout, low density. Slide count from content. Must include cover and closing. Extra material: {{source_content}}"
+        "zh-CN": "使用 AutoBoard HTML PPT 优化或生成一套适配 11m×3m 会场主屏的 3696×1008 HTML 演示文稿。若当前项目、对话或附件中存在 PPTX，必须先将该文件作为唯一正式来源执行逐页输入诊断，分类 editable_slide / image_based_slide / mixed_slide / unknown_slide；图片型页面先完成 OCR、视觉分区与内容账本，blocked 页面不得被静默省略或直接截图化为最终页面。随后按来源证据路由页面类型与 AutoBoard 模板，绑定浅暖白、青绿与香槟金的超宽风格；禁止横向拉伸源稿。正式内容、数字、单位、关系和需要保留的来源配图必须保真。发生溢出时先判断是安全区越界还是内容容量超限：前者强制保持左右 220px、上下 90px 的安全区；后者按重新分组、更换布局、必要时拆页处理，禁止压缩安全区、缩小字号或删改内容硬塞。必须在当前项目根目录输出可预览 index.html 和同级 index.html.artifact.json，并附 intake_result.json、content_inventory.json、page_plan.json、quality_report.json；不得覆盖源 PPTX。主题：{{topic}}。受众：{{audience}}。场景：{{event_context}}。补充素材：{{source_content}}",
+        "en": "Use AutoBoard HTML PPT to optimize or create a 3696×1008 HTML deck for an 11m×3m venue screen. If the current project, conversation, or attachments contain a PPTX, treat it as the sole formal source and first classify each slide as editable_slide, image_based_slide, mixed_slide, or unknown_slide. OCR and visually parse image-based slides before building the content ledger; never silently omit blocked slides or use flattened screenshots as final pages. Then route page types and AutoBoard templates from source evidence, apply the warm-white, teal, and champagne-gold ultrawide style, and never horizontally stretch the source layout. Preserve formal content, numbers, units, relationships, and source images that need to remain. When overflow occurs, first determine whether it is a safe-area violation or a content-capacity issue: preserve the 220px horizontal and 90px vertical safe area for the former; regroup, change layouts, and split slides when necessary for the latter. Never compress the safe area, shrink text, or cut formal content to force it to fit. Write previewable index.html and sibling index.html.artifact.json in the active project root, plus intake_result.json, content_inventory.json, page_plan.json, and quality_report.json; never overwrite the source PPTX. Topic: {{topic}}. Audience: {{audience}}. Context: {{event_context}}. Extra material: {{source_content}}"
       },
       "exampleOutputs": [
         {
@@ -82,11 +86,20 @@
         "default": "会场观众"
       },
       {
+        "name": "event_context",
+        "label": "会场 / 会议场景（可选）",
+        "type": "string",
+        "required": false,
+        "placeholder": "渠道闭门会、品牌营销大会、业务战略发布",
+        "default": "会场主屏演示"
+      },
+      {
         "name": "source_content",
-        "label": "补充素材（可选）",
+        "label": "待优化 PPT / 补充素材（可选）",
         "type": "text",
         "required": false,
-        "placeholder": "粘贴需要提炼成演示的素材"
+        "placeholder": "上传或选择 PPTX；也可粘贴需要提炼成演示的素材",
+        "default": "优先使用当前项目、对话或附件中的 PPTX；没有 PPTX 时使用主输入框与补充素材"
       }
     ],
     "context": {
@@ -109,7 +122,20 @@
         "./style/checklist.md",
         "./style/examples/example_prompt.md",
         "./orchestrator/rules/orchestration_pipeline.md",
+        "./orchestrator/rules/ppt_input_intake.md",
+        "./orchestrator/rules/source_structure_analysis.md",
         "./orchestrator/rules/page_role_router.md",
+        "./orchestrator/rules/page_type_router.md",
+        "./orchestrator/rules/layout_selection.md",
+        "./orchestrator/rules/component_interface.md",
+        "./orchestrator/rules/template_library.md",
+        "./orchestrator/rules/image_text_composition.md",
+        "./orchestrator/rules/page_composition_library.md",
+        "./orchestrator/rules/advanced_relation_components.md",
+        "./orchestrator/rules/card_alignment.md",
+        "./orchestrator/rules/heterogeneous_alignment.md",
+        "./orchestrator/rules/layout_overflow_protocol.md",
+        "./orchestrator/rules/page_background_routing.md",
         "./orchestrator/rules/content_preservation.md",
         "./orchestrator/rules/html_output_contract.md",
         "./orchestrator/rules/quality_check.md",

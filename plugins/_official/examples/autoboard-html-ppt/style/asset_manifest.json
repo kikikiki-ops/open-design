@@ -11,7 +11,7 @@
       "role": "封面页背景",
       "required": true,
       "provided": true,
-      "note": "封面背景已替换为用户本次上传的 SVG 资产",
+      "note": "用户提供的封面专用原图：底部金色与青绿流线，左上角为独立快手联盟 Logo 预留区域，中央为标题保留干净空间",
       "logoBakedIn": false,
       "format": "svg"
     },
@@ -20,7 +20,7 @@
       "role": "内容页背景",
       "required": true,
       "provided": true,
-      "note": "内容页背景已替换为用户本次上传的 SVG 资产",
+      "note": "用户提供的内容页原图：低对比底部流线、中央内容区保持干净，左上角预留独立快手联盟 Logo 的展示区域",
       "logoBakedIn": false,
       "format": "svg"
     },
@@ -29,12 +29,12 @@
       "role": "封尾页背景",
       "required": true,
       "provided": true,
-      "note": "封尾背景已替换为用户本次上传的 SVG 资产",
+      "note": "用户提供的封底原图：底部金色与青绿流线横向延展，中央留给感谢与合作收口内容，左上角预留独立快手联盟 Logo 的展示区域",
       "logoBakedIn": false,
       "format": "svg"
     }
   },
-  "mappingAssumption": "按用户上传顺序映射：第 1 张为封面，第 2 张为内容页，第 3 张为封尾。",
+  "mappingAssumption": "三张背景按页面角色独立设计和维护，不可互换使用。",
   "rules": [
     "background image is visual atmosphere only",
     "editable information must remain HTML text or independent editable components",
@@ -66,16 +66,16 @@
       "top": 54,
       "width": 170
     },
-    "renderPolicy": "independent_component",
-    "doNotBakeIntoBackground": true,
+    "renderPolicy": "role_aware_component",
+    "doNotBakeIntoBackground": false,
     "providedAsLocalFile": true,
     "recommendedLocalPath": "assets/logo.svg"
   },
   "backgroundAssetUpdate": {
-    "status": "all_replaced_to_latest",
+    "status": "role_specific_backgrounds_ready",
     "cover": "assets/bg-cover.svg",
     "content": "assets/bg-content.svg",
     "closing": "assets/bg-closing.svg",
-    "note": "封面、内容页、封尾三张背景图均已更新；其中封面/内容页/封尾当前都使用最新资产映射"
+    "note": "封面、内容页与封尾使用用户提供的背景，并统一保留独立 Logo。三张背景按角色独立维护，分别强调氛围、可读性和收束感。"
   }
 }

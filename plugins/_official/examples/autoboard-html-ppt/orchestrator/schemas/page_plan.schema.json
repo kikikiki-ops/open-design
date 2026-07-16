@@ -75,6 +75,122 @@
           "layoutComponent": {
             "type": "string"
           },
+          "templateId": {
+            "type": "string",
+            "enum": [
+              "cover-centered-hero",
+              "agenda-chapter-columns",
+              "metric-story-triple",
+              "metrics-taxonomy-matrix",
+              "ecosystem-bridge",
+              "strategy-before-after",
+              "capability-engine-architecture",
+              "case-problem-solution-impact",
+              "case-journey-growth",
+              "screenshot-flow-kpi",
+              "maturity-stage-triple",
+              "radial-capability-map",
+              "media-gallery-edge-metrics",
+              "dual-wing-comparison",
+              "dual-track-evidence-kpi",
+              "parallel-stage-flow",
+              "capability-evolution-roadmap",
+              "opportunity-portfolio",
+              "capability-pillar-matrix",
+              "closing-call-to-action",
+              "growth-flywheel-loop",
+              "capability-upgrade-ladder",
+              "before-after-effect-compare",
+              "funnel-conversion-story",
+              "decision-priority-map"
+            ]
+          },
+          "templateSelection": {
+            "type": "object",
+            "required": [
+              "canvasVariant",
+              "adaptationActions"
+            ],
+            "properties": {
+              "primaryPatternMatch": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "slotCoverage": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "canvasVariant": {
+                "type": "string",
+                "enum": [
+                  "wideVariant",
+                  "ultrawideVariant"
+                ]
+              },
+              "adaptationActions": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                }
+              },
+              "rejectedTemplates": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "alignmentContract": {
+            "type": "object",
+            "required": [
+              "contentBandId",
+              "heightMode",
+              "moduleAlignment",
+              "geometryCheck",
+              "maxErrorPx"
+            ],
+            "properties": {
+              "contentBandId": {
+                "type": "string"
+              },
+              "heightMode": {
+                "type": "string",
+                "enum": [
+                  "shared-content-band",
+                  "independent-module"
+                ]
+              },
+              "moduleAlignment": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "top",
+                    "bottom",
+                    "equal-height"
+                  ]
+                },
+                "minItems": 1
+              },
+              "geometryCheck": {
+                "type": "string",
+                "const": "getBoundingClientRect"
+              },
+              "maxErrorPx": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 2
+              }
+            },
+            "additionalProperties": false
+          },
           "variant": {
             "type": "string"
           },
@@ -151,6 +267,68 @@
             "items": {
               "type": "string"
             }
+          },
+          "advancedRelationSpec": {
+            "type": "object",
+            "required": [
+              "relationType",
+              "sourceRefs",
+              "requiredFacts",
+              "geometryAnchors",
+              "rejectedAlternatives",
+              "auditChecks"
+            ],
+            "properties": {
+              "relationType": {
+                "type": "string",
+                "enum": [
+                  "feedbackLoop",
+                  "capabilityProgression",
+                  "beforeAfter",
+                  "funnelConversion",
+                  "decisionBranch",
+                  "priorityAxes",
+                  "kpiDecomposition",
+                  "waterfallArithmetic"
+                ]
+              },
+              "sourceRefs": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "pattern": "^source-[0-9]{3,}$"
+                }
+              },
+              "requiredFacts": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                }
+              },
+              "geometryAnchors": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                }
+              },
+              "rejectedAlternatives": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "auditChecks": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
           },
           "splitDecision": {
             "type": "object",

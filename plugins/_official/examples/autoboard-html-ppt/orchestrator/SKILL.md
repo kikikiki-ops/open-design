@@ -1,4 +1,4 @@
-# PPT Orchestrator Skill V2
+# PPT Orchestrator Skill V2.6.0
 # HTML 型 PPT 内容识别、结构路由与生成总控
 
 ## 0. Skill 定位
@@ -7,16 +7,17 @@
 
 本 Skill 负责：
 
-1. 逐页读取正式内容、数字、图片、图表、空间分组和信息关系；
-2. 建立不可变内容账本；
-3. 区分正式内容、编辑指令、占位符和不确定内容；
-4. 先判断页面角色，再判断语义页面类型；
-5. 决定是否拆页，并将内容映射到页面区域；
-6. 选择布局组件与内容组件能力；
-7. 冻结页面结构；
-8. 在结构冻结后绑定视觉风格、背景和 Logo 规则；
-9. 输出 HTML 型 PPT；
-10. 执行内容、路由、版式、风格与可编辑性检查。
+1. 接收当前项目或对话中上传的 PPTX，逐页诊断可编辑、图片型、混合和未知页面；
+2. 逐页读取正式内容、数字、图片、图表、空间分组和信息关系；
+3. 建立不可变内容账本；
+4. 区分正式内容、编辑指令、占位符和不确定内容；
+5. 先判断页面角色，再判断语义页面类型；
+6. 决定是否拆页，并将内容映射到页面区域；
+7. 选择布局组件与内容组件能力；
+8. 冻结页面结构；
+9. 在结构冻结后绑定视觉风格、背景和 Logo 规则；
+10. 输出 HTML 型 PPT；
+11. 执行内容、路由、版式、风格与可编辑性检查。
 
 本 Skill 不负责发明视觉风格，也不得让视觉参考图决定页面类型。
 
@@ -93,9 +94,9 @@
 每次执行必须按以下顺序，不得跳过或调换：
 
 ```text
-A. 读取源材料
+A. 定位并诊断上传 / 当前项目中的 PPTX；无 PPTX 时读取其他源材料
 ↓
-B. 建立 content_inventory / edit_instruction_inventory / uncertain_inventory
+B. 建立 intake_result，再建立 content_inventory / edit_instruction_inventory / uncertain_inventory
 ↓
 C. 建立 source_page_profile，识别分组、关系、顺序和页面目标
 ↓
@@ -109,15 +110,17 @@ G. 判断拆页，生成 contentMapping
 ↓
 H. 选择 layoutComponent 与 requiredCapabilities
 ↓
-I. 执行规划前检查；通过后设置 structureFrozen = true
+I. 从模板库选择 templateId、校验 requiredSlots，并选择 wide / ultrawide 变体
 ↓
-J. 绑定视觉风格、背景、Logo 和设计 Token
+J. 执行规划前检查；通过后设置 structureFrozen = true
 ↓
-K. 输出 HTML
+K. 绑定视觉风格、背景、Logo 和设计 Token
 ↓
-L. 执行内容保真、页面路由、溢出、风格与可编辑性检查
+L. 输出 HTML
 ↓
-M. 失败时重组布局 / 更换变体 / 拆页；禁止删除正式内容
+M. 执行内容保真、页面路由、溢出、风格与可编辑性检查
+↓
+N. 失败时重组布局 / 更换变体 / 拆页；禁止删除正式内容
 ```
 
 结构一旦冻结，风格 Skill 不得修改：
@@ -128,6 +131,8 @@ M. 失败时重组布局 / 更换变体 / 拆页；禁止删除正式内容
 - `contentRefs`
 - `contentMapping`
 - `splitDecision`
+- `templateId`
+- `templateSelection`
 
 ---
 
@@ -248,6 +253,22 @@ M. 失败时重组布局 / 更换变体 / 拆页；禁止删除正式内容
 
 页面路由结果必须进一步映射到布局组件，而不是直接套视觉模板。
 
+选择完布局组件后，必须读取 `rules/template_library.md`，再从匹配的
+`Page Layout -> Content Pattern -> Reusable Component` 链路选择 `templateId`。
+若内容账本包含来源图片、截图、产品图、人物图或场景图，还必须读取
+`rules/image_text_composition.md`，选择图文搭配变体并保留媒体来源绑定。
+所有内容页还必须读取 `rules/page_composition_library.md`，声明一个
+`compositionVariant`、组件计划、信息链路与容量检查；不得默认套用卡片。
+涉及闭环、能力升级、前后效果、漏斗、决策树、双轴优先级、KPI 塔或瀑布关系时，
+还必须读取 `rules/advanced_relation_components.md`，并声明可审计的
+`advancedRelationSpec`；关系证据不完整时必须回退到普通关系布局。
+模板选择必须验证所有 `requiredSlots`、`contentCapacity`、`allowedComponents`
+和 `prohibitedUses`；不匹配时应使用所列 `fallbackTemplates` 或拆页。
+
+所有交付页面使用 `ultrawideVariant`。禁止把 2.67:1 参考结构横向缩放到
+11:3；只能扩展间距、轨道、侧栏或图表域，并保持卡片、图片、截图和圆形组件
+的比例不变。
+
 首选布局：
 
 - `HeroLayout`
@@ -293,11 +314,12 @@ M. 失败时重组布局 / 更换变体 / 拆页；禁止删除正式内容
 在 `debug = true` 或 `mode = plan/full` 时，按以下顺序输出或内部产生：
 
 1. `content_inventory`
-2. `document_analysis`
-3. `page_plan`
-4. `component_plan`
-5. `html_slides`
-6. `quality_report`
+2. `intake_result`（优化 PPT 时必需）
+3. `document_analysis`
+4. `page_plan`
+5. `component_plan`
+6. `html_slides`
+7. `quality_report`
 
 页面规划至少包含：
 
@@ -308,6 +330,7 @@ M. 失败时重组布局 / 更换变体 / 拆页；禁止删除正式内容
   "pageRole": "content",
   "pageType": "MultiColumnComparisonPage",
   "layoutComponent": "ColumnGridLayout",
+  "templateId": "capability-pillar-matrix",
   "variant": "ThreeColumnsWithMetrics",
   "routingEvidence": {
     "positive": ["3 个同级预算类型", "存在多组指标"],
@@ -317,6 +340,10 @@ M. 失败时重组布局 / 更换变体 / 拆页；禁止删除正式内容
   },
   "contentRefs": ["source-031", "source-032"],
   "contentMapping": [],
+  "templateSelection": {
+    "canvasVariant": "ultrawideVariant",
+    "adaptationActions": ["expanded inter-pillar gaps"]
+  },
   "structureFrozen": true
 }
 ```
@@ -337,6 +364,9 @@ M. 失败时重组布局 / 更换变体 / 拆页；禁止删除正式内容
 - 无溢出、遮挡和低于最小字号；
 - HTML 文本可编辑；
 - 风格绑定未改变冻结结构。
+- 模板 `requiredSlots` 已覆盖，`contentCapacity` 未超限，且未使用任何 `prohibitedUses`。
+- 高级关系图已通过来源、算术和几何审计；不存在虚构闭环、比例、坐标、分支或增量。
+- 所有交付页采用 3696 × 1008 `ultrawideVariant`；不存在 2.67:1 布局、截图、图片或卡片的横向拉伸。
 
 整套 PPT 额外检查：
 
