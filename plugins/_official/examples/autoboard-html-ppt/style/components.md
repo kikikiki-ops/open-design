@@ -626,223 +626,338 @@ height(card_i) = height(card_j)
 [ ] 卡片间距是否统一
 [ ] 多卡重点指标是否在不破坏对齐的前提下进行了轻微强调
 ```
+### 3.9 ConnectionHub 连接枢纽组件（硬约束）
+
+**适用场景**：多方协同、平台生态、业务流程、战略路径、能力体系、产品架构、营销链路、增长模型、案例总结、阶段演进、组合关系。适合大会演讲、行业峰会、品牌发布、招商推介、年度总结、战略发布等场景。
+
+**核心目标**：帮助观众快速理解"谁与谁相关、信息如何流动、多个部分如何共同形成结果"。
 
 ---
 
-
-### 3.9 ConnectionHub 连接枢纽组件（硬约束）
-
-**适用场景**：大会演讲、行业峰会、品牌发布、招商推介、年度总结、战略发布、产品介绍、案例分享等，用于表达多个角色、模块、能力、阶段、资源、数据或结论之间的关系。
-
-> **与高级关系库的分工**：`advanced_relation_components.md` 管理数据密度更高的变体（GrowthFlywheelLoop、FunnelConversion 等）。本组件聚焦**通用关系语言**——节点形状、锚点对齐、线条样式、超宽画布约束和多页复用规则。选择顺序见 §7.5。
-
-#### 组件元素（按需组合，非全部必需）
+#### 组件结构
 
 ```text
-connection-hub              顶层容器（Grid/Flex 轨道，统一坐标）
-├── hub-core                核心节点（圆形/环形/圆角徽章）
-├── hub-module              外部业务模块（卡片/标签/图标块）
-├── hub-connector           连接线（SVG line/path，语义对应线型）
-├── hub-anchor              连接锚点（各方向边界中心）
-├── hub-rhythm-dot          节奏节点（均匀分布在连接线上）
-├── hub-operator            运算符（×、+、=、→）
-├── hub-annotation          辅助说明（弱色，小字号）
-└── hub-ring                环形/同心圆装饰（可选，仅在语义需要时使用）
+connection-hub
+├── hub-node           核心节点（圆形 / 环形 / 圆角徽章 / 轻量几何）
+├── hub-spokes         连接线组（SVG 或 CSS 实现）
+│   └── hub-spoke      单条连接线（含可选节奏节点）
+├── hub-modules        外部模块组
+│   └── hub-module     单个外部业务模块
+│       ├── hub-module-title
+│       ├── hub-module-body
+│       └── hub-module-badge  （可选）
+└── hub-operator       运算符节点（×、+、=、→，可选）
 ```
 
-#### 核心节点规则
+并非每次都必须使用全部元素。根据内容复杂度选择最简洁、最清晰的组合，**禁止为装饰而增加无意义圆环、节点和线条**。
 
-- 必须保持**严格正圆**（`aspect-ratio: 1 / 1`），不得因文字长度变为椭圆
-- 节点直径设置 `max-width`（建议 200px–360px），禁止超宽画布无限放大
-- 文字控制在 2–8 个汉字或简短缩写，仅放核心概念
-- 视觉强调来自字号、字重、描边、背景层次或轻微阴影；禁止厚重发光、复杂立体效果
+---
+
+#### 一、结构变体（按内容语义选择，禁止所有页面套用同一种）
+
+| 变体 | 适用语义 | 结构描述 |
+|------|---------|---------|
+| **中心枢纽型** | 多方协同、平台生态、资源整合 | 1 核心节点 → 左右或四周 N 个业务模块 |
+| **中继转换型** | 数据处理、策略转化、流量承接 | 输入模块 → 核心节点 → 输出模块 |
+| **双节点协同型** | 两项能力组合、产品×服务 | 节点 A × 节点 B，运算符居中 |
+| **多节点流程型** | 业务流程、用户旅程、增长路径 | 节点 A → B → C → 结果 |
+| **汇聚型** | 多能力形成成果、多渠道汇聚 | 多外部节点 → 1 中心结果 |
+| **分发型** | 平台赋能、能力输出、渠道分发 | 1 中心 → 多外部模块 |
+| **环形闭环型** | 用户运营、品牌增长、数据反馈闭环 | N 节点沿圆环排列，带循环路径 |
+| **分层同心圆型** | 能力体系、产品架构、用户圈层 | 内层核心概念 + 外围能力/资源/应用层 |
+| **主干分支型** | 战略主线、产品路线图、区域布局 | 1 条主路径 + 多个分支节点 |
+| **对比连接型** | 过去/未来、现状/目标、挑战/方案 | 两侧对象 + 中间节点/运算符 |
+
+---
+
+#### 二、核心节点规则
+
+- 必须保持**严格正圆**（或统一几何形），使用 `aspect-ratio: 1 / 1`；不得因文字长度变成椭圆。
+- 文字控制在 **2–8 个汉字**或简短缩写，只放核心概念，不放长段说明。
+- 设置 `max-width`（建议 160px–360px），**禁止在超宽画布中无限放大**。
+- 视觉强调来自字号、字重、描边、背景层次或轻微阴影，**禁止**厚重发光、复杂立体效果或过度装饰。
+- 核心概念为第一视觉重点；直径最大不超过 `min(360px, 25vw)`（超宽画布约束）。
+- 同一页面内核心节点必须保持统一视觉语言（形状、描边宽度、背景规则）。
+- 主次节点：核心节点尺寸可比普通节点大 **10%–25%**，不得随意放大超过此范围。
 
 ```css
-.hub-core {
-  aspect-ratio: 1 / 1;
-  width: var(--hub-core-size, 240px);
-  max-width: var(--hub-core-max, 320px);
-  border-radius: 50%;
+.hub-node {
   display: flex;
   align-items: center;
   justify-content: center;
+  aspect-ratio: 1 / 1;
+  width: var(--hub-node-size, 220px);
+  max-width: var(--hub-node-max, 300px);
+  min-width: 120px;
+  border-radius: 50%;
   box-sizing: border-box;
   flex-shrink: 0;
-  /* 强调：border/background，禁止 box-shadow > 0 0 40px 等厚重发光 */
+  text-align: center;
+  overflow: hidden;            /* 圆形裁切，允许 */
+  /* 视觉描边 */
+  border: 2px solid rgba(213, 174, 121, .60);
+  /* 轻微阴影，禁止厚重发光 */
+  box-shadow: 0 4px 18px rgba(11, 45, 58, .10);
 }
 ```
 
-#### 外部模块规则
+---
+
+#### 三、外部模块规则
 
 同一层级的外部模块必须共享：
 
-- 相同高度或 `aspect-ratio` 规则
-- 相同 `border-radius`
-- 相同 `border` 规则
-- 相同 `padding`
-- 相同标题字号层级
-- 与核心节点的**统一间距**（`var(--hub-gap)`）
+- **相同高度**（误差 ≤ 2px）
+- 相同圆角、描边规则
+- 相同内边距（建议 `24px 28px`）
+- 相同标题层级（`font-size`、`font-weight`）
+- 相同连接锚点逻辑
+- 与核心节点的相同间距
 
-外部模块文字保持精简：每个模块优先表达一个核心概念。
-
-#### 连接线语义与线型
-
-AI 必须根据语义选择线型，**禁止所有关系使用同一种线条**：
-
-| 语义 | 线型 | SVG 属性 |
-|------|------|----------|
-| 明确、稳定、直接关系 | 实线 | `stroke-dasharray: none` |
-| 辅助、潜在、弱关联 | 虚线 | `stroke-dasharray: 8 4` |
-| 资源触点、传播路径 | 点线 | `stroke-dasharray: 2 6` |
-| 流程、递进、输入输出 | 单向箭头 | `marker-end: url(#arrow)` |
-| 互动、反馈、双向协同 | 双向箭头 | 两端 marker |
-| 对等、共同组成 | 无箭头实线 | — |
-| 循环、闭环 | 环形路径 | `stroke-dasharray: none`，闭合 path |
-| 组合关系 | 运算符 | HTML `span.hub-operator` |
-
-同一页面中，**相同语义必须使用相同连接样式**。
-
-#### 连接锚点规则（硬约束）
-
-```
-连接线必须从节点/模块的 边界锚点 出发，终止于 目标边界锚点。
-禁止从文字区域、圆心或卡片内部随意出发。
-禁止悬空（不触碰目标边缘）。
-禁止穿入文字区域。
-```
-
-标准锚点：左中 · 右中 · 上中 · 下中 · 左上 · 右上 · 左下 · 右下 · 圆周方向点
-
-**水平对齐约束**（中心枢纽型）：
-```
-centerY(leftModule) = centerY(hubCore) = centerY(rightModule)
-```
-
-**垂直对齐约束**（纵向枢纽型）：
-```
-centerX(topModule) = centerX(hubCore) = centerX(bottomModule)
-```
-
-所有对齐必须来自共同父级 Grid/Flex 的 `align-items: center` 或 SVG 坐标系统，**禁止逐条设置 `margin`、`top`、`left`、`translate` 肉眼调整**。
-
-#### 连接线排布规则
-
-- 优先水平线、垂直线和规则折线；仅当版式明确需要时才使用斜线或曲线
-- 不穿过主要文字或核心数字
-- 不无序交叉，不贴得过近，不因长度过长导致关系松散
-- 路径由共同 Grid/Flex 或 SVG 坐标系统控制
-
-#### 节奏节点规则
-
-线上的小圆点/空心点/短线/阶段标记：
-
-- 均匀分布，**弱于**核心节点和业务模块
-- 一条普通连接线 0–3 个节奏节点
-- 禁止过多节奏节点造成装饰化和视觉噪声
-
-#### 推荐布局 CSS 结构
+每个模块优先表达**一个核心概念**，不得堆放过多内容。
 
 ```css
-/* 顶层容器 */
-.connection-hub {
-  display: grid;               /* 或 flex */
-  align-items: center;         /* 保证 centerY 对齐 */
-  justify-items: center;
-  gap: var(--hub-gap, 64px);
-  width: min(100%, var(--hub-max-width, 3000px));
-  margin-inline: auto;
-  position: relative;          /* SVG 连接线 absolute 定位的基准 */
-}
-
-/* SVG 连接层 */
-.hub-svg-layer {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  overflow: visible;
-}
-
-/* 外部模块 */
 .hub-module {
-  min-width: 0;
   box-sizing: border-box;
-  /* 高度、圆角、padding 由统一 CSS 变量控制 */
-  height: var(--hub-module-height);
-  border-radius: var(--hub-module-radius, 18px);
-  padding: var(--hub-module-padding, 28px 36px);
+  min-width: 0;
+  min-height: 0;
+  padding: 24px 28px;
+  border-radius: 18px;
+  border: 1px solid rgba(213, 174, 121, .28);
+  background: var(--white-card);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  /* 高度由父级 Grid/Flex 轨道决定，不由内容撑高 */
+}
+
+.hub-module-title {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.hub-module-body {
+  font-size: 24px;
+  font-weight: 400;
+  color: var(--text-body);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
 }
 ```
 
-#### 超宽画布约束
+---
 
-- 核心节点不得无限放大（设 `max-width`）
-- 外部模块不得被推到画布两端（节点组设 `max-width`）
-- 禁止用超长连接线填满画布
-- 禁止让关联模块彼此距离过远
-- 剩余空间通过：多组并列关系 / 左右分区 / 主关系 + 辅助关系 / 中心枢纽 + 两侧业务带 / 多阶段横向流程 消化
+#### 四、连接关系类型（按语义选择，禁止所有关系都用同一种线条）
 
-#### 单页容量建议
+| 线型 | 语义 |
+|------|------|
+| 实线 `stroke-dasharray: none` | 明确、稳定、直接关系 |
+| 虚线 `stroke-dasharray: 6 4` | 辅助、潜在、弱关联 |
+| 点线 `stroke-dasharray: 2 4` | 资源触点、传播路径 |
+| 单向箭头 `marker-end` | 流程、递进、输入输出 |
+| 双向箭头 `marker-start + marker-end` | 互动、反馈、双向协同 |
+| 无箭头线 | 对等、共同组成 |
+| 环形路径 `stroke-dashoffset` 动画（可选） | 循环、闭环 |
+| 运算符 `×`、`+`、`=`、`→` | 组合、推导、因果 |
 
-| 元素 | 建议数量 |
-|------|---------|
-| 核心节点 | 1–3 个 |
-| 普通外部节点 | 2–8 个 |
-| 主要连接关系 | 1–6 条 |
-| 辅助说明 | 控制在必要范围 |
+**同一页面中相同语义必须使用相同连接样式。**
 
-超过时必须拆页、分组或分阶段呈现，**禁止在单页无限增加节点**。
+线宽（`stroke-width`）：
+- 主路径：`2px–3px`
+- 辅助路径：`1.5px`
+- **禁止 `< 1.5px`**（大屏远距离不可读）
 
-#### 大会 PPT 可读性要求
+---
 
-- 核心概念可在 3–5 秒内被识别
-- 连接线不得过细（建议 `stroke-width ≥ 1.5px`，主关系 `≥ 2px`）
-- 辅助说明字号不得低于 22px（字号层级规范最小值）
-- 重要路径高对比，次要路径主动弱化
-- 页面不得因连接元素过多像复杂架构图
+#### 五、连接锚点规则（硬约束）
 
-#### 多页复用规则
+连接线**必须从节点或模块的明确边界锚点出发**，不得从文字区域、圆心或卡片内部随机出发。
 
-同一套 PPT 中多次使用连接枢纽时，必须保持统一：核心节点形状 / 节点边框 / 连接线线宽 / 箭头样式 / 节奏节点样式 / 字体层级 / 圆角与阴影 / 连接锚点逻辑 / 主色与辅助色。
+标准锚点：左侧中心 / 右侧中心 / 顶部中心 / 底部中心 / 左上、右上、左下、右下 / 圆形节点圆周上的标准方向点。
 
-**允许**根据语义变化：节点数量 / 连接方向 / 主次大小 / 关系符号 / 局部强调色 / 外部卡片内容 / 横向纵向环形放射布局。
+连接线终点必须落在目标模块边缘或目标节点圆周上，不得悬空，不得穿入文字区域。
 
-**复用 ≠ 复制完全相同版式**。保持组件语言一致，同时根据内容选择不同关系结构。
+**水平布局对齐约束**：
 
-#### 禁止事项
-
-```text
-[ ✗ ] 圆形拉伸成椭圆（aspect-ratio 必须 1/1）
-[ ✗ ] 节点文字过多（超过 8 个汉字或 2 行）
-[ ✗ ] 连接线从文字中穿过
-[ ✗ ] 连接线悬停在节点外形成断点
-[ ✗ ] 多条线无序交叉
-[ ✗ ] 所有关系使用同一种线条样式
-[ ✗ ] 节点与外部模块没有明确对齐关系
-[ ✗ ] 超宽画布中使用超长连接线
-[ ✗ ] 通过放大中心节点填满页面
-[ ✗ ] 过重阴影、发光、厚描边
-[ ✗ ] 每页重复同一种中心圆结构（应根据语义选择变体）
-[ ✗ ] 逐个用 top/left/margin/translate 修正位置（必须用共同父级）
-[ ✗ ] 为纯装饰增加无语义圆点、线条和圆环
+```
+centerY(leftModule) = centerY(hubNode) = centerY(rightModule)
 ```
 
-#### 生成后专项检查
+**垂直布局对齐约束**：
+
+```
+centerX(topModule) = centerX(hubNode) = centerX(bottomModule)
+```
+
+---
+
+#### 六、连接线几何与排布规则
+
+- 从真实边界出发、到真实边界结束；
+- 不穿过主要文字；不穿过核心数字；
+- 不无序交叉；不贴得过近；
+- 不因长度过长导致关系松散；不因长度过短造成拥挤；
+- 优先使用**水平线、垂直线和规则折线**；只有版式明确需要时才使用斜线或曲线；
+- 连接路径由**共同 Grid、Flex 或 SVG 坐标系统**控制，**禁止**逐条 `margin`、`top`、`left`、`translate` 肉眼调整。
+
+---
+
+#### 七、节奏节点规则
+
+连接线上可设置小圆点、空心点、短线或阶段标记，表达流转过程、阶段递进或多触点协同。
+
+- 节奏节点**均匀分布**，视觉权重弱于核心节点和业务模块；
+- 每条普通连接线建议使用 **0–3 个**节奏节点；
+- **禁止**加入过多节点造成装饰化和视觉噪声。
+
+---
+
+#### 八、超宽画布规则（硬约束）
+
+- 核心节点设置 `max-width`，**禁止无限放大**；
+- 外部模块**禁止被推到画布两端**；
+- 节点组设置 `max-width`，并用 `margin-inline: auto` 居中；
+- 模块之间保持紧凑关系；
+- **禁止**用超长连接线填满画布；
+- 剩余空间通过分组、主次关系、辅助信息和视觉节奏消化。
+
+```css
+/* 枢纽组整体 */
+.connection-hub {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--hub-gap, 40px);
+  width: min(100%, var(--hub-max-width, 2800px));
+  margin-inline: auto;
+}
+
+/* 外部模块组 */
+.hub-modules {
+  display: grid;
+  grid-template-columns: repeat(var(--module-count, 2), minmax(0, 1fr));
+  align-items: stretch;
+  gap: var(--hub-module-gap, 24px);
+  width: min(100%, var(--hub-modules-max-width, 900px));
+}
+```
+
+超宽画布优先使用：多组并列关系、左右分区、中心枢纽 + 两侧业务带、多阶段横向流程。
+
+---
+
+#### 九、内容密度适配
+
+| 密度 | 节点数量 | 策略 |
+|------|---------|------|
+| 低密度 | 1–3 节点 | 大节点、关系线简洁、可加同心圆装饰 |
+| 中密度 | 中心 + 3–6 外部模块 | 明确主路径和辅助路径，一页一个核心关系 |
+| 高密度 | > 6 节点 | **必须**拆分分组或分页，禁止单页堆砌 |
+
+推荐单页上限：核心节点 1–3 个、外部节点 2–8 个、主要连接关系 1–6 条。超出时**必须拆页**。
+
+---
+
+#### 十、多组件复用规则
+
+同一套 PPT 中多次使用连接枢纽组件时，必须保持**统一组件语言**：
+
+固定项（不得因页面不同而变化）：核心节点形状 / 节点边框规格 / 连接线线宽 / 箭头样式 / 节奏节点样式 / 字体层级 / 圆角与阴影规则 / 主色与辅助色。
+
+允许变化：节点数量 / 连接方向 / 关系符号 / 局部强调色 / 外部卡片内容 / 布局方向（横/纵/环形/放射）。
+
+**复用不等于复制完全相同版式。** 应保持组件语言一致，同时根据内容选择不同关系结构变体。
+
+---
+
+#### 十一、HTML 示例（中心枢纽型）
+
+```html
+<!-- 中心枢纽型：核心节点 + 左右两组外部模块 -->
+<div class="connection-hub" style="--hub-max-width:2600px; --hub-gap:60px;">
+
+  <!-- 左侧模块组 -->
+  <div class="hub-modules" style="--module-count:1; --hub-modules-max-width:680px;">
+    <div class="hub-module">
+      <div class="hub-module-title">广告主</div>
+      <div class="hub-module-body">品牌 · 效果 · 商家</div>
+    </div>
+  </div>
+
+  <!-- SVG 连接线（左锚点 → 核心节点左边界） -->
+  <svg class="hub-spokes" viewBox="0 0 120 40" width="120" height="40"
+       fill="none" xmlns="http://www.w3.org/2000/svg"
+       style="flex-shrink:0; overflow:visible;">
+    <line x1="0" y1="20" x2="120" y2="20"
+          stroke="var(--gold-main)" stroke-width="2" />
+    <!-- 节奏节点 -->
+    <circle cx="60" cy="20" r="4" fill="var(--gold-main)" opacity=".6"/>
+  </svg>
+
+  <!-- 核心节点 -->
+  <div class="hub-node" style="--hub-node-size:240px;">
+    <div style="font-size:36px; font-weight:700; color:var(--text-primary);">
+      快手联盟
+    </div>
+  </div>
+
+  <!-- SVG 连接线（核心节点右边界 → 右锚点） -->
+  <svg class="hub-spokes" viewBox="0 0 120 40" width="120" height="40"
+       fill="none" xmlns="http://www.w3.org/2000/svg"
+       style="flex-shrink:0; overflow:visible;">
+    <defs>
+      <marker id="arrow-r" markerWidth="8" markerHeight="8"
+              refX="6" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L8,3 Z" fill="var(--teal-deep)"/>
+      </marker>
+    </defs>
+    <line x1="0" y1="20" x2="120" y2="20"
+          stroke="var(--teal-main)" stroke-width="2"
+          marker-end="url(#arrow-r)"/>
+  </svg>
+
+  <!-- 右侧模块组 -->
+  <div class="hub-modules" style="--module-count:1; --hub-modules-max-width:680px;">
+    <div class="hub-module">
+      <div class="hub-module-title">媒体 / 开发者</div>
+      <div class="hub-module-body">APP · 小程序 · 内容媒体</div>
+    </div>
+  </div>
+
+</div>
+```
+
+---
+
+#### 十二、生成后必须检查
 
 ```text
-[ ] 核心关系是否可以快速理解（3–5 秒内）
-[ ] 中心节点是否为严格正圆（aspect-ratio: 1/1，无椭圆）
-[ ] 同类节点尺寸是否一致
-[ ] 连接线是否准确接触节点边界（无悬空、无穿入文字）
-[ ] 运算符是否处于相邻节点中心之间（centerY 对齐）
-[ ] 主路径是否比辅助路径更清晰（线宽/色彩对比差异）
-[ ] 节点组是否设置了 max-width（无过度松散）
-[ ] 超宽画布是否出现无意义超长连接
-[ ] 同一套 PPT 中组件风格是否统一（节点形状/线宽/圆角）
-[ ] 当前结构是否真正适合内容（非机械套用圆形元素）
-[ ] 连接线 stroke-width ≥ 1.5px（大屏可读）
-[ ] 辅助说明字号 ≥ 22px（字号层级规范最小值）
+[ ] 核心关系是否可以在 3–5 秒内被识别
+[ ] 核心节点是否为正圆（aspect-ratio:1/1）或统一几何形，未因文字变椭圆
+[ ] 核心节点是否设置了 max-width，未在超宽画布中无限放大
+[ ] 同类节点尺寸是否一致（同层外部模块误差 ≤ 2px）
+[ ] 连接线是否准确接触节点边界（非圆心、非文字区域）
+[ ] 连接线是否穿过文字或核心数字
+[ ] 水平布局：centerY(外部模块) = centerY(核心节点)
+[ ] 运算符是否处于相邻节点中心之间
+[ ] 主路径是否比辅助路径更清晰（线宽/颜色/不透明度对比）
+[ ] 节点组是否设置了 max-width，未因超宽画布过度松散
+[ ] 超宽画布是否出现无意义超长连接线
+[ ] 同一套 PPT 中的枢纽组件风格是否一致（节点形状、线宽、箭头样式）
+[ ] 结构变体是否真正适合内容（非机械套用"左卡–中圆–右卡"）
+[ ] 节奏节点是否 ≤ 3 个/条，未装饰化
+[ ] 连接线 stroke-width ≥ 1.5px（大屏远距离可读）
+[ ] 未使用逐条 top/left/margin/translate 调整节点对齐
 ```
 
 ---
