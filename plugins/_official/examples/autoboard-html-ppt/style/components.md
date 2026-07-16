@@ -746,3 +746,145 @@ BackgroundFlow
 - 不得把 Logo 做进背景图
 - 不得从背景图裁切 Logo
 - 不得使用模糊位图 Logo
+
+
+---
+
+## 6. 卡片防溢出通用约束
+
+本节是组件维度的防溢出规则，与 `layout_overflow_protocol.md §8` 配合使用。所有卡片组件（`WhiteContentCard`、`MetricGrowthCard` 及任何自定义卡片）均必须满足本节约束。
+
+### 6.1 卡片外框不得由内容决定尺寸
+
+所有卡片外框的宽度和高度**必须由父级 Grid/Flex 轨道决定**，不得依赖内容自动撑高。
+
+```css
+/* 强制：父级轨道 */
+.card-group {
+  display: grid;
+  grid-template-columns: repeat(var(--card-count), minmax(0, 1fr));
+  align-items: stretch;      /* 同组等高 */
+}
+
+/* 强制：子卡片 */
+.card {
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+}
+```
+
+### 6.2 卡片内部区域高度分配（纵向 Grid）
+
+卡片内部必须使用纵向 Grid 显式分配各区域高度，禁止全部区域都用 `auto` 行高：
+
+```css
+.metric-card {
+  display: grid;
+  grid-template-rows:
+    auto             /* 标签区：自适应内容 */
+    auto             /* 标题区：自适应内容，但受 line-clamp 约束 */
+    auto             /* 数字区：自适应内容，必须完整显示 */
+    minmax(0, 1fr)   /* 图表区：占用剩余空间 */
+    auto             /* 时间区 */
+    auto;            /* 结论区：受 line-clamp 约束 */
+  height: 100%;      /* 高度由父级轨道决定，不由内容决定 */
+  min-height: 0;
+}
+```
+
+规则：
+- 至少有一个区域使用 `minmax(0, 1fr)` 吸收剩余空间（通常是图表区）；
+- 所有文字区域必须声明 `max-height` 或使用 `-webkit-line-clamp`；
+- 禁止所有区域都用 `auto` 行高（这会导致卡片随内容无限增高）。
+
+### 6.3 各文字区域的溢出上限
+
+| 区域 | 最大行数 | 溢出处理 |
+|------|---------|---------|
+| 卡片标题 / `metric-title` | 2 行 | `-webkit-line-clamp: 2` |
+| 卡片正文 / `card-body` | 4 行 | `-webkit-line-clamp: 4` |
+| 结论 / `metric-summary` | 2 行 | `-webkit-line-clamp: 2` |
+| 胶囊标签 / `metric-tag` | 1 行 | `white-space: nowrap` |
+| 核心数字 / `metric-number` | 1 行（不得截断）| `white-space: nowrap`，**禁止** `overflow: hidden` |
+| 列表每项 / `li` | 2 行 | `-webkit-line-clamp: 2` |
+
+### 6.4 数字区不得截断
+
+`metric-number`、`.number-xl`、`.number-lg` 等数字类**严禁**使用 `overflow: hidden`、`text-overflow: ellipsis` 或 `line-clamp`。
+
+若数字在分配空间内溢出，唯一合法修复步骤：
+1. 给数字区分配更大横向空间（收窄相邻区域）；
+2. 降一级字阶（如 100px → 72px），但不低于规范最小值；
+3. 换更宽布局模板；
+4. 拆页。
+
+### 6.5 padding 不得被压缩为零
+
+任何卡片的 `padding` 不得小于以下值：
+
+| 位置 | 最小 padding |
+|------|-------------|
+| 卡片左右内边距 | 24px |
+| 卡片上下内边距 | 24px |
+| 列表项行间距 | 8px |
+| 数字区上下间距 | 12px |
+
+**禁止**为了塞入更多内容而将 padding 降为 0 或负值。若内容确实装不下，应精简文字或拆页。
+
+### 6.6 标签宽度约束
+
+胶囊标签（`.metric-tag`、`.tag`、`.pill-tag`、`.kicker`）**禁止** `width: 100%`，必须保持自适应宽度：
+
+```css
+.metric-tag,
+.tag,
+.pill-tag {
+  display: inline-flex;
+  width: fit-content;       /* 禁止 width: 100% */
+  max-width: 90%;           /* 不得超过卡片宽度的 90% */
+  white-space: nowrap;
+}
+```
+
+### 6.7 Flex 行中标签与数字不得相互挤压
+
+若标签与数字在同一 Flex 行，需显式设置：
+
+```css
+.metric-value {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: nowrap;         /* 数字与单位不换行 */
+  gap: 4px;
+  overflow: visible;         /* 不裁切数字 */
+}
+
+.metric-prefix {
+  flex-shrink: 0;            /* 前缀不被压缩 */
+}
+
+.metric-number {
+  flex-shrink: 1;            /* 在极端情况下数字区收缩，但不截断 */
+  min-width: 0;
+}
+
+.metric-unit {
+  flex-shrink: 0;
+}
+```
+
+### 6.8 生成后卡片防溢出专项检查
+
+```text
+[ ] 每张卡片外框的宽度和高度是否来自父级 Grid/Flex 轨道
+[ ] 卡片内部是否至少有一个 minmax(0, 1fr) 区域吸收剩余高度
+[ ] 文字区是否都有 max 行数约束（line-clamp 或 max-height）
+[ ] 核心数字区是否完整显示（无 overflow:hidden，无 ellipsis）
+[ ] 胶囊标签是否 width: fit-content（无 width: 100%）
+[ ] 每个 flex/grid 子项是否有 min-width: 0 和 min-height: 0
+[ ] card 的 padding 是否不小于上下左右各 24px
+[ ] 列表每项是否有行数上限（line-clamp: 2）
+[ ] 图表区是否使用 overflow: hidden + min-height: 0
+[ ] 未出现通过 overflow:hidden 静默截断正式文字内容
+```

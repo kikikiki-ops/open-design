@@ -107,3 +107,19 @@ must-render 覆盖率 = 100%
 - 超宽画布中数据卡未设置 `max-width`，因横向空间充足而无限拉宽（超过 720px 建议上限）。
 - 数据卡内 padding、间距或图表边界触碰卡片边框。
 - 卡片内 `metric-value` 的前缀（YoY/同比）与主数字字号相同或接近，未形成明显层次。
+
+
+## 7. 卡片内部溢出专项检查
+
+以下任意情况默认失败：
+
+- 任何卡片的 `scrollWidth > clientWidth + 2px` 或 `scrollHeight > clientHeight + 2px`。
+- 卡片内的**核心数字区**（`.metric-number`、`.number-xl`、`.number-lg` 等）被 `overflow: hidden`、`text-overflow: ellipsis` 或 `-webkit-line-clamp` 截断。
+- 卡片内**正式正文**（`p`、`li`、`dd` 等）被 `overflow: hidden` 静默裁切（`scrollHeight > clientHeight`），且未经 `-webkit-line-clamp` 声明。
+- 卡片内部所有行高均为 `auto`，导致内容超出父级 Grid 轨道并撑开卡片外框。
+- 任意文字卡片的 `padding-left` 或 `padding-right` 小于 24px。
+- 胶囊标签使用 `width: 100%` 铺满卡片宽度。
+- `metric-prefix`（YoY/同比等）与核心数字字号相同，未形成明显层次（要求前缀字号 ≤ 核心数字字号的 40%）。
+- 列表每条 `li` 无行数上限（允许无限延伸），导致列表撑破所在区域高度。
+- 图表区（`.metric-chart`、`.chart-zone`）未设置 `min-height: 0`，导致 Grid `1fr` 回退失败、图表区意外扩张。
+- Flex/Grid 直接子项缺少 `min-width: 0` 或 `min-height: 0`，导致默认 `min-width: auto` 使 flex 子项溢出。
