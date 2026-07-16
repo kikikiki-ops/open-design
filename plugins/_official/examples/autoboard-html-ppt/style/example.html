@@ -5,6 +5,8 @@
 <title>AutoBoard HTML PPT — 11m × 3m 会场示例</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
+.ppt-slide *, .safe-zone > *, [data-group-id] > * { min-width: 0; }
+.safe-zone, [data-group-id] { min-height: 0; }
 
 html, body {
   width: 100vw;
@@ -52,13 +54,14 @@ html, body {
   background: var(--bg-main);
   transform-origin: top left;
   display: none;
+  isolation: isolate;
 }
 .slide.active { display: block; }
 
 .safe-zone {
   position: absolute;
   left: 220px; right: 220px;
-  top: 90px; bottom: 90px;
+  top: 90px; height: 828px;
   pointer-events: none;
   z-index: 10;
 }
@@ -86,20 +89,35 @@ html, body {
   pointer-events: none;
 }
 
-.title-xl { font-size: 88px; font-weight: 600; color: var(--text-primary); line-height: 1.12; letter-spacing: -.02em; }
-.title-lg  { font-size: 72px; font-weight: 600; color: var(--text-primary); line-height: 1.15; letter-spacing: -.02em; }
-.title-md  { font-size: 56px; font-weight: 600; color: var(--text-primary); line-height: 1.2; }
-.subtitle  { font-size: 32px; font-weight: 400; color: var(--text-body); line-height: 1.5; }
-.body-text { font-size: 20px; font-weight: 400; color: var(--text-body); line-height: 1.6; }
-.caption   { font-size: 16px; font-weight: 400; color: var(--text-muted); line-height: 1.5; }
+.title-cover { font-size: 148px; font-weight: 600; color: var(--text-primary); line-height: 1.08; letter-spacing: -.03em; }
+.title-toc  { font-size: 82px;  font-weight: 600; color: var(--text-primary); line-height: 1.1;  letter-spacing: -.02em; }
+.title-xl   { font-size: 72px;  font-weight: 600; color: var(--text-primary); line-height: 1.15; letter-spacing: -.02em; }
+.section-title-lg { font-size: 44px; font-weight: 600; color: var(--text-primary); line-height: 1.25; }
+.section-title-sm { font-size: 28px; font-weight: 500; color: var(--text-primary); line-height: 1.3; }
+.subtitle   { font-size: 36px;  font-weight: 400; color: var(--text-body);    line-height: 1.45; }
+.body-xl    { font-size: 36px;  font-weight: 400; color: var(--text-body);    line-height: 1.6; }
+.body-lg    { font-size: 32px;  font-weight: 400; color: var(--text-body);    line-height: 1.6; }
+.body-md    { font-size: 30px;  font-weight: 400; color: var(--text-body);    line-height: 1.6; }
+.body-sm    { font-size: 28px;  font-weight: 400; color: var(--text-body);    line-height: 1.6; }
+.body-xs    { font-size: 24px;  font-weight: 400; color: var(--text-body);    line-height: 1.6; }
+/* legacy alias */
+.body-text  { font-size: 28px;  font-weight: 400; color: var(--text-body);    line-height: 1.6; }
+.caption    { font-size: 22px;  font-weight: 400; color: var(--text-muted);   line-height: 1.5; }
+.caption-sm { font-size: 22px;  font-weight: 400; color: var(--text-muted);   line-height: 1.5; }
 .gold-text { color: var(--gold-deep); }
 .teal-text { color: var(--teal-deep); }
 
-.number-xl { font-size: 128px; font-weight: 300; color: var(--text-primary); line-height: 1; letter-spacing: -.04em; }
-.number-lg { font-size: 96px; font-weight: 300; color: var(--text-primary); line-height: 1; letter-spacing: -.04em; }
-.number-md { font-size: 72px; font-weight: 300; color: var(--text-primary); line-height: 1; letter-spacing: -.04em; }
-.number-unit { font-size: .45em; font-weight: 500; color: var(--text-muted); margin-left: 4px; vertical-align: baseline; }
-.number-label { font-size: 18px; color: var(--text-muted); margin-top: 10px; }
+.number-xxl  { font-size: 200px; font-weight: 300; color: var(--text-primary); line-height: 1; letter-spacing: -.05em; }
+.number-xl   { font-size: 100px; font-weight: 300; color: var(--text-primary); line-height: 1; letter-spacing: -.04em; }
+.number-lg   { font-size: 72px;  font-weight: 300; color: var(--text-primary); line-height: 1; letter-spacing: -.04em; }
+.number-md   { font-size: 64px;  font-weight: 300; color: var(--text-primary); line-height: 1; letter-spacing: -.04em; }
+.number-sm   { font-size: 48px;  font-weight: 300; color: var(--text-primary); line-height: 1; letter-spacing: -.04em; }
+.number-unit  { font-size: .45em; font-weight: 500; color: var(--text-muted); margin-left: 4px; vertical-align: baseline; }
+.metric-lg   { font-size: 48px;  font-weight: 400; color: var(--text-muted);  margin-top: 8px; }
+.metric-md   { font-size: 30px;  font-weight: 400; color: var(--text-muted);  margin-top: 8px; }
+.metric-sm   { font-size: 26px;  font-weight: 400; color: var(--text-muted);  margin-top: 6px; }
+/* legacy alias */
+.number-label { font-size: 26px; color: var(--text-muted); margin-top: 10px; }
 
 .card {
   background: var(--white-card);
@@ -107,7 +125,36 @@ html, body {
   border-radius: 22px;
   box-shadow: 0 10px 28px var(--shadow-soft);
   padding: 32px 40px;
+  height: auto;
+  overflow: visible;
 }
+.case-study-card {
+  flex: 0 0 calc((100% - 56px) / 3);
+  box-sizing: border-box;
+  height: var(--case-study-card-height);
+}
+.case-study-card-group {
+  --case-study-card-height: 230px;
+  display: flex;
+  align-items: stretch;
+  gap: 28px;
+}
+.case-study-flow {
+  display: grid;
+  grid-template-columns: 1fr 120px 1fr 120px 1fr;
+  align-items: center;
+  width: 100%;
+  padding: 24px 40px;
+  border-top: 1px solid rgba(11,45,58,.10);
+  border-bottom: 1px solid rgba(11,45,58,.07);
+}
+.case-study-flow-node { display: flex; flex-direction: column; gap: 8px; }
+.case-study-flow-node:nth-child(5) { text-align: right; align-items: flex-end; }
+.case-study-flow-step { font-size: 16px; font-weight: 600; color: var(--gold-deep); letter-spacing: .08em; }
+.case-study-flow-title { font-size: 30px; font-weight: 600; color: var(--text-primary); line-height: 1.2; }
+.case-study-flow-copy { font-size: 18px; color: var(--text-muted); line-height: 1.45; }
+.case-study-flow-arrow { position: relative; height: 1px; background: linear-gradient(90deg, var(--teal-light), var(--gold-main)); margin: 0 24px; }
+.case-study-flow-arrow::after { content: ""; position: absolute; right: -1px; top: -4px; width: 8px; height: 8px; border-top: 1px solid var(--gold-main); border-right: 1px solid var(--gold-main); transform: rotate(45deg); }
 .card-sm {
   background: var(--white-card);
   border: 1px solid rgba(213,174,121,.25);
@@ -171,6 +218,7 @@ html, body {
 .flex-col { display: flex; flex-direction: column; }
 .items-center { align-items: center; }
 .items-start { align-items: flex-start; }
+.items-end { align-items: flex-end; }
 .items-stretch { align-items: stretch; }
 .justify-center { justify-content: center; }
 .text-center { text-align: center; }
@@ -330,13 +378,13 @@ html, body {
   <img class="bg-img" src="assets/bg-content.svg" alt="" aria-hidden="true" />
   <img class="fixed-brand-logo" src="assets/logo.svg" alt="快手联盟" />
   <div class="safe-zone" data-source-id="example-source-003">
-    <div class="flex-col" style="height:100%;gap:32px;">
+    <div class="flex-col" style="height:100%;gap:32px;justify-content:space-between;">
       <div class="flex-col items-center text-center gap-12">
         <span class="tag-gold" style="font-size:17px;height:38px;padding:0 20px;">案例复盘 · 云南白药</span>
         <h2 class="title-md">突破历史资源触点，GMV <span class="gold-text">确定达成</span>，新客同步提升</h2>
       </div>
-      <div class="flex-row gap-28 flex-1 items-stretch">
-        <div class="card flex-col gap-20 flex-1" style="border-color:rgba(11,45,58,.1);">
+      <div class="case-study-card-group" style="margin-top:8px;">
+        <div class="card case-study-card flex-col gap-20" style="border-color:rgba(11,45,58,.1);">
           <div class="card-header" style="align-self:flex-start;">背景挑战</div>
           <div class="flex-col gap-12">
             <p class="body-text">缺少品牌投放历史数据，过去资源触点有限，不确定新增触点能否带来 GMV 增长。</p>
@@ -346,7 +394,7 @@ html, body {
             </div>
           </div>
         </div>
-        <div class="card flex-col gap-20 flex-1" style="border-color:rgba(79,155,144,.3);">
+        <div class="card case-study-card flex-col gap-20" style="border-color:rgba(79,155,144,.3);">
           <div style="background:linear-gradient(90deg,var(--teal-main),var(--teal-light));border-radius:10px;padding:8px 20px;display:inline-flex;align-items:center;font-size:18px;font-weight:500;color:var(--white-card);align-self:flex-start;">策略方法</div>
           <div class="flex-col gap-12">
             <p class="body-text">结合行业投放数据，采用 GTRTM 策略，科学提升触点组合，统筹效果+开屏+信息流+搜索。</p>
@@ -356,9 +404,9 @@ html, body {
             </div>
           </div>
         </div>
-        <div class="card flex-col gap-16 flex-1" style="border-color:rgba(213,174,121,.4);background:linear-gradient(135deg,#FFFCF8,#FBF5EA);">
+        <div class="card case-study-card flex-col gap-16" style="border-color:rgba(213,174,121,.4);background:linear-gradient(135deg,#FFFCF8,#FBF5EA);">
           <div class="card-header" style="align-self:flex-start;">成果结果</div>
-          <div class="flex-row gap-32" style="flex:1;align-items:center;">
+          <div class="flex-row gap-32" style="align-items:center;">
             <div class="flex-col items-center text-center flex-1" style="gap:8px;">
               <span class="number-md" style="color:var(--gold-deep);">170<span class="number-unit">%</span></span>
               <span class="caption">GMV 达成率</span>
@@ -374,6 +422,25 @@ html, body {
               <span class="caption">项目 ROI 提升</span>
             </div>
           </div>
+        </div>
+      </div>
+      <div class="case-study-flow" aria-label="案例增长路径：历史资源触点有限，经由 GTRTM 策略和全触点组合，形成 GMV 达成与新客提升">
+        <div class="case-study-flow-node">
+          <span class="case-study-flow-step">01 · 挑战</span>
+          <strong class="case-study-flow-title">历史资源触点有限</strong>
+          <span class="case-study-flow-copy">数据缺失，投放依据不足</span>
+        </div>
+        <div class="case-study-flow-arrow" aria-hidden="true"></div>
+        <div class="case-study-flow-node items-center text-center">
+          <span class="case-study-flow-step">02 · 策略</span>
+          <strong class="case-study-flow-title">GTRTM 策略</strong>
+          <span class="case-study-flow-copy">全触点组合</span>
+        </div>
+        <div class="case-study-flow-arrow" aria-hidden="true"></div>
+        <div class="case-study-flow-node">
+          <span class="case-study-flow-step">03 · 结果</span>
+          <strong class="case-study-flow-title">GMV 达成 · 新客提升</strong>
+          <span class="case-study-flow-copy">项目 ROI 持续提升</span>
         </div>
       </div>
     </div>
@@ -538,6 +605,40 @@ html, body {
     document.getElementById('btn-prev').disabled = true;
   });
   window.addEventListener('load', scaleActive);
+})();
+</script>
+<script>
+(function () {
+  var W = 3696, H = 1008, SAFE = { left: 220, right: 3476, top: 90, bottom: 918 }, EPS = 2;
+  function auditSlide(slide) {
+    var hidden = getComputedStyle(slide).display === 'none';
+    var display = slide.style.display, visibility = slide.style.visibility;
+    if (hidden) { slide.style.display = 'block'; slide.style.visibility = 'hidden'; }
+    var box = slide.getBoundingClientRect(), scale = box.width / W || 1, issues = [];
+    function rect(node) {
+      var r = node.getBoundingClientRect();
+      return { left: (r.left - box.left) / scale, top: (r.top - box.top) / scale, right: (r.right - box.left) / scale, bottom: (r.bottom - box.top) / scale };
+    }
+    if (slide.scrollWidth > W + EPS || slide.scrollHeight > H + EPS) issues.push({ code: 'canvas-scroll-overflow' });
+    slide.querySelectorAll('[data-source-id]').forEach(function (node) {
+      var r = rect(node);
+      if (r.left < SAFE.left - EPS || r.top < SAFE.top - EPS || r.right > SAFE.right + EPS || r.bottom > SAFE.bottom + EPS) issues.push({ code: 'safe-area-overflow', sourceId: node.dataset.sourceId });
+    });
+    slide.querySelectorAll('h1,h2,h3,h4,p,li,dt,dd,strong,span').forEach(function (node) {
+      if (!node.textContent.trim() || !node.clientWidth || !node.clientHeight) return;
+      if (node.scrollWidth > node.clientWidth + EPS || node.scrollHeight > node.clientHeight + EPS) issues.push({ code: 'text-overflow', text: node.textContent.trim().slice(0, 36) });
+      if (['hidden', 'clip'].indexOf(getComputedStyle(node).overflow) >= 0) issues.push({ code: 'text-clipping-style', text: node.textContent.trim().slice(0, 36) });
+    });
+    if (hidden) { slide.style.display = display; slide.style.visibility = visibility; }
+    return { slideIndex: Number(slide.dataset.slideIndex), issues: issues, checkedSourceNodes: slide.querySelectorAll('[data-source-id]').length, checkedTextNodes: slide.querySelectorAll('h1,h2,h3,h4,p,li,dt,dd,strong,span').length };
+  }
+  window.__odLayoutAudit = function () {
+    var report = { status: 'pass', canvas: { width: W, height: H }, slides: Array.from(document.querySelectorAll('.ppt-slide')).map(auditSlide) };
+    if (report.slides.some(function (slide) { return slide.issues.length; })) report.status = 'fail';
+    document.documentElement.dataset.odLayoutAudit = report.status;
+    return report;
+  };
+  window.addEventListener('load', function () { window.__odLayoutAudit(); });
 })();
 </script>
 </body>

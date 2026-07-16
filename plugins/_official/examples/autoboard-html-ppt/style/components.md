@@ -15,6 +15,28 @@
 - 香槟金强调结果
 - 青绿色表达策略 / 数据 / 智能
 
+### 1.1 可复用组件分类
+
+所有模板必须从以下分类组合，不得基于单张参考页制造一次性组件。详细的模板
+`allowedComponents`、槽位和容量见 `../orchestrator/rules/template_library.md`。
+
+| 分类 | 核心组件 | 视觉绑定 |
+|---|---|---|
+| `Metrics` | `MetricHero`、`MetricBlock`、`MetricRail`、`DeltaBadge`、`OutcomeMetric`、`KpiStrip`、`SummaryBar` | 香槟金突出成果，青绿用于策略性增量 |
+| `Charts` | `TrendChart`、`BarChart`、`PortfolioGrid`、`RadialChart`、`Legend`、`AxisLabel`、`ChartAnnotation` | 轻网格、清晰轴线、真实数据关系 |
+| `FlowAndRelationship` | `FlowNode`、`FlowTrack`、`JourneyStage`、`StageRail`、`Connector`、`RowConnector`、`RadialConnector`、`ComparisonAxis`、`BridgeCore` | 细线连接真实对象中心，不做 HUD 装饰线 |
+| `NarrativeAndComposition` | `ClaimHero`、`EvidenceRail`、`QuoteBlock`、`ActionMechanism`、`DecisionTable`、`ListRail`、`TimelineAxis`、`PortfolioGrid`、`InsightRail` | 以一个主结论组织证据、表格、清单、时间、机会和数据叙事 |
+| `AdvancedRelation` | `LoopCore`、`LoopNode`、`ArcConnector`、`CapabilityLevel`、`UpgradeVector`、`BaselinePanel`、`DeltaBridge`、`FunnelStage`、`DecisionNode`、`RiskCell`、`KpiTowerHero`、`WaterfallStep` | 只有来源关系完整时才能渲染的闭环、升级、效果、转化、决策、优先级、总分解和增减关系 |
+| `CaseAndEvidence` | `CaseContextPanel`、`ProblemCard`、`SolutionMechanism`、`ScreenshotFrame`、`MediaFrame`、`EvidenceTrack`、`EvidenceNote`、`ImpactMetricRail` | 白色证据框，媒体保留原比例 |
+| `ImageTextEvidence` | `SourceMediaFrame`、`SourceMediaRail`、`MediaTextSplit`、`PairedEvidenceStack`、`MediaCaption`、`DualMediaCompare`、`MediaFlowTrack` | 主图配证据文本、竖向图片带、双图对照和截图流程，媒体不拉伸 |
+| `TaxonomyAndMatrix` | `TaxonomyHeader`、`MatrixCell`、`PillarHeader`、`CapabilityCell`、`CapabilityLayer`、`FoundationBar`、`PriorityLegend` | 统一行列轨道、轻边框、分类明确 |
+| `PageChrome` | `SlideBackground`、`FixedBrandLogo`、`TopBrandBar`、`SectionEyebrow`、`PageTitle`、`PageFooter`、`BackgroundFlow`、`DividerRail` | 固定品牌与背景层，不承载正式内容 |
+
+超宽适配时，组件本身不横向变形。可扩大图表可视域、流程轨道或模块间距，
+也可新增有来源依据的证据/总结侧栏；不得拉伸卡片、媒体框、Logo 或圆形关系图。
+
+`AdvancedRelation` 的圆环、漏斗、阶梯、瀑布和分支以共同轨道控制：扩展超宽画布时只能延长连接走廊、增加侧栏或扩大图表域，不能变形图形比例，也不能用无依据箭头或渐变制造关系感。
+
 ---
 
 ## 2. 页面级组件
@@ -223,8 +245,8 @@ StoryCardC
 
 规则：
 
-- 左侧为主品牌。
-- 右侧为业务主题或联合品牌。
+- 品牌识别默认由 `FixedBrandLogo` 承担，不重复输出品牌文字。
+- 业务主题或联合品牌仅在源材料或用户指令明确提供时渲染。
 - 不做复杂导航。
 
 ---
@@ -235,7 +257,7 @@ StoryCardC
 
 规格：
 
-- 字号：60~72 px
+- 字号：72~88 px → 封面主标题 148px，目录页 82px，常规页 72px
 - 字重：600
 - 颜色：#0B2D3A
 - 行数：不超过 2 行
@@ -244,7 +266,7 @@ StoryCardC
 
 - 必须结论化表达。
 - 不要写成泛泛标题。
-- 标题下方可有 24~30px 副标题。
+- 标题下方可有 36px 副标题。
 
 ---
 
@@ -267,6 +289,13 @@ padding: 28px 32px;
 - 卡片内留白充足。
 - 不使用厚重阴影。
 - 不堆过多文字。
+- 默认使用 `height: auto`，禁止因内容少而拉伸到画布底部。
+- 禁止默认使用 `height: 100%`、`flex: 1` 或过大的 `min-height`。
+- 正文少于 120 字时，卡片高度不得超过画布高度的 55%（554px），且有效内容占卡片高度不得低于 55%。
+- 先识别横向、纵向或矩阵语义卡片组，再用共同父容器统一控制位置、尺寸、间距和对齐；禁止逐张定位。
+- 横向组必须顶边、底边对齐且外框等高；纵向组必须左、右边缘对齐且外框等宽；矩阵组各行等高、各列等宽，行列间距一致。
+- 内容差异只能通过内部弹性空间、固定底部结论区或精简文案处理；外框对齐优先于内部内容对齐，不得移动整张卡片。
+- 主次卡、瀑布流、时间轴或刻意非对称构图可例外，但必须在页面计划中说明设计意图。
 
 ---
 
@@ -276,8 +305,8 @@ padding: 28px 32px;
 
 规格：
 
-- 数字字号：72~88 px
-- 单位字号：32~44 px
+- 数字字号：48px / 64px / 72px / 100px / 200px（按 `--font-number-*` 选用）
+- 单位字号：36~48 px
 - 颜色：香槟金或深青黑
 - 字重：300~400
 
@@ -395,6 +424,10 @@ BackgroundFlow
 [ ] 是否使用香槟金突出结果
 [ ] 是否使用青绿色表达策略 / 数据 / 智能
 [ ] 是否没有出现普通 16:9 拉伸感
+[ ] 是否已按高 / 中 / 低内容密度选择组件结构
+[ ] 是否未通过拉伸卡片、无意义文案或纯装饰图形填充画布
+[ ] 是否用图表、流程、关系、数据对比或主题视觉承接低密度页面
+[ ] 是否避免将所有页面都做成三等分卡片
 ```
 
 ## FixedBrandLogo 独立品牌组件
