@@ -1,4 +1,4 @@
-# AutoBoard HTML PPT Combined Skill V2.4
+# AutoBoard HTML PPT Combined Skill V2.6.0
 
 这是一个合并后的单 Skill 包，包含 HTML PPT 总控 Skill v2 与超宽大屏商务增长风格 Skill。
 

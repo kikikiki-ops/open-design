@@ -15,14 +15,25 @@ content only when they explicitly request a new deck.
 
 ```text
 Locate uploaded/current-project PPTX
+-> [EXECUTE CODE] extract embedded images from PPTX to assets/source-media/
+   Run: python3 -c "from pptx import Presentation; ..." (see rules/pptx_image_extraction.md §2)
+   Or fallback: unzip source.pptx "ppt/media/*" -d /tmp/pptx_extracted && cp /tmp/pptx_extracted/ppt/media/* assets/source-media/
+   Verify: ls assets/source-media/ must show actual files
+-> scan visual assets (ALL image types, build source_asset_manifest)
 -> enumerate slides and embedded media
 -> classify every slide
 -> extract or visually parse formal content
--> build content inventory
--> verify content inventory readiness
+-> build source_asset_manifest (visual asset ledger) — reference extracted files in assets/source-media/
+-> build content inventory (text ledger)
+-> verify both ledgers are complete
 -> route page types and AutoBoard templates
--> render a new editable HTML deck
+-> render a new editable HTML deck using RELATIVE paths for all images
 ```
+
+> 来源图片扫描必须在文字内容账本建立之前完成。
+> **图片提取必须是真实的代码执行**（bash 或 Python），不是规划文档声明。
+> 详细的图片发现、提取与脚本规则见 `rules/pptx_image_extraction.md`。
+> 图片保留协议与账本结构见 `rules/source_media_extraction.md`。
 
 Each source slide must be classified as exactly one of:
 
@@ -113,8 +124,9 @@ The optimized deck must be a new editable HTML artifact in the active project:
 - `index.html.artifact.json`: Open Design HTML artifact metadata.
 - `intake_result.json`: per-slide source diagnosis.
 - `content_inventory.json`: traceable source facts and relationships.
-- `page_plan.json`: roles, page types, templates, alignment contracts, and source mapping.
-- `quality_report.json`: fidelity, overflow, 11:3, and geometry checks.
+- `source_asset_manifest.json`: per-asset inventory (asset_id, preservation, output_path, render_status).
+- `page_plan.json`: roles, page types, templates, alignment contracts, source mapping, and source_asset_ids.
+- `quality_report.json`: fidelity, overflow, 11:3, geometry checks, and source-media coverage checks.
 
 Do not overwrite the source `.pptx`. The source file remains intact; `index.html`
 is the optimized, previewable result.

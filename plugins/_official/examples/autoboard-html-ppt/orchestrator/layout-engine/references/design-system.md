@@ -896,6 +896,7 @@ visual_tokens:
     circle_shape: TBD
 
   spacing:
+    # px 台阶值唯一来源：style/style.md §5.5（CSS Token）及 example_prompt.md §5.7（台阶约束）
     page_margin_pct: 3.25%        # 左右边距占画布宽度
     header_gap: TBD
     section_gap: TBD

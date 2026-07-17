@@ -3,6 +3,243 @@
 > **适用规则版本**：v2.0 · 包含卡片高度控制、页面填充与留白、内容密度判断、同组卡片对齐协议、异构模块对齐、同一内容带对齐协议等全套约束。
 > AI 在生成任何页面之前，必须先阅读并遵守本文件末尾的「**设计规则约束**」章节。
 
+## R00 · 页面组件精准选择协议
+
+> 本规则优先于所有页面示例和视觉规则。
+> 必须先完成组件判断，再读取对应组件的详细生成规则。
+> 禁止先看哪个示例视觉相似，就直接套用哪个模板。
+
+---
+
+### 一、判断顺序
+
+每一页必须按照以下顺序处理：
+
+1. 完整提取原始页面正式内容；
+2. 判断页面角色；
+3. 判断页面主要信息关系；
+4. 统计模块、指标、图表和阶段数量；
+5. 检查候选组件的必填字段；
+6. 排除不满足条件的组件；
+7. 检查组件内容容量；
+8. 输出组件选择结果；
+9. 最后才读取选中组件的详细生成规则并生成 HTML。
+
+禁止同时读取全部组件的详细 HTML 后，凭视觉相似度选择。
+
+---
+
+### 二、页面角色
+
+`pageRole` 只允许为：
+
+- `cover`：封面
+- `contents`：目录
+- `section`：章节过渡
+- `content`：正式内容页
+- `closing`：封尾
+
+页面角色不匹配时，组件直接排除。
+
+例如：
+- 正式业务内容页不得选择 `CoverPage`；
+- 三个并列策略不得因为数量为 3 而选择 `ContentsPage`；
+- 仍有业务数据和策略内容时不得选择 `ClosingPage`。
+
+---
+
+### 三、主要信息关系
+
+每页必须识别一个 `primaryRelation`：
+
+| 值 | 含义 |
+|---|---|
+| `independent-metrics` | 多个独立指标 |
+| `parallel` | 同级并列 |
+| `comparison` | 横向对比 |
+| `process` | 前后流程 |
+| `progression` | 阶段递进 |
+| `cause-effect` | 因果关系 |
+| `background-solution-result` | 背景—方法—结果 |
+| `problem-strategy-result` | 问题—策略—结果 |
+| `dual-chain` | 两条链路共同驱动结果 |
+| `matrix` | 多个分类组成能力矩阵 |
+| `summary` | 结束或总结 |
+
+组件选择必须以 `primaryRelation` 为主，不能以单个关键词或卡片数量为主。
+
+例如：
+- 页面有三个数字，但主要表达"背景—方法—结果"，应选择案例页；
+- 页面有三列，但三列存在时间先后，应选择阶段递进页；
+- 页面有图表，但重点是三个独立业务成绩，应选择成绩单页。
+
+---
+
+### 四、组件准入条件
+
+| 页面组件 | 必须具备 | 排除条件 | 推荐容量 |
+|---|---|---|---|
+| `CoverPage` | 开场主题、标题，可含副标题、时间、演讲人 | 存在多个正式业务模块、图表或策略 | 主标题 1 个，辅助信息 0～3 项 |
+| `ContentsPage` | 2～4 个同级章节，包含章节名 | 内容是策略、指标、能力或流程，而非章节导航 | 2～4 章 |
+| `SectionDividerPage` | 单一章节主题或章节编号 | 存在复杂正文和业务数据 | 1 个章节标题 |
+| `MetricOverviewPage` | 2～4 个相互独立的大指标 | 存在完整流程、案例过程或每项独立复杂图表 | 2～4 个指标 |
+| `CaseStudyPage` | 同一案例包含背景/问题、方法/策略、结果 | 三个模块只是同级并列，没有案例过程 | 3 个主模块，1～4 个结果指标 |
+| `StrategyPanoramaPage` | 存在痛点、策略、收益三个区域及对应关系 | 只有同级策略，或没有痛点与结果 | 2～4 组痛点与策略 |
+| `DualChainStrategyPage` | 明确存在两条链路或两个因素共同驱动结果 | 单一流程、普通两栏或三个同级主题 | 左右各 2～4 个节点 |
+| `ThreeColumnStrategyPage` | 恰好三个同级主题，字段结构相近 | 存在时间顺序、因果、流程或阶段递进 | 3 个同级模块 |
+| `SceneProgressionPage` | 存在明确时间、阶段、成熟度或场景递进 | 三个模块只是同级分类 | 2～4 个阶段 |
+| `CapabilityMatrixPage` | 多个同级能力分类，每类包含若干能力项 | 存在前后流程或问题解法关系 | 3～5 个分类 |
+| `GrowthReportPage` | 每个指标同时包含大数字、趋势/占比图和解释 | 只有简单数字，没有独立图表 | 2～3 个完整指标卡 |
+| `ClosingPage` | 感谢、合作邀请、结束语、二维码或联系方式 | 仍有未表达完的业务内容 | 1 个结束主题，0～3 项辅助信息 |
+
+---
+
+### 五、必填字段检查
+
+组件必须根据原稿中真实存在的内容判断是否可用。
+
+**`CaseStudyPage`** 必须至少找到：
+- `context`：背景或问题
+- `method`：方法或策略
+- `result`：结果或业务影响
+
+其中任一项缺失时，不得强行选择 `CaseStudyPage`。
+
+**`DualChainStrategyPage`** 必须至少找到：
+- `leftChain`
+- `rightChain`
+- `sharedResult` 或明确的两链路关系
+
+如果只找到左右两组并列内容，但没有双链路关系，不得选择。
+
+**`GrowthReportPage`** 中，每个指标卡必须至少找到：
+- `metricName`
+- `metricValue`
+- `chartData` 或原稿已有趋势信息
+- `explanation`
+
+缺少真实图表数据时，禁止自行编造趋势图。
+
+---
+
+### 六、禁止为了填模板补造内容
+
+原始 PPT 没有提供的内容不得自动生成，包括：
+
+- 虚构数据、虚构同比变化、虚构趋势图、虚构总结、虚构标签；
+- 虚构案例背景、虚构问题、策略或结果；
+- 为了填满三个卡片而拆分或复制内容；
+- 为了凑满三个指标而增加新指标。
+
+组件中的可选区域，在原稿没有对应内容时应隐藏，不得填充假内容。
+
+**组件服务于原稿，原稿不得为了填满组件而被改写。**
+
+---
+
+### 七、组件容量检查
+
+选择组件后必须检查：
+
+- 原始模块数量是否超过组件容量；
+- 每个模块的文字量是否超过对应卡片容量；
+- 是否存在无法放入组件的正式内容；
+- 所有数字、单位、注释和关系是否有对应位置。
+
+容量不足时按以下顺序处理：
+
+1. 使用同页面类型下容量更大的变体；
+2. 调整卡片数量或列数；
+3. 拆成连续页面；
+4. 保留来源追踪关系。
+
+禁止：删除原始内容 / 总结替代原文 / 缩小字号硬塞 / 选择语义错误但容量更大的组件。
+
+---
+
+### 八、组件选择置信度
+
+每页输出 `componentConfidence`：
+
+| 值 | 含义 |
+|---|---|
+| `high` | 组件完全符合页面关系和内容字段 |
+| `medium` | 有两个相近候选，但其中一个更匹配 |
+| `low` | 现有组件均不能完整承载内容 |
+
+当置信度为 `low` 时：
+- 不得强行套现有模板；
+- 使用通用安全布局；
+- 或输出两个候选组件及差异；
+- 保留全部原始内容。
+
+---
+
+### 九、生成前必须输出选择报告
+
+```json
+{
+  "pageIndex": 1,
+  "pageRole": "content",
+  "primaryRelation": "background-solution-result",
+  "detectedFields": {
+    "moduleCount": 3,
+    "metricCount": 3,
+    "chartCount": 0,
+    "stageCount": 0
+  },
+  "selectedComponent": {
+    "pageType": "CaseStudyPage",
+    "layoutComponent": "CaseReviewLayout",
+    "pageVariant": "BackgroundSolutionResult"
+  },
+  "selectionReasons": [],
+  "rejectedComponents": [],
+  "capacityCheck": {
+    "passed": true,
+    "overflowFields": []
+  },
+  "componentConfidence": "high"
+}
+```
+
+完成以上判断后，才允许生成页面 HTML。
+
+---
+
+### 十、HTML 根节点必须声明组件元数据
+
+每一个完整页面的 `.slide` 根节点必须添加以下 `data-*` 属性：
+
+```html
+<div
+  class="slide"
+  data-page-type="DualChainStrategyPage"
+  data-layout-component="DualChainLayout"
+  data-page-variant="CTRCVRDriven"
+  data-primary-relation="dual-chain"
+  data-required-fields="leftChain,rightChain,sharedResult"
+  data-left-node-range="2-4"
+  data-right-node-range="2-4"
+  data-forbidden-relations="parallel,progression,matrix"
+>
+  <!-- 页面内容 -->
+</div>
+```
+
+禁止省略这些属性；它们是后续内容审计、覆盖率检查和质量报告的依据。
+
+---
+
+### 十一、图标规范
+
+图标统一使用 Lucide / Tabler 风格线性 SVG。
+
+禁止使用 emoji、卡通贴纸和风格不统一的自绘图标。
+
+---
+
+
 ## 示例 0：生成闭门会整套 HTML PPT
 
 请将以下闭门会材料生成一套可编辑的 HTML PPT，使用「AutoBoard HTML PPT」。
@@ -3561,4 +3798,541 @@ CaseReviewLayout（flex-col，height:100%，justify-content:space-between）
       ├── 步骤2（flex:1，居中对齐）
       ├── 箭头 SVG（width:56px）
       └── 步骤3（flex:1，右对齐）
+```
+
+---
+
+## R30 · 内容保真协议（Content Fidelity Protocol）
+
+> **核心原则**：AI 只负责"排版美化"，不得充当内容编辑。页面视觉可以完全重做，内容必须一字不差地保留。
+
+---
+
+### 一、美化前：逐页建立原始内容清单
+
+在对任何页面进行布局或视觉改造前，必须先提取该页的**原始内容清单**，包括：
+
+| 类别 | 具体内容 |
+|------|---------|
+| 标题 | 页面主标题、章节标题、卡片标题 |
+| 正文 | 所有段落文字、列表条目、说明文字 |
+| 数字、百分比、单位 | 所有数据数值，不得改写或四舍五入 |
+| 标签与注释 | Pill 标签、来源标注、注脚、角标 |
+| 图片、图表及图表数据 | 坐标轴标签、图例、数据点、图表标题 |
+| 流程顺序 | 步骤编号、顺序关系、连接箭头指向 |
+| 信息关系 | 对比、因果、上下级、对应关系 |
+
+---
+
+### 二、内容保留规则
+
+除以下三类内容可以删除外，**所有正式内容必须完整保留**：
+
+- ✅ 明显的编辑指令（如"[待补充]"、"[TODO]"）
+- ✅ 修改备注（如"[建议删除]"、"[版本说明]"）
+- ✅ 占位符（如"lorem ipsum"、"此处填写..."）
+
+---
+
+### 三、未经明确授权，禁止的操作
+
+未经用户明确允许，**严禁**执行以下任何操作：
+
+| ❌ 禁止操作 | 说明 |
+|------------|------|
+| 删除内容 | 包括"次要信息"、"重复信息" |
+| 精简内容 | 不得以"简洁美观"为由减少文字 |
+| 总结替代原文 | 不得用摘要替换完整段落 |
+| 改写文案 | 不得修改措辞、语序、语气 |
+| 修改数字、单位、专有名词 | 数字、% 、px、人名、品牌名必须原样保留 |
+| 合并不同观点 | 不得将两条观点合并为一条 |
+| 隐藏次要信息 | 不得以视觉层级降低代替内容保留 |
+| 用省略号代替原文 | 不得裁切长文本为"...更多" |
+| 为版式美观只保留"重点" | 不得主观判断哪些内容不重要 |
+
+---
+
+### 四、允许调整的范围
+
+以下操作**允许执行**，无需额外授权：
+
+- ✅ 页面布局（分栏、分区、网格方式）
+- ✅ 信息位置（内容块的空间摆放）
+- ✅ 视觉层级（字号大小、颜色深浅，但不得导致内容被隐藏）
+- ✅ 字体、颜色、卡片和图表样式
+- ✅ 页面拆分方式（将一页拆为连续多页）
+
+---
+
+### 五、内容放不下时的处理顺序
+
+当一页内容超出版面容量时，**按以下优先级处理**：
+
+1. **优先更换合适版式**（密度更高的布局、表格、流程图等）
+2. **仍放不下时拆成连续两页或多页**，保持页码延续标记
+3. **不得缩小字号到难以阅读**（最小字号：正文 24px，注释 20px）
+4. **不得通过删除内容解决容量问题**
+
+---
+
+### 六、必须保持的信息关系
+
+以下信息关系**不得打乱或重组**：
+
+| 信息关系类型 | 要求 |
+|------------|------|
+| 标题与正文的归属关系 | 标题下的正文必须归属该标题，不得错位 |
+| 指标与说明的对应关系 | 数字与其单位、来源、说明必须紧密配对 |
+| 流程节点的前后顺序 | 步骤 1→2→3 顺序不得颠倒或跳跃 |
+| 问题与解法的对应关系 | 问题对应的解法不得错配到其他问题 |
+| 图表与结论的对应关系 | 图表旁的结论必须与该图表对应 |
+| 对比项、阶段和层级关系 | 左右、上下、优先级等对比结构不得打乱 |
+
+---
+
+### 七、美化后：逐页核对并输出检查报告
+
+美化完成后，**必须逐页将最终页面与原始内容清单核对**，输出以下检查结果：
+
+```
+📋 内容保真检查报告
+页面：[页面标题 / 编号]
+────────────────────────────────
+原始正式内容数量：   X 条
+已保留内容数量：     X 条
+遗漏内容：           [列出]
+被改写内容：         [列出原文 → 改后文]
+新增但无来源的内容：  [列出]
+被拆分到其他页面的内容：[列出，含目标页]
+```
+
+---
+
+### 八、完成标准（硬约束）
+
+只有满足以下全部条件，才允许标记为"完成"：
+
+| 检查项 | 通过标准 |
+|--------|---------|
+| 正式内容遗漏 | **0 条** |
+| 未授权改写 | **0 处** |
+| 数字和单位错误 | **0 处** |
+| 信息关系改变 | **0 处** |
+| 无来源新增内容 | **0 条** |
+
+**任何一项不为 0，必须返回修改，不得直接交付。**
+
+
+---
+
+## R31 · MetricCardGroup 指标卡片组宽度规则（硬约束）
+
+> **适用范围**：页面包含 2～4 个同级 KPI / 指标卡片时，本节规则**优先于** R16 §二"禁止无限拉宽文本卡片"，直接生效。
+
+---
+
+### 一、页面标题居中（相对画布）
+
+页面标题必须相对于**完整画布**水平居中，不得相对于 Logo 位置、左侧内容列或卡片组居中。
+
+```css
+/* ✅ 正确 */
+.page-title-row { left: 0; right: 0; text-align: center; }
+
+/* ❌ 禁止 */
+.page-title-row { text-align: left; margin-left: 220px; }
+```
+
+---
+
+### 二、MetricCardGroup 占满安全区可用宽度
+
+```css
+.metric-card-group {
+  position: absolute;
+  left: 220px;
+  right: 220px;
+  width: auto;
+  margin: 0;
+  box-sizing: border-box;
+}
+```
+
+---
+
+### 三、同级指标卡片使用共同 Grid 父容器
+
+```css
+.metric-card-grid {
+  display: grid;
+  grid-template-columns: repeat(N, minmax(0, 1fr)); /* N = 卡片实际数量 */
+  gap: 24px;   /* 允许 24px～40px */
+  align-items: stretch;
+}
+```
+
+- `N` 由内容决定，不得写死；
+- 所有列必须等宽（`1fr`），不得单独扩大某列；
+- `align-items: stretch` 使所有卡片等高，不得改为 `flex-start`。
+
+---
+
+### 四、禁止项
+
+| ❌ 禁止操作 | 说明 |
+|------------|------|
+| 为同级指标卡设置固定 px 宽度 | 导致卡片组整体收缩 |
+| `justify-content: flex-start` | 导致卡片靠左堆积 |
+| 将卡片组锚定在页面左侧 | 违反左右对称要求 |
+| 用缩窄外框解决行长问题 | 行长约束只作用于内部文字区 |
+
+---
+
+### 五、文字行长约束只作用于卡片内部
+
+```css
+/* ✅ 正确：行长约束只作用于内部文字区 */
+.metric-card-copy { max-width: 32ch; margin-inline: auto; }
+
+/* ❌ 禁止：通过缩窄卡片外框限制行长 */
+.metric-card { max-width: 600px; }
+```
+
+---
+
+### 六、左右对称检查（硬约束）
+
+- 卡片组左右边缘必须基本对称；
+- 单侧连续无功能空白 **> 安全区宽度的 20%**（> 651px）→ 布局失败，必须重新生成；
+- 验证：`卡片组 offsetLeft − 220` ≈ `3476 − (卡片组 offsetLeft + 卡片组 offsetWidth)`，误差 ≤ 20px。
+
+---
+
+### 七、KPI 卡片横向自适应例外声明
+
+KPI / 指标卡片组允许横向自适应展开至安全区全宽；R16 §二"禁止无限拉宽文本卡片"**不适用于**内部内容居中的同级 MetricCard：
+
+- 每张卡片内部已有居中文字区（`margin-inline: auto`）；
+- 宽度由 Grid `1fr` 等比分配，不存在单卡无限拉宽；
+- 横向空间由所有卡片共同吸收，视觉均衡。
+
+---
+
+### 八、检查清单
+
+```text
+[ ] 页面标题是否相对完整画布居中，而非相对 Logo 或卡片组居中
+[ ] MetricCardGroup 是否 left:220px; right:220px（占满安全区宽度）
+[ ] 卡片是否使用 grid-template-columns: repeat(N, minmax(0, 1fr))
+[ ] 是否未为同级指标卡设置固定 px 宽度
+[ ] 是否未使用 justify-content: flex-start
+[ ] 是否未将卡片组锚定在页面左侧
+[ ] 文字行长 max-width 是否只作用于 .metric-card-copy，而非卡片外框
+[ ] 单侧空白是否未超过安全区宽度的 20%（> 651px 判定失败）
+```
+
+---
+
+## R32 · 来源图片与插图保留协议（P0 硬约束）
+
+> **优先级**：本协议优先级高于页面低信息密度规则、视觉风格统一规则、模板槽位容量规则、页面美化规则、内容精简规则和图片占位符规则。
+
+本协议适用于用户上传的 PPTX、PDF、Word、图片型页面及其他包含视觉素材的正式来源文件。
+
+除非用户明确要求删除或替换来源图片，否则必须**默认保留**所有具有内容、证据、说明或品牌识别价值的来源视觉素材。
+
+---
+
+### 一、来源图片默认保留原则
+
+来源文件中出现的图片**不得默认视为装饰**。
+
+以下类型必须默认标记为 `must_preserve`：
+
+| 类别 | 示例 |
+|------|------|
+| 产品 / 功能截图 | 界面截图、数据看板截图、产品功能截图 |
+| 人物图片 | 人物照片、人物插图、出席嘉宾图 |
+| 品牌 / 案例视觉 | 品牌案例图片、活动现场图片、营销 / 广告素材 |
+| 信息图 | 流程示意图、架构示意图、业务关系图 |
+| 数据可视化图片 | 图表图片（来源截图，非重新绘制） |
+| 品牌标识 | 品牌 Logo（独立出现）、奖项、证书、报告封面 |
+| 二维码 | 任何二维码 |
+| 证据图片 | 用于证明正文结论的视觉证据 |
+| 主图 | 原始页面中占据明显视觉面积的主图 |
+| 语义关联图标 | 与正文存在对应关系的图标或插图 |
+| 语义不完整判定 | 删除后会导致页面语义、证据或叙事不完整的图片 |
+
+以下素材可以标记为 `decorative`（允许省略或替换）：
+
+- 无信息含义的背景纹理
+- 纯装饰色块 / 无业务语义的光效 / 普通分隔线
+- 可由新风格背景替代的抽象装饰
+- 与正文无对应关系的重复小装饰
+
+**只有标记为 `decorative` 的素材，才允许在风格重构时省略或替换。**
+
+---
+
+### 二、无法判断时的默认行为
+
+当无法判断图片是否具有内容价值时，**必须默认标记为 `must_preserve`**。
+
+不得以"看起来像装饰"、"模板图"、"风格不统一"为由单方面标记为 `decorative`。
+
+---
+
+### 三、违反本协议的判定标准（任一即为失败）
+
+| 违规行为 | 说明 |
+|---------|------|
+| 静默删除来源图片 | 来源中的 `must_preserve` 图片未出现在输出 HTML 中 |
+| 用占位符替代来源图片 | 用灰色方块、`[图片待补充]` 或通用图标替代真实来源图片 |
+| 用 AI 生成图替代来源图片 | 未经用户许可，用 AIGC 图替换真实截图、产品图或人物图 |
+| 图片缩小到不可辨认 | 来源图片被压缩到 80px 以下或肉眼无法辨认 |
+| 将图片移入背景层 | 将具有信息价值的图片降级为背景图、水印或装饰层 |
+
+---
+
+### 四、检查清单
+
+```text
+[ ] 所有来源中的 must_preserve 图片是否出现在输出 HTML 中
+[ ] 是否未用占位符、灰色方块或 AIGC 图替代来源图片
+[ ] 来源图片最终渲染尺寸是否可辨认（最小边 ≥ 80px）
+[ ] 具有信息价值的图片是否作为独立 DOM 节点渲染，未移入背景层
+[ ] 不确定价值的图片是否已默认标记为 must_preserve
+```
+
+---
+
+## R33 · 页面级纵向容量预算与溢出检测协议（P0 硬约束）
+
+> **唯一来源**：`orchestrator/rules/layout_capacity_protocol.md`。本条为摘要速查。
+> **优先级**：高于卡片等高规则、卡片自动高度规则、模板默认布局、低信息密度规则。
+
+---
+
+### 一、两类溢出必须分别检查
+
+| 类型 | 定义 |
+|------|------|
+| 卡片内部溢出 | 内容超出单张卡片内部边界 |
+| **页面级溢出** | 卡片/模块超出安全区，或被画布 overflow:hidden 裁切 |
+
+不得因为卡片内部没有溢出就判定整个页面没有溢出。
+
+---
+
+### 二、页面可用高度必须显式计算
+
+```
+bodyAvailableHeight
+= 828 - pageHeaderHeight - headerToBodyGap
+  - optionalFooterHeight - bodyPadding(top+bottom)
+```
+
+page_plan 必须记录 `body_available_height`。未记录则判定 `layout-capacity-not-calculated`。
+
+---
+
+### 三、纵向卡片组容量预估
+
+```
+stackRequiredHeight
+= Σ卡片预估高度 + (N-1) × gap + 上下内边距
+
+必须满足：stackRequiredHeight <= bodyAvailableHeight - 16px
+```
+
+不满足时必须切换布局或拆页，不得继续用当前纵向结构。
+
+---
+
+### 四、左右分栏共享同一主体内容带
+
+```
+top(left) = top(right)  ·  bottom(left) = bottom(right)
+```
+
+页面标题必须放在统一标题区，不得只占左侧栏纵向空间。
+
+---
+
+### 五、四个同级模块优先 2 × 2 矩阵
+
+四行纵向堆叠只有在 `stackRequiredHeight ≤ bodyAvailableHeight × 0.9` 时才允许；否则：
+
+```
+优先：2 × 2 矩阵 > 两列双行 > 拆页
+```
+
+---
+
+### 六、正式内容禁止静默裁切
+
+`overflow:hidden`、`line-clamp`、`display:none`、负 margin、transform 上移等**不得用于解决溢出**。
+
+`overflow:hidden` 仅允许用于：背景装饰 / 图片等比裁切 / 图表绘图区 / 纯装饰元素。
+
+---
+
+### 七、最后一项完整可见检查
+
+```
+lastItemRect.bottom <= bodyBandRect.bottom - 2px
+```
+
+最后一张卡片必须完整可见；仅部分可见则判定为页面溢出。
+
+---
+
+### 八、失败代码速查
+
+```text
+page-content-outside-safe-zone  · page-bottom-overflow
+vertical-stack-height-exceeded   · formal-content-clipped
+column-height-mismatch           · body-band-height-undefined
+layout-capacity-not-calculated   · last-card-partially-visible
+scroll-height-exceeds-client-height / scroll-width-exceeds-client-width
+formal-content-moved-outside-canvas
+layout-fixed-by-negative-margin  · layout-fixed-by-transform
+```
+
+---
+
+### 九、检查清单（生成前）
+
+```text
+[ ] 是否计算 body_available_height 并写入 page_plan
+[ ] 纵向卡片组 stackRequiredHeight ≤ bodyAvailableHeight - 16px
+[ ] 左右两列是否共享同一主体内容带
+[ ] 四个同级模块是否优先评估 2 × 2 矩阵
+[ ] 未通过容量检查时是否已切换布局或拆页
+[ ] 未使用 overflow:hidden / 负margin / transform 修补溢出
+```
+
+### 十、检查清单（生成后）
+
+```text
+[ ] 所有正式内容节点 bottom ≤ safeZoneRect.bottom
+[ ] 左右两列顶部 / 底部对齐（误差 ≤ 2px）
+[ ] 最后一张卡片完整可见（bottom ≤ bodyBandRect.bottom - 2px）
+[ ] 所有正式节点 scrollHeight ≤ clientHeight
+[ ] 未使用 line-clamp / overflow:hidden 隐藏正式内容
+[ ] 100% 画布与缩放预览均无溢出
+```
+
+---
+
+## R34 · 封面背景图、内容页背景图、封底背景图与顶部 Logo 硬约束（P0）
+
+> **来源**：完全遵循 `style/examples/example.html` 的实际 HTML 结构与 `style/style.md §18`，任何偏差均视为生成错误。
+
+### 一、背景图资产与 pageRole 对应关系
+
+| pageRole | 背景图逻辑名 | 对应类型 |
+|---------|------------|---------|
+| `cover` | `assets/bg-cover.svg` | 封面页背景 |
+| `contents` | `assets/bg-content.svg` | 目录页背景（与内容页一致） |
+| `content` | `assets/bg-content.svg` | 所有内容页背景 |
+| `section` | `assets/bg-content.svg` | 章节页背景（与内容页一致） |
+| `closing` | `assets/bg-closing.svg` | 封尾页背景 |
+
+当用户提供了具体背景图资源时，封面 / 内容 / 封底三类资源独立替换，对应关系不得交叉混用。
+
+### 二、背景图 HTML 固定写法（每页第一个子元素）
+
+```html
+<img class="bg-img" src="assets/bg-content.svg" alt="" aria-hidden="true" />
+```
+
+- `class="bg-img"` 不得修改；
+- `alt=""` + `aria-hidden="true"` 必须保留；
+- 必须是 `<section class="slide">` 内的**第一个子元素**；
+- 不得用 CSS background-image 替代 `<img>` 标签。
+
+### 三、背景图 CSS（硬约束，不得修改）
+
+```css
+.bg-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center bottom;
+  z-index: 0;
+  display: block;
+}
+```
+
+### 四、Logo 来源地址（固定，不得更换）
+
+```text
+https://p5-ad.adkwai.com/udata/pkg/ks-ad-fe/md-tools/quick-cut/6689:5117.b90a9c9d53932e9b.svg
+```
+
+### 五、Logo HTML 固定写法（bg-img 之后、safe-zone 之前）
+
+```html
+<img
+  class="fixed-brand-logo"
+  src="https://p5-ad.adkwai.com/udata/pkg/ks-ad-fe/md-tools/quick-cut/6689:5117.b90a9c9d53932e9b.svg"
+  alt="快手联盟"
+/>
+```
+
+### 六、Logo CSS（硬约束，不得修改）
+
+```css
+.fixed-brand-logo {
+  position: absolute;
+  left: 96px;
+  top: 54px;
+  width: 170px;
+  height: auto;
+  z-index: 5;
+  pointer-events: none;
+}
+```
+
+### 七、每页结构顺序（P0 硬约束）
+
+```html
+<section class="slide ppt-slide" data-slide-index="N" data-page-role="[role]" ...>
+  <!-- ① 背景图（z-index: 0） -->
+  <img class="bg-img" src="assets/bg-[type].svg" alt="" aria-hidden="true" />
+  <!-- ② Logo（z-index: 5） -->
+  <img class="fixed-brand-logo" src="[logo-url]" alt="快手联盟" />
+  <!-- ③ 安全区内容 -->
+  <div class="safe-zone">...</div>
+</section>
+```
+
+### 八、禁止项
+
+```text
+[ ✗ ] 使用 CSS background-image 替代 <img class="bg-img">
+[ ✗ ] 封面页使用内容页背景图，或反之
+[ ✗ ] 内容页使用封底背景图
+[ ✗ ] 省略任何页面的 Logo
+[ ✗ ] 将 Logo 放入 .safe-zone 内部
+[ ✗ ] 用 inline style 覆盖 Logo 的 left / top / width / z-index
+[ ✗ ] 将 Logo 嵌入背景图 SVG 内部
+[ ✗ ] 额外生成第二个"快手联盟"品牌文字
+[ ✗ ] 修改 bg-img 的 object-fit / object-position / inset
+[ ✗ ] 背景图承载正文、数字、图表标签等可编辑内容
+```
+
+### 九、检查清单
+
+```text
+[ ] 每页 bg-img 的 src 是否与 pageRole 对应
+[ ] bg-img 是否是 slide 的第一个子元素
+[ ] 每页是否有且仅有一个 fixed-brand-logo
+[ ] Logo src 是否为规定 URL（未被替换或省略）
+[ ] Logo 是否位于 safe-zone 之外
+[ ] Logo CSS 的 left/top/width/z-index 是否与规定一致
+[ ] 背景图是否无文字、数字、图表或品牌 Logo 内容
 ```

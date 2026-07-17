@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "PPT Orchestrator V2 Page Plan",
+  "$comment": "V2.7.0 — additionalProperties:false on slide items; sourcePageRefs conditional on provenanceType; source ID pattern extended",
   "type": "object",
   "required": [
     "slides"
@@ -12,7 +13,7 @@
         "type": "object",
         "required": [
           "outputSlideIndex",
-          "sourcePageRefs",
+          "provenanceType",
           "pageRole",
           "pageType",
           "layoutComponent",
@@ -30,13 +31,25 @@
             "type": "integer",
             "minimum": 1
           },
+          "provenanceType": {
+            "type": "string",
+            "enum": ["source_document", "user_prompt"],
+            "description": "source_document=优化已有PPT（sourcePageRefs必填）；user_prompt=新建任务（promptContentRefs必填，sourcePageRefs可为空）"
+          },
           "sourcePageRefs": {
             "type": "array",
-            "minItems": 1,
             "items": {
               "type": "integer",
               "minimum": 1
-            }
+            },
+            "description": "provenanceType=source_document时minItems=1；user_prompt时允许为空数组"
+          },
+          "promptContentRefs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "provenanceType=user_prompt时必填；source_document时可省略"
           },
           "pageRole": {
             "type": "string",
@@ -105,6 +118,20 @@
               "decision-priority-map"
             ]
           },
+          "preservationMode": {
+            "type": "string",
+            "enum": ["verbatim", "display_optimize", "summarize"],
+            "description": "verbatim=默认严格保真；display_optimize=展示优化；summarize=总结精简（需用户明确指令）"
+          },
+          "slideStatus": {
+            "type": "string",
+            "enum": ["planned", "rendered", "pending_runtime_audit", "pass", "failed_recoverable", "blocked"],
+            "description": "单页渲染状态，独立于整体 Artifact 状态"
+          },
+          "failureReason": {
+            "type": "string",
+            "description": "slideStatus=blocked时必填"
+          },
           "templateSelection": {
             "type": "object",
             "required": [
@@ -114,35 +141,24 @@
             "properties": {
               "primaryPatternMatch": {
                 "type": "array",
-                "items": {
-                  "type": "string"
-                }
+                "items": { "type": "string" }
               },
               "slotCoverage": {
                 "type": "array",
-                "items": {
-                  "type": "string"
-                }
+                "items": { "type": "string" }
               },
               "canvasVariant": {
                 "type": "string",
-                "enum": [
-                  "wideVariant",
-                  "ultrawideVariant"
-                ]
+                "enum": ["wideVariant", "ultrawideVariant"]
               },
               "adaptationActions": {
                 "type": "array",
                 "minItems": 1,
-                "items": {
-                  "type": "string"
-                }
+                "items": { "type": "string" }
               },
               "rejectedTemplates": {
                 "type": "array",
-                "items": {
-                  "type": "string"
-                }
+                "items": { "type": "string" }
               }
             },
             "additionalProperties": false
@@ -157,25 +173,16 @@
               "maxErrorPx"
             ],
             "properties": {
-              "contentBandId": {
-                "type": "string"
-              },
+              "contentBandId": { "type": "string" },
               "heightMode": {
                 "type": "string",
-                "enum": [
-                  "shared-content-band",
-                  "independent-module"
-                ]
+                "enum": ["shared-content-band", "independent-module"]
               },
               "moduleAlignment": {
                 "type": "array",
                 "items": {
                   "type": "string",
-                  "enum": [
-                    "top",
-                    "bottom",
-                    "equal-height"
-                  ]
+                  "enum": ["top", "bottom", "equal-height"]
                 },
                 "minItems": 1
               },
@@ -196,30 +203,19 @@
           },
           "routingEvidence": {
             "type": "object",
-            "required": [
-              "positive",
-              "negative",
-              "rejectedTypes",
-              "confidence"
-            ],
+            "required": ["positive", "negative", "rejectedTypes", "confidence"],
             "properties": {
               "positive": {
                 "type": "array",
-                "items": {
-                  "type": "string"
-                }
+                "items": { "type": "string" }
               },
               "negative": {
                 "type": "array",
-                "items": {
-                  "type": "string"
-                }
+                "items": { "type": "string" }
               },
               "rejectedTypes": {
                 "type": "array",
-                "items": {
-                  "type": "string"
-                }
+                "items": { "type": "string" }
               },
               "confidence": {
                 "type": "number",
@@ -233,30 +229,29 @@
             "type": "array",
             "items": {
               "type": "string",
-              "pattern": "^source-[0-9]{3,}$"
+              "pattern": "^(source-(text|media|chart|table|ocr)-[0-9]{3,}(-fragment-[0-9]{2,})?|derived-display-[0-9]{3,}|generated-visual-[0-9]{3,}|source-[0-9]{3,})$",
+              "$comment": "支持 source-text-001、source-media-001、source-001(旧格式兼容)、derived-display-001 等"
             }
           },
           "contentMapping": {
             "type": "array",
             "items": {
               "type": "object",
-              "required": [
-                "region",
-                "contentRefs"
-              ],
+              "required": ["region", "contentRefs"],
               "properties": {
-                "region": {
-                  "type": "string"
-                },
+                "region": { "type": "string" },
                 "contentRefs": {
                   "type": "array",
                   "items": {
                     "type": "string",
-                    "pattern": "^source-[0-9]{3,}$"
+                    "pattern": "^(source-(text|media|chart|table|ocr)-[0-9]{3,}(-fragment-[0-9]{2,})?|derived-display-[0-9]{3,}|generated-visual-[0-9]{3,}|source-[0-9]{3,})$"
                   }
                 },
-                "intentionalDuplicate": {
-                  "type": "boolean"
+                "intentionalDuplicate": { "type": "boolean" },
+                "duplicateRole": {
+                  "type": "string",
+                  "enum": ["continuation_context", "legend", "annotation", "navigation_context", "comparison_reference"],
+                  "description": "intentionalDuplicate=true时必填，说明重复的业务理由"
                 }
               },
               "additionalProperties": false
@@ -264,9 +259,7 @@
           },
           "requiredCapabilities": {
             "type": "array",
-            "items": {
-              "type": "string"
-            }
+            "items": { "type": "string" }
           },
           "advancedRelationSpec": {
             "type": "object",
@@ -297,68 +290,47 @@
                 "minItems": 1,
                 "items": {
                   "type": "string",
-                  "pattern": "^source-[0-9]{3,}$"
+                  "pattern": "^(source-(text|media|chart|table|ocr)-[0-9]{3,}(-fragment-[0-9]{2,})?|source-[0-9]{3,})$"
                 }
               },
               "requiredFacts": {
                 "type": "array",
                 "minItems": 1,
-                "items": {
-                  "type": "string"
-                }
+                "items": { "type": "string" }
               },
               "geometryAnchors": {
                 "type": "array",
                 "minItems": 1,
-                "items": {
-                  "type": "string"
-                }
+                "items": { "type": "string" }
               },
               "rejectedAlternatives": {
                 "type": "array",
-                "items": {
-                  "type": "string"
-                }
+                "items": { "type": "string" }
               },
               "auditChecks": {
                 "type": "array",
                 "minItems": 1,
-                "items": {
-                  "type": "string"
-                }
+                "items": { "type": "string" }
               }
             },
             "additionalProperties": false
           },
           "splitDecision": {
             "type": "object",
-            "required": [
-              "needSplit",
-              "reason"
-            ],
+            "required": ["needSplit", "reason"],
             "properties": {
-              "needSplit": {
-                "type": "boolean"
-              },
-              "reason": {
-                "type": "string"
-              },
-              "splitGroupId": {
-                "type": "string"
-              }
+              "needSplit": { "type": "boolean" },
+              "reason": { "type": "string" },
+              "splitGroupId": { "type": "string" }
             },
-            "additionalProperties": true
+            "additionalProperties": false
           },
           "styleSkill": {
             "type": "string"
           },
           "backgroundVariant": {
             "type": "string",
-            "enum": [
-              "cover",
-              "content",
-              "closing"
-            ]
+            "enum": ["cover", "content", "closing"]
           },
           "showLogo": {
             "type": "boolean"
@@ -366,12 +338,37 @@
           "logoVariant": {
             "type": "string"
           },
+          "titleAlign": {
+            "type": "string",
+            "enum": ["center", "left"],
+            "description": "默认center；特殊布局（DualWingPage/StrategyPanoramaPage等）可声明left，须在routingEvidence中注明理由"
+          },
           "structureFrozen": {
             "type": "boolean",
             "const": true
+          },
+          "extensions": {
+            "type": "object",
+            "description": "用于扩展字段，避免破坏 additionalProperties:false 约束"
           }
         },
-        "additionalProperties": true
+        "additionalProperties": false,
+        "if": {
+          "properties": {
+            "provenanceType": { "const": "source_document" }
+          }
+        },
+        "then": {
+          "properties": {
+            "sourcePageRefs": { "minItems": 1 }
+          }
+        },
+        "else": {
+          "required": ["promptContentRefs"],
+          "properties": {
+            "promptContentRefs": { "minItems": 1 }
+          }
+        }
       }
     }
   },

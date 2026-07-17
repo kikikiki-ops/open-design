@@ -161,3 +161,64 @@ height(leftCard_n) = height(rightCard_n)
 不得只凭肉眼判断。以下误差全部必须小于等于 2px：一级模块的 top、bottom、height；
 同组卡片的 height；对应行卡片的 top 和 bottom。任何失败都必须回到父级内容带或行轨道，
 不得使用局部位移补偿。
+
+## 8. 卡片高度三层作用域（冲突消解规则）
+
+> 本节解决 `height:auto`、`height:100%`、`align-items:stretch` 三个规则在不同场合的冲突。核心原则：**高度规则只在自己的作用域内生效，不得跨层级引用。**
+
+### 层级一：独立卡片（不属于任何同组外框）
+
+独立卡片没有等高约束，高度完全由内容决定：
+
+```css
+/* 独立卡片 → 内容自决 */
+.card-standalone {
+  height: auto;           /* ✅ 由内容撑开 */
+  min-height: 0;          /* ✅ 防止 flex 子项被撑高 */
+}
+```
+
+**禁止**：对独立卡片使用 `height: 100%` 或 `align-items: stretch`（会拉伸到父容器高度）。
+
+### 层级二：同组外框（横向/纵向/矩阵卡片组）
+
+同组卡片必须共享由父容器 Grid/Flex 控制的统一高度轨道，**外框等高规则在此层生效**：
+
+```css
+/* 同组外框 → Grid 轨道控制等高 */
+.card-group {
+  display: grid;
+  grid-template-columns: repeat(N, minmax(0, 1fr));
+  align-items: stretch;   /* ✅ 外框等高 */
+}
+.card-group > .card {
+  height: 100%;           /* ✅ 填满 Grid 轨道高度 */
+  min-height: 0;
+  box-sizing: border-box;
+}
+```
+
+**禁止**：在同组外框级别对单张卡片单独设置固定 `height: Npx` 或 `min-height`（会破坏等高）。
+
+### 层级三：卡片内部（卡片内的文字/图片/子区域）
+
+卡片内部的文字区、图片区、标签区**各自独立控制高度**，不参与等高计算：
+
+```css
+/* 卡片内部 → 各区域自决，弹性吸收高度差 */
+.card-inner-text  { flex: 1; min-height: 0; overflow: hidden; }
+.card-inner-num   { flex-shrink: 0; }           /* 数字区不收缩 */
+.card-inner-label { flex-shrink: 0; height: auto; }  /* 标签区自适应 */
+```
+
+**禁止**：在卡片内部对文字区使用 `height: 100%`（会等比拉伸文字容器超出卡片可视区）。
+
+### 规则冲突速查表
+
+| 场景 | 正确规则 | 错误做法 |
+|------|---------|---------|
+| 独立卡片 | `height: auto` | `height: 100%` |
+| 同组外框等高 | 父级 `align-items: stretch` + 子级 `height: 100%` | 子级各自写 `height: Npx` |
+| 卡片内部文字区 | `flex: 1; min-height: 0` | `height: 100%` |
+| 卡片内部数字区 | `flex-shrink: 0` | `height: 100%` |
+| 内容带一级模块 | `height: 100%` + 父级显式 `height` | 父级 `top+bottom` 推导，子级 `height: 100%` |

@@ -1234,3 +1234,147 @@ BackgroundFlow
 [ ] 图表区是否使用 overflow: hidden + min-height: 0
 [ ] 未出现通过 overflow:hidden 静默截断正式文字内容
 ```
+
+---
+
+## MetricCardGroup 指标卡片组宽度规则
+
+> **适用范围（收窄）**：本节规则**仅适用于页面主体为 2～4 个纯同级 KPI / 指标卡片**的 `MetricOverviewPage`、`GrowthReportPage` 等**纯同级 KPI 页面**。
+>
+> ⚠️ **以下情形本节不适用，不得强制执行铺满全宽规则**：
+> - 图表 + 指标混合页（图表区 + 侧边指标）
+> - 主次指标页（一个大指标 + 若干次级指标）
+> - 非对称页面（左结论文字 + 右内容区）
+> - 带有左侧/右侧内容列的双栏页面
+>
+> 对上述例外页面，卡片宽度由 `layout_selection.md` 的布局规则决定，不得强行铺满全宽。
+
+---
+
+### 一、页面标题对齐（默认居中，允许例外）
+
+**默认规则：** 页面标题相对于**完整画布**水平居中。
+
+```css
+/* ✅ 默认：相对画布居中 */
+.page-title-row {
+  text-align: center;
+}
+```
+
+**允许例外（特殊布局可左对齐）：** 以下页面类型标题可左对齐：
+
+| 页面类型 | 允许的对齐方式 | 理由 |
+|---------|-------------|------|
+| 左结论+右内容 (`StrategyPanoramaPage`) | 左对齐 | 标题属于左侧内容列 |
+| 双翼对比页 (`DualWingPage`) | 左对齐 | 标题与左翼内容对齐 |
+| 案例研究页 (`CaseStudyPage`) | 左对齐 | 叙事从左开始 |
+| 流程图页 (`ProcessFlowPage`) | 左对齐 | 流程从左到右 |
+
+使用左对齐时须在 `page_plan` 中声明 `titleAlign: "left"` 并注明理由。
+
+```css
+/* ✅ 例外：特殊布局左对齐 */
+.page-title-row[data-title-align="left"] {
+  text-align: left;
+}
+```
+
+**禁止**：在无特殊理由的情况下将标题设为左对齐；禁止以 `position:absolute; left:0; right:0` 强制全局居中破坏双栏标题布局。
+
+---
+
+### 二、MetricCardGroup 占满安全区可用宽度
+
+卡片组必须铺满安全区的横向可用宽度（3256px），不得收缩至局部区域。
+
+```css
+.metric-card-group {
+  position: absolute;
+  left: 220px;
+  right: 220px;
+  width: auto;
+  margin: 0;
+  box-sizing: border-box;
+}
+```
+
+---
+
+### 三、同级指标卡片使用共同 Grid 父容器
+
+```css
+.metric-card-grid {
+  display: grid;
+  grid-template-columns: repeat(N, minmax(0, 1fr)); /* N = 卡片数量 */
+  gap: 24px;     /* 最小间距，允许调整至 40px */
+  align-items: stretch;
+}
+```
+
+- `N` = 卡片实际数量（2 / 3 / 4），由内容决定，不得固定写死；
+- 所有列必须等宽（`1fr`），不得单独设置某列更宽；
+- `align-items: stretch` 使所有卡片等高，不得改为 `flex-start`。
+
+---
+
+### 四、禁止项
+
+| ❌ 禁止操作 | 说明 |
+|------------|------|
+| 为同级指标卡设置固定 px 宽度 | 如 `width: 760px`，导致卡片组整体收缩 |
+| 使用 `justify-content: flex-start` | 导致卡片靠左堆积，右侧大量空白 |
+| 将卡片组锚定在页面左侧 | 如 `left: 220px; width: 60%`，违反对称要求 |
+| 用缩窄外框解决文字行长问题 | 文字长度约束只作用于内部，不得压缩外框 |
+
+---
+
+### 五、文字行长约束只作用于卡片内部
+
+行长限制（`max-width: 32ch`）**只作用于卡片内文字区域**，不得通过缩窄卡片外框来实现：
+
+```css
+/* ✅ 正确：行长约束作用于内部文字区 */
+.metric-card-copy {
+  max-width: 32ch;
+  margin-inline: auto;
+}
+
+/* ❌ 禁止：通过缩窄卡片外框限制行长 */
+.metric-card {
+  max-width: 600px; /* 导致卡片组无法铺满安全区 */
+}
+```
+
+---
+
+### 六、左右对称检查（硬约束）
+
+卡片组左右边缘必须基本对称：
+- 若**单侧连续无功能空白超过安全区宽度的 20%**（> 651px），判定为布局失败，必须重新生成；
+- 检查方法：卡片组 `offsetLeft - 220` 应近似等于 `3476 - (卡片组 offsetLeft + 卡片组 offsetWidth)`，误差 ≤ 20px。
+
+---
+
+### 七、KPI 卡片横向自适应例外声明
+
+KPI / 指标卡片组允许横向自适应展开至安全区全宽；R16 §二"禁止无限拉宽文本卡片"**不适用于**内部内容居中的同级 `MetricCard`，因为：
+
+- 每张卡片内部已有居中文字区（`margin-inline: auto`）；
+- 卡片宽度由 Grid `1fr` 等比分配，不存在单卡无限拉宽问题；
+- 横向空间由所有卡片共同吸收，视觉上保持均衡。
+
+---
+
+### 八、检查清单
+
+```text
+[ ] 页面标题是否相对完整画布居中，而非相对 Logo 或卡片组居中
+[ ] MetricCardGroup 是否 left:220px; right:220px（占满安全区宽度）
+[ ] 卡片是否使用 grid-template-columns: repeat(N, minmax(0, 1fr))
+[ ] 是否未为同级指标卡设置固定 px 宽度
+[ ] 是否未使用 justify-content: flex-start
+[ ] 是否未将卡片组锚定在页面左侧
+[ ] 文字行长 max-width 是否只作用于 .metric-card-copy，而非卡片外框
+[ ] 单侧空白是否未超过安全区宽度的 20%（> 651px 判定失败）
+```

@@ -113,6 +113,16 @@ orchestrator/rules/html_output_contract.md
 
 每一页还必须保留来源追踪属性、固定画布和页面序号；输出应以独立 slide 组织，不能用一个可纵向滚动的长页面代替演示文稿。
 
+**生成前必须执行布局多样性检查（来自 `layout_selection.md §6`）：**
+
+1. 列出所有内容页（`data-page-role="content"`）的预计 `layoutComponent` 序列
+2. 检查是否有连续 3 个内容页属于同一布局家族（§6.2）→ 触发时换家族
+3. 检查是否有连续 2 页使用相同 `data-page-variant` → 触发时换变体
+4. 确认卡片样式分布（`cardStyleDistribution`），主样式 S1（`.card`）在连续 3 页中出现次数 ≤ 2（§6.3）
+5. 确认同一布局家族的相邻两页不使用相同结构形态（§6.4）
+
+只有通过以上 5 项检查，才允许进入 HTML 代码生成阶段。
+
 ### Step 4：执行双重检查
 
 先执行：
@@ -264,50 +274,22 @@ orchestrator/rules/template_library.md
 
 ---
 
-## 8. 页面类型与组件
+## 8. 页面类型与组件（统一入口）
 
-页面类型优先使用总控 Skill 中的路由结果，具体视觉结构参考风格 Skill 的组件系统。
+页面类型注册表（`pageType`、`templateId`、`layoutComponent` 完整映射）的**唯一权威来源**是：
 
-必须支持的典型页面包括：
-
-- 封面页
-- 目录页
-- 章节过渡页
-- 核心指标页
-- 数据结论页
-- 案例成果页
-- 多列对比页
-- 策略分析页
-- 流程链路页
-- 能力矩阵页
-- 路线图页
-- 封尾页
-
-目录页必须支持以下结构：
-
-```text
-顶部品牌区
-顶部页面类型标识（目录 · CONTENTS）
-中心大会 / 汇报主标题
-横向三列章节导航区
-超大章节序号
-章节名称
-章节辅助说明
-列间竖向分隔线
-底部时间 / 地点信息
-底部轻氛围背景
+```
+orchestrator/rules/page_type_registry.md
 ```
 
----
-
-## 8. 组件 Skill 接入方式
+禁止在本文件或其他文件中维护各自的 pageType 列表——如需新增页面类型，只在注册表中添加，并同步更新 `page_plan.schema.json` 的 `pageType.enum`。
 
 当真实 PPT 组件 Skill 尚未接入时，使用总控中的抽象组件能力输出语义化 HTML。
 
 当真实组件 Skill 接入后：
 
 ```text
-总控页面类型
+总控页面类型（注册表）
 → 布局能力
 → 页面组件
 → 内容组件
@@ -326,7 +308,10 @@ orchestrator/rules/template_library.md
 - 只在源材料或用户明确要求时加入会议名称、日期、演讲人、联合品牌和二维码；
 - 标题、指标、图表、Logo、二维码和备注中的正式文字保持独立 DOM，可单独替换；
 - 叙事节奏由源材料决定。封面、目录、章节、案例、策略、数据、总结与封尾均应按内容证据路由，不能为了视觉统一而强制套固定页序；
-- 用户未要求“精简文案”时，所谓“美化”只允许重组、拆页、分层和视觉强化，不允许删减、概括或改写正式信息。
+- 用户未要求"精简文案"时，所谓"美化"只允许重组、拆页、分层和视觉强化，不允许删减、概括或改写正式信息。
+  > 对应 `preservationMode: "verbatim"`（默认）。触发词为"美化"、"让它好看"时，使用 `display_optimize` 模式，允许压缩过长标题，但禁止删除数字和指标。
+  > 触发词含"精简"、"总结"时，使用 `summarize` 模式，必须在质量报告中记录每条删除项。
+  > 详细规则见 `orchestrator/rules/content_preservation.md §5.1`。
 
 ---
 
@@ -348,9 +333,14 @@ orchestrator/rules/template_library.md
 ## 11. 文件入口
 
 ```text
-SKILL.md                         # 当前统一入口
-orchestrator/SKILL.md            # 总控详细规则
-style/SKILL.md                   # 风格详细规则
-style/asset_manifest.json        # 背景与 Logo 资产映射
-style/example.html               # 风格预览示例
+SKILL.md                                         # 当前统一入口（本文件）
+orchestrator/SKILL.md                            # 总控详细规则（11 步流水线）
+style/SKILL.md                                   # 风格详细规则
+orchestrator/rules/page_type_registry.md         # 页面类型注册表（唯一权威来源）
+orchestrator/rules/html_output_contract.md       # HTML 输出规范
+orchestrator/rules/layout_selection.md           # 布局选择与多样性建议
+orchestrator/rules/content_preservation.md      # 内容保真规则
+orchestrator/schemas/page_plan.schema.json       # 页面计划 JSON Schema
+style/asset_manifest.json                        # 背景与 Logo 资产映射
+style/example.html                               # 风格预览示例
 ```

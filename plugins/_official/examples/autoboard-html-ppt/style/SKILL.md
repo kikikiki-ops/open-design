@@ -43,22 +43,35 @@
 
 ## 工作流程
 
-### Step 1：识别页面意图
+### Step 1：接收页面结构，绑定视觉
 
-先判断用户输入内容更适合哪类页面：
+> ⚠️ **style/SKILL.md 不重新判断页面类型。**
+> 页面类型（`pageType`）和结构决策已由 `orchestrator/rules/page_type_router.md` 与 `layout_selection.md` 在上游完成。style 层的唯一职责是：**接收已确定的 pageType，将其映射到视觉模板。**
 
-- 封面页
-- 章节过渡页
-- 案例成果页
-- 数据结论页
-- 策略分析页
-- 三段式叙事页
-- 指标成果页
-- 问题-解法页
-- 资源组合页
-- 总结收口页
+接收来自 orchestrator 的 `page_plan` 后，仅执行：
 
-页面意图只决定视觉结构，不决定正式内容取舍。内容过多时先按总控内容账本重新分组或拆页；除非用户明确要求精简，否则不得以“提炼核心结论”为由删除、合并或改写正式内容。
+1. 按 `pageType` 从下方「页面类型 → 视觉模板」映射表中选定视觉配置
+2. 绑定品牌色 Token、字体层级、间距 Token
+3. 输出 HTML 骨架（不修改内容分组或页面顺序）
+
+**映射表（pageType → 视觉配置）：**
+
+| pageType | 背景 | 标题对齐 | 主卡片样式 |
+|---------|------|---------|----------|
+| CoverPage | `bg-cover.svg` | 居中 | `.card-header` 标签条 |
+| ContentsPage | `bg-content.svg` | 居中 | 无卡片（章节号+竖线） |
+| SectionDividerPage | `bg-content.svg` | 居中 | 无卡片 |
+| MetricOverviewPage | `bg-content.svg` | 居中 | `.card`（S1）|
+| CaseStudyPage | `bg-content.svg` | 居中 | `.case-study-card` |
+| StrategyPanoramaPage | `bg-content.svg` | 居中 | `.card-borderless`（S6）|
+| CapabilityMatrixPage | `bg-content.svg` | 居中 | `.card-teal`（S3）|
+| SceneProgressionPage | `bg-content.svg` | 居中 | `.card-sm`（S2）|
+| GrowthReportPage | `bg-content.svg` | 居中 | `.card-gold`（S4）|
+| DualChain/DualWingPage | `bg-content.svg` | 居中 | `.card-sm`（S2）|
+| ClosingPage | `bg-closing.svg` | 居中 | `.card-dark`（S7）|
+| 其他内容页 | `bg-content.svg` | 居中（可按 §1.7 规则改左对齐） | 按 `layout_selection.md §6.3` 调度 |
+
+不得因 style 层的模板偏好重新修改 orchestrator 已确定的页面顺序、内容分组或拆页方案。
 
 ---
 
@@ -125,16 +138,8 @@
 
 ### Step 3：应用固定画布与安全区
 
-必须使用：
-
-```text
-画布：3696 × 1008 px
-左安全边距：220 px
-右安全边距：220 px
-上安全边距：90 px
-下安全边距：90 px
-核心内容区：3256 × 828 px
-```
+> **安全区规则唯一来源**：`style/examples/example_prompt.md §1.3` 及 `R20 一`。
+> 速查：画布 3696 × 1008 px；左右各 220px、上下各 90px；可用内容区 3256 × 828px；`.safe-zone { left:220px; right:220px; top:90px; bottom:90px; }`；Logo 底边约 99px，内容顶部需留间隙（多列页 40px，单列页 32px）。
 
 核心信息必须放在安全区内。左右边缘主要做背景氛围，不放重要文字。
 
@@ -186,8 +191,8 @@
 
 必须：
 
-- `.slide` 容器使用固定尺寸：`width: 3696px; height: 1008px;`
-- `html, body, .slideshow` 使用 `width:100vw; height:100vh; overflow:hidden;`
+- `.ppt-slide` 容器使用固定尺寸：`width: 3696px; height: 1008px;`（统一使用 `.ppt-slide`，不得使用 `.slide`）
+- `html, body, .deck-stage` 使用 `width:100vw; height:100vh; overflow:hidden;`
 - **必须加入等比自适应缩放脚本**（见下方模板），确保任意屏幕尺寸下 3696×1008 都能完整等比居中显示
 - 使用 `position:absolute` 绝对布局，`transform-origin: 0 0`
 - 所有核心内容位于安全区内（左右各 220px，上下各 90px）
@@ -205,7 +210,7 @@
 <script>
 (function () {
   var SLIDE_W = 3696, SLIDE_H = 1008;
-  var slides = Array.from(document.querySelectorAll('.slide'));
+  var slides = Array.from(document.querySelectorAll('.ppt-slide'));  // 统一选择器：.ppt-slide
 
   function scaleSlides() {
     var navEl = document.getElementById('nav-hud');
@@ -230,7 +235,9 @@
 </script>
 ```
 
-**不允许**使用 `width:100vw; height:100vh` 直接拉伸 `.slide` 容器，这会破坏 3.67:1 超宽比例。
+**不允许**使用 `width:100vw; height:100vh` 直接拉伸 `.ppt-slide` 容器，这会破坏 3.67:1 超宽比例。
+
+> ⚠️ **统一说明**：本 Skill 全局使用 `.ppt-slide` 作为每张幻灯片的根类名，与 `html_output_contract.md` §1.1 保持一致。禁止同时使用 `.slide`、`.slideshow`、`.ppt-page` 等别名。
 
 ### 如果输出设计说明
 
@@ -456,14 +463,8 @@ AI 必须先判断主体位置，再确定裁切焦点。
 
 ## 页面填充、留白与内容密度（硬约束）
 
-- 页面不得仅依赖卡片高度填充画布；内容少时禁止增大卡片 `height`、`min-height` 或 `padding`。
-- 禁止用无意义长文、重复信息或纯装饰图形填充空间；优先增加图表、流程、关系、数据对比或主题视觉。
-- 标题区约占画布高度 10%～18%，主体内容区约占 45%～65%，辅助视觉区约占 15%～30%。
-- 连续无功能留白不得超过画布高度的 25%；有效信息与有效视觉元素覆盖面积应为 55%～75%。
-- 留白分散在标题、模块和视觉元素之间，不得集中成大面积空洞。
-- 高密度内容使用紧凑卡片、分栏和表格；中密度使用卡片加数据图形；低密度使用少量大模块、主视觉数据、流程图或主题图形。
-- 禁止所有内容密度套用三等分卡片布局。
-- 低密度页面不得仅保留顶部一排自适应卡片；若卡片下方连续留白接近画布高度 25%，必须用流程、路径、关系结构、主视觉数据或主题信息图形重构主体区。
+> **唯一来源**：`style/examples/example_prompt.md R2`（页面填充与留白控制）、`R3`（内容密度判断）及 `R20 三`。
+> 核心：禁止拉高卡片撑满；连续无功能留白 ≤25%；有效内容覆盖 55–75%；留白须分散；禁止所有页面套用三等分卡片布局。
 
 ---
 
@@ -641,55 +642,31 @@ https://p5-ad.adkwai.com/udata/pkg/ks-ad-fe/md-tools/quick-cut/6689:5117.b90a9c9
 
 ---
 
-## 布局引擎（子级规则）
+## 布局引擎（职责边界）
 
-本 skill 内嵌了一套独立的页面布局引擎，路径为 `orchestrator/layout-engine/`。
+> ⚠️ **路径说明**：本节历史上曾引用 `orchestrator/layout-engine/` 子目录，该目录**实际不存在**。布局逻辑统一在 `orchestrator/rules/` 下。本节仅说明职责分工，不代表独立子目录。
 
-**职责分工**：
+**style/SKILL.md 职责边界（只绑定视觉，不重判结构）**：
 
-| 层级 | Skill | 负责内容 |
-|------|-------|---------|
-| **父级**（本文件） | `autoboard-html-ppt` | 视觉风格、HTML 输出规范、组件规范、色彩/字体/动效、生成检查 |
-| **子级** | `layout-engine` | 内容解析、信息层级建立、关系判断、模板选择、布局决策、结构输出 |
+- ✅ 视觉风格、品牌色、字体 Token、组件 CSS、动效
+- ✅ HTML 输出规范（`html_output_contract.md`）
+- ✅ 按已确定的 `pageType` 选择视觉模板
+- ❌ **不重新识别页面类型** — pageType 已由 `orchestrator/rules/page_type_router.md` 确定，style 层只接受结果
+- ❌ **不重新做结构规划** — 结构规划已由 `orchestrator/rules/layout_selection.md` 完成
 
-**工作顺序**：生成一页 PPT 时，先走子级布局引擎的 Step 1–6，得到页面结构（YAML），再由父级规则将结构渲染为 HTML（应用品牌色、字体、组件 CSS）。
+**结构规则实际路径（`orchestrator/rules/`）**：
 
-### 子级工作流简述
-
-```text
-Step 1  内容拆解    → 标注每条内容的 type / weight / format / relation
-Step 2  层级建立    → 分配 L0–L5，驱动视觉权重
-Step 3  关系判断    → 确定页面主关系（并列/流程/对比/聚合/叙述）
-Step 4  灵活布局    → 选择模板 T01–T10，确定列数和列宽比例
-Step 5  组件排布    → 选择容器类型（A/B/C）和组件组合（C01–C10）
-Step 6  输出结构    → 输出全百分比 YAML 页面结构
-```
-
-详细规则见 `orchestrator/layout-engine/SKILL.md`。
-
-### 父子级约束
-
-布局引擎输出的 YAML 结构必须严格遵守父级以下约束，**布局引擎的结构决策不得与父级硬约束冲突**：
-
-- **画布比例**：3.67:1（3696×1008px），所有模块百分比宽度不得超出安全区
-- **卡片溢出**：所有卡片必须遵守父级 `layout_overflow_protocol.md §8` 的卡片防溢出规则
-- **超宽画布**：父级 SKILL.md "超宽画布规则"节的约束优先于子级自适应建议
-- **分栏约束**：子级 column_ratio 建议必须符合父级 `style.md §5.6`（避免机械 6:6 贯穿全 deck）
-- **字体层级**：子级输出的层级（L0–L5）映射到父级字号时，以 `style/examples/example_prompt.md §3` 字体系统为准
-- **视觉 Token**：子级 `design-system.md §12` 的 Token 来自父级，禁止子级覆盖或自行定义颜色/字体
-
-### 快速参考路径
-
-| 内容 | 文件 |
-|------|------|
-| 内容拆解规则 | `layout-engine/references/content-parsing.md` |
-| 层级与关系 | `layout-engine/references/design-system.md §5-6` |
-| 模板库（T01–T10） | `layout-engine/references/templates.md` |
-| 容器系统（A/B/C） | `layout-engine/references/container-system.md` |
-| 组件库（C01–C10） | `layout-engine/references/components.md` |
-| 组件组合模式 | `layout-engine/references/component-combinations.md` |
-| 图片布局 | `layout-engine/references/image-layout.md` |
-| 图标规则 | `layout-engine/references/icons.md` |
-| 输出 YAML 格式 | `layout-engine/references/output-format.md` |
-| 双卡+中轴模式 | `layout-engine/references/pattern-dual-cards-center-description.md` |
-| 三段流程模式 | `layout-engine/references/pattern-triple-process-with-connectors.md` |
+| 内容 | 实际文件路径 |
+|------|------------|
+| 内容拆解 & 保全 | `orchestrator/rules/content_preservation.md` |
+| 页面角色路由 | `orchestrator/rules/page_role_router.md` |
+| 页面类型路由 | `orchestrator/rules/page_type_router.md` |
+| 布局选择 & 多样性 | `orchestrator/rules/layout_selection.md` |
+| 模板库（templateId） | `orchestrator/rules/template_library.md` |
+| 组合变体 | `orchestrator/rules/page_composition_library.md` |
+| 组件接口 | `orchestrator/rules/component_interface.md` |
+| 图文布局 | `orchestrator/rules/image_text_composition.md` |
+| 高级关系组件 | `orchestrator/rules/advanced_relation_components.md` |
+| 卡片对齐 | `orchestrator/rules/card_alignment.md` |
+| 异构对齐 | `orchestrator/rules/heterogeneous_alignment.md` |
+| 溢出防护 | `orchestrator/rules/layout_overflow_protocol.md` |

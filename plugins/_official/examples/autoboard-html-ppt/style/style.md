@@ -61,25 +61,8 @@
 
 ### 1.3 安全区
 
-推荐安全边距：
-
-```text
-左安全边距：220 px
-右安全边距：220 px
-上安全边距：90 px
-下安全边距：90 px
-```
-
-推荐核心内容区：
-
-```text
-内容区起始 X：220 px
-内容区结束 X：3476 px
-可用内容区宽度：3256 px
-内容区起始 Y：90 px
-内容区结束 Y：918 px
-可用内容区高度：828 px
-```
+> **安全区规则唯一来源**：`style/examples/example_prompt.md §1.3` 及 R20。
+> 安全边距：左右各 220px、上下各 90px；可用内容区 3256×828px；Logo 安全距离见 §1.3 补充规则。
 
 ### 1.4 信息密度原则
 
@@ -94,19 +77,8 @@
 
 ### 1.5 页面填充与留白控制
 
-页面不得仅依赖卡片高度填充画布。文字内容较少时，禁止通过增大卡片 `height`、`min-height` 或 `padding` 强行撑满页面，也禁止添加无意义长文、重复信息或纯装饰图形。
-
-画面应满足以下占比：
-
-- 标题区：画布高度的 10%～18%；
-- 主体内容区：画布高度的 45%～65%；
-- 辅助视觉区：画布高度的 15%～30%；
-- 连续无功能留白：不超过画布高度的 25%；
-- 有效信息与有效视觉元素覆盖面积：画布的 55%～75%。
-
-卡片自适应后内容不足时，优先放大核心信息、升级关键数据为主视觉、改为流程 / 路径 / 关系结构、增加主题相关信息图形、调整垂直重心；最后才调整模块尺寸。留白必须分散在标题、模块和视觉元素之间，不得集中形成大面积空洞。
-
-内容密度与结构必须匹配：高密度使用紧凑卡片、分栏和表格；中密度使用卡片 + 数据图形；低密度使用少量大模块、主视觉数据、流程图或主题图形。禁止所有页面套用三等分卡片布局。
+> **留白规则唯一来源**：`style/examples/example_prompt.md R2`（页面填充与留白控制）及 R20。
+> 核心约束：禁止拉高卡片撑满；标题区 10–18%；连续无功能留白 ≤25%；有效内容覆盖 55–75%；留白须分散。
 
 ---
 
@@ -231,7 +203,7 @@ background: linear-gradient(90deg, #D5AE79 0%, #E5CDAE 100%);
 
 建议高度：70 ~ 90 px。该区域不是默认文案容器；背景与 Logo 已提供品牌识别时，只有源材料或用户指令明确要求时才渲染业务线、会议主题或联合品牌。
 
-布局建议：顶部区域保持干净，不自动叠加常驻品牌文字或重复 Logo；如背景图已包含品牌标识，则不再生成第二个品牌组件。右侧业务线 / 主题标识 / 联合品牌仅在原始内容明确提供时展示。
+布局建议：顶部区域保持干净，不自动叠加常驻品牌文字或重复 Logo；如背景图已包含品牌标识，则不再生成第二个品牌组件。
 
 ### 5.3 标题区
 
@@ -253,10 +225,11 @@ background: linear-gradient(90deg, #D5AE79 0%, #E5CDAE 100%);
 
 避免：上下堆叠太多层、过多卡片平均铺满全屏、小模块过碎。
 
-### 5.5 间距系统
+### 5.5 间距系统（CSS Token 定义）
 
 ```css
---space-8: 8px;
+/* 唯一正式 Token 定义。台阶使用规则见 example_prompt.md §5.7 */
+--space-8:  8px;
 --space-12: 12px;
 --space-16: 16px;
 --space-20: 20px;
@@ -268,52 +241,20 @@ background: linear-gradient(90deg, #D5AE79 0%, #E5CDAE 100%);
 --space-80: 80px;
 ```
 
-超宽屏推荐：标题到主体区 48~64px；卡片间距 24~40px；卡片内边距 24~32px；主体区到页面边缘至少 220px。
+> 超宽屏推荐值：标题→主体 48–64px；卡片间距 24–40px；卡片内边距 24–32px；主体区到页面边缘 ≥220px。
+> **台阶使用约束与禁止项**：见 `style/examples/example_prompt.md §5.7`。
 
 ---
 
 ### 5.6 12 栏网格系统
 
-页面内容排版基于 **12 栏网格**，通过栏宽变量控制分栏比例。
-
-**常用分栏比例**：
-
-| 分栏 | 适用场景 |
-|------|---------|
-| `8:4` | 主内容 + 侧栏说明；图片主导型页面 |
-| `7:5` | 叙述文本 + 辅助图表；信息不对称对比 |
-| `4:4:4` | 三项等权能力/步骤/指标 |
-| `3:6:3` | 两侧辅助 + 中心主区；对称枢纽布局 |
-
-**规则**：
-- **避免机械 6:6 贯穿全 deck**；若所有页面都 6:6 等分，会丧失节奏感和主次关系；
-- 同一 deck 中不同页面应使用不同分栏比例，形成视觉节奏；
-- **图片可以跨越栏线一次**（编辑突破），制造有意的构图张力；其他文字/数字/卡片元素仍须对齐栏线；
-- 分栏边界用 Grid 轨道变量实现，禁止逐元素用 `margin` 或 `left` 手动拼凑对齐。
-
-```css
-:root {
-  --col: calc((100% - 11 * var(--col-gap)) / 12);
-  --col-gap: 24px;
-}
-
-/* 常用分栏 */
-.grid-8-4 { grid-template-columns: calc(8 * var(--col) + 7 * var(--col-gap))
-                                   calc(4 * var(--col) + 3 * var(--col-gap)); }
-.grid-7-5 { grid-template-columns: calc(7 * var(--col) + 6 * var(--col-gap))
-                                   calc(5 * var(--col) + 4 * var(--col-gap)); }
-.grid-4-4-4 { grid-template-columns: repeat(3, calc(4 * var(--col) + 3 * var(--col-gap))); }
-.grid-3-6-3 { grid-template-columns: calc(3 * var(--col) + 2 * var(--col-gap))
-                                     calc(6 * var(--col) + 5 * var(--col-gap))
-                                     calc(3 * var(--col) + 2 * var(--col-gap)); }
-```
+> **网格系统唯一来源**：`style/examples/example_prompt.md §5.6`（含分栏比例场景表、CSS 实现、禁止项）及 R20 §二。
+> 核心：`--col-gap: 24px`；分栏 8:4 / 7:5 / 4:4:4 / 3:6:3；禁止用 margin/left 手动拼对齐。
 
 ### 5.7 基线节奏与 margin 使用约束
 
-- **正文基线节奏统一**：相邻文本块使用相同的行高（`line-height`）和间距变量（`--space-*`），不得用随意 `margin` 微调到"差不多齐"；
-- 同级文本块的 `margin-top` / `margin-bottom` 必须来自同一变量或同一数值，不得出现一处 `18px`、另一处 `19px` 的手动补偿；
-- 跨模块的基线对齐通过**共同父级 Grid 行轨道**实现，而非逐元素 `margin` 偏移；
-- 允许在明确的间距台阶（`--space-8`、`--space-12`、`--space-16`、`--space-24`、`--space-32`、`--space-40`、`--space-48`）中选取，不得使用非台阶数值（如 `17px`、`21px`、`35px`）。
+> **约束细则唯一来源**：`style/examples/example_prompt.md §5.7`。
+> 核心：margin 只能使用 §5.5 定义的台阶值；同级文本块间距必须来自同一变量；跨模块基线对齐靠父级 Grid。
 
 
 ## 6. 卡片系统
@@ -535,29 +476,75 @@ closing：封尾页背景
 
 ## 18. 背景无 Logo 与独立 Logo 组件
 
-当前风格采用“背景图不带 Logo，Logo 独立组件渲染”。
+当前风格采用"背景图不带 Logo，Logo 独立组件渲染"。
 
 ### 背景图规则
 
-- `assets/bg-cover.svg`：封面页背景，无 Logo
-- `assets/bg-content.svg`：内容页背景，无 Logo
-- `assets/bg-closing.svg`：封尾页背景，无 Logo
+每个页面必须按照 `data-page-role` 选择对应背景图，规则与 `style/examples/example.html` 完全一致：
+
+| pageRole | 背景图路径 | 说明 |
+|---------|-----------|------|
+| `cover` | `assets/bg-cover.svg` | 封面页背景，无 Logo |
+| `contents` | `assets/bg-content.svg` | 目录页背景，与内容页一致 |
+| `content` | `assets/bg-content.svg` | 所有正式内容页背景，无 Logo |
+| `closing` | `assets/bg-closing.svg` | 封尾页背景，无 Logo |
+| `section` | `assets/bg-content.svg` | 章节过渡页，与内容页一致 |
+
+> **唯一来源**：背景图路径规则以 `style/examples/example.html` 中各页面 `<img class="bg-img">` 的实际 `src` 为准。当项目提供了具体背景图资源时，以项目实际资源路径替换逻辑名，但背景图类型分配规则（封面/内容/封底的对应关系）不得改变。
+
+背景图 HTML 结构（固定写法，每页第一个子元素）：
+
+```html
+<img
+  class="bg-img"
+  src="assets/bg-content.svg"
+  alt=""
+  aria-hidden="true"
+/>
+```
+
+背景图 CSS（必须完全一致，不得修改）：
+
+```css
+.bg-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center bottom;
+  z-index: 0;
+  display: block;
+}
+```
 
 背景图不得包含固定品牌 Logo、品牌文字、会议名或可编辑正文信息。
 
 ### Logo 组件规则
 
-Logo 通过独立组件 `FixedBrandLogo` 渲染。
+Logo 通过独立组件 `FixedBrandLogo` 渲染，出现在**每一页**（封面、目录、章节、内容、封尾全部显示）。
 
 默认显示范围：
 
 ```text
 封面页：显示
-内容页：显示
+目录页：显示
+章节过渡页：显示
+所有内容页：显示
 封尾页：显示
 ```
 
-默认位置：
+Logo HTML 结构（固定写法，紧跟 bg-img 之后，safe-zone 之前）：
+
+```html
+<img
+  class="fixed-brand-logo"
+  src="https://p5-ad.adkwai.com/udata/pkg/ks-ad-fe/md-tools/quick-cut/6689:5117.b90a9c9d53932e9b.svg"
+  alt="快手联盟"
+/>
+```
+
+Logo CSS（必须完全一致，不得修改）：
 
 ```css
 .fixed-brand-logo {
@@ -567,6 +554,7 @@ Logo 通过独立组件 `FixedBrandLogo` 渲染。
   width: 170px;
   height: auto;
   z-index: 5;
+  pointer-events: none;
 }
 ```
 
@@ -576,4 +564,35 @@ Logo SVG 源地址：
 https://p5-ad.adkwai.com/udata/pkg/ks-ad-fe/md-tools/quick-cut/6689:5117.b90a9c9d53932e9b.svg
 ```
 
-不得额外生成第二个“快手联盟”文字。
+禁止项：
+- 不得额外生成第二个"快手联盟"文字；
+- 不得将 Logo 嵌入背景图；
+- 不得修改 Logo 的位置、尺寸或 z-index；
+- 不得省略任何页面的 Logo；
+- 不得将 Logo 放入 `.safe-zone` 内部；
+- 不得使用 inline style 覆盖 `.fixed-brand-logo` 的位置或尺寸。
+
+### 完整页面背景与 Logo 标准结构
+
+每个 `<section class="slide">` 必须严格遵循以下结构顺序：
+
+```html
+<section class="slide ppt-slide" data-slide-index="N" data-page-role="content" data-page-type="...">
+  <!-- 1. 背景图（第一个子元素，z-index: 0） -->
+  <img class="bg-img" src="assets/bg-content.svg" alt="" aria-hidden="true" />
+
+  <!-- 2. Logo（第二个子元素，z-index: 5） -->
+  <img
+    class="fixed-brand-logo"
+    src="https://p5-ad.adkwai.com/udata/pkg/ks-ad-fe/md-tools/quick-cut/6689:5117.b90a9c9d53932e9b.svg"
+    alt="快手联盟"
+  />
+
+  <!-- 3. 安全区内容（z-index 高于背景图和 Logo） -->
+  <div class="safe-zone">
+    ...
+  </div>
+</section>
+```
+
+不得额外生成第二个"快手联盟"文字。

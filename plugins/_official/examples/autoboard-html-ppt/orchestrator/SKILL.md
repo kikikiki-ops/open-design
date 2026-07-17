@@ -1,5 +1,9 @@
-# PPT Orchestrator Skill V2.6.0
+# PPT Orchestrator Skill V2.7.0
 # HTML 型 PPT 内容识别、结构路由与生成总控
+
+> **⚠️ 本文件不是独立入口 Skill。**
+> 完整工作流的统一入口是项目根目录的 `SKILL.md`，本文件只负责详细的 11 步编排流水线规则。
+> 如果你只是启动 PPT 生成任务，应从根目录 `SKILL.md` 开始。
 
 ## 0. Skill 定位
 
@@ -48,7 +52,7 @@
 
 按以下顺序执行，后项不得牺牲前项：
 
-1. 正式内容准确、完整、可追踪；
+1. 正式文字与来源图片准确、完整、可追踪（来源图片与文字具有同等正式内容地位）；
 2. 数字、单位、趋势和关系保真；
 3. 页面角色和页面类型正确；
 4. 内容可读、无溢出；
@@ -61,11 +65,13 @@
 - 只读取标题、不读取正文；
 - 把内容页改成封面页或章节页；
 - 用一句口号替代多组业务信息；
-- 删除“次要”正式内容；
+- 删除"次要"正式内容；
 - 修改数字、单位、正负方向、同比/环比条件；
 - 添加输入中不存在的数据和结论；
 - 用整页图片替代可编辑内容；
-- 为贴合视觉参考而强行复刻其版式。
+- 为贴合视觉参考而强行复刻其版式；
+- 静默删除来源图片（换模板、统一风格、控制密度或空间不足均不得作为删除理由）；
+- 用占位符、通用图标或 AI 生成图替代来源证据图、产品图、人物图或界面截图。
 
 ---
 
@@ -96,7 +102,30 @@
 ```text
 A. 定位并诊断上传 / 当前项目中的 PPTX；无 PPTX 时读取其他源材料
 ↓
-B. 建立 intake_result，再建立 content_inventory / edit_instruction_inventory / uncertain_inventory
+A1. 【必须执行代码】用 Python 或 unzip 实际解包 PPTX，提取所有嵌入图片到 assets/source-media/
+    必须使用 bash/Python 代码真实执行，不得只在规划文档中声明"已保留图片"
+    执行命令示例：
+      python3 -c "
+      from pptx import Presentation; from pathlib import Path; import shutil
+      prs = Presentation('source.pptx')
+      Path('assets/source-media').mkdir(parents=True, exist_ok=True)
+      idx = {}
+      for i, slide in enumerate(prs.slides, 1):
+          for shape in slide.shapes:
+              if shape.shape_type == 13:
+                  idx[i] = idx.get(i, 0) + 1
+                  fname = f'slide-{i:02d}-asset-{idx[i]:02d}.{shape.image.ext}'
+                  Path(f'assets/source-media/{fname}').write_bytes(shape.image.blob)
+                  print(f'extracted: slide {i} -> {fname}')
+      "
+    详细脚本与备选方法见 rules/pptx_image_extraction.md
+    扫描与提取必须在建立文字账本之前完成
+    来源见：rules/source_media_extraction.md
+↓
+A2. 验证提取结果：ls assets/source-media/ 确认文件存在且不为空
+↓
+B. 建立 intake_result，再建立 source_asset_manifest（视觉资产账本）与 content_inventory（文字账本）
+   两个账本均完成后，才能进行页面路由
 ↓
 C. 建立 source_page_profile，识别分组、关系、顺序和页面目标
 ↓
@@ -114,11 +143,43 @@ I. 从模板库选择 templateId、校验 requiredSlots，并选择 wide / ultra
 ↓
 J. 执行规划前检查；通过后设置 structureFrozen = true
 ↓
+K-0. 【必须执行代码】复制 Skill 视觉资产到项目 assets/
+     背景图和 Logo 是 Skill 的 side-file，不在用户项目目录里，必须通过 bash 代码主动复制。
+     执行以下 bash 脚本（先确定 SKILL_ROOT，再复制）：
+```bash
+# 1. 找到 Skill 在本项目的 staged 目录
+SKILL_ROOT=$(ls -d .od-skills/style-* 2>/dev/null | head -1)
+if [ -z "$SKILL_ROOT" ]; then
+  echo "ERROR: 未找到 .od-skills/style-*/，请检查 skill staging 是否成功"
+  exit 1
+fi
+# 2. 把背景图和 Logo 复制到项目 assets/
+mkdir -p assets
+cp "$SKILL_ROOT/assets/bg-cover.svg"    assets/bg-cover.svg
+cp "$SKILL_ROOT/assets/bg-content.svg"  assets/bg-content.svg
+cp "$SKILL_ROOT/assets/bg-closing.svg"  assets/bg-closing.svg
+cp "$SKILL_ROOT/assets/logo.svg"        assets/logo.svg
+# 3. 验证
+ls -lh assets/bg-cover.svg assets/bg-content.svg assets/bg-closing.svg assets/logo.svg
+```
+     如果 .od-skills/style-* 不存在，说明 staging 失败，用绝对路径 fallback：
+```bash
+SKILL_ABS=".od-skills/style-$(ls .od-skills 2>/dev/null | head -1)"
+# 绝对路径 fallback：通过 skill-root preamble 中的 "Skill root (absolute fallback)" 路径确认
+# 读取当前 SKILL.md 头部 preamble 中的绝对路径，并手动替换下面 <SKILL_ABS> 为真实路径
+```
+     必须确保以下 4 个文件在项目 assets/ 中真实存在，否则 HTML 里的背景图和 Logo 将显示为空白：
+     - assets/bg-cover.svg
+     - assets/bg-content.svg
+     - assets/bg-closing.svg
+     - assets/logo.svg
+↓
 K. 绑定视觉风格、背景、Logo 和设计 Token
 ↓
 L. 输出 HTML
 ↓
-M. 执行内容保真、页面路由、溢出、风格与可编辑性检查
+M. 执行文字覆盖率、来源图片覆盖率、页面路由、溢出、风格与可编辑性检查
+   must_preserve 图片覆盖率必须达到 100%；任意来源图片未进入最终 HTML，均不得通过验收
 ↓
 N. 失败时重组布局 / 更换变体 / 拆页；禁止删除正式内容
 ```
@@ -367,6 +428,7 @@ N. 失败时重组布局 / 更换变体 / 拆页；禁止删除正式内容
 - 模板 `requiredSlots` 已覆盖，`contentCapacity` 未超限，且未使用任何 `prohibitedUses`。
 - 高级关系图已通过来源、算术和几何审计；不存在虚构闭环、比例、坐标、分支或增量。
 - 所有交付页采用 3696 × 1008 `ultrawideVariant`；不存在 2.67:1 布局、截图、图片或卡片的横向拉伸。
+- **【图片路径硬检查】** 所有 `<img>` 的 `src` 必须是有效的相对路径，且对应文件在 `assets/source-media/` 中真实存在；不得出现绝对路径（`/Users/`、`C:\`）或临时上传 URL；必须用 `ls assets/source-media/` 和路径验证脚本（见 `rules/pptx_image_extraction.md §8`）确认后才算通过。
 
 整套 PPT 额外检查：
 

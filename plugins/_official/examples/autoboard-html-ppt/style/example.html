@@ -404,6 +404,40 @@ html, body {
   transform: scale(1.3);
 }
 .nav-dot:focus-visible { outline: 2px solid #FFFFFF; outline-offset: 4px; }
+
+/* ── 第 3 页 · 毛玻璃指标卡片（仅作用于 data-slide-index="3"，不影响其他页面） ── */
+.slide[data-slide-index="3"] .card {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.68),
+    rgba(255, 252, 248, 0.42)
+  );
+  backdrop-filter: blur(22px) saturate(125%);
+  -webkit-backdrop-filter: blur(22px) saturate(125%);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 22px;
+  box-shadow:
+    0 14px 36px rgba(11, 45, 58, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+/* 兼容兜底：不支持 backdrop-filter 时使用高透明度暖白背景 */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .slide[data-slide-index="3"] .card {
+    background: rgba(255, 252, 248, 0.94);
+  }
+}
+
+/* ── 第 3 页 · 核心数字加粗（仅作用于 data-slide-index="3"，不影响全局 .number-xl 等公共类） ── */
+.slide[data-slide-index="3"] .number-xl,
+.slide[data-slide-index="3"] .number-lg,
+.slide[data-slide-index="3"] .number-md {
+  font-weight: 700;
+}
+
+.slide[data-slide-index="3"] .number-unit {
+  font-weight: 600;
+}
 </style>
 </head>
 <body>
@@ -412,8 +446,8 @@ html, body {
 
 <!-- SLIDE 1 · 封面页 — Cover -->
 <section class="slide ppt-slide active" data-slide-index="1" data-source-pages="1" data-page-role="cover" data-page-type="CoverPage" data-layout-component="HeroLayout" data-page-variant="CoverHero" data-label="封面页 · Cover">
-  <img class="bg-img" src="/Users/maishuqi/Desktop/快手联盟闭门会PPT/封面背景图.svg" alt="" aria-hidden="true" />
-  <img class="fixed-brand-logo" src="https://p5-ad.adkwai.com/udata/pkg/ks-ad-fe/md-tools/quick-cut/6689:5117.b90a9c9d53932e9b.svg" alt="快手联盟" />
+  <img class="bg-img" src="assets/bg-cover.svg" alt="" aria-hidden="true" />
+  <img class="fixed-brand-logo" src="assets/logo.svg" alt="快手联盟" />
   <div class="safe-zone" data-source-id="example-source-001">
     <div class="flex-col items-center justify-center text-center" style="height:100%;gap:32px;">
       <div class="card-header">2026 品牌营销峰会</div>
@@ -435,8 +469,8 @@ html, body {
 
 <!-- SLIDE 2 · 目录页 — Contents -->
 <section class="slide ppt-slide" data-slide-index="2" data-source-pages="2" data-page-role="contents" data-page-type="ContentsPage" data-layout-component="ThreeColumnContentsLayout" data-page-variant="NumberedChapterList" data-label="目录页 · Contents">
-  <img class="bg-img" src="/Users/maishuqi/Desktop/快手联盟闭门会PPT/内容页背景图.svg" alt="" aria-hidden="true" />
-  <img class="fixed-brand-logo" src="https://p5-ad.adkwai.com/udata/pkg/ks-ad-fe/md-tools/quick-cut/6689:5117.b90a9c9d53932e9b.svg" alt="快手联盟" />
+  <img class="bg-img" src="assets/bg-content.svg" alt="" aria-hidden="true" />
+  <img class="fixed-brand-logo" src="assets/logo.svg" alt="快手联盟" />
 
   <div class="safe-zone" data-source-id="example-source-toc">
     <div class="flex-col items-center" style="height:100%; justify-content:center; gap:0;">
@@ -514,8 +548,8 @@ html, body {
 
 <!-- SLIDE 3 · 数据结论页 — Data Highlights -->
 <section class="slide ppt-slide" data-slide-index="3" data-source-pages="3" data-page-role="content" data-page-type="MetricOverviewPage" data-layout-component="ColumnGridLayout" data-page-variant="MetricGrid" data-label="数据结论页 · Data">
-  <img class="bg-img" src="/Users/maishuqi/Desktop/快手联盟闭门会PPT/内容页背景图.svg" alt="" aria-hidden="true" />
-  <img class="fixed-brand-logo" src="https://p5-ad.adkwai.com/udata/pkg/ks-ad-fe/md-tools/quick-cut/6689:5117.b90a9c9d53932e9b.svg" alt="快手联盟" />
+  <img class="bg-img" src="assets/bg-content.svg" alt="" aria-hidden="true" />
+  <img class="fixed-brand-logo" src="assets/logo.svg" alt="快手联盟" />
   <div class="safe-zone" data-source-id="example-source-002">
     <div class="flex-col" style="height:100%;gap:var(--space-24);padding-top:var(--space-40);">
       <div class="flex-col items-center text-center gap-12" style="justify-content:center; padding:var(--space-24) 0;">
@@ -554,8 +588,8 @@ html, body {
 
 <!-- SLIDE 4 · 案例成果页 — Case Study -->
 <section class="slide ppt-slide" data-slide-index="4" data-source-pages="4" data-page-role="content" data-page-type="CaseStudyPage" data-layout-component="CaseReviewLayout" data-page-variant="BackgroundSolutionResult" data-label="案例成果页 · Case Study">
-  <img class="bg-img" src="/Users/maishuqi/Desktop/快手联盟闭门会PPT/内容页背景图.svg" alt="" aria-hidden="true" />
-  <img class="fixed-brand-logo" src="https://p5-ad.adkwai.com/udata/pkg/ks-ad-fe/md-tools/quick-cut/6689:5117.b90a9c9d53932e9b.svg" alt="快手联盟" />
+  <img class="bg-img" src="assets/bg-content.svg" alt="" aria-hidden="true" />
+  <img class="fixed-brand-logo" src="assets/logo.svg" alt="快手联盟" />
 
   <div class="safe-zone" data-source-id="example-source-003">
     <!-- 上中下三层，justify-content:space-between -->
@@ -685,8 +719,8 @@ html, body {
 
 <!-- SLIDE 5 · 策略分析页 — Strategy -->
 <section class="slide ppt-slide" data-slide-index="5" data-source-pages="5" data-page-role="content" data-page-type="StrategyPanoramaPage" data-layout-component="ThreeZoneColumnLayout" data-page-variant="PainPointStrategyResult" data-label="策略分析页 · Strategy">
-  <img class="bg-img" src="/Users/maishuqi/Desktop/快手联盟闭门会PPT/内容页背景图.svg" alt="" aria-hidden="true" />
-  <img class="fixed-brand-logo" src="https://p5-ad.adkwai.com/udata/pkg/ks-ad-fe/md-tools/quick-cut/6689:5117.b90a9c9d53932e9b.svg" alt="快手联盟" />
+  <img class="bg-img" src="assets/bg-content.svg" alt="" aria-hidden="true" />
+  <img class="fixed-brand-logo" src="assets/logo.svg" alt="快手联盟" />
 
   <div class="safe-zone" data-source-id="example-source-004">
     <div class="flex-col" style="height:100%; gap:0; justify-content:space-between; padding-top:var(--space-40);">
@@ -840,8 +874,8 @@ html, body {
 
 <!-- SLIDE 6 · 双链路策略拆解页 — Dual Chain Strategy -->
 <section class="slide ppt-slide" data-slide-index="6" data-source-pages="6" data-page-role="content" data-page-type="DualChainStrategyPage" data-layout-component="DualChainLayout" data-page-variant="CTRCVRDriven" data-label="双链路策略拆解页 · SDK 竞争力升级">
-  <img class="bg-img" src="/Users/maishuqi/Desktop/快手联盟闭门会PPT/内容页背景图.svg" alt="" aria-hidden="true" />
-  <img class="fixed-brand-logo" src="https://p5-ad.adkwai.com/udata/pkg/ks-ad-fe/md-tools/quick-cut/6689:5117.b90a9c9d53932e9b.svg" alt="快手联盟" />
+  <img class="bg-img" src="assets/bg-content.svg" alt="" aria-hidden="true" />
+  <img class="fixed-brand-logo" src="assets/logo.svg" alt="快手联盟" />
 
   <div class="safe-zone" data-source-id="example-source-005-sdk">
     <div class="flex-col" style="height:100%; justify-content:space-between; gap:0; padding-top:var(--space-40);">
@@ -1029,8 +1063,8 @@ html, body {
 
 <!-- SLIDE 7 · 三列主题策略页 — Three Column Strategy -->
 <section class="slide ppt-slide" data-slide-index="7" data-source-pages="7" data-page-role="content" data-page-type="ThreeColumnStrategyPage" data-layout-component="ThreeColumnLayout" data-page-variant="ThemeStrategyColumns" data-label="三列主题策略页 · 增长三引擎">
-  <img class="bg-img" src="/Users/maishuqi/Desktop/快手联盟闭门会PPT/内容页背景图.svg" alt="" aria-hidden="true" />
-  <img class="fixed-brand-logo" src="https://p5-ad.adkwai.com/udata/pkg/ks-ad-fe/md-tools/quick-cut/6689:5117.b90a9c9d53932e9b.svg" alt="快手联盟" />
+  <img class="bg-img" src="assets/bg-content.svg" alt="" aria-hidden="true" />
+  <img class="fixed-brand-logo" src="assets/logo.svg" alt="快手联盟" />
 
   <div class="safe-zone" data-source-id="example-source-006-strategy">
 
@@ -1187,8 +1221,8 @@ html, body {
 
 <!-- SLIDE 8 · 场景递进路径页 — Scene Progression Path -->
 <section class="slide ppt-slide" data-slide-index="8" data-source-pages="8" data-page-role="content" data-page-type="SceneProgressionPage" data-layout-component="ThreeCardLayout" data-page-variant="DualBidSceneCards" data-label="场景递进路径页 · 留存场景">
-  <img class="bg-img" src="/Users/maishuqi/Desktop/快手联盟闭门会PPT/内容页背景图.svg" alt="" aria-hidden="true" />
-  <img class="fixed-brand-logo" src="https://p5-ad.adkwai.com/udata/pkg/ks-ad-fe/md-tools/quick-cut/6689:5117.b90a9c9d53932e9b.svg" alt="快手联盟" />
+  <img class="bg-img" src="assets/bg-content.svg" alt="" aria-hidden="true" />
+  <img class="fixed-brand-logo" src="assets/logo.svg" alt="快手联盟" />
 
   <div class="safe-zone" data-source-id="example-source-007-scene">
 
@@ -1380,8 +1414,8 @@ html, body {
 
 <!-- SLIDE 9 · 四列能力矩阵页 — AI Capability Matrix -->
 <section class="slide ppt-slide" data-slide-index="9" data-source-pages="9" data-page-role="content" data-page-type="CapabilityMatrixPage" data-layout-component="FourColumnMatrixLayout" data-page-variant="AICapabilityCards" data-label="四列能力矩阵页 · 联盟全面AI化">
-  <img class="bg-img" src="/Users/maishuqi/Desktop/快手联盟闭门会PPT/内容页背景图.svg" alt="" aria-hidden="true" />
-  <img class="fixed-brand-logo" src="https://p5-ad.adkwai.com/udata/pkg/ks-ad-fe/md-tools/quick-cut/6689:5117.b90a9c9d53932e9b.svg" alt="快手联盟" />
+  <img class="bg-img" src="assets/bg-content.svg" alt="" aria-hidden="true" />
+  <img class="fixed-brand-logo" src="assets/logo.svg" alt="快手联盟" />
 
   <div class="safe-zone" data-source-id="example-source-008-matrix">
     <div class="flex-col" style="height:100%; gap:0; justify-content:flex-start; padding-top:var(--space-40);">
@@ -1459,8 +1493,8 @@ html, body {
 
 <!-- SLIDE 10 · 三卡成绩单页 — Growth Report -->
 <section class="slide ppt-slide" data-slide-index="10" data-source-pages="10" data-page-role="content" data-page-type="GrowthReportPage" data-layout-component="ThreeMetricCardLayout" data-page-variant="YoYGrowthCards" data-label="三卡成绩单页 · 联盟增长成绩单">
-  <img class="bg-img" src="/Users/maishuqi/Desktop/快手联盟闭门会PPT/内容页背景图.svg" alt="" aria-hidden="true" />
-  <img class="fixed-brand-logo" src="https://p5-ad.adkwai.com/udata/pkg/ks-ad-fe/md-tools/quick-cut/6689:5117.b90a9c9d53932e9b.svg" alt="快手联盟" />
+  <img class="bg-img" src="assets/bg-content.svg" alt="" aria-hidden="true" />
+  <img class="fixed-brand-logo" src="assets/logo.svg" alt="快手联盟" />
 
   <div class="safe-zone" data-source-id="example-source-report">
     <!--
@@ -1658,8 +1692,8 @@ html, body {
 
 <!-- SLIDE 11 · 封尾页 — Closing -->
 <section class="slide ppt-slide" data-slide-index="11" data-source-pages="11" data-page-role="closing" data-page-type="ClosingPage" data-layout-component="HeroLayout" data-page-variant="ClosingHero" data-label="封尾页 · Closing">
-  <img class="bg-img" src="/Users/maishuqi/Desktop/快手联盟闭门会PPT/封底背景.svg" alt="" aria-hidden="true" />
-  <img class="fixed-brand-logo" src="https://p5-ad.adkwai.com/udata/pkg/ks-ad-fe/md-tools/quick-cut/6689:5117.b90a9c9d53932e9b.svg" alt="快手联盟" />
+  <img class="bg-img" src="assets/bg-closing.svg" alt="" aria-hidden="true" />
+  <img class="fixed-brand-logo" src="assets/logo.svg" alt="快手联盟" />
   <div class="safe-zone" data-source-id="example-source-005">
     <div class="flex-col items-center text-center" style="height:100%;justify-content:center;gap:32px;">
       <div class="card-header" style="font-size:20px;padding:10px 28px;">THANK YOU</div>

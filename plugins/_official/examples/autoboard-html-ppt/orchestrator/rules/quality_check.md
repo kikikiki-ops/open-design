@@ -74,18 +74,35 @@ Planner Gate 失败时不得渲染。
 - 图片容器未使用 `object-fit: cover`，出现上下或左右无意义空白、图片悬浮在容器中、或拉伸变形。
 - 同组图片高度不一致、显示比例不统一、裁切方式不同。
 - 单个内容模块宽度超过预设最大宽度，或主体内容从左安全区连续铺到右安全区。
+- 纵向卡片组未进行容量预估（未记录 `body_available_height`），或 `stackRequiredHeight > bodyAvailableHeight - 16px` 但仍保留纵向结构。
+- 四个同级短模块在可用高度不足 90% 情况下仍使用四行纵向堆叠，未评估 2 × 2 矩阵。
+- 左右分栏页面中，标题仅放在左侧栏内部，导致左列可用高度小于右列；或左右两列底部对齐误差超过 2px。
+- 最后一张纵向卡片仅部分可见（`lastItemRect.bottom > bodyBandRect.bottom - 2px`）。
+- 使用负 margin 或 `transform` 整体上移内容掩盖溢出（`layout-fixed-by-negative-margin` / `layout-fixed-by-transform`）。
+- 对正式内容节点使用 `overflow: hidden` 静默裁切（`formal-content-clipped`）。
 
-## 4. 内容覆盖
+## 4. 内容与来源图片覆盖
 
 要求：
 
 ```text
-must-render 覆盖率 = 100%
+must-render 文字覆盖率 = 100%
+must_preserve 来源图片覆盖率 = 100%
 关键数字覆盖率 = 100%
 未经授权改写 = 0
 虚构内容 = 0
 关系破坏 = 0
 ```
+
+来源图片覆盖检查（必须通过，任意来源图片未进入最终 HTML 均不得通过验收）：
+
+```text
+sourceMeaningfulAssetCount = plannedSourceAssetCount
+plannedSourceAssetCount = renderedSourceAssetCount + userApprovedRemovalCount + confirmedDecorativeCount
+mustPreserveAssetCount = renderedMustPreserveAssetCount
+```
+
+详细的图片验收失败代码见 `rules/source_media_extraction.md §10`。
 
 ## 5. 失败恢复
 
