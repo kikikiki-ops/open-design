@@ -315,9 +315,14 @@ html, body { width: 100vw; height: 100vh; overflow: hidden; background: #111418;
 | `closing` | `assets/bg-closing.svg` | 封底背景 |
 | Logo（所有页面） | `assets/logo.svg` | 快手联盟 Logo |
 
+**K-0 资产复制说明：**
+Skill staging 目录的实际格式为 `.od-skills/autoboard-html-ppt-<hash>/style/assets/`（不是 `.od-skills/style-*/`）。
+K-0 脚本必须以 `ls -d .od-skills/autoboard-html-ppt-*` 找到 staging 目录，再从 `style/assets/` 复制 4 个文件。
+K-0 未执行时禁止输出 HTML。
+
 **禁止：**
 - `src="/Users/.../bg-cover.svg"` — 绝对本机路径，其他人打开就 404
-- `src=".od-skills/style-xxx/assets/bg-cover.svg"` — skill staging 目录，不是用户项目的持久资产
+- `src=".od-skills/autoboard-html-ppt-xxx/style/assets/bg-cover.svg"` — skill staging 目录，不是用户项目的持久资产
 - `src="https://..."` for Logo — 网络不稳定时 Logo 丢失（除非 logo.svg 本地文件确实不存在）
 - `background-image: url(...)` 替代 `<img class="bg-img">` — 违反 §4 规则
 

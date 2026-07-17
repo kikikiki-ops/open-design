@@ -189,6 +189,42 @@
 
 ### 如果输出 HTML 型 PPT 页面
 
+#### ⚠️ 背景图与 Logo 资产必须来自 `assets/`（P0 硬约束）
+
+在输出任何 HTML 之前，必须已完成 orchestrator K-0 步骤，确保以下 4 个文件真实存在：
+
+```
+assets/bg-cover.svg      ← 封面背景
+assets/bg-content.svg    ← 内容页背景
+assets/bg-closing.svg    ← 封底背景
+assets/logo.svg          ← 快手联盟 Logo
+```
+
+**这 4 个文件由 K-0 从 `.od-skills/autoboard-html-ppt-<hash>/style/assets/` 复制而来。**
+
+每张 slide 的写法（封面示例）：
+```html
+<section class="ppt-slide active" data-page-role="cover">
+  <!-- ① 背景图：第一个子元素 -->
+  <img class="bg-img" src="assets/bg-cover.svg" alt="" aria-hidden="true" />
+  <!-- ② 独立 Logo：紧跟背景图 -->
+  <img class="fixed-brand-logo" src="assets/logo.svg" alt="快手联盟" data-asset-role="fixed-brand-logo" />
+  <!-- ③ 内容安全区 -->
+  <div class="safe-zone">…</div>
+</section>
+```
+
+**严禁：**
+- 用 `source-media/*.png/jpg` 作为背景 — 这是用户 PPTX 里的图片，不是品牌背景
+- 用任何 `source-media/` 文件作为 Logo — logo 必须是 `assets/logo.svg`
+- 引用绝对路径 `/Users/...` 或 `.od-skills/.../assets/...`
+- 省略 `<img class="bg-img">` — 不得用 CSS `background-image` 替代
+- 省略 `<img class="fixed-brand-logo">` — Logo 在每页都必须独立渲染
+
+如果 `assets/` 目录不存在或上述文件缺失，**禁止继续输出 HTML**，先报告错误。
+
+---
+
 必须：
 
 - `.ppt-slide` 容器使用固定尺寸：`width: 3696px; height: 1008px;`（统一使用 `.ppt-slide`，不得使用 `.slide`）

@@ -145,34 +145,69 @@ J. 执行规划前检查；通过后设置 structureFrozen = true
 ↓
 K-0. 【必须执行代码】复制 Skill 视觉资产到项目 assets/
      背景图和 Logo 是 Skill 的 side-file，不在用户项目目录里，必须通过 bash 代码主动复制。
-     执行以下 bash 脚本（先确定 SKILL_ROOT，再复制）：
+     Skill staging 目录名格式为 `.od-skills/autoboard-html-ppt-<hash>/`，其中 style 资产位于
+     `style/assets/` 子目录下。执行以下脚本（三重 fallback，确保必定成功）：
 ```bash
-# 1. 找到 Skill 在本项目的 staged 目录
-SKILL_ROOT=$(ls -d .od-skills/style-* 2>/dev/null | head -1)
-if [ -z "$SKILL_ROOT" ]; then
-  echo "ERROR: 未找到 .od-skills/style-*/，请检查 skill staging 是否成功"
-  exit 1
-fi
-# 2. 把背景图和 Logo 复制到项目 assets/
+#!/usr/bin/env bash
+set -e
 mkdir -p assets
-cp "$SKILL_ROOT/assets/bg-cover.svg"    assets/bg-cover.svg
-cp "$SKILL_ROOT/assets/bg-content.svg"  assets/bg-content.svg
-cp "$SKILL_ROOT/assets/bg-closing.svg"  assets/bg-closing.svg
-cp "$SKILL_ROOT/assets/logo.svg"        assets/logo.svg
-# 3. 验证
+
+# ── Fallback 1：staged skill 目录（标准路径）
+SKILL_STAGE=$(ls -d .od-skills/autoboard-html-ppt-* 2>/dev/null | head -1)
+if [ -n "$SKILL_STAGE" ] && [ -f "$SKILL_STAGE/style/assets/bg-cover.svg" ]; then
+  SRC="$SKILL_STAGE/style/assets"
+  echo "[K-0] Fallback-1 staged: $SRC"
+  cp "$SRC/bg-cover.svg"   assets/bg-cover.svg
+  cp "$SRC/bg-content.svg" assets/bg-content.svg
+  cp "$SRC/bg-closing.svg" assets/bg-closing.svg
+  cp "$SRC/logo.svg"       assets/logo.svg
+
+# ── Fallback 2：从 SKILL.md preamble 获取绝对路径（daemon 会注入）
+elif [ -f ".od-skills/autoboard-html-ppt-*/SKILL.md" ]; then
+  SKILL_ABS=$(head -5 .od-skills/autoboard-html-ppt-*/SKILL.md 2>/dev/null \
+    | grep "Skill root" | sed 's/.*: //')
+  if [ -n "$SKILL_ABS" ] && [ -f "$SKILL_ABS/style/assets/bg-cover.svg" ]; then
+    SRC="$SKILL_ABS/style/assets"
+    echo "[K-0] Fallback-2 abs: $SRC"
+    cp "$SRC/bg-cover.svg"   assets/bg-cover.svg
+    cp "$SRC/bg-content.svg" assets/bg-content.svg
+    cp "$SRC/bg-closing.svg" assets/bg-closing.svg
+    cp "$SRC/logo.svg"       assets/logo.svg
+  fi
+
+# ── Fallback 3：从任意 .od-skills 子目录搜索（兜底）
+else
+  SRC=$(find .od-skills -name "bg-cover.svg" 2>/dev/null | head -1 | xargs dirname 2>/dev/null)
+  if [ -n "$SRC" ] && [ -f "$SRC/bg-cover.svg" ]; then
+    echo "[K-0] Fallback-3 search: $SRC"
+    cp "$SRC/bg-cover.svg"   assets/bg-cover.svg
+    cp "$SRC/bg-content.svg" assets/bg-content.svg
+    cp "$SRC/bg-closing.svg" assets/bg-closing.svg
+    cp "$SRC/logo.svg"       assets/logo.svg
+  else
+    echo "[K-0 ERROR] 所有 fallback 均失败，无法找到 bg-cover.svg"
+    echo "  已扫描: $(ls .od-skills/ 2>/dev/null)"
+    echo "  请确认 skill staging 成功，或手动将 style/assets/*.svg 复制到 assets/"
+    exit 1
+  fi
+fi
+
+# ── 验证 4 个文件均存在且非空
+for f in assets/bg-cover.svg assets/bg-content.svg assets/bg-closing.svg assets/logo.svg; do
+  if [ ! -s "$f" ]; then
+    echo "[K-0 ERROR] $f 不存在或为空"
+    exit 1
+  fi
+done
+echo "[K-0 OK] 4 资产文件已就绪："
 ls -lh assets/bg-cover.svg assets/bg-content.svg assets/bg-closing.svg assets/logo.svg
-```
-     如果 .od-skills/style-* 不存在，说明 staging 失败，用绝对路径 fallback：
-```bash
-SKILL_ABS=".od-skills/style-$(ls .od-skills 2>/dev/null | head -1)"
-# 绝对路径 fallback：通过 skill-root preamble 中的 "Skill root (absolute fallback)" 路径确认
-# 读取当前 SKILL.md 头部 preamble 中的绝对路径，并手动替换下面 <SKILL_ABS> 为真实路径
 ```
      必须确保以下 4 个文件在项目 assets/ 中真实存在，否则 HTML 里的背景图和 Logo 将显示为空白：
      - assets/bg-cover.svg
      - assets/bg-content.svg
      - assets/bg-closing.svg
      - assets/logo.svg
+     K-0 失败时**禁止**继续输出 HTML；必须报告错误并停止。
 ↓
 K. 绑定视觉风格、背景、Logo 和设计 Token
 ↓
