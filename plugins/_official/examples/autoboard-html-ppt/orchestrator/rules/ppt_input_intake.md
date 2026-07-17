@@ -116,6 +116,41 @@ theme, page ratio, or screenshot dimensions never authorize stretching an old
 layout into the 11:3 delivery canvas. Use the template library's ultrawide
 adaptation rules instead.
 
+### 5.1 Hidden slide classification
+
+Each source slide must be checked for `is_hidden` status during intake:
+
+```python
+# python-pptx: check hidden status
+slide_layout = slide.slide_layout
+is_hidden = getattr(slide, '_element', None) and \
+            slide._element.get('show') == '0'
+```
+
+| is_hidden | Default classification | Inclusion in page_plan |
+|-----------|----------------------|------------------------|
+| False | Normal intake → route to pageType | Yes |
+| True | `hidden_slide` | No, unless user explicitly requests hidden content |
+
+Hidden slides must be recorded in `intake_result.json` with `"slideStatus": "hidden_excluded"`.
+They must NOT silently disappear — they must be documented.
+
+### 5.2 Canvas profile declaration
+
+`page_plan.json` must declare the canvas profile in the top-level metadata before the slides array:
+
+```json
+{
+  "canvasProfile": "3696x1008",
+  "deliveryMode": "ultrawide_html_ppt",
+  "sourceFile": "uploaded.pptx",
+  "hiddenSlidesExcluded": 2,
+  "slides": [...]
+}
+```
+
+Prohibition: do not mix slides from different canvas profiles (e.g., 16:9 source and 11:3 delivery) into the same `slides` array without an explicit `sourceCanvasRatio` annotation.
+
 ## 6. Optimization delivery
 
 The optimized deck must be a new editable HTML artifact in the active project:

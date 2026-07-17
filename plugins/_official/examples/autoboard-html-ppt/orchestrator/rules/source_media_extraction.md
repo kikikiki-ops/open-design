@@ -4,6 +4,119 @@
 
 ---
 
+## 16. 图片关系证据强度（evidence_strength）
+
+每张图片绑定关系必须声明证据强度，驱动后续审计严格程度：
+
+| `evidence_strength` | 含义 | 对应 `binding_method` |
+|---------------------|------|----------------------|
+| `definitive` | 同一 GroupShape 或 bbox 重叠 | `group`、`bbox_overlap` |
+| `high` | 空间邻近距离 ≤ 0.04 | `spatial_proximity` |
+| `medium` | 同行中心 Y 坐标差 ≤ 0.08 | `same_row` |
+| `low` | 整页唯一图片，关联全部文字 | `page_only_image` |
+| `inferred` | 无法通过空间分析确定，人工推断 | `uncertain` |
+
+**规则：**
+- `evidence_strength: "inferred"` 的图片必须在质量报告中标注 `WARN: weak-image-binding`
+- `evidence_strength: "low"` 及以下的图片，在 HTML 中允许位置灵活，但仍须在同一 `ppt-slide` 内
+- 禁止在没有任何空间证据的情况下将图片标记为 `definitive` 或 `high`
+
+---
+
+## 17. Source-Media 两层结构（SourceItem 与 MediaInstance）
+
+每张来源图片必须拆分为：
+
+- **SourceItem**：唯一来源事实记录，存在于 `source_asset_manifest.json`
+- **MediaInstance**：某输出页面中的渲染实例，存在于 `page_plan.json` 的 `source_asset_ids` 或 `contentMapping` 中
+
+| 层 | 字段 | 说明 |
+|---|------|------|
+| SourceItem | `asset_id`、`source_page`、`semantic_tier`、`preservation` | 来源事实，不重复 |
+| MediaInstance | `instanceId`、`sourceAssetId`（引用 SourceItem）、`outputPage`、`role`、`layout_position` | 每次渲染独立记录 |
+
+**允许一张 SourceItem 对应多个 MediaInstance（合理场景）：**
+- `role: "navigation_context"`：目录页展示封面的小缩略图
+- `role: "comparison_reference"`：对比页左侧展示"Before"版本图片
+- `role: "legend"`：图例中引用某图片作为视觉说明
+
+**禁止：** 不同内容的图片共享同一 `asset_id`；同一来源页面的图片不标明 `source_page` 就归入账本。
+
+---
+
+## 18. 默认分类协议（classification_pending）
+
+提取图片后，在空间分析完成之前，所有图片的 `semantic_tier` 必须先设为 `classification_pending`：
+
+```json
+{
+  "asset_id": "src-slide-03-asset-01",
+  "semantic_tier": "classification_pending",
+  "preservation": "must_preserve",
+  "$comment": "分类待确认，空间分析完成后更新"
+}
+```
+
+**禁止：**
+- 在空间分析前直接写死 `semantic_tier: "decorative"`（常见错误：因为图片面积小就直接标记装饰）
+- 在空间分析前直接写死 `semantic_tier: "essential"`（跳过分析流程）
+- 用任意默认值（`null`、`unknown`、`optional`）代替 `classification_pending`
+
+**流程：**
+```
+extract → classification_pending
+↓ 空间分析完成
+升级为 essential / supporting / decorative / duplicate
+↓
+验证覆盖率
+```
+
+---
+
+## 19. 禁止路径伪造（P0 硬约束）
+
+以下行为触发 `quality_report.json` 失败，代码 `source-media-path-faked`：
+
+```
+❌ 声明 "output_path": "assets/source-media/slide-03-asset-01.png"
+   但该文件并不存在于项目目录中
+
+❌ 在 source_asset_manifest.json 中记录图片，
+   但在 HTML 中引用的是完全不同来源的 CDN 链接
+
+❌ 提取时未执行 Python 代码，只在 JSON 中写入路径作为"计划"
+   （计划路径 ≠ 已提取路径）
+
+❌ 用 AI 生成的图片覆盖到本应是来源图片的路径
+```
+
+**正确做法：**
+- 只有在实际执行提取脚本、文件确实写入磁盘后，才在账本中记录 `output_path`
+- 未提取成功的图片必须记录 `extraction_status: "failed"`，不得假装成功
+- 文件路径检查（§11）在 HTML 生成前必须实际执行，不得跳过
+
+---
+
+## 20. 图文分离禁令（P0）
+
+以下情况触发 `quality_report.json` 失败，代码 `source-media-text-split`：
+
+```
+❌ 图片提取后丢入单独的"图片库"，与来源文字账本完全分离
+❌ 图片账本和文字账本各自独立，没有任何 related_content_ids 绑定
+❌ 来源图表数据提取为 OCR 文字后，原始图表截图被丢弃
+❌ 原生图表（native chart）存在时，用截图/OCR 代替数据提取
+```
+
+**原生图表优先规则：**
+- 如果 PPTX 包含可读的原生图表（`.xlsx` embedded data）：
+  1. 必须先从 `ppt/charts/` 目录提取原始数据
+  2. 数据准确率 > OCR；不得用截图文字替代数据
+  3. 原始数据入账本 `asset_type: "chart_data"`，截图入账本 `asset_type: "chart_image"`
+  4. 两者都保留，在 HTML 中优先使用原始数据重绘，截图作为 `comparison_reference` 备用
+
+---
+
 ## 1. 视觉资产扫描（在建立文字内容账本之前必须先完成）
 
 在建立文字内容账本之前，必须先完成来源文件的**视觉资产扫描**。
